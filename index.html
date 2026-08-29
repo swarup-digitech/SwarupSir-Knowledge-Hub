@@ -1,163 +1,100 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Swarup Sir's Knowledge Hub</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
-button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:11px 16px;background:#2563eb;color:#fff}
-button.secondary{background:#e8eef8;color:#172033}.wrap{max-width:1150px;margin:auto;padding:20px}
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}
-.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 5px 22px #0000000d;margin-bottom:18px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.actions{display:flex;gap:8px;flex-wrap:wrap}
-input,textarea,select{width:100%;padding:11px;border:1px solid #ccd5e2;border-radius:9px;margin:6px 0 12px}
-h1,h2,h3{margin-top:0}.muted{color:#64748b}.stat{font-size:28px;font-weight:700}.login{max-width:430px;margin:8vh auto}
-.notice{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;margin:12px 0}.success{padding:12px;border-radius:10px;background:#ecfdf5;color:#166534;margin:12px 0}
-.assignment{border:1px solid #e3e8f0;border-radius:12px;padding:15px;margin-bottom:12px}.small{font-size:13px}
-table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left}
-.video{width:100%;aspect-ratio:16/9;background:#111;border:0;border-radius:12px}.option{display:block;width:100%;text-align:left;background:#f8fafc;color:#172033;border:1px solid #dbe3ee;margin:8px 0}
-.option.selected{border-color:#2563eb;background:#eff6ff}.tag{display:inline-block;background:#eaf1ff;color:#1d4ed8;padding:5px 9px;border-radius:20px;font-size:12px}
-pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
-@media(max-width:600px){.wrap{padding:12px}.top h1{font-size:20px}}
-</style>
-</head>
-<body><div id="app"></div>
-<script>
-const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
-const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
-const CREATE_STUDENT_FN="create-students";
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let current=null,profile=null,active=null,answers=[],videoDone=false;
-let bulkStudents=[], importedQuestions=[], importedAnswers={};
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-const render=x=>document.getElementById("app").innerHTML=x;
-const header=t=>`<div class="top"><h1>${t}</h1><button class="secondary" onclick="logout()">Logout</button></div>`;
-const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
-function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?&]v=([^&]+)/)||v.match(/youtu\.be\/([^?]+)/);return m?"https://www.youtube.com/embed/"+m[1]:v}
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-async function init(){const {data:{session}}=await sb.auth.getSession();if(!session)return login();current=session.user;const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();if(error||!p)return login();profile=p;p.role==="teacher"?teacherHome():studentHome()}
-function login(){render(`<div class="wrap"><div class="card login"><h1>Swarup Sir's Knowledge Hub</h1><p class="muted">Video lessons followed by MCQ assessment.</p><input id="email" type="email" placeholder="Email address"><input id="password" type="password" placeholder="Password"><button onclick="doLogin()">Login</button><div id="msg"></div></div></div>`)}
-async function doLogin(){const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});if(error){msg.innerHTML=message(error.message);return}current=data.user;const {data:p,error:e}=await sb.from("profiles").select("*").eq("id",current.id).single();if(e||!p){msg.innerHTML=message("Login worked, but no profile exists for this user.");return}profile=p;p.role==="teacher"?teacherHome():studentHome()}
-async function logout(){await sb.auth.signOut();current=null;profile=null;login()}
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-async function teacherHome(){
- const [{data:classes},{data:assignments},{data:students}]=await Promise.all([
- sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
- sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
- sb.from("profiles").select("*").eq("role","student").order("full_name")]);
- render(`<div class="wrap">${header("Teacher Dashboard")}
- <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF + Excel)</button></div></div>
- <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
- <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button class="secondary" onclick="results('${a.id}')">Results</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
-}
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
 
-async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`)}
-async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id});if(error)return alert(error.message);teacherHome()}
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) return json({error:"Missing authorization."},401);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: caller, error: callerErr } = await admin.auth.getUser(token);
+    if (callerErr || !caller.user) return json({error:"Not authenticated."},401);
 
-async function addStudent(){
- const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(error)return alert(error.message);if(!classes?.length){alert("Create a class first.");return newClass()}
- render(`<div class="wrap">${header("Add Student")}<div class="card"><label>Student name</label><input id="sn"><label>Student email / login</label><input id="se" type="email"><label>Temporary password</label><input id="sp" type="password"><label>Class</label><select id="sc">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><div id="sm"></div><div class="actions"><button onclick="createStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`)
-}
-async function createStudent(){const {data:{session}}=await sb.auth.getSession();const body={name:sn.value.trim(),email:se.value.trim(),password:sp.value,class_id:sc.value};if(!body.name||!body.email||!body.password)return alert("Fill all fields");const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});const j=await res.json();if(!res.ok||j.error){sm.innerHTML=message(j.error||"Could not create student.");return}sm.innerHTML=message("Student created successfully.",true);setTimeout(teacherHome,800)}
+    const { data: teacher, error: teacherErr } = await admin.from("profiles")
+      .select("id, role").eq("id", caller.user.id).single();
+    if (teacherErr || teacher?.role !== "teacher")
+      return json({error:"Only teachers can create students."},403);
 
-function bulkImportStudents(){
- bulkStudents=[];
- render(`<div class="wrap">${header("Bulk Students — Excel")}<div class="card"><p>Upload an Excel file with these columns:</p><pre>Student Name | Email | Password | Class</pre><input id="studentFile" type="file" accept=".xlsx,.xls" onchange="readStudentExcel(event)"><div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);
-}
-function readStudentExcel(ev){
- const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});bulkStudents=rows.map(x=>({name:String(x["Student Name"]||x.Name||"").trim(),email:String(x.Email||x["Email/Login"]||"").trim(),password:String(x.Password||"").trim(),className:String(x.Class||"").trim()}));document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows.</div><pre>${esc(bulkStudents.slice(0,10).map((x,i)=>`${i+1}. ${x.name} | ${x.email} | ${x.className}`).join("\\n"))}</pre>`}catch(err){bulkPreview.innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file)
-}
-async function uploadBulkStudents(){
- if(!bulkStudents.length)return alert("Upload an Excel file first.");
- const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id);
- const cmap={};(classes||[]).forEach(c=>cmap[c.name.toLowerCase()]=c.id);
- const {data:{session}}=await sb.auth.getSession();
- const payload=bulkStudents.map(x=>({name:x.name,email:x.email,password:x.password,class_id:cmap[x.className.toLowerCase()]||""}));
- const invalid=payload.filter(x=>!x.name||!x.email||!x.password||!x.class_id);if(invalid.length)return alert(`${invalid.length} rows have missing data or a class name that does not exist.`);
- const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify({students:payload})});
- const j=await res.json();if(!res.ok)return alert(j.error||"Bulk creation failed");
- const ok=(j.results||[]).filter(x=>x.success).length,bad=(j.results||[]).filter(x=>!x.success);
- render(`<div class="wrap">${header("Bulk Import Result")}<div class="card"><h2>${ok} students created</h2>${bad.length?message(`${bad.length} rows failed. See details below.`):message("All students were created successfully.",true)}${bad.length?`<pre>${esc(bad.map(x=>`${x.name} (${x.email}): ${x.error}`).join("\\n"))}</pre>`:""}<button onclick="teacherHome()">Back to Dashboard</button></div></div>`);
-}
+    const body = await req.json();
+    const items = Array.isArray(body.students) ? body.students : [body];
 
-async function newAssignment(){
- const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
- render(`<div class="wrap">${header("New Video Assignment")}<div class="card"><label>Class</label><select id="ac">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><label>Title</label><input id="at"><label>Subject</label><input id="asub"><label>YouTube video URL</label><input id="av"><label>Description</label><textarea id="adesc"></textarea><h3>MCQs</h3><div id="qs"></div><button class="secondary" onclick="addQ()">+ Add MCQ manually</button><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save Assignment</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);addQ();addQ()
-}
-function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
-async function saveAssignment(){if(!at.value.trim()||!av.value.trim())return alert("Enter title and video URL");const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:av.value.trim(),created_by:current.id}).select().single();if(error)return alert(error.message);const qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);if(qs.length){const {error:e}=await sb.from("questions").insert(qs);if(e)return alert(e.message)}teacherHome()}
+    if (!items.length) return json({error:"No students supplied."},400);
 
-async function bulkImportMCQs(){
- importedQuestions=[];importedAnswers={};
- render(`<div class="wrap">${header("Import MCQs — PDF + Answer Key")}<div class="card"><p><b>PDF:</b> one question per page. The page should contain the question and options A, B, C, D.</p><p><b>Excel answer key:</b> columns <code>Question No</code> and <code>Correct Option</code>.</p><label>Questions PDF</label><input id="qpdf" type="file" accept=".pdf" onchange="readMCQPdf(event)"><label>Answer Key Excel</label><input id="akey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)"><div id="mcqPreview"></div><div class="actions"><button onclick="showImportedMCQs()">Preview / Continue</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`)
+    const results = [];
+    for (const item of items) {
+      const name = String(item.name ?? "").trim();
+      const email = String(item.email ?? "").trim().toLowerCase();
+      const password = String(item.password ?? "");
+      const classId = String(item.class_id ?? "").trim();
+
+      if (!name || !email || !password || !classId) {
+        results.push({success:false,name,email,error:"Name, email, password and class are required."});
+        continue;
+      }
+      if (password.length < 6) {
+        results.push({success:false,name,email,error:"Password must contain at least 6 characters."});
+        continue;
+      }
+
+      const { data: cls, error: classErr } = await admin.from("classes")
+        .select("id, teacher_id").eq("id", classId).single();
+      if (classErr || !cls || cls.teacher_id !== caller.user.id) {
+        results.push({success:false,name,email,error:"Invalid class for this teacher."});
+        continue;
+      }
+
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email, password, email_confirm:true,
+        user_metadata:{full_name:name, role:"student"}
+      });
+      if (createErr || !created.user) {
+        results.push({success:false,name,email,error:createErr?.message ?? "Could not create user."});
+        continue;
+      }
+
+      const studentId = created.user.id;
+      const { error: profileErr } = await admin.from("profiles").insert({
+        id:studentId, full_name:name, username:email, role:"student"
+      });
+      if (profileErr) {
+        await admin.auth.admin.deleteUser(studentId);
+        results.push({success:false,name,email,error:profileErr.message});
+        continue;
+      }
+
+      const { error: memberErr } = await admin.from("class_students").insert({
+        class_id:classId, student_id:studentId
+      });
+      if (memberErr) {
+        await admin.from("profiles").delete().eq("id",studentId);
+        await admin.auth.admin.deleteUser(studentId);
+        results.push({success:false,name,email,error:memberErr.message});
+        continue;
+      }
+
+      results.push({success:true,name,email,class_id:classId});
+    }
+
+    return json({success:true, results});
+  } catch (e) {
+    return json({error:e instanceof Error ? e.message : String(e)},500);
+  }
+});
+
+function json(data: unknown, status=200) {
+  return new Response(JSON.stringify(data), {
+    status, headers:{...corsHeaders,"Content-Type":"application/json"}
+  });
 }
-async function readMCQPdf(ev){
- const file=ev.target.files[0];
- if(!file)return;
- const buf=await file.arrayBuffer();
- try{
-   if(!window.pdfjsLib) throw new Error("PDF reader library did not load.");
-   pdfjsLib.GlobalWorkerOptions.workerSrc =
-     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-   let arr=[];
-   for(let p=1;p<=pdf.numPages;p++){
-     const page=await pdf.getPage(p);
-     const content=await page.getTextContent();
-     const text=content.items.map(i=>i.str).join(" ");
-     arr.push(parseQuestionText(text,p));
-   }
-   importedQuestions=arr;
-   document.getElementById("mcqPreview").innerHTML =
-     message(`Read ${arr.length} question pages.`,true);
- }catch(e){
-   document.getElementById("mcqPreview").innerHTML =
-     message("PDF reading failed: "+e.message);
- }
-}
-function parseQuestionText(text,pageNo){
- const clean=text.replace(/\s+/g," ").trim();
- const qmatch=clean.match(/^(?:Question\s*\d+\s*[:.)-]?\s*)?(.*?)(?=\s+A[.)]\s)/i);
- const q=qmatch?qmatch[1].trim():clean;
- const parts=clean.split(/\s+(?=[A-D][.)]\s)/i);
- const opts={A:"",B:"",C:"",D:""};parts.forEach(part=>{const m=part.match(/^([A-D])[.)]\s*(.*)$/i);if(m)opts[m[1].toUpperCase()]=m[2].trim()});
- return {page:pageNo,question:q, A:opts.A,B:opts.B,C:opts.C,D:opts.D}
-}
-function readAnswerExcel(ev){
- const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});importedAnswers={};rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No);const a=String(x["Correct Option"]??x.Answer??"").trim().toUpperCase();if(n&&["A","B","C","D"].includes(a))importedAnswers[n]=a});document.getElementById("mcqPreview").innerHTML=message(`Loaded ${Object.keys(importedAnswers).length} answer keys.`,true)}catch(err){mcqPreview.innerHTML=message("Could not read answer Excel: "+err.message)}};r.readAsArrayBuffer(file)
-}
-function showImportedMCQs(){
- if(!importedQuestions.length)return alert("Upload and read the questions PDF first.");
- if(!Object.keys(importedAnswers).length)return alert("Upload and read the answer-key Excel first.");
- const missing=importedQuestions.filter((q,i)=>!importedAnswers[i+1]);
- const invalid=importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D);
- render(`<div class="wrap">${header("Review Imported MCQs")}<div class="card"><div class="${missing.length||invalid.length?'notice':'success'}">${importedQuestions.length} questions found. ${missing.length} missing answers; ${invalid.length} pages need manual checking.</div>${importedQuestions.map((q,i)=>`<div class="assignment"><b>${i+1}. ${esc(q.question)}</b><p>A. ${esc(q.A)}</p><p>B. ${esc(q.B)}</p><p>C. ${esc(q.C)}</p><p>D. ${esc(q.D)}</p><span class="tag">Answer: ${esc(importedAnswers[i+1]||"MISSING")}</span></div>`).join("")}<button onclick="saveImportedMCQs()">Use These MCQs in New Assignment</button></div></div>`)
-}
-async function saveImportedMCQs(){
- const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
- render(`<div class="wrap">${header("Create Assignment from Imported MCQs")}<div class="card"><label>Class</label><select id="iac">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><label>Assignment title</label><input id="iat" placeholder="Lesson title"><label>Subject</label><input id="ias"><label>YouTube video URL</label><input id="iav"><label>Description</label><textarea id="iad"></textarea><button onclick="finishImportedAssignment()">Create Assignment</button></div></div>`)
-}
-async function finishImportedAssignment(){
- if(!iat.value.trim()||!iav.value.trim())return alert("Enter title and video URL.");
- const {data:a,error}=await sb.from("assignments").insert({class_id:iac.value,title:iat.value.trim(),subject:ias.value.trim(),description:iad.value.trim(),video_url:iav.value.trim(),created_by:current.id}).select().single();if(error)return alert(error.message);
- const qs=importedQuestions.map((q,i)=>({assignment_id:a.id,question_text:q.question,option_a:q.A,option_b:q.B,option_c:q.C,option_d:q.D,correct_option:importedAnswers[i+1]||"A",question_order:i+1}));
- const {error:e}=await sb.from("questions").insert(qs);if(e)return alert(e.message);teacherHome()
-}
-async function viewAssignment(id){const {data:a}=await sb.from("assignments").select("*").eq("id",id).single();const {data:qs}=await sb.from("questions").select("*").eq("assignment_id",id).order("question_order");render(`<div class="wrap">${header(esc(a.title))}<div class="card"><p class="muted">${esc(a.subject||"")}</p><iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe></div><div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p></div>`).join("")}</div><button class="secondary" onclick="teacherHome()">Back</button></div>`)}
-async function results(id){const {data:a}=await sb.from("assignments").select("*").eq("id",id).single();const {data:ats}=await sb.from("attempts").select("*").eq("assignment_id",id).order("submitted_at",{ascending:false});const ids=[...new Set((ats||[]).map(x=>x.student_id))];let names={};if(ids.length){const {data:p}=await sb.from("profiles").select("id,full_name").in("id",ids);(p||[]).forEach(x=>names[x.id]=x.full_name)}render(`<div class="wrap">${header("Results")}<div class="card"><h2>${esc(a.title)}</h2><table><tr><th>Student</th><th>Score</th><th>Video</th><th>Submitted</th></tr>${(ats||[]).map(x=>`<tr><td>${esc(names[x.student_id]||x.student_id)}</td><td>${x.score}/${x.total_questions}</td><td>${x.video_completed?"Yes":"No"}</td><td>${x.submitted_at?new Date(x.submitted_at).toLocaleString():"—"}</td></tr>`).join("")||"<tr><td colspan=4>No submissions yet.</td></tr>"}</table></div><button class="secondary" onclick="teacherHome()">Back</button></div>`)}
-async function studentHome(){const {data:links}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);const ids=(links||[]).map(x=>x.assignment_id);let assignments=[],attempts=[];if(ids.length){const {data:a}=await sb.from("assignments").select("*").in("id",ids).order("created_at",{ascending:false});assignments=a||[];const {data:at}=await sb.from("attempts").select("*").eq("student_id",current.id).in("assignment_id",ids);attempts=at||[]}render(`<div class="wrap">${header("My Assignments")}<div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Watch your assigned lesson and complete the MCQs.</p></div><div class="grid">${assignments.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h2>${esc(a.title)}</h2><p class="muted">${esc(a.subject||"")}</p>${x?`<p><b>Completed:</b> ${x.score}/${x.total_questions}</p><button onclick="startLesson('${a.id}')">Review</button>`:`<button onclick="startLesson('${a.id}')">Start Lesson</button>`}</div>`}).join("")||"<p class='muted'>No assignments have been assigned to you yet.</p>"}</div></div>`)}
-async function startLesson(id){const {data:a}=await sb.from("assignments").select("*").eq("id",id).single();active=a;videoDone=false;answers=[];lesson()}
-function lesson(){render(`<div class="wrap">${header(esc(active.title))}<div class="card"><p class="muted">${esc(active.subject||"")}</p><iframe class="video" src="${esc(embed(active.video_url))}" allowfullscreen></iframe><div class="notice">After watching the video, click the button to continue.</div><button onclick="videoWatched()">Video watched — Continue to MCQs</button></div></div>`)}
-async function videoWatched(){videoDone=true;const {data:qs}=await sb.from("questions").select("*").eq("assignment_id",active.id).order("question_order");active.questions=qs||[];quiz()}
-function quiz(){render(`<div class="wrap">${header("MCQ Test")}<div class="card"><p class="muted">Answer all questions.</p>${active.questions.map((q,i)=>`<div class="card" style="background:#f8fafc"><h3>${i+1}. ${esc(q.question_text)}</h3>${[['A',q.option_a],['B',q.option_b],['C',q.option_c],['D',q.option_d]].map(o=>`<button class="option ${answers[i]===o[0]?'selected':''}" onclick="choose(${i},'${o[0]}')">${o[0]}. ${esc(o[1])}</button>`).join("")}</div>`).join("")}<button onclick="submitQuiz()">Submit Test</button></div></div>`)}
-function choose(i,v){answers[i]=v;quiz()}
-async function submitQuiz(){if(answers.length<active.questions.length)return alert("Please answer every question.");const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);const {data:old}=await sb.from("attempts").select("attempt_number").eq("assignment_id",active.id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);const num=(old?.[0]?.attempt_number||0)+1;const {data:attempt,error}=await sb.from("attempts").insert({assignment_id:active.id,student_id:current.id,score,total_questions:active.questions.length,video_completed:videoDone,submitted_at:new Date().toISOString(),attempt_number:num}).select().single();if(error)return alert(error.message);const rows=active.questions.map((q,i)=>({attempt_id:attempt.id,question_id:q.id,selected_option:answers[i],is_correct:answers[i]===q.correct_option}));const {error:e}=await sb.from("answers").insert(rows);if(e)return alert(e.message);render(`<div class="wrap">${header("Result")}<div class="card" style="text-align:center"><div class="stat">${score} / ${active.questions.length}</div><h2>${score===active.questions.length?"Excellent!":"Well done!"}</h2><p>Your result has been recorded.</p><button onclick="studentHome()">Back to Assignments</button></div></div>`)}
-init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start</h2><p>${esc(e.message||e)}</p></div></div>`));
-</script></body></html>
