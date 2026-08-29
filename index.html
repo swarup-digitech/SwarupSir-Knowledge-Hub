@@ -55,7 +55,66 @@ async function teacherHome(){
  <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF + Excel)</button></div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button class="secondary" onclick="results('${a.id}')">Results</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
+ <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button class="secondary" onclick="results('${a.id}')">Results</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
+}
+
+async function reassignAssignment(assignmentId){
+ const [{data:a,error:ae},{data:classes,error:ce}]=await Promise.all([
+   sb.from("assignments").select("*").eq("id",assignmentId).eq("created_by",current.id).single(),
+   sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name")
+ ]);
+ if(ae)return alert(ae.message); if(ce)return alert(ce.message);
+ if(!classes?.length)return alert("Create a class first.");
+ const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId);
+ if(ee)return alert(ee.message);
+ const existingIds=new Set((existing||[]).map(x=>x.student_id));
+ const initialClass=a.class_id && classes.some(c=>c.id===a.class_id)?a.class_id:classes[0].id;
+ render(`<div class="wrap">${header("Assign / Reassign Assignment")}<div class="card">
+   <h2>${esc(a.title)}</h2><p class="muted">Assign an existing video/MCQ assignment to a whole class or selected students. Existing recipients will be replaced.</p>
+   <label>Class / Group</label><select id="rac" onchange="loadReassignStudents('${assignmentId}',this.value)">${classes.map(c=>`<option value="${c.id}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}</select>
+   <div class="card" style="background:#f8fafc"><h3>Assign To</h3>
+    <label><input type="radio" name="reassignMode" value="class" checked onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire class</label>
+    <label><input type="radio" name="reassignMode" value="students" onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label>
+    <div id="reassignStudentPicker" class="small muted">All students in the selected class will receive this assignment.</div>
+   </div>
+   <div class="actions"><button onclick="saveReassignment('${assignmentId}')">Save Assignment</button><button class="secondary" onclick="teacherHome()">Cancel</button></div>
+ </div></div>`);
+ window._reassignExistingIds=existingIds;
+}
+async function loadReassignStudents(assignmentId,classId){
+ const box=document.getElementById("reassignStudentPicker"); if(!box)return;
+ if(document.querySelector('input[name="reassignMode"]:checked')?.value!=="students"){
+   box.innerHTML='<div class="small muted">All students in the selected class will receive this assignment.</div>'; return;
+ }
+ box.innerHTML='<div class="small muted">Loading students...</div>';
+ const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+ if(error){box.innerHTML=message(error.message);return;}
+ const ids=(members||[]).map(x=>x.student_id); if(!ids.length){box.innerHTML='<div class="notice">No students are in this class.</div>';return;}
+ const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");
+ if(e){box.innerHTML=message(e.message);return;}
+ const oldIds=window._reassignExistingIds||new Set();
+ box.innerHTML=`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+
+ (students||[]).map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${s.id}" ${oldIds.has(s.id)?'checked':''} style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.username||'')}</span></label>`).join("");
+}
+async function toggleReassignStudents(assignmentId){loadReassignStudents(assignmentId,document.getElementById("rac")?.value);}
+async function saveReassignment(assignmentId){
+ const classId=document.getElementById("rac")?.value; if(!classId)return alert("Select a class.");
+ let studentIds=[];
+ try{
+   const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
+   if(mode==="class"){
+     const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+     if(error)throw error; studentIds=(members||[]).map(x=>x.student_id);
+   }else{
+     studentIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
+   }
+   studentIds=[...new Set(studentIds)]; if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
+   const {error:de}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId); if(de)throw de;
+   const rows=studentIds.map(student_id=>({assignment_id:assignmentId,student_id}));
+   const {error:ins}=await sb.from("assignment_students").insert(rows); if(ins)throw ins;
+   const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id); if(up)throw up;
+   alert(`Assignment assigned to ${rows.length} student${rows.length===1?'':'s'}.`); teacherHome();
+ }catch(e){alert("Could not update assignment: "+(e.message||e));}
 }
 
 async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`)}
