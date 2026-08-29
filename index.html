@@ -52,7 +52,7 @@ async function teacherHome(){
  sb.from("profiles").select("*").eq("role","student").order("full_name")]);
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF + Excel)</button></div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF + Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
  <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button class="secondary" onclick="results('${a.id}')">Results</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
@@ -115,6 +115,30 @@ async function saveReassignment(assignmentId){
    const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id); if(up)throw up;
    alert(`Assignment assigned to ${rows.length} student${rows.length===1?'':'s'}.`); teacherHome();
  }catch(e){alert("Could not update assignment: "+(e.message||e));}
+}
+
+async function callTeacherFn(body){
+ const {data:{session}}=await sb.auth.getSession();
+ if(!session) throw new Error("Teacher session expired. Please log in again.");
+ const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
+ const j=await res.json().catch(()=>({}));
+ if(!res.ok) throw new Error(j.error||"Request failed");
+ return j;
+}
+async function manageStudentAccounts(){
+ try{
+  const j=await callTeacherFn({action:"listCredentials"});
+  const students=j.students||[];
+  render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Passwords are shown because you requested teacher-viewable school login credentials. For security, use simple classroom passwords and do not reuse important personal passwords.</div><p class="muted">You can view and change the login password for students belonging to your classes.</p><table><tr><th>Student</th><th>Login Email</th><th>Password</th><th>Class</th><th>Action</th></tr>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.email||s.username||"")}</td><td><span id="pw-${s.id}">${esc(s.password||"Not recorded")}</span></td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}','${esc(s.email||s.username||"")}')">Change</button></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</table><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">Back to Dashboard</button></div></div></div>`);
+ }catch(e){alert(e.message||e)}
+}
+async function changeStudentPassword(studentId,name,email){
+ const np=prompt(`Enter new password for ${name}:\n\nLogin: ${email}\n\nMinimum 6 characters.`);
+ if(np===null)return;
+ if(np.length<6)return alert("Password must contain at least 6 characters.");
+ const confirmPw=prompt("Re-enter the new password:");
+ if(confirmPw!==np)return alert("Passwords do not match.");
+ try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:np});alert(`Password changed for ${name}.`);manageStudentAccounts()}catch(e){alert(e.message||e)}
 }
 
 async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`)}
