@@ -1,0 +1,7 @@
+The PDF importer worker error has been fixed.
+
+Replace your current index.html with this index.html.
+No Supabase SQL or Edge Function change is required for this fix.
+
+Then refresh the app and test:
+Import MCQs (PDF + Excel) -> choose PDF -> choose Answer Key -> Preview / Continue.
