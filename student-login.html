@@ -5,31 +5,49 @@
 <title>Student Login — Swarup Sir's Knowledge Hub</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033;min-height:100vh}.wrap{max-width:1000px;margin:auto;padding:20px}.card{background:#fff;border-radius:16px;padding:22px;box-shadow:0 5px 22px #0000000d;margin-bottom:18px}.login{max-width:430px;margin:8vh auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}h1,h2,h3{margin-top:0}input{width:100%;padding:12px;border:1px solid #ccd5e2;border-radius:9px;margin:7px 0 14px}button{cursor:pointer;border:0;border-radius:10px;padding:11px 16px;background:#2563eb;color:#fff}button.secondary{background:#e8eef8;color:#172033}.notice{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;margin:12px 0}.success{padding:12px;border-radius:10px;background:#ecfdf5;color:#166534;margin:12px 0}.assignment{border:1px solid #dbe3ee;border-radius:12px;padding:16px;margin-bottom:12px}.muted{color:#64748b}.tag{display:inline-block;background:#eaf1ff;color:#1d4ed8;padding:5px 9px;border-radius:20px;font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.video{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;background:#111}.option{display:block;width:100%;text-align:left;background:#f8fafc;color:#172033;border:1px solid #dbe3ee;margin:8px 0}.option.selected{border-color:#2563eb;background:#eff6ff}
-@media(max-width:600px){.wrap{padding:12px}.top h1{font-size:21px}}
-</style></head>
-<body><div id="app"></div>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033;min-height:100vh;display:flex;align-items:center;justify-content:center}.card{background:#fff;border-radius:18px;padding:30px;box-shadow:0 8px 30px #00000012;width:min(430px,92vw)}h1{margin-top:0;font-size:32px}.muted{color:#64748b}label{display:block;margin-top:16px}input{width:100%;padding:13px;border:1px solid #ccd5e2;border-radius:10px;margin:7px 0 14px;font-size:16px}button{cursor:pointer;border:0;border-radius:10px;padding:12px 18px;background:#2563eb;color:#fff;font-size:16px;width:100%}.secondary{background:#e8eef8;color:#172033;margin-top:10px}.notice{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;margin:12px 0}.success{padding:12px;border-radius:10px;background:#ecfdf5;color:#166534;margin:12px 0}.brand{font-weight:700;color:#2563eb}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">🎓 STUDENT PORTAL</div>
+  <h1>Student Login</h1>
+  <p class="muted">Login using your Roll No and Password.</p>
+  <form id="loginForm">
+    <label for="rollNo">Roll No</label>
+    <input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter your Roll No" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="Enter your Password" required>
+    <button id="loginBtn" type="submit">Login</button>
+  </form>
+  <div id="msg"></div>
+  <button class="secondary" type="button" onclick="location.href='teacher-login.html'">Teacher Login</button>
+</div>
 <script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
 const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
+const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let user=null,profile=null;
-const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-const msg=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
-function render(x){document.getElementById('app').innerHTML=x}
-function login(){render(`<div class="wrap"><div class="card login"><h1>Swarup Sir's Knowledge Hub</h1><h2>Student Login</h2><p class="muted">Login to view your assigned video lessons and MCQ assessments.</p><label>Email address</label><input id="email" type="email" autocomplete="username" placeholder="Student email"><label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"><button onclick="doLogin()">Login</button><div id="message"></div></div></div>`)}
-async function init(){const {data:{session}}=await sb.auth.getSession();if(!session)return login();user=session.user;const {data:p,error}=await sb.from('profiles').select('*').eq('id',user.id).single();if(error||!p){await sb.auth.signOut();login();return}if(p.role!=='student'){render(`<div class="wrap"><div class="card login">${msg('This page is for student accounts only.') }<button onclick="logout()">Back to Login</button></div></div>`);return}profile=p;studentHome()}
-async function doLogin(){message.innerHTML='';const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});if(error){message.innerHTML=msg(error.message);return}user=data.user;const {data:p,error:e}=await sb.from('profiles').select('*').eq('id',user.id).single();if(e||!p){await sb.auth.signOut();message.innerHTML=msg('Authentication worked, but no profile exists for this user.');return}if(p.role!=='student'){await sb.auth.signOut();message.innerHTML=msg('This account is not a student account.');return}profile=p;studentHome()}
-async function logout(){await sb.auth.signOut();user=null;profile=null;login()}
-async function studentHome(){
- const {data:links,error:le}=await sb.from('assignment_students').select('assignment_id,assigned_at').eq('student_id',user.id).order('assigned_at',{ascending:false});
- if(le){render(`<div class="wrap"><div class="card">${msg(le.message)}</div></div>`);return}
- const ids=(links||[]).map(x=>x.assignment_id);let assignments=[];
- if(ids.length){const {data:a,error:ae}=await sb.from('assignments').select('*').in('id',ids).order('created_at',{ascending:false});if(ae){render(`<div class="wrap"><div class="card">${msg(ae.message)}</div></div>`);return}assignments=a||[]}
- render(`<div class="wrap"><div class="top"><h1>Student Dashboard</h1><button class="secondary" onclick="logout()">Logout</button></div><div class="card"><h2>Welcome, ${esc(profile.full_name||profile.username||'Student')}</h2><p class="muted">Your assigned lessons and assessments are shown below.</p></div><div class="card"><h2>My Assignments</h2>${assignments.length?assignments.map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||'')} ${a.deadline?` · Deadline: ${new Date(a.deadline).toLocaleString()}`:''}</p><p>${esc(a.description||'')}</p><span class="tag">Video + MCQ</span><div class="actions" style="margin-top:12px"><button onclick="openAssignment('${a.id}')">Start Assignment</button></div></div>`).join(''):'<p class="muted">No assignments have been assigned to you yet.</p>'}</div></div>`)
-}
-function embed(v){if(!v)return '';if(v.includes('youtube.com/embed/'))return v;let m=v.match(/[?&]v=([^&]+)/)||v.match(/youtu\.be\/([^?]+)/);return m?'https://www.youtube.com/embed/'+m[1]:v}
-async function openAssignment(id){const {data:a,error}=await sb.from('assignments').select('*').eq('id',id).single();if(error){alert(error.message);return}const {data:q,error:qe}=await sb.from('questions').select('*').eq('assignment_id',id).order('question_order');if(qe){alert(qe.message);return}render(`<div class="wrap"><div class="top"><h1>${esc(a.title)}</h1><button class="secondary" onclick="studentHome()">Back</button></div><div class="card"><h2>Video Lesson</h2><iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe><p class="muted">Watch the lesson, then complete the MCQ assessment below.</p></div><div class="card"><h2>MCQ Assessment</h2>${(q||[]).length?(q||[]).map((x,i)=>`<div class="assignment"><h3>${i+1}. ${esc(x.question_text)}</h3>${['A','B','C','D'].map(o=>`<button class="option" onclick="this.parentElement.querySelectorAll('.option').forEach(b=>b.classList.remove('selected'));this.classList.add('selected');this.parentElement.dataset.answer='${o}'">${o}. ${esc(x['option_'+o.toLowerCase()])}</button>`).join('')}</div>`).join(''):'<p class="muted">No questions have been added yet.</p>'}<button onclick="submitAssignment('${a.id}')">Submit Assessment</button></div></div>`)}
-async function submitAssignment(id){const blocks=[...document.querySelectorAll('.assignment[data-answer]')];const questions=[...document.querySelectorAll('.assignment')].filter(x=>x.dataset.answer!==undefined);if(!questions.length){alert('Please answer the questions first.');return}const {data:q,error}=await sb.from('questions').select('id,correct_option').eq('assignment_id',id).order('question_order');if(error){alert(error.message);return}let score=0;questions.forEach((b,i)=>{if(q[i]&&b.dataset.answer===q[i].correct_option)score++});alert(`Assessment submitted. Score: ${score}/${q.length}`);studentHome()}
-init();
-</script></body></html>
+const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn');
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'">'+esc(t)+'</div>'}
+// If already signed in, go straight to the main application.
+sb.auth.getSession().then(({data:{session}})=>{if(session)location.replace('index.html')});
+document.getElementById('loginForm').addEventListener('submit',async e=>{
+ e.preventDefault(); const roll=rollNo.value.trim(),pw=password.value;
+ if(!roll||!pw)return show('Enter Roll No and Password.');
+ btn.disabled=true;btn.textContent='Signing in...';
+ try{
+   const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify({action:'studentLogin',roll_no:roll,password:pw})});
+   const j=await res.json().catch(()=>({}));
+   if(!res.ok||j.error)throw new Error(j.error||'Invalid Roll No or Password.');
+   const {error}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
+   if(error)throw error;
+   const {data:{user}}=await sb.auth.getUser();
+   if(!user)throw new Error('Student session could not be created.');
+   show('Login successful. Opening Student Dashboard...',true);
+   setTimeout(()=>location.replace('index.html'),250);
+ }catch(err){show(err.message||String(err));btn.disabled=false;btn.textContent='Login'}
+});
+</script>
+</body></html>
