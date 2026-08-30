@@ -4,7 +4,85 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swarup Sir's Knowledge Hub</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">async function bulkStudents(){
+  const file=document.getElementById("studentExcel")?.files?.[0];
+  if(!file){alert("Please select an Excel file.");return;}
+  try{
+    const data=await file.arrayBuffer();
+    const wb=XLSX.read(data,{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    if(!raw.length) throw new Error("The Excel file is empty.");
+
+    const norm=v=>String(v??"").trim();
+    const headers=raw[0].map(x=>norm(x).toLowerCase().replace(/\s+/g," "));
+    const findHeader=(...names)=>{
+      for(const n of names){const i=headers.indexOf(n);if(i>=0)return i;}
+      return -1;
+    };
+    const nameCol=findHeader("name","student name");
+    const rollCol=findHeader("roll no","roll number","roll_no");
+    const classCol=findHeader("class","class name");
+    const passCol=findHeader("password");
+
+    if([nameCol,rollCol,classCol,passCol].some(i=>i<0))
+      throw new Error("Excel must contain: Name, Roll No, Class, Password.");
+
+    const rows=raw.slice(1).map((r,idx)=>({
+      excelRow:idx+2,name:norm(r[nameCol]),roll_no:norm(r[rollCol]),
+      class_name:norm(r[classCol]),password:norm(r[passCol])
+    })).filter(r=>r.name||r.roll_no||r.class_name||r.password);
+
+    if(!rows.length)throw new Error("No student rows were found.");
+
+    const seen=new Set(), problems=[];
+    rows.forEach(r=>{
+      const key=`${r.class_name.toLowerCase()}|${r.roll_no.toLowerCase()}`;
+      if(!r.name)problems.push(`Row ${r.excelRow}: Name is missing.`);
+      if(!r.roll_no)problems.push(`Row ${r.excelRow}: Roll No is missing.`);
+      if(!r.class_name)problems.push(`Row ${r.excelRow}: Class is missing.`);
+      if(!r.password)problems.push(`Row ${r.excelRow}: Password is missing.`);
+      if(r.password&&r.password.length<6)problems.push(`Row ${r.excelRow}: Password must be at least 6 characters.`);
+      if(r.roll_no&&r.class_name&&seen.has(key))problems.push(`Row ${r.excelRow}: Duplicate Roll No ${r.roll_no} in class ${r.class_name}.`);
+      if(r.roll_no&&r.class_name)seen.add(key);
+    });
+    if(problems.length){
+      document.getElementById("bulkPreview").innerHTML=`<div class="error"><b>Please correct these errors:</b><br>${problems.map(x=>esc(x)).join("<br>")}</div>`;
+      return;
+    }
+
+    const {data:classes,error:ce}=await sb.from("classes").select("id,name").eq("teacher_id",profile.id);
+    if(ce)throw new Error(ce.message);
+    const cm=new Map((classes||[]).map(c=>[String(c.name).trim().toLowerCase(),c]));
+    const missing=[...new Set(rows.map(r=>r.class_name))].filter(n=>!cm.has(n.toLowerCase()));
+    if(missing.length){
+      document.getElementById("bulkPreview").innerHTML=`<div class="error">These classes were not found:<br>${missing.map(esc).join("<br>")}</div>`;
+      return;
+    }
+    rows.forEach(r=>r.class_id=cm.get(r.class_name.toLowerCase()).id);
+    window.pendingBulkStudents=rows;
+
+    let table=`<div class="success">Loaded ${rows.length} student rows.</div><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Class</th><th>Password</th></tr></thead><tbody>`;
+    rows.forEach((r,i)=>table+=`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.roll_no)}</td><td>${esc(r.class_name)}</td><td>${esc(r.password)}</td></tr>`);
+    table+=`</tbody></table></div><div class="actions" style="margin-top:14px"><button onclick="createBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>`;
+    document.getElementById("bulkPreview").innerHTML=table;
+  }catch(e){alert("Excel reading failed: "+(e.message||e));}
+}
+
+async function createBulkStudents(){
+  const rows=window.pendingBulkStudents||[];
+  if(!rows.length){alert("Please load an Excel file first.");return;}
+  if(!confirm(`Create ${rows.length} student account(s)?`))return;
+  try{
+    const result=await callTeacherFn({action:"createStudents",students:rows.map(r=>({name:r.name,roll_no:r.roll_no,class_id:r.class_id,password:r.password}))});
+    const ok=result.results?.filter(x=>x.success).length??0;
+    const failed=result.results?.filter(x=>!x.success).length??0;
+    document.getElementById("bulkPreview").innerHTML=`<div class="success">${ok} student(s) created successfully.</div>${failed?`<div class="error" style="margin-top:10px">${failed} row(s) failed.</div>`:""}<div class="actions" style="margin-top:14px"><button onclick="manageStudentAccounts()">Student Accounts</button><button class="secondary" onclick="teacherHome()">← Home</button></div>`;
+    window.pendingBulkStudents=[];
+  }catch(e){alert("Could not create students: "+(e.message||e));}
+}
+
+</script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
 <style>
@@ -174,7 +252,7 @@ async function createStudent(){const {data:{session}}=await sb.auth.getSession()
 
 function bulkImportStudents(){
  bulkStudents=[];
- render(`<div class="wrap">${header("Bulk Students — Excel")}<div class="card"><p>Upload an Excel file with these columns:</p><pre>Student Name | Roll No | Email | Password | Class</pre><input id="studentFile" type="file" accept=".xlsx,.xls" onchange="readStudentExcel(event)"><div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);
+ render(`<div class="wrap">${header("Bulk Students — Excel")}<div class="card"><p>Upload an Excel file with these columns:</div><div class="hint">Name | Roll No | Class | Password</div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);
 }
 function readStudentExcel(ev){
  const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});bulkStudents=rows.map(x=>({name:String(x["Student Name"]||x.Name||"").trim(),roll_no:String(x["Roll No"]||x.RollNo||x.roll_no||"").trim(),email:String(x.Email||x["Email/Login"]||"").trim(),password:String(x.Password||"").trim(),className:String(x.Class||"").trim()}));document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows.</div><pre>${esc(bulkStudents.slice(0,10).map((x,i)=>`${i+1}. ${x.name} | Roll ${x.roll_no} | ${x.className}`).join("\\n"))}</pre>`}catch(err){bulkPreview.innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file)
