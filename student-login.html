@@ -1,53 +1,172 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0757a6">
 <title>Student Login — Swarup Sir's Knowledge Hub</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033;min-height:100vh;display:flex;align-items:center;justify-content:center}.card{background:#fff;border-radius:18px;padding:30px;box-shadow:0 8px 30px #00000012;width:min(430px,92vw)}h1{margin-top:0;font-size:32px}.muted{color:#64748b}label{display:block;margin-top:16px}input{width:100%;padding:13px;border:1px solid #ccd5e2;border-radius:10px;margin:7px 0 14px;font-size:16px}button{cursor:pointer;border:0;border-radius:10px;padding:12px 18px;background:#2563eb;color:#fff;font-size:16px;width:100%}.secondary{background:#e8eef8;color:#172033;margin-top:10px}.notice{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;margin:12px 0}.success{padding:12px;border-radius:10px;background:#ecfdf5;color:#166534;margin:12px 0}.brand{font-weight:700;color:#2563eb}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif}
+body{
+  min-height:100svh;display:flex;justify-content:center;
+  background:linear-gradient(180deg,#eaf5ff 0%,#f7fbff 52%,#dceeff 100%);
+  color:#123b63;padding:0;
+}
+.page{
+  width:100%;max-width:520px;min-height:100svh;overflow:hidden;
+  position:relative;background:linear-gradient(180deg,#fafdff,#eef7ff);
+}
+.wave{position:absolute;left:-10%;width:120%;height:130px;border-radius:50%;opacity:.95}
+.wave.top{top:-85px;background:#0b72c9;transform:rotate(-5deg)}
+.wave.bottom{bottom:-85px;background:#0757a6;transform:rotate(4deg)}
+.content{position:relative;z-index:2;padding:20px 18px 38px}
+.logo-wrap{
+  display:flex;justify-content:center;margin:6px auto 10px;
+}
+.logo{
+  width:min(88vw,370px);height:auto;display:block;
+  border-radius:18px;filter:drop-shadow(0 7px 13px rgba(0,55,110,.12));
+}
+.welcome{text-align:center;margin:8px 0 22px}
+.welcome h1{font-size:28px;margin:0 0 8px;color:#124a7e}
+.welcome p{margin:0 auto;max-width:370px;font-size:15px;line-height:1.45;color:#58728d}
+.login-card{
+  background:rgba(255,255,255,.97);border-radius:24px;padding:24px 18px 20px;
+  box-shadow:0 12px 32px rgba(18,75,125,.14);
+}
+.login-title{text-align:center;color:#0b4e88;font-size:23px;font-weight:700;margin-bottom:18px}
+label{display:block;font-size:15px;font-weight:700;color:#204e75;margin:12px 2px 7px}
+.field{position:relative}
+input{
+  width:100%;height:54px;border:1px solid #cbdbea;border-radius:13px;
+  padding:0 15px;font-size:17px;color:#173f65;background:#fbfdff;outline:none
+}
+input:focus{border-color:#1976d2;box-shadow:0 0 0 3px rgba(25,118,210,.12)}
+.password-toggle{
+  position:absolute;right:8px;top:7px;height:40px;width:44px;border:0;
+  background:transparent;color:#4d6780;font-size:20px;cursor:pointer
+}
+.login-btn{
+  width:100%;height:54px;border:0;border-radius:14px;margin-top:21px;
+  background:linear-gradient(90deg,#0877df,#268cf1);color:white;font-size:18px;
+  font-weight:700;box-shadow:0 7px 16px rgba(22,112,207,.22);cursor:pointer
+}
+.login-btn:disabled{opacity:.65;cursor:wait}
+.msg{display:none;margin-top:14px;padding:12px 13px;border-radius:11px;
+  background:#fff1e8;color:#b74612;font-size:14px;line-height:1.4}
+.back{
+  width:100%;height:48px;border:1px solid #bdd4eb;border-radius:12px;
+  background:#eef5fc;color:#174b76;font-size:16px;font-weight:600;margin-top:11px;cursor:pointer
+}
+.footer{
+  position:relative;z-index:3;text-align:center;color:#fff;padding:22px 15px 18px;
+  margin-top:45px
+}
+.footer .motto{font-size:15px;font-weight:600;margin-bottom:7px}
+.footer .copy{font-size:12px;opacity:.92}
+@media (max-height:720px){
+  .content{padding-top:8px}
+  .logo{width:min(75vw,300px)}
+  .welcome{margin-bottom:14px}
+  .login-card{padding-top:18px}
+  .footer{margin-top:25px}
+}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="brand">🎓 STUDENT PORTAL</div>
-  <h1>Student Login</h1>
-  <p class="muted">Login using your Roll No and Password.</p>
-  <form id="loginForm">
-    <label for="rollNo">Roll No</label>
-    <input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter your Roll No" required>
-    <label for="password">Password</label>
-    <input id="password" type="password" autocomplete="current-password" placeholder="Enter your Password" required>
-    <button id="loginBtn" type="submit">Login</button>
-  </form>
-  <div id="msg"></div>
-  <button class="secondary" type="button" onclick="location.href='teacher-login.html'">Teacher Login</button>
-</div>
+<main class="page">
+  <div class="wave top"></div>
+  <div class="content">
+    <div class="logo-wrap">
+      <img class="logo" src="swarup-sir-logo.png" alt="Swarup Sir's Knowledge Hub">
+    </div>
+
+    <section class="welcome">
+      <h1>Welcome Students!</h1>
+      <p>Login to access your assignments, tests and learning materials.</p>
+    </section>
+
+    <section class="login-card">
+      <div class="login-title">🎓 Student Login</div>
+
+      <label for="rollNo">Roll No</label>
+      <div class="field">
+        <input id="rollNo" type="text" inputmode="numeric" autocomplete="username"
+               placeholder="Enter your Roll No">
+      </div>
+
+      <label for="studentPassword">Password</label>
+      <div class="field">
+        <input id="studentPassword" type="password" autocomplete="current-password"
+               placeholder="Enter your Password">
+        <button class="password-toggle" type="button" aria-label="Show password"
+                onclick="togglePassword()">👁</button>
+      </div>
+
+      <button id="loginBtn" class="login-btn" onclick="studentLogin()">🔒 &nbsp;Login</button>
+      <div id="msg" class="msg"></div>
+
+      <button class="back" type="button" onclick="goHome()">← Back</button>
+    </section>
+
+    <footer class="footer">
+      <div class="motto">🛡️ Your learning. Your progress. Your success.</div>
+      <div class="copy">© 2026 Swarup Sir's Knowledge Hub</div>
+    </footer>
+  </div>
+  <div class="wave bottom"></div>
+</main>
+
 <script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
 const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
-const CREATE_STUDENT_FN="create-students";
+const FUNCTION_NAME="create-students";
+const APP_URL="index.html";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn');
-const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'">'+esc(t)+'</div>'}
-// If already signed in, go straight to the main application.
-sb.auth.getSession().then(({data:{session}})=>{if(session)location.replace('index.html')});
-document.getElementById('loginForm').addEventListener('submit',async e=>{
- e.preventDefault(); const roll=rollNo.value.trim(),pw=password.value;
- if(!roll||!pw)return show('Enter Roll No and Password.');
- btn.disabled=true;btn.textContent='Signing in...';
- try{
-   const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify({action:'studentLogin',roll_no:roll,password:pw})});
-   const j=await res.json().catch(()=>({}));
-   if(!res.ok||j.error)throw new Error(j.error||'Invalid Roll No or Password.');
-   const {error}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
-   if(error)throw error;
-   const {data:{user}}=await sb.auth.getUser();
-   if(!user)throw new Error('Student session could not be created.');
-   show('Login successful. Opening Student Dashboard...',true);
-   setTimeout(()=>location.replace('index.html'),250);
- }catch(err){show(err.message||String(err));btn.disabled=false;btn.textContent='Login'}
+
+function showMessage(text){
+  const el=document.getElementById("msg");
+  el.textContent=text; el.style.display="block";
+}
+function togglePassword(){
+  const p=document.getElementById("studentPassword");
+  p.type=p.type==="password"?"text":"password";
+}
+async function studentLogin(){
+  const roll=document.getElementById("rollNo").value.trim();
+  const password=document.getElementById("studentPassword").value;
+  const btn=document.getElementById("loginBtn");
+  if(!roll||!password){showMessage("Please enter your Roll No and Password.");return;}
+  btn.disabled=true;btn.textContent="Logging in...";
+  document.getElementById("msg").style.display="none";
+  try{
+    const res=await fetch(`${SUPABASE_URL}/functions/v1/${FUNCTION_NAME}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},
+      body:JSON.stringify({action:"studentLogin",roll_no:roll,password:password})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok||data.error){showMessage(data.error||"Invalid Roll No or Password.");return;}
+    const {error}=await sb.auth.setSession({
+      access_token:data.access_token,refresh_token:data.refresh_token
+    });
+    if(error){showMessage(error.message);return;}
+    window.location.href=APP_URL;
+  }catch(e){
+    showMessage(e.message||"Unable to connect. Please try again.");
+  }finally{
+    btn.disabled=false;btn.innerHTML="🔒 &nbsp;Login";
+  }
+}
+function goHome(){window.location.href=APP_URL;}
+document.getElementById("studentPassword").addEventListener("keydown",e=>{
+  if(e.key==="Enter")studentLogin();
+});
+document.getElementById("rollNo").addEventListener("keydown",e=>{
+  if(e.key==="Enter")document.getElementById("studentPassword").focus();
 });
 </script>
-</body></html>
+</body>
+</html>
