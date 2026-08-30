@@ -141,7 +141,16 @@ async function manageStudentAccounts(){
 }
 async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
 async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
-async function deleteStudentAccount(studentId,name){if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account and classroom memberships.`))return;try{await callTeacherFn({action:"deleteStudent",student_id:studentId});alert("Student deleted.");manageStudentAccounts()}catch(e){alert("Could not delete student: "+(e.message||e))}}
+async function deleteStudentAccount(studentId,name){
+ if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account, classroom memberships, assignments and submitted answers.`))return;
+ try{
+  await callTeacherFn({action:"deleteStudent",student_id:studentId});
+  alert(`${name} was deleted successfully.`);
+  await manageStudentAccounts();
+ }catch(e){
+  alert("Could not delete student.\n\n"+(e.message||String(e)));
+ }
+}
 
 async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)}
 async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id});if(error)return alert(error.message);teacherHome()}
