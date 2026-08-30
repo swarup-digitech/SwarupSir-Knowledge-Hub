@@ -133,7 +133,7 @@ async function manageStudentAccounts(){
  try{
   const j=await callTeacherFn({action:"listCredentials"});
   const students=j.students||[];
-  render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Passwords are shown because you requested teacher-viewable school login credentials. For security, use simple classroom passwords and do not reuse important personal passwords.</div><p class="muted">You can view and change the login password for students belonging to your classes.</p><table><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"Not set")}</td><td><span id="pw-${s.id}">${esc(s.password||"Not recorded")}</span></td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button> <button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</table><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">Back to Dashboard</button></div></div></div>`);
+  render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Passwords are shown because you requested teacher-viewable school login credentials. For security, use simple classroom passwords and do not reuse important personal passwords.</div><p class="muted">You can view and change the login password for students belonging to your classes.</p><table><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"Not set")}</td><td><span id="pw-${s.id}">${esc(s.password||"Not recorded")}</span></td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button> <button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button> <button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</table><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">Back to Dashboard</button></div></div></div>`);
  }catch(e){alert(e.message||e)}
 }
 async function changeStudentRollNo(studentId,name,currentRoll){
@@ -149,6 +149,18 @@ async function changeStudentPassword(studentId,name){
  const confirmPw=prompt("Re-enter the new password:");
  if(confirmPw!==np)return alert("Passwords do not match.");
  try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:np});alert(`Password changed for ${name}.`);manageStudentAccounts()}catch(e){alert(e.message||e)}
+}
+
+
+async function deleteStudentAccount(studentId,name){
+  if(!confirm(`Delete student account for ${name}?\n\nThis permanently removes the student's login account and classroom membership. This cannot be undone.`)) return;
+  const confirmation=prompt(`Type DELETE to permanently delete ${name}:`);
+  if(confirmation!=="DELETE") return;
+  try{
+    await callTeacherFn({action:"deleteStudent",student_id:studentId});
+    alert(`Student account deleted: ${name}`);
+    manageStudentAccounts();
+  }catch(e){ alert("Could not delete student: "+(e.message||e)); }
 }
 
 async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`)}
