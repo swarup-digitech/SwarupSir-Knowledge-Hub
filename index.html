@@ -6,7 +6,6 @@
 <title>Swarup Sir's Knowledge Hub</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
 button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:11px 16px;background:#2563eb;color:#fff}
@@ -265,6 +264,8 @@ async function readMCQPdf(ev){
  const pdfjs=window.pdfjsLib; // module may not expose; fallback dynamic import below
  try{
    const mod=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs");
+   // PDF.js 4.x requires an explicit worker URL when used from a browser module.
+   mod.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
    const pdf=await mod.getDocument({data:buf}).promise;let arr=[];
    for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),content=await page.getTextContent();const text=content.items.map(i=>i.str).join(" ");arr.push(parseQuestionText(text,p))}
    importedQuestions=arr;document.getElementById("mcqPreview").innerHTML=message(`Read ${arr.length} question pages.`,true)
