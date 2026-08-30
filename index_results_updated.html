@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Swarup Sir's Knowledge Hub</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
+button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:11px 16px;background:#2563eb;color:#fff}
+button.secondary{background:#e8eef8;color:#172033}.wrap{max-width:1150px;margin:auto;padding:20px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}
+.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 5px 22px #0000000d;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+input,textarea,select{width:100%;padding:11px;border:1px solid #ccd5e2;border-radius:9px;margin:6px 0 12px}
+h1,h2,h3{margin-top:0}.muted{color:#64748b}.stat{font-size:28px;font-weight:700}.login{max-width:430px;margin:8vh auto}
+.notice{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;margin:12px 0}.success{padding:12px;border-radius:10px;background:#ecfdf5;color:#166534;margin:12px 0}
+.assignment{border:1px solid #e3e8f0;border-radius:12px;padding:15px;margin-bottom:12px}.small{font-size:13px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left}
+.video{width:100%;aspect-ratio:16/9;background:#111;border:0;border-radius:12px}.option{display:block;width:100%;text-align:left;background:#f8fafc;color:#172033;border:1px solid #dbe3ee;margin:8px 0}
+.option.selected{border-color:#2563eb;background:#eff6ff}.tag{display:inline-block;background:#eaf1ff;color:#1d4ed8;padding:5px 9px;border-radius:20px;font-size:12px}
+pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
+@media(max-width:600px){.wrap{padding:12px}.top h1{font-size:20px}}
+
+.exam-shell{max-width:1280px;margin:auto;padding:16px}
+.exam-top{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:14px;box-shadow:0 5px 22px #0000000d}
+.exam-top h2{margin:0;font-size:24px;text-align:center;flex:1}.exam-grid{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px}.question-card{min-height:0;padding:18px}.question-number{font-weight:700;color:#1d4ed8;margin:0 0 10px;font-size:16px}.question-image-wrap{width:100%;display:flex;justify-content:center;align-items:flex-start;background:#fff;border:1px solid #dbe3ee;border-radius:12px;overflow:hidden;margin:0 0 14px}.question-image{display:block;width:100%;height:auto;max-height:none;object-fit:contain;background:#fff}.question-text{font-size:22px;font-weight:700;line-height:1.55;padding:20px;background:#f8fafc;border-radius:12px;margin-bottom:20px;white-space:pre-wrap}.answer-heading{font-size:18px;margin:10px 0 12px}.circle-choice-row{display:flex;justify-content:space-around;align-items:center;gap:14px;padding:8px 6px 4px}.circle-choice{width:68px;height:68px;border-radius:50%;border:2px solid #2563eb;background:#fff;color:#2563eb;display:grid;place-items:center;font-size:22px;font-weight:800;padding:0;transition:.16s;box-shadow:none}.circle-choice:hover{background:#eff6ff;transform:translateY(-1px)}.circle-choice.selected{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:0 0 0 5px #dbeafe}.palette{height:max-content;position:sticky;top:12px}.palette-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.palette-btn{background:#eef3fa;color:#172033;padding:10px 4px}.palette-btn.current{outline:2px solid #2563eb}.palette-btn.answered{background:#22c55e;color:#fff}.exam-nav{display:flex;justify-content:space-between;gap:10px;margin-top:12px}.answer-key-btn{min-width:54px;font-weight:700}.answer-key-btn.selected-key{outline:3px solid #16a34a;background:#dcfce7;color:#166534}.tag{font-weight:600}
+@media(max-width:800px){.exam-grid{grid-template-columns:1fr}.palette{position:static}.exam-shell{padding:8px}.exam-top{padding:10px 8px}.exam-top h2{font-size:19px}.question-card{padding:12px}.question-text{font-size:18px}.question-image-wrap{margin-bottom:12px}.circle-choice-row{justify-content:space-between;padding:8px 4px}.circle-choice{width:58px;height:58px;font-size:20px}.exam-nav button{padding:10px 12px}}
+
+.result-summary{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
+.answer-pill{display:inline-grid;place-items:center;min-width:34px;height:34px;padding:0 9px;border-radius:50%;font-weight:800;border:2px solid}
+.answer-correct{color:#15803d;border-color:#16a34a;background:#f0fdf4}
+.answer-wrong{color:#dc2626;border-color:#ef4444;background:#fef2f2}
+.answer-key{color:#166534;border-color:#16a34a;background:#dcfce7}
+.result-correct{color:#16a34a;font-weight:700}
+.result-wrong{color:#dc2626;font-weight:700}
+@media(max-width:600px){
+  .result-summary{gap:12px;font-size:14px}
+  .answer-pill{min-width:32px;height:32px}
+}
+</style>
+</head>
+<body><div id="app"></div>
+<script>
+const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
+const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
+const CREATE_STUDENT_FN="create-students";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let current=null,profile=null,active=null,answers=[],videoDone=false;
+let bulkStudents=[], importedQuestions=[], importedAnswers={};
+
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const render=x=>document.getElementById("app").innerHTML=x;
+const header=t=>`<div class="top"><h1>${t}</h1><button class="secondary" onclick="logout()">Logout</button></div>`;
+const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
+function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?&]v=([^&]+)/)||v.match(/youtu\.be\/([^?]+)/);return m?"https://www.youtube.com/embed/"+m[1]:v}
+
+async function init(){const {data:{session}}=await sb.auth.getSession();if(!session)return login();current=session.user;const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();if(error||!p)return login();profile=p;p.role==="teacher"?teacherHome():studentHome()}
+function login(){render(`<div class="wrap"><div class="card login" style="text-align:center"><h1>Swarup Sir's Knowledge Hub</h1><p class="muted">Choose your login</p><div class="actions" style="display:grid;gap:12px"><button onclick="studentLoginPage()" style="width:100%;font-size:17px;padding:14px">🎓 Student Login</button><button class="secondary" onclick="teacherLoginPage()" style="width:100%;font-size:17px;padding:14px">👨‍🏫 Teacher Login</button></div></div></div>`)}
+function studentLoginPage(){render(`<div class="wrap"><div class="card login"><h1>Student Login</h1><p class="muted">Login using your Roll No and Password.</p><label>Roll No</label><input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Roll No"><label>Password</label><input id="studentPassword" type="password" autocomplete="current-password" placeholder="Enter Password"><button onclick="doStudentLogin()">Login</button><div id="msg"></div><div class="actions"><button class="secondary" onclick="login()">← Back</button></div></div></div>`)}
+function teacherLoginPage(){render(`<div class="wrap"><div class="card login"><h1>Teacher Login</h1><p class="muted">Teacher account login.</p><label>Email address</label><input id="email" type="email" autocomplete="username" placeholder="Teacher email"><label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"><button onclick="doTeacherLogin()">Login</button><div id="msg"></div><div class="actions"><button class="secondary" onclick="login()">← Back</button></div></div></div>`)}
+async function doStudentLogin(){const roll=rollNo.value.trim();const pw=studentPassword.value;if(!roll||!pw){msg.innerHTML=message("Enter Roll No and Password.");return}try{const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},body:JSON.stringify({action:"studentLogin",roll_no:roll,password:pw})});const j=await res.json().catch(()=>({}));if(!res.ok||j.error){msg.innerHTML=message(j.error||"Invalid Roll No or Password.");return}const {error:e}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});if(e){msg.innerHTML=message(e.message);return}current=(await sb.auth.getUser()).data.user;const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();if(pe||!p){msg.innerHTML=message("Login worked, but no student profile exists.");return}profile=p;studentHome()}catch(e){msg.innerHTML=message(e.message||String(e))}}
+async function doTeacherLogin(){const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});if(error){msg.innerHTML=message(error.message);return}current=data.user;const {data:p,error:e}=await sb.from("profiles").select("*").eq("id",current.id).single();if(e||!p){msg.innerHTML=message("Login worked, but no profile exists for this user.");return}profile=p;if(p.role!=="teacher"){await sb.auth.signOut();msg.innerHTML=message("This account is not a teacher account.");return}teacherHome()}
+async function doLogin(){return doTeacherLogin()}
+async function logout(){await sb.auth.signOut();current=null;profile=null;login()}
+
+async function teacherHome(){
+ const [{data:classes},{data:assignments},{data:students}]=await Promise.all([
+ sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
+ sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
+ sb.from("profiles").select("*").eq("role","student").order("full_name")]);
+ render(`<div class="wrap">${header("Teacher Dashboard")}
+ <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF / Image)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
+ <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
+ <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
+ <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button class="secondary" onclick="results('${a.id}')">Results</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
+}
+
+async function reassignAssignment(assignmentId){
+ const [{data:a,error:ae},{data:classes,error:ce}]=await Promise.all([
+   sb.from("assignments").select("*").eq("id",assignmentId).eq("created_by",current.id).single(),
+   sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name")
+ ]);
+ if(ae)return alert(ae.message); if(ce)return alert(ce.message);
+ if(!classes?.length)return alert("Create a class first.");
+ const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId);
+ if(ee)return alert(ee.message);
+ const existingIds=new Set((existing||[]).map(x=>x.student_id));
+ const initialClass=a.class_id && classes.some(c=>c.id===a.class_id)?a.class_id:classes[0].id;
+ render(`<div class="wrap">${header("Assign / Reassign Assignment")}<div class="card">
+   <h2>${esc(a.title)}</h2><p class="muted">Assign an existing video/MCQ assignment to a whole class or selected students. Existing recipients will be replaced.</p>
+   <label>Class / Group</label><select id="rac" onchange="loadReassignStudents('${assignmentId}',this.value)">${classes.map(c=>`<option value="${c.id}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}</select>
+   <div class="card" style="background:#f8fafc"><h3>Assign To</h3>
+    <label><input type="radio" name="reassignMode" value="class" checked onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire class</label>
+    <label><input type="radio" name="reassignMode" value="students" onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label>
+    <div id="reassignStudentPicker" class="small muted">All students in the selected class will receive this assignment.</div>
+   </div>
+   <div class="actions"><button onclick="saveReassignment('${assignmentId}')">Save Assignment</button><button class="secondary" onclick="teacherHome()">Cancel</button></div>
+ </div></div>`);
+ window._reassignExistingIds=existingIds;
+}
+async function loadReassignStudents(assignmentId,classId){
+ const box=document.getElementById("reassignStudentPicker"); if(!box)return;
+ if(document.querySelector('input[name="reassignMode"]:checked')?.value!=="students"){
+   box.innerHTML='<div class="small muted">All students in the selected class will receive this assignment.</div>'; return;
+ }
+ box.innerHTML='<div class="small muted">Loading students...</div>';
+ const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+ if(error){box.innerHTML=message(error.message);return;}
+ const ids=(members||[]).map(x=>x.student_id); if(!ids.length){box.innerHTML='<div class="notice">No students are in this class.</div>';return;}
+ const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");
+ if(e){box.innerHTML=message(e.message);return;}
+ const oldIds=window._reassignExistingIds||new Set();
+ box.innerHTML=`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+
+ (students||[]).map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${s.id}" ${oldIds.has(s.id)?'checked':''} style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.username||'')}</span></label>`).join("");
+}
+async function toggleReassignStudents(assignmentId){loadReassignStudents(assignmentId,document.getElementById("rac")?.value);}
+async function saveReassignment(assignmentId){
+ const classId=document.getElementById("rac")?.value; if(!classId)return alert("Select a class.");
+ let studentIds=[];
+ try{
+   const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
+   if(mode==="class"){
+     const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+     if(error)throw error; studentIds=(members||[]).map(x=>x.student_id);
+   }else{
+     studentIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
+   }
+   studentIds=[...new Set(studentIds)]; if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
+   const {error:de}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId); if(de)throw de;
+   const rows=studentIds.map(student_id=>({assignment_id:assignmentId,student_id}));
+   const {error:ins}=await sb.from("assignment_students").insert(rows); if(ins)throw ins;
+   const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id); if(up)throw up;
+   alert(`Assignment assigned to ${rows.length} student${rows.length===1?'':'s'}.`); teacherHome();
+ }catch(e){alert("Could not update assignment: "+(e.message||e));}
+}
+
+async function callTeacherFn(body){
+ const {data:{session}}=await sb.auth.getSession();
+ if(!session) throw new Error("Teacher session expired. Please log in again.");
+ const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
+ const j=await res.json().catch(()=>({}));
+ if(!res.ok) throw new Error(j.error||"Request failed");
+ return j;
+}
+async function callTeacherFn(body){
+ const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error("Please log in again.");
+ const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
+ const j=await res.json().catch(()=>({}));if(!res.ok||j.error)throw new Error(j.error||"Request failed.");return j;
+}
+async function manageStudentAccounts(){
+ try{const j=await callTeacherFn({action:"listCredentials"});const students=j.students||[];
+ render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Teachers can view and change classroom Roll No and Password.</div><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr></thead><tbody>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><div class="actions"><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
+ }catch(e){alert(e.message||String(e))}
+}
+async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function deleteStudentAccount(studentId,name){
+ if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account, classroom memberships, assignments and submitted answers.`))return;
+ try{
+  await callTeacherFn({action:"deleteStudent",student_id:studentId});
+  alert(`${name} was deleted successfully.`);
+  await manageStudentAccounts();
+ }catch(e){
+  alert("Could not delete student.\n\n"+(e.message||String(e)));
+ }
+}
+
+async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)}
+async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id});if(error)return alert(error.message);teacherHome()}
+
+async function addStudent(){
+ const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");
+ if(error)return alert(error.message); if(!classes?.length){alert("Create a class first.");return newClass()}
+ render(`<div class="wrap">${header("Add Student")}<div class="card">
+ <label>Student Name</label><input id="sn" placeholder="Student name">
+ <label>Roll No</label><input id="sr" type="text" inputmode="numeric" placeholder="e.g. 1">
+ <label>Password</label><input id="sp" type="text" placeholder="At least 6 characters">
+ <label>Class</label><select id="sc">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+ <div id="sm"></div><div class="actions"><button onclick="createStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+ </div></div>`)
+}
+async function createStudent(){
+ const {data:{session}}=await sb.auth.getSession(); if(!session)return login();
+ const body={name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value};
+ if(!body.name||!body.roll_no||!body.password||!body.class_id)return alert("Fill all fields");
+ if(body.password.length<6)return alert("Password must contain at least 6 characters.");
+ try{
+  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify({action:"createStudents",students:[body]})});
+  const j=await res.json().catch(()=>({})); if(!res.ok||j.error)throw new Error(j.error||"Could not create student.");
+  const r=j.results?.[0]; if(!r?.success)throw new Error(r?.error||"Could not create student.");
+  sm.innerHTML=message(`Student created successfully. Roll No: ${r.roll_no}`,true); setTimeout(teacherHome,900);
+ }catch(e){sm.innerHTML=message(e.message||String(e))}
+}
+
+function bulkImportStudents(){
+ bulkStudents=[];
+ render(`<div class="wrap">${header("Bulk Students — Excel")}<div class="card">
+ <p><b>Upload an Excel file with these columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div>
+ <p class="muted small">Email is not required. The system creates the internal login account automatically.</p>
+ <label>Excel file</label><input id="studentExcel" type="file" accept=".xlsx,.xls" onchange="readStudentExcel(event)">
+ <div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+ </div></div>`)
+}
+function readStudentExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{
+  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+  if(!raw.length)throw new Error("The Excel file is empty."); const norm=v=>String(v??"").trim();
+  const headers=raw[0].map(v=>norm(v).toLowerCase().replace(/[_\s]+/g," ")); const col=(...names)=>{for(const x of names){const i=headers.indexOf(x);if(i>=0)return i}return -1};
+  const ni=col("name","student name"),ri=col("roll no","roll number"),ci=col("class","class name"),pi=col("password");
+  if([ni,ri,ci,pi].some(x=>x<0))throw new Error("Required columns: Name, Roll No, Class, Password.");
+  bulkStudents=raw.slice(1).map((row,i)=>({row:i+2,name:norm(row[ni]),roll_no:norm(row[ri]),className:norm(row[ci]),password:norm(row[pi])})).filter(x=>x.name||x.roll_no||x.className||x.password);
+  if(!bulkStudents.length)throw new Error("No student rows found."); const errors=[],seen=new Set();
+  bulkStudents.forEach(x=>{const k=x.className.toLowerCase()+"|"+x.roll_no.toLowerCase();if(!x.name)errors.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errors.push(`Row ${x.row}: Roll No missing`);if(!x.className)errors.push(`Row ${x.row}: Class missing`);if(!x.password)errors.push(`Row ${x.row}: Password missing`);if(x.password&&x.password.length<6)errors.push(`Row ${x.row}: Password must be at least 6 characters`);if(seen.has(k))errors.push(`Row ${x.row}: duplicate Roll No ${x.roll_no} in ${x.className}`);seen.add(k)});
+  if(errors.length){document.getElementById("bulkPreview").innerHTML=message(errors.join(" | "));return;}
+  document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows.</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Class</th><th>Password</th></tr></thead><tbody>${bulkStudents.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td></tr>`).join("")}</tbody></table></div>`;
+ }catch(err){document.getElementById("bulkPreview").innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file)
+}
+async function uploadBulkStudents(){
+ if(!bulkStudents.length)return alert("Upload an Excel file first."); const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id);if(error)return alert(error.message);
+ const cmap=new Map((classes||[]).map(c=>[c.name.trim().toLowerCase(),c.id]));const missing=[...new Set(bulkStudents.filter(x=>!cmap.has(x.className.toLowerCase())).map(x=>x.className))];if(missing.length)return alert("Class not found: "+missing.join(", "));
+ const {data:{session}}=await sb.auth.getSession();const payload=bulkStudents.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase())}));
+ const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify({action:"createStudents",students:payload})});
+ const j=await res.json().catch(()=>({}));if(!res.ok||j.error)return alert(j.error||"Bulk creation failed");const results=j.results||[],ok=results.filter(x=>x.success),bad=results.filter(x=>!x.success);
+ render(`<div class="wrap">${header("Bulk Import Result")}<div class="card"><div class="success">${ok.length} student(s) created successfully.</div>${bad.length?`<div class="notice">${bad.length} row(s) failed.</div><pre>${esc(bad.map(x=>`${x.name||""} — Roll ${x.roll_no||""}: ${x.error}`).join("\n"))}</pre>`:""}<div class="actions"><button onclick="teacherHome()">Back to Dashboard</button><button class="secondary" onclick="bulkImportStudents()">Add More</button></div></div></div>`)
+}
+
+async function newAssignment(){
+ const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
+ render(`<div class="wrap">${header("New Video Assignment")}<div class="card">
+ <label>Class</label><select id="ac" onchange="loadAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+ <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="assignMode" value="class" checked onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Entire class</label><label><input type="radio" name="assignMode" value="students" onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Selected students</label><div id="studentPicker" class="small muted">The assignment will be given to all students in the selected class.</div></div>
+ <label>Title</label><input id="at"><label>Subject</label><input id="asub"><label>YouTube video URL</label><input id="av"><label>Description</label><textarea id="adesc"></textarea><h3>MCQs</h3><div id="qs"></div><button class="secondary" onclick="addQ()">+ Add MCQ manually</button><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);addQ();addQ();loadAssignmentStudents(classes[0].id)
+}
+async function loadAssignmentStudents(classId){
+ const box=document.getElementById("studentPicker");if(!box)return;
+ if(document.querySelector('input[name="assignMode"]:checked')?.value!=="students"){box.innerHTML='<div class="small muted">The assignment will be given to all students in the selected class.</div>';return}
+ box.innerHTML='<div class="small muted">Loading students...</div>';
+ const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+ if(error){box.innerHTML=message(error.message);return}
+ const ids=(members||[]).map(x=>x.student_id);if(!ids.length){box.innerHTML='<div class="notice">No students are currently in this class.</div>';return}
+ const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");
+ if(e){box.innerHTML=message(e.message);return}
+ box.innerHTML=(students||[]).map(s=>`<label style="display:block;padding:6px 0"><input class="assignment-student" type="checkbox" value="${s.id}" style="width:auto;margin-right:8px">${esc(s.full_name)} <span class="muted small">${esc(s.username||"")}</span></label>`).join("")||'<div class="notice">No student profiles found.</div>'
+ if(students?.length) box.insertAdjacentHTML("afterbegin",`<div class="actions" style="margin:4px 0 8px"><button type="button" class="secondary" onclick="selectAllAssignmentStudents(true)">Select all</button><button type="button" class="secondary" onclick="selectAllAssignmentStudents(false)">Clear all</button></div><div class="small muted" style="margin-bottom:6px">${students.length} student${students.length===1?"":"s"} in this class.</div>`);
+}
+function selectAllAssignmentStudents(value){document.querySelectorAll(".assignment-student").forEach(x=>x.checked=value)}
+function toggleAssignmentStudents(){const mode=document.querySelector('input[name="assignMode"]:checked')?.value;if(mode==="students")loadAssignmentStudents(document.getElementById("ac").value);else{const box=document.getElementById("studentPicker");if(box)box.innerHTML='<div class="small muted">The assignment will be given to all students in the selected class.</div>'}}
+async function getStudentsForAssignment(classId){
+ const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;
+ const allIds=(members||[]).map(x=>x.student_id);
+ if(document.querySelector('input[name="assignMode"]:checked')?.value==="students")return [...document.querySelectorAll(".assignment-student:checked")].map(x=>x.value);
+ return allIds;
+}
+async function assignStudentsToAssignment(assignmentId,classId){
+ const studentIds=await getStudentsForAssignment(classId);
+ if(!studentIds.length)throw new Error("No students were selected or this class has no students.");
+ const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:assignmentId,student_id}));
+ const {error}=await sb.from("assignment_students").insert(rows);if(error)throw error;
+ return rows.length;
+}
+function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
+async function saveAssignment(){
+ if(!at.value.trim()||!av.value.trim())return alert("Enter title and video URL");
+ let studentCount=0;try{const previewIds=await getStudentsForAssignment(ac.value);if(!previewIds.length)return alert("Select at least one student or add students to this class.");studentCount=previewIds.length}catch(e){return alert(e.message)}
+ const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:av.value.trim(),created_by:current.id}).select().single();if(error)return alert(error.message);
+ const qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
+ if(qs.length){const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}}
+ try{await assignStudentsToAssignment(a.id,ac.value)}catch(e){await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
+ alert(`Assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);teacherHome()
+}
+
+async function bulkImportMCQs(){
+ importedQuestions=[];importedAnswers={};
+ render(`<div class="wrap">${header("Import MCQs")}<div class="card">
+ <h2>Choose an upload method</h2>
+ <p class="muted">You can use either method. Method 1 keeps the existing PDF + Excel workflow. Method 2 treats every PDF page as an image, so Assamese and other non-Latin text is displayed exactly as it appears in the PDF.</p>
+ <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+  <div class="card" style="border:2px solid #2563eb;background:#f8fbff">
+   <span class="tag">METHOD 1</span><h3>PDF + Excel Answer Key</h3>
+   <p class="small muted">PDF: one question per page. Excel: Question No + Correct Option.</p>
+   <label>Questions PDF</label><input id="qpdf" type="file" accept=".pdf" onchange="readMCQPdf(event)">
+   <label>Answer Key Excel</label><input id="akey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
+  </div>
+  <div class="card" style="border:2px solid #16a34a;background:#f7fff9">
+   <span class="tag" style="background:#dcfce7;color:#166534">METHOD 2 — RECOMMENDED FOR ASSAMESE</span>
+   <h3>PDF — Image per Page</h3>
+   <p class="small muted">Each page becomes an image. No OCR is used, so Assamese text, special symbols, fractions and mathematical notation remain visually correct.</p>
+   <label>Questions PDF</label><input id="imagePdf" type="file" accept=".pdf" onchange="readImagePdf(event)">
+   <div class="notice small">No Excel file is required. On the next screen, choose the correct answer (A/B/C/D) for each page.</div>
+  </div>
+ </div>
+ <div id="mcqPreview"></div>
+ <div class="actions"><button onclick="showImportedMCQs()">Preview / Continue</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+ </div></div>`)
+}
+async function getPdfJs(){
+ const mod=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs");
+ mod.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+ return mod;
+}
+async function readMCQPdf(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const box=document.getElementById("mcqPreview");box.innerHTML=message("Reading PDF text…",true);
+ try{
+  const buf=await file.arrayBuffer(),pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise,arr=[];
+  for(let p=1;p<=pdf.numPages;p++){
+   const page=await pdf.getPage(p),content=await page.getTextContent();
+   const text=content.items.map(i=>i.str).join(" ");arr.push(parseQuestionText(text,p));
+  }
+  importedQuestions=arr;box.innerHTML=message(`Read ${arr.length} question pages.`,true)
+ }catch(e){box.innerHTML=message("PDF reading failed: "+(e.message||e))}
+}
+function cropWhiteMargins(sourceCanvas){
+ const ctx=sourceCanvas.getContext("2d",{willReadFrequently:true}); const w=sourceCanvas.width,h=sourceCanvas.height;
+ const data=ctx.getImageData(0,0,w,h).data; const threshold=248; let minX=w,minY=h,maxX=-1,maxY=-1;
+ for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ const i=(y*w+x)*4,r=data[i],g=data[i+1],b=data[i+2],a=data[i+3]; if(a>10&&(r<threshold||g<threshold||b<threshold)){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;} } }
+ if(maxX<0)return sourceCanvas; const pad=Math.max(12,Math.round(Math.min(w,h)*.018)); minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(w-1,maxX+pad);maxY=Math.min(h-1,maxY+pad);
+ const out=document.createElement("canvas");out.width=maxX-minX+1;out.height=maxY-minY+1;out.getContext("2d").drawImage(sourceCanvas,minX,minY,out.width,out.height,0,0,out.width,out.height);return out;
+}
+
+async function readImagePdf(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const box=document.getElementById("mcqPreview");box.innerHTML=message("Converting PDF pages to images…",true);
+ try{
+  const buf=await file.arrayBuffer(),pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise,arr=[];
+  for(let p=1;p<=pdf.numPages;p++){
+   const page=await pdf.getPage(p);
+   const base=page.getViewport({scale:1});
+   const maxWidth=1600;
+   const scale=Math.min(2.2,Math.max(1.4,maxWidth/base.width));
+   const viewport=page.getViewport({scale});
+   const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{alpha:false});
+   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+   await page.render({canvasContext:ctx,viewport}).promise;
+   // Crop large white PDF margins before storing the question image.
+   const cropped=cropWhiteMargins(canvas);
+   const imageData=cropped.toDataURL("image/jpeg",0.92);
+   arr.push({page:p,image_data:imageData,question:"",A:"",B:"",C:"",D:"",image_mode:true});
+  }
+  importedQuestions=arr;importedAnswers={};
+  box.innerHTML=message(`Converted ${arr.length} PDF page${arr.length===1?"":"s"} to question images. Click Preview / Continue to set the answer key.`,true)
+ }catch(e){box.innerHTML=message("PDF image conversion failed: "+(e.message||e))}
+}
+function parseQuestionText(text,pageNo){
+ const clean=text.replace(/\s+/g," ").trim();
+ const qmatch=clean.match(/^(?:Question\s*\d+\s*[:.)-]?\s*)?(.*?)(?=\s+A[.)]\s)/i);
+ const q=qmatch?qmatch[1].trim():clean;
+ const parts=clean.split(/\s+(?=[A-D][.)]\s)/i),opts={A:"",B:"",C:"",D:""};
+ parts.forEach(part=>{const m=part.match(/^([A-D])[.)]\s*(.*)$/i);if(m)opts[m[1].toUpperCase()]=m[2].trim()});
+ return {page:pageNo,question:q,A:opts.A,B:opts.B,C:opts.C,D:opts.D,image_mode:false}
+}
+function readAnswerExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{
+  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});importedAnswers={};
+  rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No),a=String(x["Correct Option"]??x.Answer??"").trim().toUpperCase();if(n&&["A","B","C","D"].includes(a))importedAnswers[n]=a});
+  document.getElementById("mcqPreview").innerHTML=message(`Loaded ${Object.keys(importedAnswers).length} answer keys.`,true)
+ }catch(err){document.getElementById("mcqPreview").innerHTML=message("Could not read answer Excel: "+err.message)}};r.readAsArrayBuffer(file)
+}
+function showImportedMCQs(){
+ if(!importedQuestions.length)return alert("Upload a PDF first.");
+ const imageMode=importedQuestions.some(q=>q.image_mode);
+ if(!imageMode&&!Object.keys(importedAnswers).length)return alert("Upload and read the answer-key Excel first.");
+ render(`<div class="wrap">${header(imageMode?"Review Question Images":"Review Imported MCQs")}<div class="card">
+  <div class="${imageMode?"success":((importedQuestions.filter((q,i)=>!importedAnswers[i+1]).length||importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D).length)?"notice":"success")}">
+   ${imageMode?`${importedQuestions.length} question images ready. Select the correct answer for every question below.`:`${importedQuestions.length} questions found. ${importedQuestions.filter((q,i)=>!importedAnswers[i+1]).length} missing answers; ${importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D).length} pages need manual checking.`}
+  </div>
+  <div id="importReview">${importedQuestions.map((q,i)=>imageMode?`<div class="assignment">
+    <h3>Question ${i+1}</h3><div class="question-image-wrap"><img class="question-image" src="${q.image_data}" alt="Question ${i+1}"></div>
+    <p><b>Correct answer:</b></p><div class="actions">${["A","B","C","D"].map(o=>`<button type="button" class="answer-key-btn ${importedAnswers[i+1]===o?"selected-key":""}" onclick="setImportedAnswer(${i+1},'${o}')">${o}</button>`).join("")}</div>
+   </div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question)}</b><p>A. ${esc(q.A)}</p><p>B. ${esc(q.B)}</p><p>C. ${esc(q.C)}</p><p>D. ${esc(q.D)}</p><span class="tag">Answer: ${esc(importedAnswers[i+1]||"MISSING")}</span></div>`).join("")}</div>
+  <div class="actions"><button onclick="saveImportedMCQs()">Use These MCQs in New Assignment</button><button class="secondary" onclick="bulkImportMCQs()">← Choose Another Method</button><button class="secondary" onclick="teacherHome()">← Home</button></div>
+ </div></div>`)
+}
+function setImportedAnswer(n,opt){importedAnswers[n]=opt;showImportedMCQs()}
+async function saveImportedMCQs(){
+ const imageMode=importedQuestions.some(q=>q.image_mode);
+ const missing=importedQuestions.map((q,i)=>i+1).filter(n=>!importedAnswers[n]);
+ if(missing.length)return alert("Please select the correct answer for question(s): "+missing.join(", "));
+ if(!imageMode){const invalid=importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D);if(invalid.length)return alert("Some PDF pages could not be read correctly. Use the Image per Page method for those questions.")}
+ const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
+ render(`<div class="wrap">${header("Create Assignment from Imported MCQs")}<div class="card"><label>Class</label><select id="iac" onchange="loadImportedAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+ <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="importAssignMode" value="class" checked onchange="toggleImportedAssignmentStudents()" style="width:auto;margin-right:8px">Entire class</label><label><input type="radio" name="importAssignMode" value="students" onchange="toggleImportedAssignmentStudents()" style="width:auto;margin-right:8px">Selected students</label><div id="importStudentPicker" class="small muted">The assignment will be given to all students in the selected class.</div></div>
+ <label>Assignment title</label><input id="iat" placeholder="Lesson title"><label>Subject</label><input id="ias"><label>YouTube video URL (optional)</label><input id="iav" placeholder="Optional video lesson URL"><label>Description</label><textarea id="iad"></textarea>
+ <div class="success small">Image-based questions will be shown exactly as they appear in the PDF. Students answer using A, B, C or D.</div>
+ <div class="actions"><button onclick="finishImportedAssignment()">Create & Assign Assignment</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);loadImportedAssignmentStudents(classes[0].id)
+}
+async function loadImportedAssignmentStudents(classId){
+ const box=document.getElementById("importStudentPicker");if(!box)return;if(document.querySelector('input[name="importAssignMode"]:checked')?.value!=="students"){box.innerHTML='<div class="small muted">The assignment will be given to all students in the selected class.</div>';return}
+ box.innerHTML='<div class="small muted">Loading students...</div>';const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error){box.innerHTML=message(error.message);return}
+ const ids=(members||[]).map(x=>x.student_id);if(!ids.length){box.innerHTML='<div class="notice">No students are currently in this class.</div>';return}
+ const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return}
+ box.innerHTML=(students||[]).map(s=>`<label style="display:block;padding:6px 0"><input class="import-assignment-student" type="checkbox" value="${s.id}" style="width:auto;margin-right:8px">${esc(s.full_name)} <span class="muted small">${esc(s.username||"")}</span></label>`).join("")||'<div class="notice">No student profiles found.</div>'
+}
+function toggleImportedAssignmentStudents(){const mode=document.querySelector('input[name="importAssignMode"]:checked')?.value;if(mode==="students")loadImportedAssignmentStudents(document.getElementById("iac").value);else{const box=document.getElementById("importStudentPicker");if(box)box.innerHTML='<div class="small muted">The assignment will be given to all students in the selected class.</div>'}}
+async function getImportedStudentIds(classId){const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;if(document.querySelector('input[name="importAssignMode"]:checked')?.value==="students")return [...document.querySelectorAll(".import-assignment-student:checked")].map(x=>x.value);return (members||[]).map(x=>x.student_id)}
+async function finishImportedAssignment(){
+ if(!iat.value.trim())return alert("Enter an assignment title.");let studentIds;try{studentIds=await getImportedStudentIds(iac.value);if(!studentIds.length)return alert("Select at least one student or add students to this class.")}catch(e){return alert(e.message)}
+ const {data:a,error}=await sb.from("assignments").insert({class_id:iac.value,title:iat.value.trim(),subject:ias.value.trim(),description:iad.value.trim(),video_url:iav.value.trim()||"https://www.youtube.com/",created_by:current.id}).select().single();if(error)return alert(error.message);
+ const imageMode=importedQuestions.some(q=>q.image_mode);
+ const qs=importedQuestions.map((q,i)=>({assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question,option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[i+1],question_order:i+1,image_url:imageMode?q.image_data:null}));
+ const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert("Could not save imported questions: "+e.message)}
+ const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:a.id,student_id}));const {error:ae}=await sb.from("assignment_students").insert(rows);if(ae){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment created, but student assignment failed: "+ae.message)}
+ alert(`Assignment created and assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome()
+}
+async function viewAssignment(id){
+ const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).single();if(ae)return alert(ae.message);
+ const {data:qs,error:qe}=await sb.from("questions").select("*").eq("assignment_id",id).order("question_order");if(qe)return alert(qe.message);
+ render(`<div class="wrap">${header(esc(a.title))}<div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div><div class="card"><h2>Questasync function results(id){
+  try{
+    const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).eq("created_by",current.id).single();
+    if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
+
+    const [{data:qs,error:qe},{data:ats,error:te}]=await Promise.all([
+      sb.from("questions").select("id,question_order,question_text,option_a,option_b,option_c,option_d,correct_option,image_url").eq("assignment_id",id).order("question_order"),
+      sb.from("attempts").select("id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").eq("assignment_id",id).order("submitted_at",{ascending:false})
+    ]);
+    if(qe)throw new Error(qe.message);
+    if(te)throw new Error(te.message);
+
+    const attemptIds=(ats||[]).map(x=>x.id);
+    const studentIds=[...new Set((ats||[]).map(x=>x.student_id))];
+
+    let profiles=[], answerRows=[];
+    if(studentIds.length){
+      const {data:p,error:pe}=await sb.from("profiles").select("id,full_name,roll_no").in("id",studentIds);
+      if(pe)throw new Error(pe.message);
+      profiles=p||[];
+    }
+    if(attemptIds.length){
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option,is_correct")
+        .in("attempt_id",attemptIds);
+      if(are)throw new Error(are.message);
+      answerRows=ar||[];
+    }
+
+    const pm=new Map(profiles.map(p=>[p.id,p]));
+    const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
+    const qm=new Map((qs||[]).map(q=>[q.id,q]));
+
+    window._resultData={
+      assignment:a,
+      questions:qs||[],
+      attempts:ats||[],
+      profiles:pm,
+      answers:am,
+      sortBy:"submitted",
+      sortDir:"desc"
+    };
+
+    renderResultsPage();
+  }catch(e){
+    alert("Could not load results: "+(e.message||e));
+  }
+}
+
+function renderResultsPage(){
+  const d=window._resultData;
+  if(!d)return;
+
+  const sorted=[...d.attempts].sort((x,y)=>{
+    let ax,by;
+    if(d.sortBy==="student"){
+      ax=(d.profiles.get(x.student_id)?.full_name||"").toLowerCase();
+      by=(d.profiles.get(y.student_id)?.full_name||"").toLowerCase();
+    }else if(d.sortBy==="score"){
+      ax=Number(x.score||0);by=Number(y.score||0);
+    }else if(d.sortBy==="submitted"){
+      ax=x.submitted_at?new Date(x.submitted_at).getTime():0;
+      by=y.submitted_at?new Date(y.submitted_at).getTime():0;
+    }else{
+      ax=Number(x.attempt_number||1);by=Number(y.attempt_number||1);
+    }
+    if(ax<by)return d.sortDir==="asc"?-1:1;
+    if(ax>by)return d.sortDir==="asc"?1:-1;
+    return 0;
+  });
+
+  const totalQuestions=d.questions.length||0;
+  const avg=sorted.length?Math.round(sorted.reduce((n,x)=>n+(Number(x.score||0)/Math.max(1,Number(x.total_questions||totalQuestions)))*100,0)/sorted.length):0;
+
+  render(`<div class="wrap">${header("Results")}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px;flex-wrap:wrap">
+        <div>
+          <h2 style="margin-bottom:6px">${esc(d.assignment.title)}</h2>
+          <div class="muted">${esc(d.assignment.subject||"")} ${d.assignment.deadline?`• Deadline: ${new Date(d.assignment.deadline).toLocaleString()}`:""}</div>
+        </div>
+        <div class="tag">${sorted.length} submission${sorted.length===1?"":"s"} • Average ${avg}%</div>
+      </div>
+
+      <div class="actions" style="margin:18px 0 12px;align-items:center">
+        <b>Sort results:</b>
+        <select id="resultSortBy" style="width:auto;min-width:160px;margin:0">
+          <option value="submitted" ${d.sortBy==="submitted"?"selected":""}>Submission time</option>
+          <option value="student" ${d.sortBy==="student"?"selected":""}>Student name</option>
+          <option value="score" ${d.sortBy==="score"?"selected":""}>Score</option>
+          <option value="attempt" ${d.sortBy==="attempt"?"selected":""}>Attempt number</option>
+        </select>
+        <select id="resultSortDir" style="width:auto;min-width:140px;margin:0">
+          <option value="desc" ${d.sortDir==="desc"?"selected":""}>Descending</option>
+          <option value="asc" ${d.sortDir==="asc"?"selected":""}>Ascending</option>
+        </select>
+        <button onclick="applyResultSort()">Apply</button>
+        <button onclick="downloadAssignmentResultsExcel('${d.assignment.id}')">⬇ Download Results Excel</button>
+        <button class="secondary" onclick="teacherHome()">← Back</button>
+      </div>
+
+      ${sorted.length?sorted.map((at,idx)=>{
+        const p=d.profiles.get(at.student_id)||{};
+        const total=Number(at.total_questions||totalQuestions);
+        const score=Number(at.score||0);
+        const pct=total?Math.round(score*100/total):0;
+        const qs=d.questions;
+        return `<div class="assignment" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <h3 style="margin-bottom:4px">${esc(p.full_name||at.student_id)}</h3>
+              <div class="muted small">Roll No: ${esc(p.roll_no||"—")} • Attempt ${esc(at.attempt_number||1)} • ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</div>
+            </div>
+            <div><b style="font-size:20px">${score}/${total}</b> <span class="tag">${pct}%</span></div>
+          </div>
+          <div style="overflow:auto;margin-top:12px">
+            <table>
+              <thead><tr><th>Q. No.</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead>
+              <tbody>
+                ${qs.map((q,i)=>{
+                  const ans=d.answers.get(`${at.id}:${q.id}`);
+                  const selected=ans?.selected_option||"—";
+                  const correct=q.correct_option||"—";
+                  const ok=ans?.is_correct===true || (selected!=="—" && selected===correct);
+                  return `<tr>
+                    <td><b>${q.question_order||i+1}</b></td>
+                    <td><span class="answer-pill ${ok?"answer-correct":"answer-wrong"}">${esc(selected)}</span></td>
+                    <td><span class="answer-pill answer-key">${esc(correct)}</span></td>
+                    <td>${ok?`<span class="result-correct">✓ Correct</span>`:`<span class="result-wrong">✗ Wrong</span>`}</td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="result-summary">
+            <span><b>Total:</b> ${total}</span>
+            <span class="result-correct"><b>✓ Correct:</b> ${score}</span>
+            <span class="result-wrong"><b>✗ Wrong:</b> ${Math.max(0,total-score)}</span>
+            <span><b>Video:</b> ${at.video_completed?"Yes":"No"}</span>
+          </div>
+        </div>`;
+      }).join(""):`<div class="success"><b>No submissions yet.</b><br><span class="small">Results will appear here after students submit this assignment.</span></div>`}
+    </div>
+  </div>`);
+}
+
+function applyResultSort(){
+  const d=window._resultData;
+  if(!d)return;
+  d.sortBy=document.getElementById("resultSortBy")?.value||"submitted";
+  d.sortDir=document.getElementById("resultSortDir")?.value||"desc";
+  renderResultsPage();
+}
+
+iv class="wrap">${header("Results")}<div class="card"><h2>${esc(a.title)}</h2><table><tr><th>Student</th><th>Score</th><th>Video</th><th>Submitted</th></tr>${(ats||[]).map(x=>`<tr><td>${esc(names[x.student_id]||x.student_id)}</td><td>${x.score}/${x.total_questions}</td><td>${x.video_completed?"Yes":"No"}</td><td>${x.submitted_at?new Date(x.submitted_at).toLocaleString():"—"}</td></tr>`).join("")||"<tr><td colspan=4>No submissions yet.</td></tr>"}</table><div class="actions" style="margin-top:12px"><button onclick="downloadAssignmentResultsExcel('${id}')">⬇ Download Results Excel</button><button class="secondary" onclick="teacherHome()">Back</button></div></div>`)}
+
+async function downloadAssignmentResultsExcel(assignmentId){
+  try{
+    const {data:a,error:ae}=await sb.from("assignments").select("id,title").eq("id",assignmentId).single();
+    if(ae||!a) throw new Error(ae?.message||"Assignment not found.");
+
+    const {data:qs,error:qe}=await sb.from("questions")
+      .select("id,question_order,correct_option")
+      .eq("assignment_id",assignmentId).order("question_order");
+    if(qe) throw new Error(qe.message);
+
+    const {data:ats,error:te}=await sb.from("attempts")
+      .select("id,student_id,score,total_questions,submitted_at,attempt_number")
+      .eq("assignment_id",assignmentId).order("submitted_at",{ascending:true});
+    if(te) throw new Error(te.message);
+
+    const ids=[...new Set((ats||[]).map(x=>x.student_id))];
+    let profiles=[];
+    if(ids.length){
+      const {data:p,error:pe}=await sb.from("profiles")
+        .select("id,full_name,roll_no").in("id",ids);
+      if(pe) throw new Error(pe.message);
+      profiles=p||[];
+    }
+
+    const attemptIds=(ats||[]).map(x=>x.id);
+    let answerRows=[];
+    if(attemptIds.length){
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
+      if(are) throw new Error(are.message);
+      answerRows=ar||[];
+    }
+
+    const pm=new Map(profiles.map(p=>[p.id,p]));
+    const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
+
+    const rows=(ats||[]).map(at=>{
+      const p=pm.get(at.student_id)||{};
+      const row={
+        "Student Name":p.full_name||at.student_id,
+        "Roll No":p.roll_no||"",
+        "Assignment Name":a.title,
+        "Score":at.score,
+        "Total Questions":at.total_questions,
+        "Submitted":at.submitted_at?new Date(at.submitted_at).toLocaleString():"",
+        "Attempt No":at.attempt_number||1
+      };
+      (qs||[]).forEach((q,i)=>{
+        const n=q.question_order||i+1;
+        const ans=am.get(`${at.id}:${q.id}`);
+        row[`Q${n} Option`]=ans?.selected_option||"";
+        row[`Q${n} Answer Key`]=q.correct_option||"";
+      });
+      row["Total Marks"]=at.score;
+      return row;
+    });
+
+    if(!rows.length){ alert("No student submissions are available for this assignment yet."); return; }
+
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:Math.max(12,Math.min(28,k.length+3))}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Results");
+    const safe=(a.title||"Assignment Results").replace(/[\\/:*?"<>|]+/g,"_").slice(0,80);
+    XLSX.writeFile(wb,`${safe}_Results.xlsx`);
+  }catch(e){ alert("Could not download results: "+(e.message||e)); }
+}
+
+async function downloadAllResultsExcel(){
+  try{
+    const {data:as,error:ae}=await sb.from("assignments")
+      .select("id,title,created_by").eq("created_by",profile.id).order("created_at",{ascending:false});
+    if(ae) throw new Error(ae.message);
+    if(!as?.length){ alert("No assignments found."); return; }
+
+    const assignmentIds=as.map(a=>a.id);
+    const {data:qs,error:qe}=await sb.from("questions")
+      .select("id,assignment_id,question_order,correct_option")
+      .in("assignment_id",assignmentIds).order("question_order");
+    if(qe) throw new Error(qe.message);
+
+    const {data:ats,error:te}=await sb.from("attempts")
+      .select("id,assignment_id,student_id,score,total_questions,submitted_at,attempt_number")
+      .in("assignment_id",assignmentIds).order("submitted_at",{ascending:true});
+    if(te) throw new Error(te.message);
+
+    const studentIds=[...new Set((ats||[]).map(x=>x.student_id))];
+    let profiles=[];
+    if(studentIds.length){
+      const {data:p,error:pe}=await sb.from("profiles")
+        .select("id,full_name,roll_no").in("id",studentIds);
+      if(pe) throw new Error(pe.message);
+      profiles=p||[];
+    }
+
+    const attemptIds=(ats||[]).map(x=>x.id);
+    let answerRows=[];
+    if(attemptIds.length){
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
+      if(are) throw new Error(are.message);
+      answerRows=ar||[];
+    }
+
+    const pm=new Map(profiles.map(p=>[p.id,p]));
+    const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
+    const asm=new Map(as.map(a=>[a.id,a]));
+
+    const rows=(ats||[]).map(at=>{
+      const p=pm.get(at.student_id)||{}, a=asm.get(at.assignment_id)||{};
+      const row={
+        "Student Name":p.full_name||at.student_id,
+        "Roll No":p.roll_no||"",
+        "Assignment Name":a.title||"",
+        "Score":at.score,
+        "Total Questions":at.total_questions,
+        "Submitted":at.submitted_at?new Date(at.submitted_at).toLocaleString():"",
+        "Attempt No":at.attempt_number||1
+      };
+      (qs||[]).filter(q=>q.assignment_id===at.assignment_id).forEach((q,i)=>{
+        const n=q.question_order||i+1, ans=am.get(`${at.id}:${q.id}`);
+        row[`Q${n} Option`]=ans?.selected_option||"";
+        row[`Q${n} Answer Key`]=q.correct_option||"";
+      });
+      row["Total Marks"]=at.score;
+      return row;
+    });
+
+    if(!rows.length){ alert("No student submissions are available yet."); return; }
+
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:Math.max(12,Math.min(28,k.length+3))}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"All Results");
+    XLSX.writeFile(wb,"SwarupSir_All_Assignment_Results.xlsx");
+  }catch(e){ alert("Could not download results: "+(e.message||e)); }
+}
+
+async function studentHome(){
+  const {data:links,error:le}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);
+  if(le)return render(`<div class="wrap">${header("My Assignments")}<div class="card">${message(le.message)}</div></div>`);
+  const ids=(links||[]).map(x=>x.assignment_id);
+  let assignments=[],attempts=[];
+  if(ids.length){
+    const {data:a,error:ae}=await sb.from("assignments").select("*").in("id",ids).order("created_at",{ascending:false});
+    if(ae)return render(`<div class="wrap">${header("My Assignments")}<div class="card">${message(ae.message)}</div></div>`);
+    assignments=a||[];
+    const {data:at,error:ate}=await sb.from("attempts").select("*").eq("student_id",current.id).in("assignment_id",ids).order("submitted_at",{ascending:false});
+    if(ate)return render(`<div class="wrap">${header("My Assignments")}<div class="card">${message(ate.message)}</div></div>`);
+    attempts=at||[];
+  }
+  const completedIds=new Set(attempts.map(t=>t.assignment_id));
+  const pending=assignments.filter(a=>!completedIds.has(a.id));
+  const completed=assignments.filter(a=>completedIds.has(a.id));
+  render(`<div class="wrap">${header("My Assignments")}
+    <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p></div>
+    <div class="card"><h2>New Assignments</h2>
+      ${pending.length?pending.map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
+    </div>
+    <div class="card"><h2>Previous Work</h2>
+      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Completed:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div class="actions"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
+    </div>
+  </div>`)
+}
+async function viewPreviousWork(assignmentId,attemptId){
+ const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",assignmentId).single();if(ae||!a)return alert(ae?.message||"Assignment not found.");
+ const {data:at,error:te}=await sb.from("attempts").select("*").eq("id",attemptId).eq("student_id",current.id).single();if(te||!at)return alert(te?.message||"Submission not found.");
+ const {data:ans,error:anErr}=await sb.from("answers").select("*").eq("attempt_id",attemptId);if(anErr)return alert(anErr.message);
+ const qids=(ans||[]).map(x=>x.question_id);let qs=[];if(qids.length){const {data:q,error:qe}=await sb.from("questions").select("*").in("id",qids);if(qe)return alert(qe.message);qs=q||[]}
+ const qm=new Map(qs.map(q=>[q.id,q]));const ordered=(ans||[]).map(x=>({x,q:qm.get(x.question_id)})).sort((a,b)=>(a.q?.question_order??999999)-(b.q?.question_order??999999));
+ render(`<div class="wrap">${header("Previous Work")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p></div><div class="card"><h2>My Answers</h2>${ordered.map(({x,q},i)=>{const opts={A:q?.option_a,B:q?.option_b,C:q?.option_c,D:q?.option_d};const selectedText=opts[x.selected_option]??x.selected_option??"—";const correctText=opts[q?.correct_option]??q?.correct_option??"—";return `<div class="assignment"><h3>Question ${i+1}</h3>${q?.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${i+1}"></div>`:`<p><b>${esc(q?.question_text||"Question unavailable")}</b></p>`}<p><b>Your answer:</b> ${esc(x.selected_option||"—")}${q?.image_url?"":". "+esc(selectedText)}</p>${x.is_correct?`<div class="success"><b>Correct answer ✓</b></div>`:`<div class="notice"><b>Wrong answer ✗</b><br>Correct answer: <b>${esc(q?.correct_option||"—")}${q?.image_url?"":". "+esc(correctText)}</b></div>`}</div>`}).join("")||"<p class='muted'>No answer details found.</p>"}</div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`)
+}
+async function startLesson(id){
+ const {data:a,error}=await sb.from("assignments").select("*").eq("id",id).single();if(error)return alert(error.message);active=a;videoDone=false;answers=[];lesson()
+}
+function lesson(){render(`<div class="wrap">${header(esc(active.title))}<div class="card"><p class="muted">${esc(active.subject||"")}</p>${active.video_url?`<iframe class="video" src="${esc(embed(active.video_url))}" allowfullscreen></iframe>`:""}<div class="notice">Watch the lesson, then continue to the questions.</div><button onclick="videoWatched()">${active.video_url?"Video watched — Continue to Questions":"Continue to Questions"}</button></div></div>`)}
+async function videoWatched(){videoDone=true;const {data:qs,error}=await sb.from("questions").select("*").eq("assignment_id",active.id).order("question_order");if(error)return alert(error.message);active.questions=qs||[];quiz()}
+function quiz(){
+ if(!active.questions?.length)return alert("No questions are available for this assignment.");
+ const total=active.questions.length,currentIndex=window.quizIndex||0,q=active.questions[currentIndex],image=q.image_url;
+ render(`<div class="exam-shell"><div class="exam-top"><button class="secondary" onclick="studentHome()">← Back</button><h2>Question ${currentIndex+1} of ${total}</h2><span class="tag">${answers.filter(Boolean).length}/${total} Answered</span></div><div class="exam-grid"><main class="exam-main"><div class="card question-card"><div class="question-number">Question ${currentIndex+1}</div>${image?`<div class="question-image-wrap"><img class="question-image" src="${esc(image)}" alt="Question ${currentIndex+1}"></div>`:`<div class="question-text">${esc(q.question_text)}</div>`}<div class="answer-heading">Choose Your Answer</div><div class="circle-choice-row" role="radiogroup" aria-label="Choose your answer">${["A","B","C","D"].map(o=>`<button type="button" class="circle-choice ${answers[currentIndex]===o?"selected":""}" aria-label="Option ${o}" aria-pressed="${answers[currentIndex]===o}" onclick="choose(${currentIndex},'${o}')">${o}</button>`).join("")}</div></div><div class="exam-nav"><button class="secondary" ${currentIndex===0?"disabled":""} onclick="goQuestion(${currentIndex-1})">← Previous</button>${currentIndex<total-1?`<button onclick="goQuestion(${currentIndex+1})">Next →</button>`:`<button onclick="submitQuiz()">✓ Submit Test</button>`}</div></main><aside class="palette card"><h3>Question Palette</h3><div class="palette-grid">${active.questions.map((_,i)=>`<button class="palette-btn ${i===currentIndex?"current":""} ${answers[i]?"answered":""}" onclick="goQuestion(${i})">${i+1}</button>`).join("")}</div><div class="small muted" style="margin-top:16px"><div>🟩 Answered</div><div>🔵 Current</div><div>⬜ Not Answered</div></div></aside></div></div>`);
+}
+function goQuestion(i){window.quizIndex=Math.max(0,Math.min(i,active.questions.length-1));quiz()}
+function choose(i,v){answers[i]=v;quiz()}
+async function submitQuiz(){if(answers.length<active.questions.length)return alert("Please answer every question.");const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);const {data:old}=await sb.from("attempts").select("attempt_number").eq("assignment_id",active.id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);const num=(old?.[0]?.attempt_number||0)+1;const {data:attempt,error}=await sb.from("attempts").insert({assignment_id:active.id,student_id:current.id,score,total_questions:active.questions.length,video_completed:videoDone,submitted_at:new Date().toISOString(),attempt_number:num}).select().single();if(error)return alert(error.message);const rows=active.questions.map((q,i)=>({attempt_id:attempt.id,question_id:q.id,selected_option:answers[i],is_correct:answers[i]===q.correct_option}));const {error:e}=await sb.from("answers").insert(rows);if(e)return alert(e.message);render(`<div class="wrap">${header("Assignment Completed")}<div class="card" style="text-align:center"><div class="stat">${score} / ${active.questions.length}</div><h2>${score===active.questions.length?"Excellent!":"Well done!"}</h2><div class="success"><b>Completed</b><br>Your assignment has been submitted successfully.</div><div class="actions" style="justify-content:center;margin-top:12px"><button onclick="viewPreviousWork('${active.id}','${attempt.id}')">View My Answers</button><button class="secondary" onclick="studentHome()">Back to Assignments</button></div></div></div>`)}
+init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start</h2><p>${esc(e.message||e)}</p></div></div>`));
+</script></body></html>
