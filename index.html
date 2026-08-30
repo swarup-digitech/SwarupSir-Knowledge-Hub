@@ -27,6 +27,18 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .exam-top{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:14px;box-shadow:0 5px 22px #0000000d}
 .exam-top h2{margin:0;font-size:24px;text-align:center;flex:1}.exam-grid{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px}.question-card{min-height:0;padding:18px}.question-number{font-weight:700;color:#1d4ed8;margin:0 0 10px;font-size:16px}.question-image-wrap{width:100%;display:flex;justify-content:center;align-items:flex-start;background:#fff;border:1px solid #dbe3ee;border-radius:12px;overflow:hidden;margin:0 0 14px}.question-image{display:block;width:100%;height:auto;max-height:none;object-fit:contain;background:#fff}.question-text{font-size:22px;font-weight:700;line-height:1.55;padding:20px;background:#f8fafc;border-radius:12px;margin-bottom:20px;white-space:pre-wrap}.answer-heading{font-size:18px;margin:10px 0 12px}.circle-choice-row{display:flex;justify-content:space-around;align-items:center;gap:14px;padding:8px 6px 4px}.circle-choice{width:68px;height:68px;border-radius:50%;border:2px solid #2563eb;background:#fff;color:#2563eb;display:grid;place-items:center;font-size:22px;font-weight:800;padding:0;transition:.16s;box-shadow:none}.circle-choice:hover{background:#eff6ff;transform:translateY(-1px)}.circle-choice.selected{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:0 0 0 5px #dbeafe}.palette{height:max-content;position:sticky;top:12px}.palette-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.palette-btn{background:#eef3fa;color:#172033;padding:10px 4px}.palette-btn.current{outline:2px solid #2563eb}.palette-btn.answered{background:#22c55e;color:#fff}.exam-nav{display:flex;justify-content:space-between;gap:10px;margin-top:12px}.answer-key-btn{min-width:54px;font-weight:700}.answer-key-btn.selected-key{outline:3px solid #16a34a;background:#dcfce7;color:#166534}.tag{font-weight:600}
 @media(max-width:800px){.exam-grid{grid-template-columns:1fr}.palette{position:static}.exam-shell{padding:8px}.exam-top{padding:10px 8px}.exam-top h2{font-size:19px}.question-card{padding:12px}.question-text{font-size:18px}.question-image-wrap{margin-bottom:12px}.circle-choice-row{justify-content:space-between;padding:8px 4px}.circle-choice{width:58px;height:58px;font-size:20px}.exam-nav button{padding:10px 12px}}
+
+.result-summary{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
+.answer-pill{display:inline-grid;place-items:center;min-width:34px;height:34px;padding:0 9px;border-radius:50%;font-weight:800;border:2px solid}
+.answer-correct{color:#15803d;border-color:#16a34a;background:#f0fdf4}
+.answer-wrong{color:#dc2626;border-color:#ef4444;background:#fef2f2}
+.answer-key{color:#166534;border-color:#16a34a;background:#dcfce7}
+.result-correct{color:#16a34a;font-weight:700}
+.result-wrong{color:#dc2626;font-weight:700}
+@media(max-width:600px){
+  .result-summary{gap:12px;font-size:14px}
+  .answer-pill{min-width:32px;height:32px}
+}
 </style>
 </head>
 <body><div id="app"></div>
@@ -396,9 +408,161 @@ async function finishImportedAssignment(){
 async function viewAssignment(id){
  const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).single();if(ae)return alert(ae.message);
  const {data:qs,error:qe}=await sb.from("questions").select("*").eq("assignment_id",id).order("question_order");if(qe)return alert(qe.message);
- render(`<div class="wrap">${header(esc(a.title))}<div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div><div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>q.image_url?`<div class="assignment"><h3>Question ${i+1}</h3><img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:750px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px"><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`).join("")}</div><button class="secondary" onclick="teacherHome()">← Back</button></div>`)
+ render(`<div class="wrap">${header(esc(a.title))}<div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div><div class="card"><h2>Questasync function results(id){
+  try{
+    const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).eq("created_by",current.id).single();
+    if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
+
+    const [{data:qs,error:qe},{data:ats,error:te}]=await Promise.all([
+      sb.from("questions").select("id,question_order,question_text,option_a,option_b,option_c,option_d,correct_option,image_url").eq("assignment_id",id).order("question_order"),
+      sb.from("attempts").select("id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").eq("assignment_id",id).order("submitted_at",{ascending:false})
+    ]);
+    if(qe)throw new Error(qe.message);
+    if(te)throw new Error(te.message);
+
+    const attemptIds=(ats||[]).map(x=>x.id);
+    const studentIds=[...new Set((ats||[]).map(x=>x.student_id))];
+
+    let profiles=[], answerRows=[];
+    if(studentIds.length){
+      const {data:p,error:pe}=await sb.from("profiles").select("id,full_name,roll_no").in("id",studentIds);
+      if(pe)throw new Error(pe.message);
+      profiles=p||[];
+    }
+    if(attemptIds.length){
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option,is_correct")
+        .in("attempt_id",attemptIds);
+      if(are)throw new Error(are.message);
+      answerRows=ar||[];
+    }
+
+    const pm=new Map(profiles.map(p=>[p.id,p]));
+    const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
+    const qm=new Map((qs||[]).map(q=>[q.id,q]));
+
+    window._resultData={
+      assignment:a,
+      questions:qs||[],
+      attempts:ats||[],
+      profiles:pm,
+      answers:am,
+      sortBy:"submitted",
+      sortDir:"desc"
+    };
+
+    renderResultsPage();
+  }catch(e){
+    alert("Could not load results: "+(e.message||e));
+  }
 }
-async function results(id){const {data:a}=await sb.from("assignments").select("*").eq("id",id).single();const {data:ats}=await sb.from("attempts").select("*").eq("assignment_id",id).order("submitted_at",{ascending:false});const ids=[...new Set((ats||[]).map(x=>x.student_id))];let names={};if(ids.length){const {data:p}=await sb.from("profiles").select("id,full_name").in("id",ids);(p||[]).forEach(x=>names[x.id]=x.full_name)}render(`<div class="wrap">${header("Results")}<div class="card"><h2>${esc(a.title)}</h2><table><tr><th>Student</th><th>Score</th><th>Video</th><th>Submitted</th></tr>${(ats||[]).map(x=>`<tr><td>${esc(names[x.student_id]||x.student_id)}</td><td>${x.score}/${x.total_questions}</td><td>${x.video_completed?"Yes":"No"}</td><td>${x.submitted_at?new Date(x.submitted_at).toLocaleString():"—"}</td></tr>`).join("")||"<tr><td colspan=4>No submissions yet.</td></tr>"}</table><div class="actions" style="margin-top:12px"><button onclick="downloadAssignmentResultsExcel('${id}')">⬇ Download Results Excel</button><button class="secondary" onclick="teacherHome()">Back</button></div></div>`)}
+
+function renderResultsPage(){
+  const d=window._resultData;
+  if(!d)return;
+
+  const sorted=[...d.attempts].sort((x,y)=>{
+    let ax,by;
+    if(d.sortBy==="student"){
+      ax=(d.profiles.get(x.student_id)?.full_name||"").toLowerCase();
+      by=(d.profiles.get(y.student_id)?.full_name||"").toLowerCase();
+    }else if(d.sortBy==="score"){
+      ax=Number(x.score||0);by=Number(y.score||0);
+    }else if(d.sortBy==="submitted"){
+      ax=x.submitted_at?new Date(x.submitted_at).getTime():0;
+      by=y.submitted_at?new Date(y.submitted_at).getTime():0;
+    }else{
+      ax=Number(x.attempt_number||1);by=Number(y.attempt_number||1);
+    }
+    if(ax<by)return d.sortDir==="asc"?-1:1;
+    if(ax>by)return d.sortDir==="asc"?1:-1;
+    return 0;
+  });
+
+  const totalQuestions=d.questions.length||0;
+  const avg=sorted.length?Math.round(sorted.reduce((n,x)=>n+(Number(x.score||0)/Math.max(1,Number(x.total_questions||totalQuestions)))*100,0)/sorted.length):0;
+
+  render(`<div class="wrap">${header("Results")}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px;flex-wrap:wrap">
+        <div>
+          <h2 style="margin-bottom:6px">${esc(d.assignment.title)}</h2>
+          <div class="muted">${esc(d.assignment.subject||"")} ${d.assignment.deadline?`• Deadline: ${new Date(d.assignment.deadline).toLocaleString()}`:""}</div>
+        </div>
+        <div class="tag">${sorted.length} submission${sorted.length===1?"":"s"} • Average ${avg}%</div>
+      </div>
+
+      <div class="actions" style="margin:18px 0 12px;align-items:center">
+        <b>Sort results:</b>
+        <select id="resultSortBy" style="width:auto;min-width:160px;margin:0">
+          <option value="submitted" ${d.sortBy==="submitted"?"selected":""}>Submission time</option>
+          <option value="student" ${d.sortBy==="student"?"selected":""}>Student name</option>
+          <option value="score" ${d.sortBy==="score"?"selected":""}>Score</option>
+          <option value="attempt" ${d.sortBy==="attempt"?"selected":""}>Attempt number</option>
+        </select>
+        <select id="resultSortDir" style="width:auto;min-width:140px;margin:0">
+          <option value="desc" ${d.sortDir==="desc"?"selected":""}>Descending</option>
+          <option value="asc" ${d.sortDir==="asc"?"selected":""}>Ascending</option>
+        </select>
+        <button onclick="applyResultSort()">Apply</button>
+        <button onclick="downloadAssignmentResultsExcel('${d.assignment.id}')">⬇ Download Results Excel</button>
+        <button class="secondary" onclick="teacherHome()">← Back</button>
+      </div>
+
+      ${sorted.length?sorted.map((at,idx)=>{
+        const p=d.profiles.get(at.student_id)||{};
+        const total=Number(at.total_questions||totalQuestions);
+        const score=Number(at.score||0);
+        const pct=total?Math.round(score*100/total):0;
+        const qs=d.questions;
+        return `<div class="assignment" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <h3 style="margin-bottom:4px">${esc(p.full_name||at.student_id)}</h3>
+              <div class="muted small">Roll No: ${esc(p.roll_no||"—")} • Attempt ${esc(at.attempt_number||1)} • ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</div>
+            </div>
+            <div><b style="font-size:20px">${score}/${total}</b> <span class="tag">${pct}%</span></div>
+          </div>
+          <div style="overflow:auto;margin-top:12px">
+            <table>
+              <thead><tr><th>Q. No.</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead>
+              <tbody>
+                ${qs.map((q,i)=>{
+                  const ans=d.answers.get(`${at.id}:${q.id}`);
+                  const selected=ans?.selected_option||"—";
+                  const correct=q.correct_option||"—";
+                  const ok=ans?.is_correct===true || (selected!=="—" && selected===correct);
+                  return `<tr>
+                    <td><b>${q.question_order||i+1}</b></td>
+                    <td><span class="answer-pill ${ok?"answer-correct":"answer-wrong"}">${esc(selected)}</span></td>
+                    <td><span class="answer-pill answer-key">${esc(correct)}</span></td>
+                    <td>${ok?`<span class="result-correct">✓ Correct</span>`:`<span class="result-wrong">✗ Wrong</span>`}</td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="result-summary">
+            <span><b>Total:</b> ${total}</span>
+            <span class="result-correct"><b>✓ Correct:</b> ${score}</span>
+            <span class="result-wrong"><b>✗ Wrong:</b> ${Math.max(0,total-score)}</span>
+            <span><b>Video:</b> ${at.video_completed?"Yes":"No"}</span>
+          </div>
+        </div>`;
+      }).join(""):`<div class="success"><b>No submissions yet.</b><br><span class="small">Results will appear here after students submit this assignment.</span></div>`}
+    </div>
+  </div>`);
+}
+
+function applyResultSort(){
+  const d=window._resultData;
+  if(!d)return;
+  d.sortBy=document.getElementById("resultSortBy")?.value||"submitted";
+  d.sortDir=document.getElementById("resultSortDir")?.value||"desc";
+  renderResultsPage();
+}
+
+iv class="wrap">${header("Results")}<div class="card"><h2>${esc(a.title)}</h2><table><tr><th>Student</th><th>Score</th><th>Video</th><th>Submitted</th></tr>${(ats||[]).map(x=>`<tr><td>${esc(names[x.student_id]||x.student_id)}</td><td>${x.score}/${x.total_questions}</td><td>${x.video_completed?"Yes":"No"}</td><td>${x.submitted_at?new Date(x.submitted_at).toLocaleString():"—"}</td></tr>`).join("")||"<tr><td colspan=4>No submissions yet.</td></tr>"}</table><div class="actions" style="margin-top:12px"><button onclick="downloadAssignmentResultsExcel('${id}')">⬇ Download Results Excel</button><button class="secondary" onclick="teacherHome()">Back</button></div></div>`)}
 
 async function downloadAssignmentResultsExcel(assignmentId){
   try{
