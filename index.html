@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swarup Sir's Knowledge Hub</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=HOev0fW60w_rkRHd5iz1-3oRQ3gWcJ8XOpNNp963IWpOMJjku8COsn57B2Ekbj8azQ_iQhsNARGq2wS0hQOZUjljyIteFKzHTMF5SXKKH7IOJSAs4Tvakf8y60_LGOKKq2pfqEg5imp2EXcjVO5wRbaclLQahhQ1-z1BPHH10x42Jn0JC9gJRMa2ge7ak4APS1j-EKm1BIGxy84nCvamtC2bMq47EDfa9PU_IOFq6UIYGAhLvUIZ3yGmm7OkeJ5sa9YxUZWh7kaw5ty2DscElM8fl1FQLVrcDv7MyA-_G59ZkBKdSprWgHu_NhyMfYUqjaFuRW4z3hvXaN33TZx17A" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -723,10 +723,34 @@ async function studentHome(){
       ${pending.length?pending.map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
     </div>
     <div class="card"><h2>Previous Work</h2>
-      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Completed:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div class="actions"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
+      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Completed:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
+  <button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button>
+</div>
+<div style="margin-top:10px">
+  <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
+</div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
     </div>
   </div>`)
 }
+async function watchCompletedVideo(assignmentId){
+  try{
+    const {data:a,error}=await sb.from("assignments").select("*").eq("id",assignmentId).single();
+    if(error||!a)throw new Error(error?.message||"Assignment not found.");
+    render(`<div class="wrap">${header("Watch Video")}
+      <div class="card">
+        <h2>${esc(a.title)}</h2>
+        ${a.subject?`<p class="muted">${esc(a.subject)}</p>`:""}
+        ${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:`<div class="notice">No video is available for this assignment.</div>`}
+        <div class="actions" style="margin-top:15px">
+          <button class="secondary" onclick="studentHome()">← Back to My Assignments</button>
+        </div>
+      </div>
+    </div>`)
+  }catch(e){
+    alert("Could not load video: "+(e.message||e));
+  }
+}
+
 async function viewPreviousWork(assignmentId,attemptId){
  const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",assignmentId).single();if(ae||!a)return alert(ae?.message||"Assignment not found.");
  const {data:at,error:te}=await sb.from("attempts").select("*").eq("id",attemptId).eq("student_id",current.id).single();if(te||!at)return alert(te?.message||"Submission not found.");
