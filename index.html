@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swarup Sir's Knowledge Hub</title>
-<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=HOev0fW60w_rkRHd5iz1-3oRQ3gWcJ8XOpNNp963IWpOMJjku8COsn57B2Ekbj8azQ_iQhsNARGq2wS0hQOZUjljyIteFKzHTMF5SXKKH7IOJSAs4Tvakf8y60_LGOKKq2pfqEg5imp2EXcjVO5wRbaclLQahhQ1-z1BPHH10x42Jn0JC9gJRMa2ge7ak4APS1j-EKm1BIGxy84nCvamtC2bMq47EDfa9PU_IOFq6UIYGAhLvUIZ3yGmm7OkeJ5sa9YxUZWh7kaw5ty2DscElM8fl1FQLVrcDv7MyA-_G59ZkBKdSprWgHu_NhyMfYUqjaFuRW4z3hvXaN33TZx17A" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=HFIEPiemEvwtqn4csxWzfOhIpiI7GGca3YmxzD9CHzouDtSNxLjqHK05PcF47jMVbXZZBnZjc9ePYxX75uiJpM5cUyFbBezwq2b4LH7K-8KJLJsSg29WQuy7gOJuy0d9Fqa1Yt2vBOnPIpfFRcG6uzni9BIBcfZpFJqfTMM6F__sIAbkcJ6PsmZOrfT11wxCMPlaknQuDYS0u58h5vhk01uD9W1UvQZml05pk-AZTTBx-b-a56tVyC2sGe6JWBoYgFiW6O6wRqM44XWmJeV5myLVa_ZE6pI1urkFp8kaRQCUvxiaUjIGG4rN3fFy9d1Ogy_UvPtHN0KCqZZNaCXOhw" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -59,33 +59,52 @@ function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?
 async function init(){
   const mode=new URLSearchParams(location.search).get("mode");
   window.loginMode=mode==="student"?"student":mode==="teacher"?"teacher":"chooser";
+
   const {data:{session}}=await sb.auth.getSession();
+
   if(!session){
     if(window.loginMode==="student") return studentLoginPage();
     if(window.loginMode==="teacher") return teacherLoginPage();
     return login();
   }
+
   current=session.user;
+
   const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();
+
   if(error||!p){
     await sb.auth.signOut();
+    current=null;
+    profile=null;
     if(window.loginMode==="student") return studentLoginPage();
     if(window.loginMode==="teacher") return teacherLoginPage();
     return login();
   }
+
   profile=p;
-  if(p.role==="teacher") return teacherHome();
-  if(p.role==="student") return studentHome();
+
+  // The authenticated role is authoritative. This also fixes the case
+  // where a student arrives here from /student-login.html without ?mode=student.
+  if(p.role==="student"){
+    window.loginMode="student";
+    return studentHome();
+  }
+
+  if(p.role==="teacher"){
+    window.loginMode="teacher";
+    return teacherHome();
+  }
+
+  await sb.auth.signOut();
+  current=null;
+  profile=null;
   return login();
 }
 function login(){
   window.loginMode="chooser";
   render(`<div class="wrap"><div class="card login" style="text-align:center"><h1>Swarup Sir's Knowledge Hub</h1><p class="muted">Choose your login</p><div class="actions" style="display:grid;gap:12px"><button onclick="studentLoginPage()" style="width:100%;font-size:17px;padding:14px">🎓 Student Login</button><button class="secondary" onclick="teacherLoginPage()" style="width:100%;font-size:17px;padding:14px">👨‍🏫 Teacher Login</button></div></div></div>`);
 }
-function studentLoginPage(){
-  window.loginMode="student";
-  render(`<div class="wrap"><div class="card login"><h1>🎓 Student Login</h1><p class="muted">Login using your Roll No and Password.</p><label>Roll No</label><input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Roll No"><label>Password</label><input id="studentPassword" type="password" autocomplete="current-password" placeholder="Enter Password"><button onclick="doStudentLogin()">Login</button><div id="msg"></div></div></div>`);
-}
+function studentLoginPage(){ window.location.assign("/student-login.html"); }
 function teacherLoginPage(){
   window.loginMode="teacher";
   render(`<div class="wrap"><div class="card login"><h1>👨‍🏫 Teacher Login</h1><p class="muted">Teacher account login.</p><label>Email address</label><input id="email" type="email" autocomplete="username" placeholder="Teacher email"><label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"><button onclick="doTeacherLogin()">Login</button><div id="msg"></div><div class="actions"><button class="secondary" onclick="login()">← Login Choice</button></div></div></div>`);
@@ -117,12 +136,29 @@ async function doTeacherLogin(){
 }
 async function doLogin(){return doTeacherLogin()}
 async function logout(){
-  const mode=window.loginMode;
-  await sb.auth.signOut();current=null;profile=null;active=null;answers=[];
-  if(mode==="student") return studentLoginPage();
-  if(mode==="teacher") return teacherLoginPage();
-  return login();
+  const role=profile?.role || window.loginMode;
+
+  await sb.auth.signOut();
+
+  current=null;
+  profile=null;
+  active=null;
+  answers=[];
+  videoDone=false;
+
+  if(role==="student"){
+    window.location.assign("/student-login.html");
+    return;
+  }
+
+  if(role==="teacher"){
+    window.location.assign("/teacher-login.html");
+    return;
+  }
+
+  window.location.assign("/teacher-login.html");
 }
+
 
 async function teacherHome(){
  const [{data:classes,error:ce},{data:assignments,error:ae},{data:students,error:se}]=await Promise.all([
@@ -723,34 +759,10 @@ async function studentHome(){
       ${pending.length?pending.map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
     </div>
     <div class="card"><h2>Previous Work</h2>
-      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Completed:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
-  <button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button>
-</div>
-<div style="margin-top:10px">
-  <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
-</div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
+      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Completed:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div class="actions"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
     </div>
   </div>`)
 }
-async function watchCompletedVideo(assignmentId){
-  try{
-    const {data:a,error}=await sb.from("assignments").select("*").eq("id",assignmentId).single();
-    if(error||!a)throw new Error(error?.message||"Assignment not found.");
-    render(`<div class="wrap">${header("Watch Video")}
-      <div class="card">
-        <h2>${esc(a.title)}</h2>
-        ${a.subject?`<p class="muted">${esc(a.subject)}</p>`:""}
-        ${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:`<div class="notice">No video is available for this assignment.</div>`}
-        <div class="actions" style="margin-top:15px">
-          <button class="secondary" onclick="studentHome()">← Back to My Assignments</button>
-        </div>
-      </div>
-    </div>`)
-  }catch(e){
-    alert("Could not load video: "+(e.message||e));
-  }
-}
-
 async function viewPreviousWork(assignmentId,attemptId){
  const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",assignmentId).single();if(ae||!a)return alert(ae?.message||"Assignment not found.");
  const {data:at,error:te}=await sb.from("attempts").select("*").eq("id",attemptId).eq("student_id",current.id).single();if(te||!at)return alert(te?.message||"Submission not found.");
