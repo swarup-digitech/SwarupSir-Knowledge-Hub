@@ -28,18 +28,27 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .exam-top h2{margin:0;font-size:24px;text-align:center;flex:1}.exam-grid{display:grid;grid-template-columns:minmax(0,1fr) 285px;gap:16px}.question-card{min-height:0;padding:18px}.question-number{font-weight:700;color:#1d4ed8;margin:0 0 10px;font-size:16px}.question-image-wrap{width:100%;display:flex;justify-content:center;align-items:flex-start;background:#fff;border:1px solid #dbe3ee;border-radius:12px;overflow:hidden;margin:0 0 14px}.question-image{display:block;width:100%;height:auto;max-height:none;object-fit:contain;background:#fff}.question-text{font-size:22px;font-weight:700;line-height:1.55;padding:20px;background:#f8fafc;border-radius:12px;margin-bottom:20px;white-space:pre-wrap}.answer-heading{font-size:18px;margin:10px 0 12px}.circle-choice-row{display:flex;justify-content:space-around;align-items:center;gap:14px;padding:8px 6px 4px}.circle-choice{width:68px;height:68px;border-radius:50%;border:2px solid #2563eb;background:#fff;color:#2563eb;display:grid;place-items:center;font-size:22px;font-weight:800;padding:0;transition:.16s;box-shadow:none}.circle-choice:hover{background:#eff6ff;transform:translateY(-1px)}.circle-choice.selected{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:0 0 0 5px #dbeafe}.palette{height:max-content;position:sticky;top:12px}.palette-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.palette-btn{background:#eef3fa;color:#172033;padding:10px 4px}.palette-btn.current{outline:2px solid #2563eb}.palette-btn.answered{background:#22c55e;color:#fff}.exam-nav{display:flex;justify-content:space-between;gap:10px;margin-top:12px}.answer-key-btn{min-width:54px;font-weight:700}.answer-key-btn.selected-key{outline:3px solid #16a34a;background:#dcfce7;color:#166534}.tag{font-weight:600}
 @media(max-width:800px){.exam-grid{grid-template-columns:1fr}.palette{position:static}.exam-shell{padding:8px}.exam-top{padding:10px 8px}.exam-top h2{font-size:19px}.question-card{padding:12px}.question-text{font-size:18px}.question-image-wrap{margin-bottom:12px}.circle-choice-row{justify-content:space-between;padding:8px 4px}.circle-choice{width:58px;height:58px;font-size:20px}.exam-nav button{padding:10px 12px}}
 
-.result-summary{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
-.answer-pill{display:inline-grid;place-items:center;min-width:34px;height:34px;padding:0 9px;border-radius:50%;font-weight:800;border:2px solid}
-.answer-correct{color:#15803d;border-color:#16a34a;background:#f0fdf4}
-.answer-wrong{color:#dc2626;border-color:#ef4444;background:#fef2f2}
-.answer-key{color:#166534;border-color:#16a34a;background:#dcfce7}
-.result-correct{color:#16a34a;font-weight:700}
-.result-wrong{color:#dc2626;font-weight:700}
-@media(max-width:600px){
-  .result-summary{gap:12px;font-size:14px}
-  .answer-pill{min-width:32px;height:32px}
+.result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.result-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc}
+.result-controls select{width:auto;min-width:150px;margin:0}
+.result-student{margin-top:16px;padding:16px;border:1px solid #dbe3ee;border-radius:14px;background:#fff}
+.result-student-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.result-student-head h3{margin:0 0 4px}
+.result-score{display:flex;align-items:center;gap:10px}
+.result-score b{font-size:22px}
+.result-score span{padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700}
+.result-questions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
+.result-question{display:grid;grid-template-columns:42px 1fr 32px;align-items:center;gap:8px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px}
+.result-qno{font-weight:800;color:#1d4ed8}
+.result-answer{display:flex;gap:16px;flex-wrap:wrap;font-size:14px}
+.result-correct{color:#15803d;font-weight:800}
+.result-wrong{color:#dc2626;font-weight:800}
+.result-summary{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb}
+@media(max-width:700px){
+  .result-questions{grid-template-columns:1fr}
+  .result-controls select{min-width:130px}
 }
-.danger{background:#dc2626!important;color:#fff!important}.result-controls{margin:18px 0;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc}.result-controls select{width:auto;min-width:150px;margin:0}.result-student{margin-top:16px;padding:16px;border:1px solid #dbe3ee;border-radius:14px}.result-student-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.result-student-head h3{margin:0 0 4px}.result-questions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.result-question{display:grid;grid-template-columns:42px 1fr 32px;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px}.result-answer{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}.result-score{display:flex;gap:10px;align-items:center}.result-score b{font-size:22px}.result-score span{padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700}@media(max-width:700px){.result-questions{grid-template-columns:1fr}}</style>
+</style>
 </head>
 <body><div id="app"></div>
 <script>
@@ -57,118 +66,86 @@ const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</di
 function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?&]v=([^&]+)/)||v.match(/youtu\.be\/([^?]+)/);return m?"https://www.youtube.com/embed/"+m[1]:v}
 
 async function init(){
-  const mode=new URLSearchParams(location.search).get("mode");
-  window.loginMode=mode==="student"?"student":mode==="teacher"?"teacher":"chooser";
   const {data:{session}}=await sb.auth.getSession();
-  if(!session){
-    if(window.loginMode==="student") return studentLoginPage();
-    if(window.loginMode==="teacher") return teacherLoginPage();
-    return login();
-  }
+  if(!session)return login();
+
   current=session.user;
   const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();
+
   if(error||!p){
     await sb.auth.signOut();
-    if(window.loginMode==="student") return studentLoginPage();
-    if(window.loginMode==="teacher") return teacherLoginPage();
+    current=null;profile=null;
     return login();
   }
+
   profile=p;
-  if(p.role==="teacher") return teacherHome();
-  if(p.role==="student") return studentHome();
+
+  if(p.role==="student"){
+    window.loginMode="student";
+    return studentHome();
+  }
+
+  if(p.role==="teacher"){
+    window.loginMode="teacher";
+    return teacherHome();
+  }
+
+  await sb.auth.signOut();
+  current=null;profile=null;
   return login();
 }
 function login(){
-  window.loginMode="chooser";
-  render(`<div class="wrap"><div class="card login" style="text-align:center"><h1>Swarup Sir's Knowledge Hub</h1><p class="muted">Choose your login</p><div class="actions" style="display:grid;gap:12px"><button onclick="studentLoginPage()" style="width:100%;font-size:17px;padding:14px">🎓 Student Login</button><button class="secondary" onclick="teacherLoginPage()" style="width:100%;font-size:17px;padding:14px">👨‍🏫 Teacher Login</button></div></div></div>`);
-}
-function studentLoginPage(){
-  window.loginMode="student";
-  render(`<div class="wrap"><div class="card login"><h1>🎓 Student Login</h1><p class="muted">Login using your Roll No and Password.</p><label>Roll No</label><input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Roll No"><label>Password</label><input id="studentPassword" type="password" autocomplete="current-password" placeholder="Enter Password"><button onclick="doStudentLogin()">Login</button><div id="msg"></div></div></div>`);
-}
-function teacherLoginPage(){
   window.loginMode="teacher";
-  render(`<div class="wrap"><div class="card login"><h1>👨‍🏫 Teacher Login</h1><p class="muted">Teacher account login.</p><label>Email address</label><input id="email" type="email" autocomplete="username" placeholder="Teacher email"><label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"><button onclick="doTeacherLogin()">Login</button><div id="msg"></div><div class="actions"><button class="secondary" onclick="login()">← Login Choice</button></div></div></div>`);
+  render(`<div class="wrap"><div class="card login" style="text-align:center">
+    <h1>Swarup Sir's Knowledge Hub</h1>
+    <p class="muted">Teacher Portal</p>
+    <div class="actions" style="display:grid;gap:12px">
+      <button onclick="teacherLoginPage()" style="width:100%;font-size:17px;padding:14px">👨‍🏫 Teacher Login</button>
+      <button class="secondary" onclick="location.href='/student-login.html'" style="width:100%;font-size:17px;padding:14px">🎓 Student Login</button>
+    </div>
+  </div></div>`)
 }
-async function doStudentLogin(){
-  const roll=rollNo.value.trim(),pw=studentPassword.value;
-  if(!roll||!pw){msg.innerHTML=message("Enter Roll No and Password.");return}
-  try{
-    const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},body:JSON.stringify({action:"studentLogin",roll_no:roll,password:pw})});
-    const j=await res.json().catch(()=>({}));
-    if(!res.ok||j.error){msg.innerHTML=message(j.error||"Invalid Roll No or Password.");return}
-    const {error:e}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
-    if(e){msg.innerHTML=message(e.message);return}
-    current=(await sb.auth.getUser()).data.user;
-    const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();
-    if(pe||!p||p.role!=="student"){await sb.auth.signOut();msg.innerHTML=message("This is not a student account.");return}
-    profile=p;window.loginMode="student";studentHome();
-  }catch(e){msg.innerHTML=message(e.message||String(e))}
-}
-async function doTeacherLogin(){
-  const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});
-  if(error){msg.innerHTML=message(error.message);return}
-  current=data.user;
-  const {data:p,error:e}=await sb.from("profiles").select("*").eq("id",current.id).single();
-  if(e||!p){await sb.auth.signOut();msg.innerHTML=message("Login worked, but no profile exists for this user.");return}
-  profile=p;
-  if(p.role!=="teacher"){await sb.auth.signOut();msg.innerHTML=message("This account is not a teacher account.");return}
-  window.loginMode="teacher";teacherHome();
-}
+function studentLoginPage(){location.replace("/student-login.html");}
+function teacherLoginPage(){render(`<div class="wrap"><div class="card login"><h1>Teacher Login</h1><p class="muted">Teacher account login.</p><label>Email address</label><input id="email" type="email" autocomplete="username" placeholder="Teacher email"><label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"><button onclick="doTeacherLogin()">Login</button><div id="msg"></div><div class="actions"><button class="secondary" onclick="login()">← Back</button></div></div></div>`)}
+async function doStudentLogin(){const roll=rollNo.value.trim();const pw=studentPassword.value;if(!roll||!pw){msg.innerHTML=message("Enter Roll No and Password.");return}try{const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},body:JSON.stringify({action:"studentLogin",roll_no:roll,password:pw})});const j=await res.json().catch(()=>({}));if(!res.ok||j.error){msg.innerHTML=message(j.error||"Invalid Roll No or Password.");return}const {error:e}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});if(e){msg.innerHTML=message(e.message);return}current=(await sb.auth.getUser()).data.user;const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();if(pe||!p){msg.innerHTML=message("Login worked, but no student profile exists.");return}profile=p;studentHome()}catch(e){msg.innerHTML=message(e.message||String(e))}}
+async function doTeacherLogin(){const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});if(error){msg.innerHTML=message(error.message);return}current=data.user;const {data:p,error:e}=await sb.from("profiles").select("*").eq("id",current.id).single();if(e||!p){msg.innerHTML=message("Login worked, but no profile exists for this user.");return}profile=p;if(p.role!=="teacher"){await sb.auth.signOut();msg.innerHTML=message("This account is not a teacher account.");return}teacherHome()}
 async function doLogin(){return doTeacherLogin()}
 async function logout(){
-  const mode=window.loginMode;
-  await sb.auth.signOut();current=null;profile=null;active=null;answers=[];
-  if(mode==="student") return studentLoginPage();
-  if(mode==="teacher") return teacherLoginPage();
+  const role=profile?.role;
+
+  await sb.auth.signOut();
+
+  current=null;
+  profile=null;
+  active=null;
+  answers=[];
+  videoDone=false;
+
+  if(role==="student"){
+    window.loginMode="student";
+    window.location.replace("/student-login.html");
+    return;
+  }
+
+  if(role==="teacher"){
+    window.loginMode="teacher";
+    return teacherLoginPage();
+  }
+
   return login();
 }
 
 async function teacherHome(){
- const [{data:classes,error:ce},{data:assignments,error:ae},{data:students,error:se}]=await Promise.all([
-   sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
-   sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
-   sb.from("profiles").select("*").eq("role","student").order("full_name")
- ]);
- if(ce||ae||se)return render(`<div class="wrap">${header("Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
+ const [{data:classes},{data:assignments},{data:students}]=await Promise.all([
+ sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
+ sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
+ sb.from("profiles").select("*").eq("role","student").order("full_name")]);
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
  <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF / Image)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
-}
-async function deleteAssignment(assignmentId){
- const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
- if(error||!a)return alert(error?.message||"Assignment not found.");
- if(!confirm(`Delete "${a.title}"?\\n\\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
- try{
-   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
-   const attemptIds=(ats||[]).map(x=>x.id);
-   if(attemptIds.length){
-     const {error:e}=await sb.from("answers").delete().in("attempt_id",attemptIds);if(e)throw e;
-     const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
-   }
-   const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(e3)throw e3;
-   const {error:e4}=await sb.from("questions").delete().eq("assignment_id",assignmentId);if(e4)throw e4;
-   const {error:e5}=await sb.from("assignments").delete().eq("id",assignmentId).eq("created_by",current.id);if(e5)throw e5;
-   alert("Assignment deleted successfully.");teacherHome();
- }catch(e){alert("Could not delete assignment.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
-}
-async function reassignFresh(assignmentId){
- const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
- if(error||!a)return alert(error?.message||"Assignment not found.");
- if(!confirm(`Reassign "${a.title}" as a FRESH assignment?\\n\\nPrevious attempts and answers will be deleted, and students can take it again as a new attempt.`))return;
- try{
-   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
-   const ids=(ats||[]).map(x=>x.id);
-   if(ids.length){
-     const {error:e}=await sb.from("answers").delete().in("attempt_id",ids);if(e)throw e;
-     const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
-   }
-   alert("Previous attempts cleared. Now choose the class/students for the fresh assignment.");
-   reassignAssignment(assignmentId);
- }catch(e){alert("Could not clear previous attempts.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
+ <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button class="secondary" onclick="results('${a.id}')">Results</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
 }
 
 async function reassignAssignment(assignmentId){
@@ -211,25 +188,24 @@ async function loadReassignStudents(assignmentId,classId){
 }
 async function toggleReassignStudents(assignmentId){loadReassignStudents(assignmentId,document.getElementById("rac")?.value);}
 async function saveReassignment(assignmentId){
- const classId=document.getElementById("rac")?.value;if(!classId)return alert("Select a class.");
+ const classId=document.getElementById("rac")?.value; if(!classId)return alert("Select a class.");
+ let studentIds=[];
  try{
    const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
-   let studentIds=[];
    if(mode==="class"){
-     const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;
-     studentIds=(members||[]).map(x=>x.student_id);
+     const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+     if(error)throw error; studentIds=(members||[]).map(x=>x.student_id);
    }else{
      studentIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
    }
-   studentIds=[...new Set(studentIds)];if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
-   const {error:de}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(de)throw de;
+   studentIds=[...new Set(studentIds)]; if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
+   const {error:de}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId); if(de)throw de;
    const rows=studentIds.map(student_id=>({assignment_id:assignmentId,student_id}));
-   const {error:ins}=await sb.from("assignment_students").insert(rows);if(ins)throw ins;
-   const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id);if(up)throw up;
-   alert(`Assignment assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome();
- }catch(e){alert("Could not update assignment: "+(e.message||e))}
+   const {error:ins}=await sb.from("assignment_students").insert(rows); if(ins)throw ins;
+   const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id); if(up)throw up;
+   alert(`Assignment assigned to ${rows.length} student${rows.length===1?'':'s'}.`); teacherHome();
+ }catch(e){alert("Could not update assignment: "+(e.message||e));}
 }
-
 
 async function callTeacherFn(body){
  const {data:{session}}=await sb.auth.getSession();
@@ -500,68 +476,164 @@ async function finishImportedAssignment(){
  alert(`Assignment created and assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome()
 }
 async function viewAssignment(id){
- const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).single();
- if(ae)return alert(ae.message);
- const {data:qs,error:qe}=await sb.from("questions").select("*").eq("assignment_id",id).order("question_order");
- if(qe)return alert(qe.message);
- render(`<div class="wrap">${header(esc(a.title))}
- <div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div>
- <div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>q.image_url?`<div class="assignment"><h3>Question ${i+1}</h3><img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:750px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px"><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`).join("")}</div>
- <div class="actions"><button class="secondary" onclick="teacherHome()">← Back</button></div></div>`)
+ const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).single();if(ae)return alert(ae.message);
+ const {data:qs,error:qe}=await sb.from("questions").select("*").eq("assignment_id",id).order("question_order");if(qe)return alert(qe.message);
+ render(`<div class="wrap">${header(esc(a.title))}<div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div><div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>q.image_url?`<div class="assignment"><h3>Question ${i+1}</h3><img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:750px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px"><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`).join("")}</div><button class="secondary" onclick="teacherHome()">← Back</button></div>`)
 }
-
 async function results(id){
- try{
-  const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).eq("created_by",current.id).single();
-  if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
-  const {data:qs,error:qe}=await sb.from("questions").select("id,question_order,correct_option").eq("assignment_id",id).order("question_order");
-  if(qe)throw qe;
-  const {data:ats,error:te}=await sb.from("attempts").select("id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").eq("assignment_id",id).order("submitted_at",{ascending:false});
-  if(te)throw te;
-  const ids=[...new Set((ats||[]).map(x=>x.student_id))],attemptIds=(ats||[]).map(x=>x.id);
-  let profiles=[],answerRows=[];
-  if(ids.length){const {data:p,error}=await sb.from("profiles").select("id,full_name,roll_no").in("id",ids);if(error)throw error;profiles=p||[]}
-  if(attemptIds.length){const {data:ar,error}=await sb.from("answers").select("attempt_id,question_id,selected_option,is_correct").in("attempt_id",attemptIds);if(error)throw error;answerRows=ar||[]}
-  window._resultData={assignment:a,questions:qs||[],attempts:ats||[],profiles:new Map(profiles.map(p=>[p.id,p])),answers:new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x])),sortBy:"submitted",sortDir:"desc"};
-  renderResultsPage();
- }catch(e){alert("Could not load results: "+(e.message||e))}
+  try{
+    const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).eq("created_by",current.id).single();
+    if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
+
+    const {data:qs,error:qe}=await sb.from("questions")
+      .select("id,question_order,question_text,option_a,option_b,option_c,option_d,correct_option,image_url")
+      .eq("assignment_id",id).order("question_order");
+    if(qe)throw new Error(qe.message);
+
+    const {data:ats,error:te}=await sb.from("attempts")
+      .select("id,student_id,score,total_questions,video_completed,submitted_at,attempt_number")
+      .eq("assignment_id",id).order("submitted_at",{ascending:false});
+    if(te)throw new Error(te.message);
+
+    const studentIds=[...new Set((ats||[]).map(x=>x.student_id))];
+    const attemptIds=(ats||[]).map(x=>x.id);
+
+    let profiles=[],answerRows=[];
+    if(studentIds.length){
+      const {data:p,error:pe}=await sb.from("profiles")
+        .select("id,full_name,roll_no").in("id",studentIds);
+      if(pe)throw new Error(pe.message);
+      profiles=p||[];
+    }
+    if(attemptIds.length){
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option,is_correct").in("attempt_id",attemptIds);
+      if(are)throw new Error(are.message);
+      answerRows=ar||[];
+    }
+
+    window._resultData={
+      assignment:a,
+      questions:qs||[],
+      attempts:ats||[],
+      profiles:new Map(profiles.map(p=>[p.id,p])),
+      answers:new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x])),
+      sortBy:"submitted",
+      sortDir:"desc"
+    };
+    renderResultsPage();
+  }catch(e){
+    alert("Could not load results: "+(e.message||e));
+  }
 }
 
 function renderResultsPage(){
- const d=window._resultData;if(!d)return;
- const sorted=[...d.attempts].sort((x,y)=>{
-  let a,b;
-  if(d.sortBy==="student"){a=(d.profiles.get(x.student_id)?.full_name||"").toLowerCase();b=(d.profiles.get(y.student_id)?.full_name||"").toLowerCase()}
-  else if(d.sortBy==="score"){a=Number(x.score||0)/Math.max(1,Number(x.total_questions||d.questions.length));b=Number(y.score||0)/Math.max(1,Number(y.total_questions||d.questions.length))}
-  else if(d.sortBy==="attempt"){a=Number(x.attempt_number||1);b=Number(y.attempt_number||1)}
-  else {a=x.submitted_at?new Date(x.submitted_at).getTime():0;b=y.submitted_at?new Date(y.submitted_at).getTime():0}
-  return (a===b?0:a<b?-1:1)*(d.sortDir==="asc"?1:-1);
- });
- const avg=sorted.length?Math.round(sorted.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||d.questions.length)),0)/sorted.length):0;
- render(`<div class="wrap">${header("Results")}<div class="card">
- <div style="display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap"><div><h2>${esc(d.assignment.title)}</h2><div class="muted">${esc(d.assignment.subject||"")}</div></div><div class="tag">${sorted.length} submission${sorted.length===1?"":"s"} • Average ${avg}%</div></div>
- <div class="result-controls actions"><b>Sort:</b><select id="resultSortBy"><option value="submitted" ${d.sortBy==="submitted"?"selected":""}>Submission time</option><option value="student" ${d.sortBy==="student"?"selected":""}>Student name</option><option value="score" ${d.sortBy==="score"?"selected":""}>Score</option><option value="attempt" ${d.sortBy==="attempt"?"selected":""}>Attempt number</option></select><select id="resultSortDir"><option value="desc" ${d.sortDir==="desc"?"selected":""}>Descending</option><option value="asc" ${d.sortDir==="asc"?"selected":""}>Ascending</option></select><button onclick="applyResultSort()">Apply</button><button onclick="downloadAssignmentResultsExcel('${d.assignment.id}')">⬇ Download Results Excel</button><button class="secondary" onclick="teacherHome()">← Back</button></div>
- ${sorted.length?sorted.map(at=>{const p=d.profiles.get(at.student_id)||{},total=Number(at.total_questions||d.questions.length),score=Number(at.score||0),wrong=Math.max(0,total-score);return `<div class="result-student"><div class="result-student-head"><div><h3>${esc(p.full_name||"Student")}</h3><div class="muted small">Roll No: ${esc(p.roll_no||"—")} • Attempt ${esc(at.attempt_number||1)} • ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</div></div><div class="result-score"><b>${score}/${total}</b><span>${total?Math.round(score*100/total):0}%</span></div></div><div class="result-questions">${d.questions.map((q,i)=>{const ans=d.answers.get(`${at.id}:${q.id}`),selected=ans?.selected_option||"—",correct=q.correct_option||"—",ok=ans?.is_correct===true||(selected!=="—"&&selected===correct);return `<div class="result-question"><div class="result-qno">Q${q.question_order||i+1}</div><div class="result-answer"><span>Your: <b>${esc(selected)}</b></span><span>Key: <b>${esc(correct)}</b></span></div><div class="${ok?"result-correct":"result-wrong"}">${ok?"✓":"✗"}</div></div>`}).join("")}</div><div class="result-summary"><span>Total: <b>${total}</b></span><span class="result-correct">✓ Correct: <b>${score}</b></span><span class="result-wrong">✗ Wrong: <b>${wrong}</b></span><span>Video: <b>${at.video_completed?"Yes":"No"}</b></span><button class="danger" onclick="deleteStudentAttempt('${at.id}','${esc(p.full_name||"Student")}')">Delete This Attempt</button></div></div>`}).join(""):`<div class="success"><b>No submissions yet.</b></div>`}
- </div></div>`);
+  const d=window._resultData;
+  if(!d)return;
+
+  const sorted=[...d.attempts].sort((x,y)=>{
+    let ax,by;
+    if(d.sortBy==="student"){
+      ax=(d.profiles.get(x.student_id)?.full_name||"").toLowerCase();
+      by=(d.profiles.get(y.student_id)?.full_name||"").toLowerCase();
+    }else if(d.sortBy==="score"){
+      ax=Number(x.score||0)/Math.max(1,Number(x.total_questions||d.questions.length));
+      by=Number(y.score||0)/Math.max(1,Number(y.total_questions||d.questions.length));
+    }else if(d.sortBy==="attempt"){
+      ax=Number(x.attempt_number||1);by=Number(y.attempt_number||1);
+    }else{
+      ax=x.submitted_at?new Date(x.submitted_at).getTime():0;
+      by=y.submitted_at?new Date(y.submitted_at).getTime():0;
+    }
+    if(ax<by)return d.sortDir==="asc"?-1:1;
+    if(ax>by)return d.sortDir==="asc"?1:-1;
+    return 0;
+  });
+
+  const avg=sorted.length?Math.round(sorted.reduce((n,x)=>{
+    const total=Number(x.total_questions||d.questions.length||1);
+    return n+(Number(x.score||0)*100/total);
+  },0)/sorted.length):0;
+
+  render(`<div class="wrap">${header("Results")}
+    <div class="card">
+      <div class="result-head">
+        <div>
+          <h2>${esc(d.assignment.title)}</h2>
+          ${d.assignment.subject?`<div class="muted">${esc(d.assignment.subject)}</div>`:""}
+        </div>
+        <div class="tag">${sorted.length} submission${sorted.length===1?"":"s"} • Average ${avg}%</div>
+      </div>
+
+      <div class="result-controls">
+        <b>Sort:</b>
+        <select id="resultSortBy">
+          <option value="submitted" ${d.sortBy==="submitted"?"selected":""}>Submission time</option>
+          <option value="student" ${d.sortBy==="student"?"selected":""}>Student name</option>
+          <option value="score" ${d.sortBy==="score"?"selected":""}>Score</option>
+          <option value="attempt" ${d.sortBy==="attempt"?"selected":""}>Attempt number</option>
+        </select>
+        <select id="resultSortDir">
+          <option value="desc" ${d.sortDir==="desc"?"selected":""}>Descending</option>
+          <option value="asc" ${d.sortDir==="asc"?"selected":""}>Ascending</option>
+        </select>
+        <button onclick="applyResultSort()">Apply</button>
+        <button onclick="downloadAssignmentResultsExcel('${d.assignment.id}')">⬇ Download Results Excel</button>
+        <button class="secondary" onclick="teacherHome()">← Back</button>
+      </div>
+
+      ${sorted.length?sorted.map(at=>{
+        const p=d.profiles.get(at.student_id)||{};
+        const total=Number(at.total_questions||d.questions.length||0);
+        const score=Number(at.score||0);
+        const wrong=Math.max(0,total-score);
+        const pct=total?Math.round(score*100/total):0;
+
+        return `<div class="result-student">
+          <div class="result-student-head">
+            <div>
+              <h3>${esc(p.full_name||"Student")}</h3>
+              <div class="muted small">Roll No: ${esc(p.roll_no||"—")} • Attempt ${esc(at.attempt_number||1)} • ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</div>
+            </div>
+            <div class="result-score"><b>${score}/${total}</b><span>${pct}%</span></div>
+          </div>
+
+          <div class="result-questions">
+            ${d.questions.map((q,i)=>{
+              const ans=d.answers.get(`${at.id}:${q.id}`);
+              const selected=ans?.selected_option||"—";
+              const correct=q.correct_option||"—";
+              const ok=ans?.is_correct===true || (selected!=="—" && selected===correct);
+              return `<div class="result-question">
+                <div class="result-qno">Q${q.question_order||i+1}</div>
+                <div class="result-answer">
+                  <span>Your answer: <b>${esc(selected)}</b></span>
+                  <span>Correct: <b>${esc(correct)}</b></span>
+                </div>
+                <div class="${ok?"result-correct":"result-wrong"}">${ok?"✓":"✗"}</div>
+              </div>`;
+            }).join("")}
+          </div>
+
+          <div class="result-summary">
+            <span>Total: <b>${total}</b></span>
+            <span class="result-correct">✓ Correct: <b>${score}</b></span>
+            <span class="result-wrong">✗ Wrong: <b>${wrong}</b></span>
+            <span>Video: <b>${at.video_completed?"Yes":"No"}</b></span>
+          </div>
+        </div>`;
+      }).join(""):`<div class="notice"><b>No submissions yet.</b><br><span class="small">Results will appear here after students submit this assignment.</span></div>`}
+    </div>
+  </div>`);
 }
 
 function applyResultSort(){
- const d=window._resultData;if(!d)return;
- d.sortBy=document.getElementById("resultSortBy")?.value||"submitted";
- d.sortDir=document.getElementById("resultSortDir")?.value||"desc";
- renderResultsPage();
+  const d=window._resultData;
+  if(!d)return;
+  d.sortBy=document.getElementById("resultSortBy")?.value||"submitted";
+  d.sortDir=document.getElementById("resultSortDir")?.value||"desc";
+  renderResultsPage();
 }
-
-async function deleteStudentAttempt(attemptId,studentName){
- if(!confirm(`Delete ${studentName}'s attempt?\n\nThe submitted answers and this attempt will be permanently removed.`))return;
- try{
-  const {error:e}=await sb.from("answers").delete().eq("attempt_id",attemptId);if(e)throw e;
-  const {error:e2}=await sb.from("attempts").delete().eq("id",attemptId);if(e2)throw e2;
-  alert("Attempt deleted successfully.");
-  const assignmentId=window._resultData?.assignment?.id;if(assignmentId)results(assignmentId);
- }catch(e){alert("Could not delete attempt.\n\n"+(e.message||e)+"\n\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
-}
-
 
 async function downloadAssignmentResultsExcel(assignmentId){
   try{
