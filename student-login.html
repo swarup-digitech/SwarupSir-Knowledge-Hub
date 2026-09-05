@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Student Login — Swarup Sir's Knowledge Hub</title>
+<link rel="manifest" href="/student-app.webmanifest">
+<link rel="apple-touch-icon" href="/skh-icon.png">
+<meta name="theme-color" content="#087ed7">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SKH">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
@@ -133,6 +139,10 @@ button{
   text-shadow:0 1px 2px rgba(0,0,0,.18);
 }
 .footer small{display:block;margin-top:8px;font-weight:400;font-size:13px}
+.install-card{display:none;margin-top:16px;padding:16px;border-radius:18px;background:#eef8ff;border:1px solid #b9dff8;text-align:center;color:#164d7d}
+.install-card.show{display:block}
+.install-btn{width:100%;height:52px;margin-top:10px;background:#07508d;color:#fff}
+.install-note{font-size:13px;line-height:1.45;margin:9px 0 0;color:#52718f}
 @media(max-width:600px){
   .login-page{padding:18px 16px 65px}
   .logo-wrap{height:190px;width:min(405px,92vw)}
@@ -184,6 +194,11 @@ button{
     </form>
 
     <div id="msg"></div>
+    <div id="installCard" class="install-card">
+      <strong>📱 Add SKH to your Home Screen</strong>
+      <div class="install-note">Create a student-only shortcut for quick access to SKH.</div>
+      <button id="installBtn" class="install-btn" type="button">➕ Add SKH</button>
+    </div>
   </div>
 
   <div class="footer">
@@ -197,6 +212,38 @@ const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
 const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn');
+let deferredInstallPrompt=null;
+const installCard=document.getElementById('installCard');
+const installBtn=document.getElementById('installBtn');
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/student-sw.js').catch(()=>{}));
+}
+
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  if(localStorage.getItem('skh_student_device_seen')==='1' && !window.matchMedia('(display-mode: standalone)').matches){
+    installCard.classList.add('show');
+  }
+});
+
+window.addEventListener('appinstalled',()=>{
+  deferredInstallPrompt=null;
+  installCard.classList.remove('show');
+});
+
+installBtn.addEventListener('click',async()=>{
+  if(!deferredInstallPrompt){
+    installCard.classList.add('show');
+    document.querySelector('.install-note').textContent='Use your browser menu and choose “Add to Home screen” or “Install app”. The shortcut will be named SKH.';
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt=null;
+  installCard.classList.remove('show');
+});
 document.getElementById('togglePassword').addEventListener('click',()=>{
   const p=document.getElementById('password');
   const t=document.getElementById('togglePassword');
@@ -230,8 +277,23 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
    if(error)throw error;
    const {data:{user}}=await sb.auth.getUser();
    if(!user)throw new Error('Student session could not be created.');
+    const firstLoginOnThisDevice=localStorage.getItem('skh_student_device_seen')!=='1';
+    localStorage.setItem('skh_student_device_seen','1');
    show('Login successful. Opening Student Dashboard...',true);
-   setTimeout(()=>location.replace('/index.html'),250);
+    if(firstLoginOnThisDevice && deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches){
+      installCard.classList.add('show');
+      installBtn.textContent='📱 Add SKH to Home Screen';
+      setTimeout(async()=>{
+        if(!deferredInstallPrompt)return;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt=null;
+        installCard.classList.remove('show');
+        setTimeout(()=>location.replace('/index.html'),250);
+      },300);
+    }else{
+      setTimeout(()=>location.replace('/index.html'),250);
+    }
  }catch(err){show(err.message||String(err));btn.disabled=false;btn.textContent='Login'}
 });
 </script>

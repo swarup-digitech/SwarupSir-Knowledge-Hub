@@ -1,35 +1,26 @@
-SWARUP SIR'S KNOWLEDGE HUB — COMPLETE PWA PACKAGE
+SKH — Swarup Sir's Knowledge Hub
+Complete student-login shortcut package
 
-Cloudflare Pages files (upload all of these to the deployment root):
-- index.html
-- student-login.html
-- teacher-login.html
-- manifest.webmanifest
-- sw.js
-- icon-192.png
-- icon-512.png
-- icon-maskable-512.png
+UPLOAD ALL FILES TO THE ROOT OF YOUR CLOUDFLARE PAGES SITE:
 
-Supabase SQL (DO NOT upload this as index.html):
-- automatic_low_score_reassignment.sql
+index.html
+student-login.html
+teacher-login.html
+student-app.webmanifest
+student-sw.js
+skh-icon.png
 
-FEATURES INCLUDED:
-- Student Roll No + Password login
-- Teacher login
-- One submission per student per assignment
-- Score below 80%: submission is automatically deleted after 3 hours
-- Assignment remains assigned and becomes available again
-- Automatic student dashboard status refresh
-- Teacher can manually delete attempts and use Reassign Fresh
-- PWA / Add to Home Screen support
-- Custom Swarup Sir's Knowledge Hub app icon
-- Android/Chrome native install prompt where supported
-- iPhone/iPad Add to Home Screen guidance
+Student flow:
+Student Login -> Student Dashboard -> Logout -> Student Login
 
-DEPLOYMENT:
-1. Upload the website files listed above to the ROOT of the Cloudflare Pages deployment.
-2. Run automatic_low_score_reassignment.sql ONLY in Supabase SQL Editor.
-3. Do not upload any .sql file as index.html.
+The student Home Screen/PWA shortcut is named "SKH" and uses the supplied
+Swarup Sir's Knowledge Hub icon.
 
-NOTE:
-A website cannot silently install an icon on a device. The browser requires user confirmation. The app provides the installation prompt/instructions when supported.
+Important:
+A browser cannot silently install a Home Screen shortcut. On supported
+browsers the installation prompt is requested after the student's first
+successful login; otherwise the student can use the browser's
+"Add to Home screen" / "Install app" option.
+
+Do not rename the manifest, service worker, or icon files unless the
+references in student-login.html and student-app.webmanifest are updated.

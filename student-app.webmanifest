@@ -1,0 +1,18 @@
+{
+  "name": "SKH — Swarup Sir's Knowledge Hub",
+  "short_name": "SKH",
+  "description": "Student-only access to Swarup Sir's Knowledge Hub.",
+  "start_url": "/student-login.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef8ff",
+  "theme_color": "#087ed7",
+  "icons": [
+    {
+      "src": "/skh-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
