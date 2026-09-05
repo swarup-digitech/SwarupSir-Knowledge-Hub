@@ -1,26 +1,27 @@
 SKH — Swarup Sir's Knowledge Hub
-Complete student-login shortcut package
+Complete package with student credential convenience
 
-UPLOAD ALL FILES TO THE ROOT OF YOUR CLOUDFLARE PAGES SITE:
+Files:
+- index.html
+- student-login.html
+- teacher-login.html
+- student-app.webmanifest
+- student-sw.js
+- skh-icon.png
 
-index.html
-student-login.html
-teacher-login.html
-student-app.webmanifest
-student-sw.js
-skh-icon.png
+Login behavior:
+1. The browser can offer to save the student's Roll No and Password using
+   standard username/current-password autocomplete fields.
+2. The optional "Remember my Roll No on this device" checkbox stores ONLY
+   the Roll No in the browser's local storage.
+3. The password is NOT stored by this website. If the student chooses
+   "Save password", the browser/password manager stores it securely.
+4. Supabase's normal authenticated session can keep the student signed in
+   according to the existing app behavior.
 
-Student flow:
-Student Login -> Student Dashboard -> Logout -> Student Login
+Student-only shortcut:
+- App name: SKH
+- Start page: /student-login.html
+- Icon: skh-icon.png
 
-The student Home Screen/PWA shortcut is named "SKH" and uses the supplied
-Swarup Sir's Knowledge Hub icon.
-
-Important:
-A browser cannot silently install a Home Screen shortcut. On supported
-browsers the installation prompt is requested after the student's first
-successful login; otherwise the student can use the browser's
-"Add to Home screen" / "Install app" option.
-
-Do not rename the manifest, service worker, or icon files unless the
-references in student-login.html and student-app.webmanifest are updated.
+Upload all files to the root of the Cloudflare Pages deployment.

@@ -138,6 +138,8 @@ button{
   font-weight:700;font-size:15px;
   text-shadow:0 1px 2px rgba(0,0,0,.18);
 }
+.remember-row{display:flex;align-items:center;gap:9px;margin:2px 0 14px;color:#52718f;font-size:14px;cursor:pointer}
+.remember-row input{accent-color:#087ed7}
 .footer small{display:block;margin-top:8px;font-weight:400;font-size:13px}
 .install-card{display:none;margin-top:16px;padding:16px;border-radius:18px;background:#eef8ff;border:1px solid #b9dff8;text-align:center;color:#164d7d}
 .install-card.show{display:block}
@@ -173,18 +175,18 @@ button{
   <div class="card">
     <h2 class="login-title">🎓 Student Login</h2>
 
-    <form id="loginForm">
+    <form id="loginForm" autocomplete="on">
       <div class="form-group">
         <label for="rollNo">Roll No</label>
         <input id="rollNo" type="text" inputmode="numeric"
-               autocomplete="username" placeholder="Enter your Roll No" required>
+               name="username" autocomplete="username" placeholder="Enter your Roll No" required>
       </div>
 
       <div class="form-group">
         <label for="password">Password</label>
         <div class="input-wrap">
           <input id="password" class="password-input" type="password"
-                 autocomplete="current-password" placeholder="Enter your Password" required>
+                 name="password" autocomplete="current-password" placeholder="Enter your Password" required>
           <button class="toggle-password" type="button" id="togglePassword"
                   aria-label="Show password">◉</button>
         </div>
@@ -201,9 +203,9 @@ button{
     </div>
   </div>
 
-  <div class="footer"><font color="red">
+  <div class="footer">
     🛡️ Your learning. Your progress. Your success.
-    <small>© 2026 Swarup Sir's Knowledge Hub</small></font>
+    <small>© 2026 Swarup Sir's Knowledge Hub</small>
   </div>
 </div>
 <script>
@@ -212,6 +214,12 @@ const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
 const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn');
+const rememberRoll=document.getElementById('rememberRoll');
+
+try{
+  const savedRoll=localStorage.getItem('skh_saved_roll');
+  if(savedRoll){ rollNo.value=savedRoll; rememberRoll.checked=true; }
+}catch(e){}
 let deferredInstallPrompt=null;
 const installCard=document.getElementById('installCard');
 const installBtn=document.getElementById('installBtn');
