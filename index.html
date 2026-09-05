@@ -3,8 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=gvRxOk_30q8tSID9qR30m9CvX3BnuTXEYK6natja94wOXwKhKDjtfnJUO1yGKM30FyPLCDF96lKze5NKL79WhwSDm9sxf4iork1Yuq4pQYwVBODzKLqO54X6FuLtVRB2wQl6s4YWrmA9u3npZCr1ZrNH3-NCMV_Z6DRNSzzaJKBiGjB-CmZ0KYPhsf9oQosMOJPzWSa6mJxk0eJb--TYouQuGSNKR7LkHdQdnbtyg_TemEfg8D1riBSu5zFPCp7XBtxv-i8mIWiNjjwE5bfMu182NXhB2hYJ29aQJJGPwSf-3z_LgD_1YbQUR3BzOo2TZ-ML5_RH0r12tPBe1j_DcQ" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -39,16 +42,27 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
   .result-summary{gap:12px;font-size:14px}
   .answer-pill{min-width:32px;height:32px}
 }
-.danger{background:#dc2626!important;color:#fff!important}.result-controls{margin:18px 0;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc}.result-controls select{width:auto;min-width:150px;margin:0}.result-student{margin-top:16px;padding:16px;border:1px solid #dbe3ee;border-radius:14px}.result-student-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.result-student-head h3{margin:0 0 4px}.result-questions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.result-question{display:grid;grid-template-columns:42px 1fr 32px;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px}.result-answer{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}.result-score{display:flex;gap:10px;align-items:center}.result-score b{font-size:22px}.result-score span{padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700}@media(max-width:700px){.result-questions{grid-template-columns:1fr}}</style>
+.danger{background:#dc2626!important;color:#fff!important}.result-controls{margin:18px 0;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc}.result-controls select{width:auto;min-width:150px;margin:0}.result-student{margin-top:16px;padding:16px;border:1px solid #dbe3ee;border-radius:14px}.result-student-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.result-student-head h3{margin:0 0 4px}.result-questions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.result-question{display:grid;grid-template-columns:42px 1fr 32px;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px}.result-answer{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}.result-score{display:flex;gap:10px;align-items:center}.result-score b{font-size:22px}.result-score span{padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700}@media(max-width:700px){.result-questions{grid-template-columns:1fr}}.install-banner{position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;display:none;max-width:560px;margin:auto;background:#fff;border:1px solid #dbe3ee;border-radius:16px;padding:16px;box-shadow:0 12px 40px #0000001a}.install-banner.show{display:block}.install-banner-row{display:flex;gap:12px;align-items:center}.install-icon{width:52px;height:52px;border-radius:12px;flex:0 0 auto}.install-banner h3{margin:0 0 4px}.install-banner p{margin:0}.install-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.install-actions button{flex:1;min-width:120px}
+</style>
 </head>
 <body><div id="app"></div>
+<div id="installBanner" class="install-banner" role="dialog" aria-live="polite"><div class="install-banner-row"><img class="install-icon" src="/icon-192.png" alt="Knowledge Hub icon"><div><h3>Install Knowledge Hub</h3><p class="muted small">Add a shortcut to this device for quick student access.</p></div></div><div id="installHelp" class="small muted" style="margin-top:8px"></div><div class="install-actions"><button id="installAppBtn" type="button">＋ Add to Home Screen</button><button class="secondary" id="installLaterBtn" type="button">Not now</button></div></div>
 <script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
 const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
 const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let current=null,profile=null,active=null,answers=[],videoDone=false;
+let studentRefreshTimer=null, studentDashboardSnapshot=null;
 let bulkStudents=[], importedQuestions=[], importedAnswers={};
+let deferredInstallPrompt=null;
+const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
+function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent);}
+function setupPWAInstall(){if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;});window.addEventListener("appinstalled",()=>{deferredInstallPrompt=null;localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();});}
+function hideInstallBanner(){document.getElementById("installBanner")?.classList.remove("show");}
+function showStudentInstallPrompt(){if(!profile||profile.role!=="student"||isStandalone()||localStorage.getItem(PWA_INSTALL_KEY))return;const b=document.getElementById("installBanner"),help=document.getElementById("installHelp"),btn=document.getElementById("installAppBtn");if(!b||!btn)return;help.textContent=isIOS()&&!deferredInstallPrompt?"On iPhone/iPad: tap Share, then choose “Add to Home Screen”.":"Tap Add to Home Screen and confirm the installation.";b.classList.add("show");btn.onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();const choice=await deferredInstallPrompt.userChoice.catch(()=>null);deferredInstallPrompt=null;if(choice?.outcome==="accepted")localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();}else if(isIOS()){alert("To add Knowledge Hub: tap Share, then choose “Add to Home Screen”.");}else{alert("If your browser shows an install icon in the address bar or menu, choose “Install” or “Add to Home Screen”.");}};document.getElementById("installLaterBtn").onclick=()=>{localStorage.setItem(PWA_INSTALL_KEY,"later");hideInstallBanner();};}
+setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>document.getElementById("app").innerHTML=x;
@@ -102,7 +116,7 @@ async function doStudentLogin(){
     current=(await sb.auth.getUser()).data.user;
     const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();
     if(pe||!p||p.role!=="student"){await sb.auth.signOut();msg.innerHTML=message("This is not a student account.");return}
-    profile=p;window.loginMode="student";studentHome();
+    profile=p;window.loginMode="student";studentHome();setTimeout(showStudentInstallPrompt,700);
   }catch(e){msg.innerHTML=message(e.message||String(e))}
 }
 async function doTeacherLogin(){
@@ -117,6 +131,7 @@ async function doTeacherLogin(){
 }
 async function doLogin(){return doTeacherLogin()}
 async function logout(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const wasStudent = profile?.role === "student" || window.loginMode === "student";
   const wasTeacher = profile?.role === "teacher" || window.loginMode === "teacher";
 
@@ -722,6 +737,7 @@ async function downloadAllResultsExcel(){
 }
 
 async function studentHome(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const {data:links,error:le}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);
   if(le)return render(`<div class="wrap">${header("My Assignments")}<div class="card">${message(le.message)}</div></div>`);
   const ids=(links||[]).map(x=>x.assignment_id);
@@ -737,8 +753,11 @@ async function studentHome(){
   const completedIds=new Set(attempts.map(t=>t.assignment_id));
   const pending=assignments.filter(a=>!completedIds.has(a.id));
   const completed=assignments.filter(a=>completedIds.has(a.id));
+  const snapshot=[...completedIds].sort().join("|");
+  const previousSnapshot=studentDashboardSnapshot;
+  studentDashboardSnapshot=snapshot;
   render(`<div class="wrap">${header("My Assignments")}
-    <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p></div>
+    <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div>
     <div class="card"><h2>New Assignments</h2>
       ${pending.length?pending.map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
     </div>
@@ -750,9 +769,32 @@ async function studentHome(){
   <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
 </div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
     </div>
-  </div>`)
+  </div>`);
+
+  // Keep the dashboard in sync while it is open. The database job removes
+  // failed submissions after 3 hours; when that happens the assignment moves
+  // back to New Assignments automatically.
+  setTimeout(showStudentInstallPrompt,300);
+
+  studentRefreshTimer=setInterval(async()=>{
+    try{
+      const {data:links2,error:e1}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);
+      if(e1)return;
+      const ids2=(links2||[]).map(x=>x.assignment_id);
+      if(!ids2.length){if(studentDashboardSnapshot!==""){studentDashboardSnapshot="";studentHome();}return;}
+      const {data:at2,error:e2}=await sb.from("attempts").select("assignment_id").eq("student_id",current.id).in("assignment_id",ids2);
+      if(e2)return;
+      const snap2=[...new Set((at2||[]).map(x=>x.assignment_id))].sort().join("|");
+      if(snap2!==studentDashboardSnapshot){
+        studentDashboardSnapshot=snap2;
+        alert("Assignment status updated. Any submission below 80% that has passed the 3-hour limit is now available again.");
+        await studentHome();
+      }
+    }catch(_e){}
+  },60000);
 }
 async function watchCompletedVideo(assignmentId){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   try{
     const {data:a,error}=await sb.from("assignments").select("*").eq("id",assignmentId).single();
     if(error||!a)throw new Error(error?.message||"Assignment not found.");
@@ -772,6 +814,7 @@ async function watchCompletedVideo(assignmentId){
 }
 
 async function viewPreviousWork(assignmentId,attemptId){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
  const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",assignmentId).single();if(ae||!a)return alert(ae?.message||"Assignment not found.");
  const {data:at,error:te}=await sb.from("attempts").select("*").eq("id",attemptId).eq("student_id",current.id).single();if(te||!at)return alert(te?.message||"Submission not found.");
  const {data:ans,error:anErr}=await sb.from("answers").select("*").eq("attempt_id",attemptId);if(anErr)return alert(anErr.message);
@@ -780,6 +823,7 @@ async function viewPreviousWork(assignmentId,attemptId){
  render(`<div class="wrap">${header("Previous Work")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p></div><div class="card"><h2>My Answers</h2>${ordered.map(({x,q},i)=>{const opts={A:q?.option_a,B:q?.option_b,C:q?.option_c,D:q?.option_d};const selectedText=opts[x.selected_option]??x.selected_option??"—";const correctText=opts[q?.correct_option]??q?.correct_option??"—";return `<div class="assignment"><h3>Question ${i+1}</h3>${q?.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${i+1}"></div>`:`<p><b>${esc(q?.question_text||"Question unavailable")}</b></p>`}<p><b>Your answer:</b> ${esc(x.selected_option||"—")}${q?.image_url?"":". "+esc(selectedText)}</p>${x.is_correct?`<div class="success"><b>Correct answer ✓</b></div>`:`<div class="notice"><b>Wrong answer ✗</b><br>Correct answer: <b>${esc(q?.correct_option||"—")}${q?.image_url?"":". "+esc(correctText)}</b></div>`}</div>`}).join("")||"<p class='muted'>No answer details found.</p>"}</div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`)
 }
 async function startLesson(id){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const {data:a,error}=await sb.from("assignments").select("*").eq("id",id).single();
   if(error)return alert(error.message);
 
