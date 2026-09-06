@@ -179,14 +179,14 @@ button{
       <div class="form-group">
         <label for="rollNo">Roll No</label>
         <input id="rollNo" type="text" inputmode="numeric"
-               name="username" autocomplete="username" placeholder="Enter your Roll No" required>
+               name="username" name="username" autocomplete="username" placeholder="Enter your Roll No" required>
       </div>
 
       <div class="form-group">
         <label for="password">Password</label>
         <div class="input-wrap">
           <input id="password" class="password-input" type="password"
-                 name="password" autocomplete="current-password" placeholder="Enter your Password" required>
+                 name="password" name="password" autocomplete="current-password" placeholder="Enter your Password" required>
           <button class="toggle-password" type="button" id="togglePassword"
                   aria-label="Show password">◉</button>
         </div>
@@ -225,7 +225,7 @@ const installCard=document.getElementById('installCard');
 const installBtn=document.getElementById('installBtn');
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('/student-sw.js').catch(()=>{}));
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/student-sw.js?v=3').catch(()=>{}));
 }
 
 window.addEventListener('beforeinstallprompt',e=>{

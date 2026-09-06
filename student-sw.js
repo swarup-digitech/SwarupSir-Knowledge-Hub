@@ -1,4 +1,4 @@
-const CACHE_NAME = "skh-student-v1";
+const CACHE_NAME = "skh-student-v3";
 const APP_SHELL = [
   "/student-login.html",
   "/skh-icon.png",
@@ -16,17 +16,35 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(
+        keys.filter(key => key.startsWith("skh-student-") && key !== CACHE_NAME)
+            .map(key => caches.delete(key))
+      )
     ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  // Navigation: try the live page first, then use the cached student login.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put("/student-login.html", copy));
+          return response;
+        })
+        .catch(() => caches.match("/student-login.html"))
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).catch(() => caches.match("/student-login.html"));
-    })
+    caches.match(event.request).then(cached => cached || fetch(event.request))
   );
 });

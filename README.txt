@@ -1,27 +1,29 @@
 SKH — Swarup Sir's Knowledge Hub
-Complete package with student credential convenience
+Complete student PWA package — v3
 
-Files:
-- index.html
-- student-login.html
-- teacher-login.html
-- student-app.webmanifest
-- student-sw.js
-- skh-icon.png
+Upload these files to the ROOT of Cloudflare Pages:
+index.html
+student-login.html
+teacher-login.html
+student-app.webmanifest
+student-sw.js
+skh-icon.png
 
-Login behavior:
-1. The browser can offer to save the student's Roll No and Password using
-   standard username/current-password autocomplete fields.
-2. The optional "Remember my Roll No on this device" checkbox stores ONLY
-   the Roll No in the browser's local storage.
-3. The password is NOT stored by this website. If the student chooses
-   "Save password", the browser/password manager stores it securely.
-4. Supabase's normal authenticated session can keep the student signed in
-   according to the existing app behavior.
+Student PWA:
+- Home Screen name: SKH
+- Opens: /student-login.html
+- Uses the supplied SKH icon.
+- Updated service worker uses network-first navigation and a safe cached fallback.
+- Old SKH service-worker caches are automatically removed.
 
-Student-only shortcut:
-- App name: SKH
-- Start page: /student-login.html
-- Icon: skh-icon.png
+Login convenience:
+- Roll No can be remembered locally when the student selects the option.
+- Password is NOT stored by the website.
+- Browser password managers can save/autofill the Roll No and Password.
 
-Upload all files to the root of the Cloudflare Pages deployment.
+IMPORTANT AFTER DEPLOYMENT:
+If an old SKH icon is already installed on a phone and still shows the old
+ERR_FAILED screen, REMOVE/UNINSTALL that old SKH shortcut once, then open
+https://swarupsir-knowledge-hub.pages.dev/student-login.html in Chrome and
+install SKH again. This is necessary because the old installed PWA can retain
+its previous launch/service-worker state.

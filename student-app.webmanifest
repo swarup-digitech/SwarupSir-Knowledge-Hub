@@ -1,10 +1,12 @@
 {
+  "id": "/student-login.html",
   "name": "SKH — Swarup Sir's Knowledge Hub",
   "short_name": "SKH",
   "description": "Student-only access to Swarup Sir's Knowledge Hub.",
   "start_url": "/student-login.html",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#eef8ff",
   "theme_color": "#087ed7",
   "icons": [
