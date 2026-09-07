@@ -519,7 +519,7 @@ async function addStudent(){
  if(error)return alert(error.message); if(!classes?.length){alert("Create a class first.");return newClass()}
  render(`<div class="wrap">${header("Add Student")}<div class="card">
  <label>Student Name</label><input id="sn" placeholder="Student name">
- <label>Roll No</label><input id="sr" type="text" inputmode="numeric" placeholder="e.g. 1">
+ <label>Roll No</label><input id="sr" type="text" inputmode="numeric" placeholder="e.g. 101">
  <label>Password</label><input id="sp" type="text" placeholder="At least 6 characters">
  <label>Class</label><select id="sc">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
  <div id="sm"></div><div class="actions"><button onclick="createStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
@@ -542,7 +542,7 @@ function bulkImportStudents(){
  bulkStudents=[];
  render(`<div class="wrap">${header("Bulk Students — Excel")}<div class="card">
  <p><b>Upload an Excel file with these columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div>
- <p class="muted small">Email is not required. The system creates the internal login account automatically.</p>
+ <p class="muted small">Roll No is assigned by the teacher. The internal login email is generated automatically by the system.</p>
  <label>Excel file</label><input id="studentExcel" type="file" accept=".xlsx,.xls" onchange="readStudentExcel(event)">
  <div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
  </div></div>`)
@@ -552,13 +552,14 @@ function readStudentExcel(ev){
   const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
   if(!raw.length)throw new Error("The Excel file is empty."); const norm=v=>String(v??"").trim();
   const headers=raw[0].map(v=>norm(v).toLowerCase().replace(/[_\s]+/g," ")); const col=(...names)=>{for(const x of names){const i=headers.indexOf(x);if(i>=0)return i}return -1};
-  const ni=col("name","student name"),ri=col("roll no","roll number"),ci=col("class","class name"),pi=col("password");
+  const ni=col("name","student name"),ri=col("roll no","roll number","roll"),ci=col("class","class name"),pi=col("password");
   if([ni,ri,ci,pi].some(x=>x<0))throw new Error("Required columns: Name, Roll No, Class, Password.");
   bulkStudents=raw.slice(1).map((row,i)=>({row:i+2,name:norm(row[ni]),roll_no:norm(row[ri]),className:norm(row[ci]),password:norm(row[pi])})).filter(x=>x.name||x.roll_no||x.className||x.password);
-  if(!bulkStudents.length)throw new Error("No student rows found."); const errors=[],seen=new Set();
-  bulkStudents.forEach(x=>{const k=x.className.toLowerCase()+"|"+x.roll_no.toLowerCase();if(!x.name)errors.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errors.push(`Row ${x.row}: Roll No missing`);if(!x.className)errors.push(`Row ${x.row}: Class missing`);if(!x.password)errors.push(`Row ${x.row}: Password missing`);if(x.password&&x.password.length<6)errors.push(`Row ${x.row}: Password must be at least 6 characters`);if(seen.has(k))errors.push(`Row ${x.row}: duplicate Roll No ${x.roll_no} in ${x.className}`);seen.add(k)});
+  if(!bulkStudents.length)throw new Error("No student rows found."); const errors=[];
+  const seenRolls=new Set();
+  bulkStudents.forEach(x=>{if(!x.name)errors.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errors.push(`Row ${x.row}: Roll No missing`);if(x.roll_no&&seenRolls.has(x.roll_no))errors.push(`Row ${x.row}: Duplicate Roll No ${x.roll_no}`);if(x.roll_no)seenRolls.add(x.roll_no);if(!x.className)errors.push(`Row ${x.row}: Class missing`);if(!x.password)errors.push(`Row ${x.row}: Password missing`);if(x.password&&x.password.length<6)errors.push(`Row ${x.row}: Password must be at least 6 characters`)});
   if(errors.length){document.getElementById("bulkPreview").innerHTML=message(errors.join(" | "));return;}
-  document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows.</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Class</th><th>Password</th></tr></thead><tbody>${bulkStudents.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td></tr>`).join("")}</tbody></table></div>`;
+  document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows. Roll Nos will be taken from your Excel file; internal login emails will be generated automatically.</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Class</th><th>Password</th></tr></thead><tbody>${bulkStudents.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td></tr>`).join("")}</tbody></table></div>`;
  }catch(err){document.getElementById("bulkPreview").innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file)
 }
 async function uploadBulkStudents(){
@@ -567,7 +568,7 @@ async function uploadBulkStudents(){
  const {data:{session}}=await sb.auth.getSession();const payload=bulkStudents.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase())}));
  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify({action:"createStudents",students:payload})});
  const j=await res.json().catch(()=>({}));if(!res.ok||j.error)return alert(j.error||"Bulk creation failed");const results=j.results||[],ok=results.filter(x=>x.success),bad=results.filter(x=>!x.success);
- render(`<div class="wrap">${header("Bulk Import Result")}<div class="card"><div class="success">${ok.length} student(s) created successfully.</div>${bad.length?`<div class="notice">${bad.length} row(s) failed.</div><pre>${esc(bad.map(x=>`${x.name||""} — Roll ${x.roll_no||""}: ${x.error}`).join("\n"))}</pre>`:""}<div class="actions"><button onclick="teacherHome()">Back to Dashboard</button><button class="secondary" onclick="bulkImportStudents()">Add More</button></div></div></div>`)
+ render(`<div class="wrap">${header("Bulk Import Result")}<div class="card"><div class="success">${ok.length} student(s) created successfully.</div>${bad.length?`<div class="notice">${bad.length} row(s) failed.</div><pre>${esc(bad.map(x=>`${x.name||""}: ${x.error}`).join("\n"))}</pre>`:""}<div class="actions"><button onclick="teacherHome()">Back to Dashboard</button><button class="secondary" onclick="bulkImportStudents()">Add More</button></div></div></div>`)
 }
 
 async function newAssignment(){
