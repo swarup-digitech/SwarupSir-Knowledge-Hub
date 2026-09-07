@@ -105,6 +105,94 @@ alter table public.mock_test_answers enable row level security;
 
 
 -- Make the SQL safe to re-run.
+-- SECURITY DEFINER helper functions prevent circular RLS evaluation between
+-- mock_tests and mock_test_students (the source of
+-- "infinite recursion detected in policy for relation mock_test_students").
+
+drop function if exists public.is_mock_test_teacher(uuid);
+drop function if exists public.is_mock_test_assigned(uuid);
+drop function if exists public.is_mock_test_question_teacher(uuid);
+drop function if exists public.is_mock_attempt_teacher(uuid);
+drop function if exists public.is_mock_answer_teacher(uuid);
+
+create or replace function public.is_mock_test_teacher(p_mock_test_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.mock_tests t
+    where t.id = p_mock_test_id
+      and t.teacher_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_mock_test_assigned(p_mock_test_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.mock_test_students s
+    where s.mock_test_id = p_mock_test_id
+      and s.student_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_mock_test_question_teacher(p_question_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.mock_test_questions q
+    join public.mock_tests t on t.id = q.mock_test_id
+    where q.id = p_question_id
+      and t.teacher_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_mock_attempt_teacher(p_attempt_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.mock_test_attempts a
+    join public.mock_tests t on t.id = a.mock_test_id
+    where a.id = p_attempt_id
+      and t.teacher_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_mock_answer_teacher(p_answer_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.mock_test_answers ma
+    join public.mock_test_attempts a on a.id = ma.attempt_id
+    join public.mock_tests t on t.id = a.mock_test_id
+    where ma.id = p_answer_id
+      and t.teacher_id = auth.uid()
+  );
+$$;
+
+-- Policies
 drop policy if exists "mock bank teacher manage" on public.mock_question_bank;
 drop policy if exists "mock tests teacher manage" on public.mock_tests;
 drop policy if exists "mock test questions teacher manage" on public.mock_test_questions;
@@ -120,26 +208,71 @@ drop policy if exists "mock image teacher upload" on storage.objects;
 drop policy if exists "mock image teacher delete" on storage.objects;
 
 -- Teacher policies
-create policy "mock bank teacher manage" on public.mock_question_bank for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
-create policy "mock tests teacher manage" on public.mock_tests for all to authenticated using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
-create policy "mock test questions teacher manage" on public.mock_test_questions for all to authenticated using (exists (select 1 from public.mock_tests t where t.id=mock_test_id and t.teacher_id=auth.uid())) with check (exists (select 1 from public.mock_tests t where t.id=mock_test_id and t.teacher_id=auth.uid()));
-create policy "mock recipients teacher manage" on public.mock_test_students for all to authenticated using (exists (select 1 from public.mock_tests t where t.id=mock_test_id and t.teacher_id=auth.uid())) with check (exists (select 1 from public.mock_tests t where t.id=mock_test_id and t.teacher_id=auth.uid()));
-create policy "mock attempts teacher read" on public.mock_test_attempts for select to authenticated using (exists (select 1 from public.mock_tests t where t.id=mock_test_id and t.teacher_id=auth.uid()));
-create policy "mock answers teacher read" on public.mock_test_answers for select to authenticated using (exists (select 1 from public.mock_test_attempts a join public.mock_tests t on t.id=a.mock_test_id where a.id=attempt_id and t.teacher_id=auth.uid()));
+create policy "mock bank teacher manage" on public.mock_question_bank
+for all to authenticated
+using (teacher_id = auth.uid())
+with check (teacher_id = auth.uid());
 
--- Student policies
-create policy "mock tests student assigned read" on public.mock_tests for select to authenticated using (exists (select 1 from public.mock_test_students s where s.mock_test_id=id and s.student_id=auth.uid()));
-create policy "mock test questions student read" on public.mock_test_questions for select to authenticated using (exists (select 1 from public.mock_test_students s where s.mock_test_id=mock_test_id and s.student_id=auth.uid()));
-create policy "mock recipients student read own" on public.mock_test_students for select to authenticated using (student_id=auth.uid());
-create policy "mock attempts student own" on public.mock_test_attempts for all to authenticated using (student_id=auth.uid()) with check (student_id=auth.uid());
-create policy "mock answers student own" on public.mock_test_answers for all to authenticated using (exists (select 1 from public.mock_test_attempts a where a.id=attempt_id and a.student_id=auth.uid())) with check (exists (select 1 from public.mock_test_attempts a where a.id=attempt_id and a.student_id=auth.uid()));
+create policy "mock tests teacher manage" on public.mock_tests
+for all to authenticated
+using (teacher_id = auth.uid())
+with check (teacher_id = auth.uid());
 
--- Public bucket for cropped question-page images. The URLs are intentionally used as image assets by the student test UI.
+create policy "mock test questions teacher manage" on public.mock_test_questions
+for all to authenticated
+using (public.is_mock_test_teacher(mock_test_id))
+with check (public.is_mock_test_teacher(mock_test_id));
+
+create policy "mock recipients teacher manage" on public.mock_test_students
+for all to authenticated
+using (public.is_mock_test_teacher(mock_test_id))
+with check (public.is_mock_test_teacher(mock_test_id));
+
+create policy "mock attempts teacher read" on public.mock_test_attempts
+for select to authenticated
+using (public.is_mock_test_teacher(mock_test_id));
+
+create policy "mock answers teacher read" on public.mock_test_answers
+for select to authenticated
+using (public.is_mock_attempt_teacher(attempt_id));
+
+-- Student policies. These use SECURITY DEFINER helpers so no policy recursively
+-- queries a relation whose own RLS policy points back to the first relation.
+create policy "mock tests student assigned read" on public.mock_tests
+for select to authenticated
+using (public.is_mock_test_assigned(id));
+
+create policy "mock test questions student read" on public.mock_test_questions
+for select to authenticated
+using (public.is_mock_test_assigned(mock_test_id));
+
+create policy "mock recipients student read own" on public.mock_test_students
+for select to authenticated
+using (student_id = auth.uid());
+
+create policy "mock attempts student own" on public.mock_test_attempts
+for all to authenticated
+using (student_id = auth.uid())
+with check (student_id = auth.uid());
+
+create policy "mock answers student own" on public.mock_test_answers
+for all to authenticated
+using (exists (
+  select 1 from public.mock_test_attempts a
+  where a.id = attempt_id and a.student_id = auth.uid()
+))
+with check (exists (
+  select 1 from public.mock_test_attempts a
+  where a.id = attempt_id and a.student_id = auth.uid()
+));
+
+-- Public bucket for cropped question-page images.
 insert into storage.buckets (id,name,public) values ('mock-question-images','mock-question-images',true)
 on conflict (id) do update set public=true;
 
 create policy "mock image teacher upload" on storage.objects for insert to authenticated
 with check (bucket_id='mock-question-images' and (storage.foldername(name))[1]=auth.uid()::text);
+
 create policy "mock image teacher delete" on storage.objects for delete to authenticated
 using (bucket_id='mock-question-images' and (storage.foldername(name))[1]=auth.uid()::text);
 

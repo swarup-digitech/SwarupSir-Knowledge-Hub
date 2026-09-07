@@ -24,14 +24,24 @@ MOCK TEST BLUEPRINT
 
 QUESTION BULK UPLOAD
 --------------------
+General rule: every question bank has a 'required questions per set' value. A bulk upload is accepted only when the uploaded amount is a multiple of that value. The rule is checked separately for each Part/Question Bank in an Excel file.
+
+Examples:
+- MAT Pattern Completion: 4 per set -> 4, 8, 12, 16... questions.
+- EVS MCQ: 15 per set -> 15, 30, 45... questions.
+- Arithmetic: 20 per set -> 20, 40, 60... questions.
+- Passage banks: one complete passage group is the unit; each group contains exactly 5 linked questions.
+
 1) EVS + LANGUAGE: Excel upload.
    - Normal questions can be entered in the Questions sheet.
    - Passage groups use two sheets: Passages and Questions.
-   - Create one Passage ID in Passages and link its five questions to the same Passage ID.
-   - Image URL is optional.
+   - Create one Passage ID in Passages and link exactly five questions to the same Passage ID.
+   - Multiple complete passage groups can be uploaded in one file.
+   - Image URL is optional; images can also be added later from Manage Question Bank.
 
 2) MAT + ARITHMETIC: PDF + Answer Key Excel.
    - One complete question per PDF page.
+   - Upload any multiple of the required questions-per-set for the selected bank.
    - Each page is rendered as an image in the browser.
    - Unnecessary white margins are automatically cropped.
    - Answer Key Excel maps PDF page/question number to A/B/C/D.
