@@ -596,7 +596,7 @@ function switchAssignmentType(){
    <div class="card" style="background:#f8fafc">
     <label>Upload Method</label>
     <label><input type="radio" name="mcqUploadMethod" value="excel" checked onchange="switchMCQUploadMethod()" style="width:auto;margin-right:8px"> Excel — question and options</label>
-    <label><input type="radio" name="mcqUploadMethod" value="pdf" onchange="switchMCQUploadMethod()" style="width:auto;margin-right:8px"> PDF + Answer Key Excel — one question per page</label>
+    <label><input type="radio" name="mcqUploadMethod" value="pdf" onchange="switchMCQUploadMethod()" style="width:auto;margin-right:8px"> PDF + Answer Key Excel — one question per page, cropped automatically</label>
     <div id="mcqUploadArea"></div>
    </div>
    <div id="mcqAssignmentPreview"></div>`;
@@ -606,11 +606,11 @@ function switchAssignmentType(){
  }else{
   box.innerHTML=`<label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=...">
    <label>Description</label><textarea id="adesc"></textarea>
-   <h3>MCQ Question Upload</h3>
+   <h3>Bulk MCQ Upload</h3><div class="small muted" style="margin-bottom:8px">Video + MCQ assignments support the same bulk upload methods as MCQ-only assignments: Excel or PDF + Answer Key Excel.</div>
    <div class="card" style="background:#f8fafc">
-    <label>Question Entry Method</label>
-    <label><input type="radio" name="videoQuestionMethod" value="excel" checked onchange="switchVideoQuestionMethod()" style="width:auto;margin-right:8px"> Excel — bulk questions</label>
-    <label><input type="radio" name="videoQuestionMethod" value="pdf" onchange="switchVideoQuestionMethod()" style="width:auto;margin-right:8px"> PDF + Answer Key Excel — one question per page</label>
+    <label>Question Entry / Bulk Upload Method</label>
+    <label><input type="radio" name="videoQuestionMethod" value="excel" checked onchange="switchVideoQuestionMethod()" style="width:auto;margin-right:8px"> Excel — bulk questions & options</label>
+    <label><input type="radio" name="videoQuestionMethod" value="pdf" onchange="switchVideoQuestionMethod()" style="width:auto;margin-right:8px"> PDF + Answer Key Excel — one question per page, cropped automatically</label>
     <label><input type="radio" name="videoQuestionMethod" value="manual" onchange="switchVideoQuestionMethod()" style="width:auto;margin-right:8px"> Manual — add questions one by one</label>
     <div id="videoQuestionUploadArea"></div>
    </div>
