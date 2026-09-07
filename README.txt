@@ -1,29 +1,28 @@
-SKH — Swarup Sir's Knowledge Hub
-Complete student PWA package — v3
+Swarup Sir's Knowledge Hub — Complete Updated Package
 
-Upload these files to the ROOT of Cloudflare Pages:
-index.html
-student-login.html
-teacher-login.html
-student-app.webmanifest
-student-sw.js
-skh-icon.png
+Includes:
+- Student-only login page + PWA/Home Screen support
+- Teacher login page
+- Latest index.html with:
+  * Student/Teacher separated login flow
+  * 80% pass threshold and retry below 80%
+  * Attempt history and attempt numbering
+  * 3-hour assignment time limit support
+  * Multi-class / multi-student assignment
+  * Teacher Student Accounts: change Roll No, Password and Class Type
+- create-students.ts Edge Function with teacher class-type update support
+- SQL for multi-attempt retry support
+- SQL for profiles.class_type
+- SQL for teacher-viewable student credentials
+- SKH PWA manifest, service worker and icon
 
-Student PWA:
-- Home Screen name: SKH
-- Opens: /student-login.html
-- Uses the supplied SKH icon.
-- Updated service worker uses network-first navigation and a safe cached fallback.
-- Old SKH service-worker caches are automatically removed.
+Deployment:
+1. Replace the deployed index.html with this package's index.html.
+2. Deploy create-students.ts to the existing Supabase Edge Function named create-students.
+3. Run multi_attempts_80_percent_retry.sql in Supabase SQL Editor.
+4. Run student_class_type.sql in Supabase SQL Editor.
+5. Keep student-login.html, teacher-login.html, student-app.webmanifest, student-sw.js and skh-icon.png at the site root.
+6. Do not recreate the old unique attempts index from one_submission.sql.
 
-Login convenience:
-- Roll No can be remembered locally when the student selects the option.
-- Password is NOT stored by the website.
-- Browser password managers can save/autofill the Roll No and Password.
-
-IMPORTANT AFTER DEPLOYMENT:
-If an old SKH icon is already installed on a phone and still shows the old
-ERR_FAILED screen, REMOVE/UNINSTALL that old SKH shortcut once, then open
-https://swarupsir-knowledge-hub.pages.dev/student-login.html in Chrome and
-install SKH again. This is necessary because the old installed PWA can retain
-its previous launch/service-worker state.
+PWA note:
+If an older SKH shortcut still shows ERR_FAILED, remove the old shortcut once and install the updated app again after deployment.

@@ -187,18 +187,12 @@ async function deleteAssignment(assignmentId){
 async function reassignFresh(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
- if(!confirm(`Reassign "${a.title}" as a FRESH assignment?\\n\\nPrevious attempts and answers will be deleted, and students can take it again as a new attempt.`))return;
+ if(!confirm(`Reassign "${a.title}"?\\n\\nPrevious attempts and answers will be preserved in the student's attempt history. The assignment recipients will be selected again.`))return;
  try{
-   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
-   const ids=(ats||[]).map(x=>x.id);
-   if(ids.length){
-     const {error:e}=await sb.from("answers").delete().in("attempt_id",ids);if(e)throw e;
-     const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
-   }
-   alert("Previous attempts cleared. Now choose the class/students for the fresh assignment.");
+   alert("Previous attempts preserved. Now choose the classes/students for reassignment.");
    reassignAssignment(assignmentId);
- }catch(e){alert("Could not clear previous attempts.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
-}
+  }catch(e){alert("Could not open reassignment.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
+ }
 
 async function reassignAssignment(assignmentId){
  const [{data:a,error:ae},{data:classes,error:ce}]=await Promise.all([
@@ -210,52 +204,65 @@ async function reassignAssignment(assignmentId){
  const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId);
  if(ee)return alert(ee.message);
  const existingIds=new Set((existing||[]).map(x=>x.student_id));
- const initialClass=a.class_id && classes.some(c=>c.id===a.class_id)?a.class_id:classes[0].id;
+  const assignedClassIds=a.class_id && classes.some(c=>c.id===a.class_id)?[a.class_id]:[];
  render(`<div class="wrap">${header("Assign / Reassign Assignment")}<div class="card">
-   <h2>${esc(a.title)}</h2><p class="muted">Assign an existing video/MCQ assignment to a whole class or selected students. Existing recipients will be replaced.</p>
-   <label>Class / Group</label><select id="rac" onchange="loadReassignStudents('${assignmentId}',this.value)">${classes.map(c=>`<option value="${c.id}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}</select>
-   <div class="card" style="background:#f8fafc"><h3>Assign To</h3>
-    <label><input type="radio" name="reassignMode" value="class" checked onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire class</label>
-    <label><input type="radio" name="reassignMode" value="students" onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label>
-    <div id="reassignStudentPicker" class="small muted">All students in the selected class will receive this assignment.</div>
-   </div>
+    <h2>${esc(a.title)}</h2><p class="muted">Assign this assignment to multiple classes, or select individual students from different classes. Students already assigned are retained when you save.</p>
+    <div class="card" style="background:#f8fafc"><h3>1. Select Classes</h3>
+      <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-class').forEach(x=>x.checked=true);loadReassignStudents('${assignmentId}')">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-class').forEach(x=>x.checked=false);loadReassignStudents('${assignmentId}')">Clear all</button></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="display:block;padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="reassign-class" type="checkbox" value="${c.id}" ${assignedClassIds.includes(c.id)?'checked':''} onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join("")}</div>
+    </div>
+    <div class="card" style="background:#f8fafc"><h3>2. Choose Students</h3>
+      <p class="small muted">For each selected class, choose <b>Entire class</b> or <b>Selected students</b>. You can mix both methods across classes.</p>
+      <div id="reassignStudentPicker" class="small muted">Select one or more classes above.</div>
+    </div>
    <div class="actions"><button onclick="saveReassignment('${assignmentId}')">Save Assignment</button><button class="secondary" onclick="teacherHome()">Cancel</button></div>
  </div></div>`);
  window._reassignExistingIds=existingIds;
+  loadReassignStudents(assignmentId);
 }
-async function loadReassignStudents(assignmentId,classId){
+async function loadReassignStudents(assignmentId){
  const box=document.getElementById("reassignStudentPicker"); if(!box)return;
- if(document.querySelector('input[name="reassignMode"]:checked')?.value!=="students"){
-   box.innerHTML='<div class="small muted">All students in the selected class will receive this assignment.</div>'; return;
- }
- box.innerHTML='<div class="small muted">Loading students...</div>';
- const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
- if(error){box.innerHTML=message(error.message);return;}
- const ids=(members||[]).map(x=>x.student_id); if(!ids.length){box.innerHTML='<div class="notice">No students are in this class.</div>';return;}
- const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");
- if(e){box.innerHTML=message(e.message);return;}
- const oldIds=window._reassignExistingIds||new Set();
- box.innerHTML=`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+
- (students||[]).map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${s.id}" ${oldIds.has(s.id)?'checked':''} style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.username||'')}</span></label>`).join("");
+  const selectedClasses=[...document.querySelectorAll('.reassign-class:checked')].map(x=>x.value);
+  if(!selectedClasses.length){box.innerHTML='<div class="notice">No classes selected. Select one or more classes above.</div>';return;}
+  box.innerHTML='<div class="small muted">Loading students...</div>';
+  const {data:members,error}=await sb.from("class_students").select("class_id,student_id").in("class_id",selectedClasses);
+  if(error){box.innerHTML=message(error.message);return;}
+  const ids=[...new Set((members||[]).map(x=>x.student_id))];
+  let students=[];
+  if(ids.length){const {data:p,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return;}students=p||[]}
+  const oldIds=window._reassignExistingIds||new Set();
+  const byClass=new Map();
+  (members||[]).forEach(m=>{if(!byClass.has(m.class_id))byClass.set(m.class_id,[]);byClass.get(m.class_id).push(m.student_id)});
+  const classMap=new Map([...document.querySelectorAll('.reassign-class')].map(x=>[x.value,x.parentElement.querySelector('b')?.textContent||x.value]));
+  box.innerHTML=selectedClasses.map(cid=>{
+    const classStudents=(byClass.get(cid)||[]).map(id=>students.find(s=>s.id===id)).filter(Boolean);
+    const modeId=`reassignMode_${cid}`;
+    return `<div class="assignment" style="margin-bottom:12px"><h3>${esc(classMap.get(cid)||"Class")}</h3>
+      <div class="actions" style="margin-bottom:8px"><label><input type="radio" name="${modeId}" value="class" checked onchange="toggleReassignClass('${cid}')" style="width:auto;margin-right:6px">Entire class</label><label><input type="radio" name="${modeId}" value="students" onchange="toggleReassignClass('${cid}')" style="width:auto;margin-right:6px">Selected students</label></div>
+      <div id="reassignStudents_${cid}" style="display:none"><div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student[data-class-id=\"${cid}\"]').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student[data-class-id=\"${cid}\"]').forEach(x=>x.checked=false)">Clear all</button></div>${classStudents.length?classStudents.map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" data-class-id="${cid}" type="checkbox" value="${s.id}" ${oldIds.has(s.id)?'checked':''} style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.username||'')}</span></label>`).join(""):'<div class="notice">No students are in this class.</div>'}</div>
+    </div>`;
+  }).join("");
 }
-async function toggleReassignStudents(assignmentId){loadReassignStudents(assignmentId,document.getElementById("rac")?.value);}
+function toggleReassignClass(classId){const r=document.querySelector(`input[name="reassignMode_${classId}"]:checked`)?.value;const box=document.getElementById(`reassignStudents_${classId}`);if(box)box.style.display=r==="students"?"block":"none";}
 async function saveReassignment(assignmentId){
- const classId=document.getElementById("rac")?.value;if(!classId)return alert("Select a class.");
  try{
-   const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
-   let studentIds=[];
-   if(mode==="class"){
-     const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;
-     studentIds=(members||[]).map(x=>x.student_id);
-   }else{
-     studentIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
-   }
-   studentIds=[...new Set(studentIds)];if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
+    const classIds=[...document.querySelectorAll('.reassign-class:checked')].map(x=>x.value);if(!classIds.length)return alert("Select at least one class.");
+    let studentIds=[];
+    for(const classId of classIds){
+      const mode=document.querySelector(`input[name="reassignMode_${classId}"]:checked`)?.value||"class";
+      if(mode==="class"){
+        const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;
+        studentIds.push(...(members||[]).map(x=>x.student_id));
+      }else{
+        studentIds.push(...[...document.querySelectorAll(`.reassign-student[data-class-id="${classId}"]:checked`)].map(x=>x.value));
+      }
+    }
+    studentIds=[...new Set(studentIds)];if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
    const {error:de}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(de)throw de;
    const rows=studentIds.map(student_id=>({assignment_id:assignmentId,student_id}));
    const {error:ins}=await sb.from("assignment_students").insert(rows);if(ins)throw ins;
-   const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id);if(up)throw up;
-   alert(`Assignment assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome();
+    const {error:up}=await sb.from("assignments").update({class_id:classIds[0]}).eq("id",assignmentId).eq("created_by",current.id);if(up)throw up;
+    alert(`Assignment assigned to ${rows.length} student${rows.length===1?"":"s"} across ${classIds.length} class${classIds.length===1?"":"es"}.`);teacherHome();
  }catch(e){alert("Could not update assignment: "+(e.message||e))}
 }
 
@@ -275,11 +282,12 @@ async function callTeacherFn(body){
 }
 async function manageStudentAccounts(){
  try{const j=await callTeacherFn({action:"listCredentials"});const students=j.students||[];
- render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Teachers can view and change classroom Roll No and Password.</div><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr></thead><tbody>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><div class="actions"><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
+ render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Teachers can view and change classroom Roll No, Password and Class Type.</div><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Class Type</th><th>Action</th></tr></thead><tbody>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td>${esc(s.class_type||"—")}</td><td><div class="actions"><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button onclick="changeStudentClassType('${s.id}','${esc(s.full_name)}','${esc(s.class_type||"")}')">Class Type</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="6">No students found.</td></tr>`}</tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
  }catch(e){alert(e.message||String(e))}
 }
 async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
 async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function changeStudentClassType(studentId,name,currentType){const v=prompt(`Class Type for ${name}:`,currentType);if(v===null)return;if(!v.trim())return alert("Class Type is required.");try{await callTeacherFn({action:"setStudentClassType",student_id:studentId,class_type:v.trim()});alert("Class Type updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
 async function deleteStudentAccount(studentId,name){
  if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account, classroom memberships, assignments and submitted answers.`))return;
  try{
@@ -743,7 +751,11 @@ async function studentHome(){
     if(ate)return render(`<div class="wrap">${header("My Assignments")}<div class="card">${message(ate.message)}</div></div>`);
     attempts=at||[];
   }
-  const completedIds=new Set(attempts.map(t=>t.assignment_id));
+  // An assignment is completed only after the student's latest attempt reaches 80%.
+  // Failed attempts remain in the database as history and make the assignment available again.
+  const latestByAssignment=new Map();
+  attempts.forEach(t=>{if(!latestByAssignment.has(t.assignment_id))latestByAssignment.set(t.assignment_id,t)});
+  const completedIds=new Set([...latestByAssignment.entries()].filter(([_,t])=>Number(t.score||0)*100/Math.max(1,Number(t.total_questions||0))>=80).map(([id])=>id));
   const pending=assignments.filter(a=>!completedIds.has(a.id));
   const completed=assignments.filter(a=>completedIds.has(a.id));
   render(`<div class="wrap">${header("My Assignments")}
@@ -793,13 +805,17 @@ async function startLesson(id){
   if(error)return alert(error.message);
 
   const {data:existing,error:ae}=await sb.from("attempts")
-    .select("id").eq("assignment_id",id).eq("student_id",current.id).limit(1);
+    .select("id,score,total_questions,attempt_number").eq("assignment_id",id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);
 
   if(ae)return alert("Could not check submission status: "+ae.message);
 
   if(existing?.length){
-    alert("Already Submitted. You have already submitted this assignment.\n\nYour teacher can reassign it as a fresh assignment if you need to take it again.");
-    return studentHome();
+    const last=existing[0];
+    const pct=Math.round(Number(last.score||0)*100/Math.max(1,Number(last.total_questions||0)));
+    if(pct>=80){
+      alert(`You have already passed this assignment with ${pct}%.`);
+      return studentHome();
+    }
   }
 
   active=a;
@@ -821,16 +837,22 @@ async function submitQuiz(){
   if(answers.length<active.questions.length)return alert("Please answer every question.");
 
   const {data:existing,error:checkError}=await sb.from("attempts")
-    .select("id").eq("assignment_id",active.id).eq("student_id",current.id).limit(1);
+    .select("id,score,total_questions,attempt_number").eq("assignment_id",active.id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);
 
   if(checkError)return alert("Could not check submission status: "+checkError.message);
 
   if(existing?.length){
-    alert("Already Submitted. This assignment can only be submitted once.");
-    return studentHome();
+    const last=existing[0];
+    const pct=Math.round(Number(last.score||0)*100/Math.max(1,Number(last.total_questions||0)));
+    if(pct>=80){
+      alert(`Already passed with ${pct}%. This assignment cannot be submitted again.`);
+      return studentHome();
+    }
   }
 
   const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);
+  const nextAttemptNumber=(existing?.[0]?.attempt_number||0)+1;
+  const percentage=Math.round(score*100/Math.max(1,active.questions.length));
 
   const {data:attempt,error}=await sb.from("attempts").insert({
     assignment_id:active.id,
@@ -839,7 +861,7 @@ async function submitQuiz(){
     total_questions:active.questions.length,
     video_completed:videoDone,
     submitted_at:new Date().toISOString(),
-    attempt_number:1
+    attempt_number:nextAttemptNumber
   }).select().single();
 
   if(error){
@@ -866,8 +888,8 @@ async function submitQuiz(){
 
   render(`<div class="wrap">${header("Assignment Completed")}<div class="card" style="text-align:center">
     <div class="stat">${score} / ${active.questions.length}</div>
-    <h2>${score===active.questions.length?"Excellent!":"Well done!"}</h2>
-    <div class="success"><b>Submitted</b><br>Your assignment has been submitted successfully. You cannot submit it again unless your teacher reassigns it as a fresh assignment.</div>
+    <h2>${percentage>=80?"Excellent!":"Keep Practicing!"}</h2>
+    ${percentage>=80?`<div class="success"><b>Passed ✓</b><br>You scored ${percentage}%. This assignment is completed.</div>`:`<div class="notice"><b>Score: ${percentage}% — Below 80%</b><br>Your Attempt ${nextAttemptNumber} has been recorded. The assignment has been made available again for another attempt. Your previous attempt remains in your attempt history.</div>`}
     <div class="actions" style="justify-content:center;margin-top:12px">
       <button onclick="viewPreviousWork('${active.id}','${attempt.id}')">View My Answers</button>
       <button class="secondary" onclick="studentHome()">Back to Assignments</button>
