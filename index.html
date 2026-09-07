@@ -345,12 +345,14 @@ async function teacherHome(){
    sb.from("profiles").select("*").eq("role","student").order("full_name")
  ]);
  if(ce||ae||se)return render(`<div class="wrap">${header("Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
+ const grouped={};(assignments||[]).forEach(a=>{const g=(a.group_name||"Ungrouped").trim()||"Ungrouped";(grouped[g] ||= []).push(a)});
+ const groupHtml=Object.entries(grouped).map(([g,list])=>`<div class="assignment-group" style="margin-top:16px;border:1px solid #dbe3ee;border-radius:14px;padding:14px;background:#fbfdff"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><h3 style="margin:0">📁 ${esc(g)}</h3><div class="muted small">${list.length} assignment${list.length===1?"":"s"} in this group</div></div></div>${list.map(a=>{const type=a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ";return `<div class="assignment" style="margin-top:10px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${type}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`}).join("")}</div>`).join("");
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF / Image)</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div><div class="notice small" style="margin-top:12px"><b>New Assignment</b> supports <b>🎥 Video + MCQ</b> and <b>📝 MCQ Only</b>. Use the same Assignment Group name to keep both types together.</div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
+ <div class="card"><h2>Assignments by Group</h2>${groupHtml||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
 }
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
@@ -567,12 +569,97 @@ async function uploadBulkStudents(){
 }
 
 async function newAssignment(){
- const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
- render(`<div class="wrap">${header("New Video Assignment")}<div class="card">
- <label>Class</label><select id="ac" onchange="loadAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
- <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="assignMode" value="class" checked onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Entire class</label><label><input type="radio" name="assignMode" value="students" onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Selected students</label><div id="studentPicker" class="small muted">The assignment will be given to all students in the selected class.</div></div>
- <label>Title</label><input id="at"><label>Subject</label><input id="asub"><label>YouTube video URL</label><input id="av"><label>Description</label><textarea id="adesc"></textarea><h3>MCQs</h3><div id="qs"></div><button class="secondary" onclick="addQ()">+ Add MCQ manually</button><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);addQ();addQ();loadAssignmentStudents(classes[0].id)
+ const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");
+ if(error)return alert(error.message);
+ if(!classes?.length){alert("Create a class first.");return newClass()}
+ window.assignmentClasses=classes;
+ render(`<div class="wrap">${header("New Assignment")}<div class="card">
+  <h2>Assignment Type</h2>
+  <label><input type="radio" name="assignmentType" value="video_mcq" checked onchange="switchAssignmentType()" style="width:auto;margin-right:8px"> 🎥 Video + MCQ</label>
+  <label><input type="radio" name="assignmentType" value="mcq_only" onchange="switchAssignmentType()" style="width:auto;margin-right:8px"> 📝 MCQ Only — No Video</label>
+  <div class="notice small" style="margin-top:10px">Both assignment types can belong to the same Assignment Group. Students use the same submission and 80% retry system.</div>
+  <label>Assignment Group</label><input id="agroup" placeholder="e.g. Class 6 Mathematics — Fractions"><div class="small muted">Use the same group name for Video + MCQ and MCQ Only assignments that belong together.</div>
+  <label>Class</label><select id="ac" onchange="loadAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+  <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="assignMode" value="class" checked onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Entire class</label><label><input type="radio" name="assignMode" value="students" onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Selected students</label><div id="studentPicker" class="small muted">The assignment will be given to all students in the selected class.</div></div>
+  <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentTypeArea"></div>
+  <div class="actions" style="margin-top:15px"><button id="assignmentSaveBtn" onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div>
+ </div></div>`);
+ switchAssignmentType();
+ loadAssignmentStudents(classes[0].id);
 }
+function switchAssignmentType(){
+ const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video_mcq";
+ const box=document.getElementById("assignmentTypeArea"),btn=document.getElementById("assignmentSaveBtn");if(!box)return;
+ if(type==="mcq_only"){
+  box.innerHTML=`<label>Description</label><textarea id="adesc"></textarea>
+   <h3>Bulk MCQ Upload</h3>
+   <div class="card" style="background:#f8fafc">
+    <label>Upload Method</label>
+    <label><input type="radio" name="mcqUploadMethod" value="excel" checked onchange="switchMCQUploadMethod()" style="width:auto;margin-right:8px"> Excel — question and options</label>
+    <label><input type="radio" name="mcqUploadMethod" value="pdf" onchange="switchMCQUploadMethod()" style="width:auto;margin-right:8px"> PDF + Answer Key Excel — one question per page</label>
+    <div id="mcqUploadArea"></div>
+   </div>
+   <div id="mcqAssignmentPreview"></div>`;
+  window.mcqAssignmentImport={mode:"excel",questions:[],answers:{}};
+  switchMCQUploadMethod();
+  if(btn)btn.textContent="Create MCQ-Only Assignment & Assign";
+ }else{
+  box.innerHTML=`<label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><label>Description</label><textarea id="adesc"></textarea><h3>MCQs</h3><div id="qs"></div><button class="secondary" onclick="addQ()">+ Add MCQ manually</button>`;
+  addQ();addQ();
+  if(btn)btn.textContent="Save & Assign Video Assignment";
+ }
+}
+function switchMCQUploadMethod(){
+ const mode=document.querySelector('input[name="mcqUploadMethod"]:checked')?.value||"excel";
+ const box=document.getElementById("mcqUploadArea");if(!box)return;
+ window.mcqAssignmentImport=window.mcqAssignmentImport||{questions:[],answers:{}};
+ window.mcqAssignmentImport.mode=mode;
+ window.mcqAssignmentImport.questions=[];window.mcqAssignmentImport.answers={};
+ if(mode==="excel"){
+  box.innerHTML=`<label>Questions Excel</label><input id="mcqAssignmentExcel" type="file" accept=".xlsx,.xls" onchange="readMCQAssignmentExcel(event)"><div class="small muted">Required columns: Question, Option A, Option B, Option C, Option D, Answer. Question No is optional.</div><div class="actions" style="margin-top:8px"><button type="button" class="secondary" onclick="downloadMCQOnlyExcelTemplate()">⬇ Download Excel Template</button></div>`;
+ }else{
+  box.innerHTML=`<label>Questions PDF</label><input id="mcqAssignmentPdf" type="file" accept=".pdf" onchange="readMCQAssignmentPdf(event)"><label>Answer Key Excel</label><input id="mcqAssignmentKey" type="file" accept=".xlsx,.xls" onchange="readMCQAssignmentKey(event)"><div class="small muted">PDF must contain one complete question per page. Each page is automatically cropped to remove unnecessary white space.</div><div class="actions" style="margin-top:8px"><button type="button" class="secondary" onclick="downloadMCQOnlyAnswerTemplate()">⬇ Download Answer Key Template</button></div>`;
+ }
+}
+function normMCQHeader(v){return String(v??"").trim().toLowerCase().replace(/[_\s-]+/g," ")}
+function getMCQCell(row,names){for(const n of names){const k=Object.keys(row).find(x=>normMCQHeader(x)===normMCQHeader(n));if(k!==undefined)return String(row[k]??"").trim()}return ""}
+function downloadMCQOnlyExcelTemplate(){
+ const wb=XLSX.utils.book_new();
+ const q=XLSX.utils.aoa_to_sheet([["Question No","Question","Option A","Option B","Option C","Option D","Answer","Image URL"],[1,"What is 2 + 2?","3","4","5","6","B",""]]);
+ XLSX.utils.book_append_sheet(wb,q,"Questions");
+ const ins=XLSX.utils.aoa_to_sheet([["MCQ-ONLY ASSIGNMENT FORMAT"],["Required: Question, Option A, Option B, Option C, Option D, Answer"],["Answer must be A, B, C or D."],["Question No and Image URL are optional."]]);
+ XLSX.utils.book_append_sheet(wb,ins,"Instructions");
+ XLSX.writeFile(wb,"MCQ_Only_Assignment_Template.xlsx");
+}
+function downloadMCQOnlyAnswerTemplate(){
+ const wb=XLSX.utils.book_new();
+ const ws=XLSX.utils.aoa_to_sheet([["Question No","Correct Option"],[1,"A"],[2,"B"],[3,"C"],[4,"D"],[5,"A"]]);
+ XLSX.utils.book_append_sheet(wb,ws,"Answer Key");
+ XLSX.writeFile(wb,"MCQ_Only_Answer_Key_Template.xlsx");
+}
+function readMCQAssignmentExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");box.innerHTML=message("Reading MCQ Excel…",true);
+ const r=new FileReader();r.onload=e=>{try{
+  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+  const qs=rows.map((row,i)=>({question_no:Number(getMCQCell(row,["Question No","Question Number","No","Number"]))||i+1,question:getMCQCell(row,["Question","Question Text"]),A:getMCQCell(row,["Option A","A"]),B:getMCQCell(row,["Option B","B"]),C:getMCQCell(row,["Option C","C"]),D:getMCQCell(row,["Option D","D"]),answer:getMCQCell(row,["Answer","Correct Option","Correct"] ).toUpperCase(),image_url:getMCQCell(row,["Image URL","Question Image URL"])})).filter(x=>x.question||x.image_url||x.A||x.B||x.C||x.D);
+  const bad=qs.filter(x=>!x.question||!x.A||!x.B||!x.C||!x.D||!["A","B","C","D"].includes(x.answer));
+  window.mcqAssignmentImport={mode:"excel",questions:qs,answers:{}};
+  box.innerHTML=message(`Loaded ${qs.length} question(s). ${bad.length?bad.length+" row(s) need correction.":(dupNums.length?"Duplicate Question No found.":"All questions and answer keys look valid.")}`,!bad.length&&!dupNums.length)+`<div class="small muted" style="margin-top:8px">${qs.slice(0,8).map((q,i)=>`${i+1}. ${esc(q.question.slice(0,100))} — ${esc(q.answer||"MISSING")}`).join("<br>")}${qs.length>8?"<br>…":""}</div>`;
+ }catch(err){box.innerHTML=message("Could not read Excel: "+err.message)} };r.readAsArrayBuffer(file)
+}
+async function readMCQAssignmentPdf(ev){
+ const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");box.innerHTML=message("Reading PDF pages and trimming white space…",true);
+ try{const buf=await file.arrayBuffer(),pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise,qs=[];
+  for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),base=page.getViewport({scale:1}),scale=Math.min(2.2,Math.max(1.4,1600/base.width)),vp=page.getViewport({scale}),c=document.createElement("canvas"),ctx=c.getContext("2d",{alpha:false});c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);await page.render({canvasContext:ctx,viewport:vp}).promise;const cropped=cropWhiteMargins(c);qs.push({question_no:p,question:"[IMAGE QUESTION]",A:"Option A",B:"Option B",C:"Option C",D:"Option D",answer:"",image_data:cropped.toDataURL("image/jpeg",0.92)});}
+  window.mcqAssignmentImport=window.mcqAssignmentImport||{};window.mcqAssignmentImport.mode="pdf";window.mcqAssignmentImport.questions=qs;window.mcqAssignmentImport.answers=window.mcqAssignmentImport.answers||{};
+  box.innerHTML=message(`Prepared ${qs.length} cropped question image(s). Now upload the Answer Key Excel.`,true);
+  const key=document.getElementById("mcqAssignmentKey");if(key&&key.files?.[0])readMCQAssignmentKey({target:key});
+ }catch(e){box.innerHTML=message("PDF processing failed: "+(e.message||e))}
+}
+function readMCQAssignmentKey(ev){
+ const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""}),answers={};rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No??x.Number);const a=String(x["Correct Option"]??x.Answer??x.Correct??"").trim().toUpperCase();if(Number.isInteger(n)&&n>0&&["A","B","C","D"].includes(a))answers[n]=a});window.mcqAssignmentImport=window.mcqAssignmentImport||{mode:"pdf",questions:[],answers:{}};window.mcqAssignmentImport.answers=answers;const total=window.mcqAssignmentImport.questions?.length||0;const missing=Array.from({length:total},(_,i)=>i+1).filter(n=>!answers[n]);box.innerHTML=message(`Loaded ${Object.keys(answers).length} answer keys for ${total} PDF question(s). ${missing.length?"Missing: "+missing.join(", "):"All answer keys are present."}`,!missing.length); }catch(err){box.innerHTML=message("Could not read answer key: "+err.message)}};r.readAsArrayBuffer(file)
+}
+async function uploadAssignmentQuestionImage(dataUrl,path){const blob=await(await fetch(dataUrl)).blob();const {error}=await sb.storage.from("assignment-question-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});if(error)throw error;const {data}=sb.storage.from("assignment-question-images").getPublicUrl(path);return data.publicUrl}
 async function loadAssignmentStudents(classId){
  const box=document.getElementById("studentPicker");if(!box)return;
  if(document.querySelector('input[name="assignMode"]:checked')?.value!=="students"){box.innerHTML='<div class="small muted">The assignment will be given to all students in the selected class.</div>';return}
@@ -602,16 +689,57 @@ async function assignStudentsToAssignment(assignmentId,classId){
 }
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
 async function saveAssignment(){
+ const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video_mcq";
+ if(type==="mcq_only")return saveMCQOnlyAssignment();
  if(!at.value.trim()||!av.value.trim())return alert("Enter title and video URL");
  let studentCount=0;try{const previewIds=await getStudentsForAssignment(ac.value);if(!previewIds.length)return alert("Select at least one student or add students to this class.");studentCount=previewIds.length}catch(e){return alert(e.message)}
- const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:av.value.trim(),created_by:current.id}).select().single();if(error)return alert(error.message);
+ const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:av.value.trim(),created_by:current.id,assignment_type:"video_mcq",group_name:document.getElementById("agroup")?.value.trim()||null}).select().single();if(error)return alert(error.message);
  const qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
  if(qs.length){const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}}
  try{await assignStudentsToAssignment(a.id,ac.value)}catch(e){await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
- alert(`Assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);teacherHome()
+ alert(`Video assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);teacherHome()
+}
+async function saveMCQOnlyAssignment(){
+ const imp=window.mcqAssignmentImport||{};
+ const qs=imp.questions||[];
+ if(!at.value.trim())return alert("Enter an assignment title.");
+ if(!qs.length)return alert("Upload the MCQ questions first.");
+ if(imp.mode==="excel"){
+  const bad=qs.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D||!["A","B","C","D"].includes(q.answer));
+  if(bad.length)return alert(`${bad.length} question(s) need correction. Every question needs text, four options and a valid A/B/C/D answer.`);
+  const nums=qs.map(q=>q.question_no),dups=nums.filter((n,i)=>nums.indexOf(n)!==i);
+  if(dups.length)return alert("Duplicate Question No found: "+[...new Set(dups)].join(", "));
+ }else{
+  const keyNums=Object.keys(imp.answers||{}).map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
+  const missing=qs.map(q=>q.question_no).filter(n=>!["A","B","C","D"].includes(String(imp.answers?.[n]||"").toUpperCase()));
+  const extras=keyNums.filter(n=>n<1||n>qs.length);
+  if(missing.length)return alert("Missing/invalid answer key for PDF question(s): "+missing.join(", "));
+  if(extras.length)return alert("Answer Key contains extra question number(s): "+extras.join(", "));
+  if(keyNums.length!==qs.length)return alert(`PDF has ${qs.length} question page(s), but the Answer Key has ${keyNums.length} valid key(s). The counts must match exactly.`);
+ }
+ let studentCount=0;try{const ids=await getStudentsForAssignment(ac.value);if(!ids.length)return alert("Select at least one student or add students to this class.");studentCount=ids.length}catch(e){return alert(e.message)}
+ if(!confirm(`Create this MCQ-only assignment with ${qs.length} question(s) and assign it to ${studentCount} student${studentCount===1?"":"s"}?`))return;
+ let a;
+ try{
+  const {data:newAssignmentRow,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:document.getElementById("adesc")?.value?.trim()||"",video_url:null,created_by:current.id,assignment_type:"mcq_only",group_name:document.getElementById("agroup")?.value.trim()||null}).select().single();
+  if(error)throw error;a=newAssignmentRow;
+  const rows=[];
+  for(let i=0;i<qs.length;i++){
+   const q=qs[i];let imageUrl=q.image_url||null;
+   if(q.image_data){const safe=`${current.id}/${a.id}/q-${String(i+1).padStart(4,"0")}-${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;imageUrl=await uploadAssignmentQuestionImage(q.image_data,safe)}
+   rows.push({assignment_id:a.id,question_text:q.question||"[IMAGE QUESTION]",option_a:q.A||"Option A",option_b:q.B||"Option B",option_c:q.C||"Option C",option_d:q.D||"Option D",correct_option:(imp.mode==="pdf"?imp.answers[q.question_no]:q.answer),question_order:i+1,image_url:imageUrl});
+  }
+  const {error:qe}=await sb.from("questions").insert(rows);if(qe)throw qe;
+  const studentIds=await getStudentsForAssignment(ac.value),recipients=[...new Set(studentIds)].map(student_id=>({assignment_id:a.id,student_id}));
+  const {error:re}=await sb.from("assignment_students").insert(recipients);if(re)throw re;
+  alert(`MCQ-only assignment created successfully with ${rows.length} question${rows.length===1?"":"s"} and assigned to ${recipients.length} student${recipients.length===1?"":"s"}.`);teacherHome();
+ }catch(e){
+  if(a?.id){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignment_students").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id)}
+  alert("Could not create MCQ-only assignment: "+(e.message||e));
+ }
 }
 
-async function bulkImportMCQs(){
+function bulkImportMCQs(){
  importedQuestions=[];importedAnswers={};
  render(`<div class="wrap">${header("Import MCQs")}<div class="card">
  <h2>Choose an upload method</h2>
@@ -759,7 +887,7 @@ async function results(id){
  try{
   const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",id).eq("created_by",current.id).single();
   if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
-  const {data:qs,error:qe}=await sb.from("questions").select("id,question_order,correct_option").eq("assignment_id",id).order("question_order");
+  const {data:qs,error:qe}=await sb.from("questions").select("id,question_order,question_text,option_a,option_b,option_c,option_d,correct_option,image_url").eq("assignment_id",id).order("question_order");
   if(qe)throw qe;
   const {data:ats,error:te}=await sb.from("attempts").select("id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").eq("assignment_id",id).order("submitted_at",{ascending:false});
   if(te)throw te;
@@ -783,10 +911,15 @@ function renderResultsPage(){
   return (a===b?0:a<b?-1:1)*(d.sortDir==="asc"?1:-1);
  });
  const avg=sorted.length?Math.round(sorted.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||d.questions.length)),0)/sorted.length):0;
+ const type=d.assignment.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ";
  render(`<div class="wrap">${header("Results")}<div class="card">
- <div style="display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap"><div><h2>${esc(d.assignment.title)}</h2><div class="muted">${esc(d.assignment.subject||"")}</div></div><div class="tag">${sorted.length} submission${sorted.length===1?"":"s"} • Average ${avg}%</div></div>
+ <div style="display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap"><div><h2>${esc(d.assignment.title)}</h2><div class="muted">${esc(d.assignment.subject||"")} · ${type}${d.assignment.group_name?` · 📁 ${esc(d.assignment.group_name)}`:""}</div></div><div class="tag">${sorted.length} submission${sorted.length===1?"":"s"} • Average ${avg}%</div></div>
  <div class="result-controls actions"><b>Sort:</b><select id="resultSortBy"><option value="submitted" ${d.sortBy==="submitted"?"selected":""}>Submission time</option><option value="student" ${d.sortBy==="student"?"selected":""}>Student name</option><option value="score" ${d.sortBy==="score"?"selected":""}>Score</option><option value="attempt" ${d.sortBy==="attempt"?"selected":""}>Attempt number</option></select><select id="resultSortDir"><option value="desc" ${d.sortDir==="desc"?"selected":""}>Descending</option><option value="asc" ${d.sortDir==="asc"?"selected":""}>Ascending</option></select><button onclick="applyResultSort()">Apply</button><button onclick="downloadAssignmentResultsExcel('${d.assignment.id}')">⬇ Download Results Excel</button><button class="secondary" onclick="teacherHome()">← Back</button></div>
- ${sorted.length?sorted.map(at=>{const p=d.profiles.get(at.student_id)||{},total=Number(at.total_questions||d.questions.length),score=Number(at.score||0),wrong=Math.max(0,total-score);return `<div class="result-student"><div class="result-student-head"><div><h3>${esc(p.full_name||"Student")}</h3><div class="muted small">Roll No: ${esc(p.roll_no||"—")} • Attempt ${esc(at.attempt_number||1)} • ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</div></div><div class="result-score"><b>${score}/${total}</b><span>${total?Math.round(score*100/total):0}%</span></div></div><div class="result-questions">${d.questions.map((q,i)=>{const ans=d.answers.get(`${at.id}:${q.id}`),selected=ans?.selected_option||"—",correct=q.correct_option||"—",ok=ans?.is_correct===true||(selected!=="—"&&selected===correct);return `<div class="result-question"><div class="result-qno">Q${q.question_order||i+1}</div><div class="result-answer"><span>Your: <b>${esc(selected)}</b></span><span>Key: <b>${esc(correct)}</b></span></div><div class="${ok?"result-correct":"result-wrong"}">${ok?"✓":"✗"}</div></div>`}).join("")}</div><div class="result-summary"><span>Total: <b>${total}</b></span><span class="result-correct">✓ Correct: <b>${score}</b></span><span class="result-wrong">✗ Wrong: <b>${wrong}</b></span><span>Video: <b>${at.video_completed?"Yes":"No"}</b></span><button class="danger" onclick="deleteStudentAttempt('${at.id}','${esc(p.full_name||"Student")}')">Delete This Attempt</button></div></div>`}).join(""):`<div class="success"><b>No submissions yet.</b></div>`}
+ ${sorted.length?sorted.map(at=>{const p=d.profiles.get(at.student_id)||{},total=Number(at.total_questions||d.questions.length),score=Number(at.score||0),wrong=Math.max(0,total-score);const wrongQs=d.questions.filter((q,i)=>{const ans=d.answers.get(`${at.id}:${q.id}`);return !(ans?.is_correct===true||(ans?.selected_option&&ans.selected_option===q.correct_option))});return `<div class="result-student"><div class="result-student-head"><div><h3>${esc(p.full_name||"Student")}</h3><div class="muted small">Roll No: ${esc(p.roll_no||"—")} • Attempt ${esc(at.attempt_number||1)} • ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</div></div><div class="result-score"><b>${score}/${total}</b><span>${total?Math.round(score*100/total):0}%</span></div></div>
+ <div class="result-summary"><span>Total: <b>${total}</b></span><span class="result-correct">✓ Correct: <b>${score}</b></span><span class="result-wrong">✗ Wrong/Unanswered: <b>${wrong}</b></span>${d.assignment.assignment_type!=="mcq_only"?`<span>Video: <b>${at.video_completed?"Yes":"No"}</b></span>`:""}</div>
+ <details style="margin-top:14px" open><summary style="cursor:pointer;font-weight:700">❌ View Wrong Questions (${wrongQs.length})</summary><div style="margin-top:10px">${wrongQs.length?wrongQs.map((q,i)=>{const ans=d.answers.get(`${at.id}:${q.id}`),selected=ans?.selected_option||"—",correct=q.correct_option||"—",opts={A:q.option_a||"",B:q.option_b||"",C:q.option_c||"",D:q.option_d||""};return `<div class="assignment" style="border-left:4px solid #dc2626"><h4 style="margin:0 0 8px">Question ${q.question_order||i+1}</h4>${q.image_url?`<img src="${esc(q.image_url)}" alt="Question ${q.question_order||i+1}" style="display:block;max-width:100%;max-height:420px;object-fit:contain;margin-bottom:10px">`:q.question_text?`<div style="font-weight:700;margin-bottom:8px">${esc(q.question_text)}</div>`:""}<div class="small"><div><b>Student selected:</b> ${esc(selected)}${selected!=="—"&&opts[selected]?`. ${esc(opts[selected])}`:""}</div><div class="result-correct"><b>Correct answer:</b> ${esc(correct)}${opts[correct]?`. ${esc(opts[correct])}`:""}</div></div></div>`}).join(""):`<div class="success">No wrong or unanswered questions.</div>`}</div></details>
+ <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">View All Questions & Answers</summary><div class="result-questions">${d.questions.map((q,i)=>{const ans=d.answers.get(`${at.id}:${q.id}`),selected=ans?.selected_option||"—",correct=q.correct_option||"—",ok=ans?.is_correct===true||(selected!=="—"&&selected===correct);return `<div class="result-question"><div class="result-qno">Q${q.question_order||i+1}</div><div class="result-answer"><span>Your: <b>${esc(selected)}</b></span><span>Key: <b>${esc(correct)}</b></span></div><div class="${ok?"result-correct":"result-wrong"}">${ok?"✓":"✗"}</div></div>`}).join("")}</div></details>
+ <div class="actions" style="margin-top:12px"><button class="danger" onclick="deleteStudentAttempt('${at.id}','${esc(p.full_name||"Student")}')">Delete This Attempt</button></div></div>`}).join(""):`<div class="success"><b>No submissions yet.</b></div>`}
  </div></div>`);
 }
 
@@ -970,15 +1103,12 @@ async function studentHome(){
     <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p></div>
     <div class="card"><h2>🎯 Mock Test</h2><p class="muted">80 Questions • 4 Sections • 100 Marks • 2 Hours</p><button onclick="studentMockTests()">Open Mock Test</button></div>
     <div class="card"><h2>New Assignments</h2>
-      ${pending.length?pending.map(a=>`<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
+      ${pending.length?pending.map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.group_name?`<p class="small muted">📁 ${esc(a.group_name)}</p>`:""}</div><span class="tag">${a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ"}</span></div>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">${a.assignment_type==="mcq_only"?"Start MCQ Assignment":"Start Assignment"}</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
     </div>
     <div class="card"><h2>Previous Work</h2>
-      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
+      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.group_name?`<p class="small muted">📁 ${esc(a.group_name)}</p>`:""}</div><span class="tag">${a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ"}</span></div><p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
   <button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button>
-</div>
-<div style="margin-top:10px">
-  <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
-</div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
+</div>${a.assignment_type!=="mcq_only"?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}</div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
     </div>
   </div>`)
 }
@@ -1033,12 +1163,18 @@ async function startLesson(id){
   window.quizIndex=0;
   lesson();
 }
-function lesson(){render(`<div class="wrap">${header(esc(active.title))}<div class="card"><p class="muted">${esc(active.subject||"")}</p>${active.video_url?`<iframe class="video" src="${esc(embed(active.video_url))}" allowfullscreen></iframe>`:""}<div class="notice">Watch the lesson, then continue to the questions.</div><button onclick="videoWatched()">${active.video_url?"Video watched — Continue to Questions":"Continue to Questions"}</button></div></div>`)}
+function lesson(){
+ if(active.assignment_type==="mcq_only"){
+  videoDone=false;
+  return videoWatched();
+ }
+ render(`<div class="wrap">${header(esc(active.title))}<div class="card"><p class="muted">${esc(active.subject||"")}</p>${active.video_url?`<iframe class="video" src="${esc(embed(active.video_url))}" allowfullscreen></iframe>`:""}<div class="notice">Watch the lesson, then continue to the questions.</div><button onclick="videoWatched()">Video watched — Continue to Questions</button></div></div>`)
+}
 async function videoWatched(){videoDone=true;const {data:qs,error}=await sb.from("questions").select("*").eq("assignment_id",active.id).order("question_order");if(error)return alert(error.message);active.questions=qs||[];quiz()}
 function quiz(){
  if(!active.questions?.length)return alert("No questions are available for this assignment.");
  const total=active.questions.length,currentIndex=window.quizIndex||0,q=active.questions[currentIndex],image=q.image_url;
- render(`<div class="exam-shell"><div class="exam-top"><button class="secondary" onclick="studentHome()">← Back</button><h2>Question ${currentIndex+1} of ${total}</h2><span class="tag">${answers.filter(Boolean).length}/${total} Answered</span></div><div class="exam-grid"><main class="exam-main"><div class="card question-card"><div class="question-number">Question ${currentIndex+1}</div>${image?`<div class="question-image-wrap"><img class="question-image" src="${esc(image)}" alt="Question ${currentIndex+1}"></div>`:`<div class="question-text">${esc(q.question_text)}</div>`}<div class="answer-heading">Choose Your Answer</div><div class="circle-choice-row" role="radiogroup" aria-label="Choose your answer">${["A","B","C","D"].map(o=>`<button type="button" class="circle-choice ${answers[currentIndex]===o?"selected":""}" aria-label="Option ${o}" aria-pressed="${answers[currentIndex]===o}" onclick="choose(${currentIndex},'${o}')">${o}</button>`).join("")}</div></div><div class="exam-nav"><button class="secondary" ${currentIndex===0?"disabled":""} onclick="goQuestion(${currentIndex-1})">← Previous</button>${currentIndex<total-1?`<button onclick="goQuestion(${currentIndex+1})">Next →</button>`:`<button onclick="submitQuiz()">✓ Submit Test</button>`}</div></main><aside class="palette card"><h3>Question Palette</h3><div class="palette-grid">${active.questions.map((_,i)=>`<button class="palette-btn ${i===currentIndex?"current":""} ${answers[i]?"answered":""}" onclick="goQuestion(${i})">${i+1}</button>`).join("")}</div><div class="small muted" style="margin-top:16px"><div>🟩 Answered</div><div>🔵 Current</div><div>⬜ Not Answered</div></div></aside></div></div>`);
+ render(`<div class="exam-shell"><div class="exam-top"><button class="secondary" onclick="studentHome()">← Back</button><h2>Question ${currentIndex+1} of ${total}</h2><span class="tag">${answers.filter(Boolean).length}/${total} Answered</span></div><div class="exam-grid"><main class="exam-main"><div class="card question-card"><div class="question-number">Question ${currentIndex+1}</div>${image?`<div class="question-image-wrap"><img class="question-image" src="${esc(image)}" alt="Question ${currentIndex+1}"></div>`:`<div class="question-text">${esc(q.question_text)}</div>`}<div class="answer-heading">Choose Your Answer</div><div class="circle-choice-row" role="radiogroup" aria-label="Choose your answer">${["A","B","C","D"].map(o=>{const txt={A:q.option_a||"",B:q.option_b||"",C:q.option_c||"",D:q.option_d||""}[o];return `<button type="button" class="circle-choice ${answers[currentIndex]===o?"selected":""}" aria-label="Option ${o}: ${esc(txt)}" aria-pressed="${answers[currentIndex]===o}" onclick="choose(${currentIndex},'${o}')"><span class="option-letter">${o}.</span><span class="option-text">${esc(txt||"Option "+o)}</span></button>`}).join("")}</div></div><div class="exam-nav"><button class="secondary" ${currentIndex===0?"disabled":""} onclick="goQuestion(${currentIndex-1})">← Previous</button>${currentIndex<total-1?`<button onclick="goQuestion(${currentIndex+1})">Next →</button>`:`<button onclick="submitQuiz()">✓ Submit Test</button>`}</div></main><aside class="palette card"><h3>Question Palette</h3><div class="palette-grid">${active.questions.map((_,i)=>`<button class="palette-btn ${i===currentIndex?"current":""} ${answers[i]?"answered":""}" onclick="goQuestion(${i})">${i+1}</button>`).join("")}</div><div class="small muted" style="margin-top:16px"><div>🟩 Answered</div><div>🔵 Current</div><div>⬜ Not Answered</div></div></aside></div></div>`);
 }
 function goQuestion(i){window.quizIndex=Math.max(0,Math.min(i,active.questions.length-1));quiz()}
 function choose(i,v){answers[i]=v;quiz()}
