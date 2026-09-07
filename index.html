@@ -267,38 +267,61 @@ async function saveReassignment(assignmentId){
 }
 
 
-async function callTeacherFn(body){
- const {data:{session}}=await sb.auth.getSession();
- if(!session) throw new Error("Teacher session expired. Please log in again.");
- const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
- const j=await res.json().catch(()=>({}));
- if(!res.ok) throw new Error(j.error||"Request failed");
- return j;
-}
+
 async function callTeacherFn(body){
  const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error("Please log in again.");
  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
  const j=await res.json().catch(()=>({}));if(!res.ok||j.error)throw new Error(j.error||"Request failed.");return j;
 }
 async function manageStudentAccounts(){
- try{const j=await callTeacherFn({action:"listCredentials"});const students=j.students||[];
- render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Teachers can view and change classroom Roll No, Password and Class Type.</div><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Class Type</th><th>Action</th></tr></thead><tbody>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td>${esc(s.class_type||"—")}</td><td><div class="actions"><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button onclick="changeStudentClassType('${s.id}','${esc(s.full_name)}','${esc(s.class_type||"")}')">Class Type</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="6">No students found.</td></tr>`}</tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
+ try{
+  const [{data:classes,error:classErr},j]=await Promise.all([
+    sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name"),
+    callTeacherFn({action:"listCredentials"})
+  ]);
+  if(classErr)throw classErr;
+  const students=j.students||[];
+  const classOptions=classes||[];
+  window._teacherStudentClasses=classOptions;
+  render(`<div class="wrap">${header("Student Accounts")}<div class="card">
+   <div class="notice">Teachers can view and change a student's Roll No, Password and Class. Use <b>Change Class</b> to move a student to another class taught by you.</div>
+   <div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Current Class</th><th>Action</th></tr></thead>
+   <tbody>${students.map(s=>`<tr>
+    <td><b>${esc(s.full_name)}</b></td>
+    <td>${esc(s.roll_no||"—")}</td>
+    <td>${esc(s.password||"—")}</td>
+    <td>${esc((s.classes||[]).join(", ")||"—")}</td>
+    <td><div class="actions">
+     <button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button>
+     <button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button>
+     <button onclick="changeStudentClass('${s.id}','${esc(s.full_name)}','${esc((s.classes||[]).join(", "))}')">Change Class</button>
+     <button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button>
+    </div></td>
+   </tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</tbody></table></div>
+   <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+  </div></div>`);
  }catch(e){alert(e.message||String(e))}
 }
 async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
-async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
-async function changeStudentClassType(studentId,name,currentType){const v=prompt(`Class Type for ${name}:`,currentType);if(v===null)return;if(!v.trim())return alert("Class Type is required.");try{await callTeacherFn({action:"setStudentClassType",student_id:studentId,class_type:v.trim()});alert("Class Type updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
-async function deleteStudentAccount(studentId,name){
- if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account, classroom memberships, assignments and submitted answers.`))return;
+async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must be at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function changeStudentClass(studentId,name,currentClass){
+ const classes=window._teacherStudentClasses||[];
+ if(!classes.length)return alert("No classes are available.");
+ const currentNames=(currentClass||"").split(", ").filter(Boolean);
+ const list=classes.map((c,i)=>`${i+1}. ${c.name}${currentNames.includes(c.name)?" (Current)":""}`).join("\n");
+ const v=prompt(`Change class for ${name}.\n\n${list}\n\nEnter the number of the new class:`);
+ if(v===null)return;
+ const n=Number(v.trim());
+ if(!Number.isInteger(n)||n<1||n>classes.length)return alert("Please enter a valid class number.");
+ const selected=classes[n-1];
+ if(currentNames.includes(selected.name))return alert(`${name} is already in ${selected.name}.`);
+ if(!confirm(`Move ${name} to "${selected.name}"?\n\nThe student's current class membership under you will be changed to this class.`))return;
  try{
-  await callTeacherFn({action:"deleteStudent",student_id:studentId});
-  alert(`${name} was deleted successfully.`);
+  await callTeacherFn({action:"setStudentClass",student_id:studentId,class_id:selected.id});
+  alert(`${name} was moved to ${selected.name}.`);
   await manageStudentAccounts();
- }catch(e){
-  alert("Could not delete student.\n\n"+(e.message||String(e)));
- }
+ }catch(e){alert(e.message||e)}
 }
-
 async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)}
 async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id});if(error)return alert(error.message);teacherHome()}
 
