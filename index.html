@@ -216,9 +216,115 @@ async function editMockQuestion(id){const {data:q,error}=await sb.from('mock_que
 async function saveMockQuestionEdit(id){try{const {data:q,error:qe}=await sb.from('mock_question_bank').select('*').eq('id',id).eq('teacher_id',current.id).single();if(qe)throw qe;let imageUrl=q.image_url||null;const file=document.getElementById('emqImage')?.files?.[0];if(file){imageUrl=await uploadMockFile(file,`${current.id}/edited-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`)}const newPart=document.getElementById('emqPart').value;const newPlan=mockPlanByPart[newPart];const payload={section_code:newPlan.section,part_code:newPart,question_text:document.getElementById('emqQuestion').value.trim()||null,option_a:document.getElementById('emqA').value.trim()||null,option_b:document.getElementById('emqB').value.trim()||null,option_c:document.getElementById('emqC').value.trim()||null,option_d:document.getElementById('emqD').value.trim()||null,correct_option:document.getElementById('emqAnswer').value,passage_title:document.getElementById('emqPassageTitle').value.trim()||null,passage_text:document.getElementById('emqPassage').value.trim()||null,image_url:imageUrl};const {error}=await sb.from('mock_question_bank').update(payload).eq('id',id).eq('teacher_id',current.id);if(error)throw error;alert('Question updated successfully.');mockBankSummary()}catch(e){alert('Could not update question: '+(e.message||e))}}
 async function toggleMockQuestion(id,active){const {error}=await sb.from('mock_question_bank').update({active}).eq('id',id).eq('teacher_id',current.id);if(error)return alert(error.message);mockBankSummary()}
 async function deleteMockQuestion(id){if(!confirm('Delete this question from your question bank? It will not affect questions already copied into generated mock tests.'))return;const {error}=await sb.from('mock_question_bank').delete().eq('id',id).eq('teacher_id',current.id);if(error)return alert(error.message);mockBankSummary()}
-async function generateMockTestPage(){const {data:classes,error}=await sb.from('classes').select('id,name').eq('teacher_id',current.id).order('name');if(error)return alert(error.message);if(!classes?.length)return alert('Create a class first.');const {data:bank,error:be}=await sb.from('mock_question_bank').select('id,part_code,passage_id,active').eq('teacher_id',current.id).eq('active',true);if(be)return alert(be.message);const counts={};const groups={};(bank||[]).forEach(x=>{counts[x.part_code]=(counts[x.part_code]||0)+1;if(x.passage_id){const k=x.part_code+'::'+x.passage_id;(groups[k]||=[]).push(x)}});const shortages=MOCK_PLAN.filter(x=>{if(x.unit==='passage'){const completeGroups=Object.entries(groups).filter(([k,g])=>k.startsWith(x.part+'::')&&g.length===x.count).length;return completeGroups<1}else return (counts[x.part]||0)<x.count});if(shortages.length)return alert('Question bank is incomplete or has no complete passage group:\n\n'+shortages.map(x=>x.unit==='passage'?`${x.label}: need at least 1 complete passage group of ${x.count} questions`:`${x.label}: need at least ${x.count} questions`).join('\n'));render(`<div class="wrap">${header('Generate Mock Test')}<div class="card"><label>Test Title</label><input id="mtTitle" value="Mock Test"><label>Time Limit</label><input value="2 Hours (120 minutes)" disabled><label>Question Selection</label><select id="mtMode"><option value="fixed">Fixed test — same 80 questions for all assigned students</option></select><h3>Assign To</h3><p class="small muted">Select multiple classes. For each class choose entire class or selected students.</p><div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=true);loadMockAssignStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=false);loadMockAssignStudents()">Clear all</button></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="mock-class" type="checkbox" value="${c.id}" onchange="loadMockAssignStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join('')}</div><div id="mockAssignPicker" class="card" style="background:#f8fafc;margin-top:15px"><span class="muted">Select classes above.</span></div><div class="card" style="background:#f8fafc"><h3>Question Blueprint</h3>${MOCK_PLAN.map(x=>`<div class="assignment" style="margin:6px 0;padding:9px"><b>${esc(x.label)}</b> — ${x.count} ${x.unit==='passage'?'questions from 1 complete passage group':'questions'}${x.unit==='questions'?` · bank upload must be a multiple of ${x.count}`:''}</div>`).join('')}</div><div class="actions"><button onclick="createMockTest()">Generate & Assign 80-Question Test</button><button class="secondary" onclick="mockTestManagement()">Cancel</button></div></div></div>`)}
+function mockSortQuestions(a,b){
+ const ad=Date.parse(a.created_at||'')||0,bd=Date.parse(b.created_at||'')||0;
+ if(ad!==bd)return ad-bd;
+ const ao=Number(a.question_order??a.source_question_no??999999),bo=Number(b.question_order??b.source_question_no??999999);
+ if(ao!==bo)return ao-bo;
+ return String(a.id||'').localeCompare(String(b.id||''));
+}
+function mockBuildSets(qs,plan){
+ if(plan.unit==='passage'){
+  const groups=new Map();
+  (qs||[]).forEach(q=>{const pid=String(q.passage_id||'').trim();if(!pid)return;if(!groups.has(pid))groups.set(pid,[]);groups.get(pid).push(q)});
+  return [...groups.entries()].filter(([,g])=>g.length===plan.count).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([pid,g],i)=>({number:i+1,label:`Passage Group ${i+1} — ${pid}`,questions:[...g].sort(mockSortQuestions)}));
+ }
+ const sorted=[...(qs||[])].sort(mockSortQuestions);
+ const sets=[];
+ for(let i=0;i<sorted.length;i+=plan.count){
+  const group=sorted.slice(i,i+plan.count);
+  if(group.length===plan.count)sets.push({number:sets.length+1,label:`Set ${sets.length+1}`,questions:group});
+ }
+ return sets;
+}
+async function generateMockTestPage(){
+ const {data:classes,error}=await sb.from('classes').select('id,name').eq('teacher_id',current.id).order('name');
+ if(error)return alert(error.message);
+ if(!classes?.length)return alert('Create a class first.');
+ const {data:bank,error:be}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true);
+ if(be)return alert(be.message);
+ const byPart={};(bank||[]).forEach(q=>{(byPart[q.part_code]||=[]).push(q)});
+ const setInfo={};
+ const shortages=[];
+ for(const plan of MOCK_PLAN){
+  const sets=mockBuildSets(byPart[plan.part]||[],plan);
+  setInfo[plan.part]=sets;
+  if(!sets.length)shortages.push(plan);
+ }
+ if(shortages.length)return alert('Question bank is incomplete or has no complete set/passage group:\n\n'+shortages.map(x=>x.unit==='passage'?`${x.label}: need at least 1 complete passage group of ${x.count} questions`:`${x.label}: need at least ${x.count} usable questions for one complete set`).join('\n'));
+ const sectionGroups=[
+  ['MAT','Mental Ability Test (MAT)'],
+  ['EVS','Environmental Studies (EVS)'],
+  ['ARITHMETIC','Arithmetic'],
+  ['LANGUAGE','Language']
+ ];
+ render(`<div class="wrap">${header('Generate Mock Test')}<div class="card">
+  <label>Test Title</label><input id="mtTitle" value="Mock Test">
+  <label>Time Limit</label><input value="2 Hours (120 minutes)" disabled>
+  <label>Question Selection</label><select id="mtMode"><option value="fixed">Fixed test — same 80 questions for all assigned students</option></select>
+  <div class="card" style="background:#f8fafc;border:2px solid #2563eb;margin-top:15px">
+   <h3>📚 Select Question Sets</h3>
+   <p class="small muted">Choose exactly which set/group should be used from each question bank. The selected sets are copied into the generated test and will be the same for all assigned students.</p>
+   <div class="actions" style="margin-bottom:10px">
+    <button type="button" class="secondary" onclick="document.querySelectorAll('.mock-set-select').forEach(x=>x.selectedIndex=0)">Set 1 for all</button>
+    <button type="button" class="secondary" onclick="document.querySelectorAll('.mock-set-select').forEach(x=>x.value='random')">Random available set</button>
+   </div>
+   ${sectionGroups.map(([code,name])=>`<div style="margin:12px 0 6px"><b>${esc(name)}</b></div>${MOCK_PLAN.filter(x=>x.section===code).map(x=>`<div class="assignment" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0;padding:9px"><div><b>${esc(x.label)}</b><div class="small muted">${x.count} question(s) per set</div></div><select id="mockSet_${x.part}" class="mock-set-select" style="min-width:210px;width:auto"><option value="random">Random set</option>${setInfo[x.part].map(st=>`<option value="${st.number}" ${st.number===1?'selected':''}>${esc(st.label)}</option>`).join('')}</select></div>`).join('')}`).join('')}
+  </div>
+  <h3>Assign To</h3><p class="small muted">Select multiple classes. For each class choose entire class or selected students.</p>
+  <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=true);loadMockAssignStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=false);loadMockAssignStudents()">Clear all</button></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="mock-class" type="checkbox" value="${c.id}" onchange="loadMockAssignStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join('')}</div>
+  <div id="mockAssignPicker" class="card" style="background:#f8fafc;margin-top:15px"><span class="muted">Select classes above.</span></div>
+  <div class="card" style="background:#f8fafc"><h3>Question Blueprint</h3>${MOCK_PLAN.map(x=>`<div class="assignment" style="margin:6px 0;padding:9px"><b>${esc(x.label)}</b> — ${x.count} ${x.unit==='passage'?'questions from 1 complete passage group':'questions'} · <b>${setInfo[x.part].length} set(s) available</b></div>`).join('')}</div>
+  <div class="actions"><button onclick="createMockTest()">Generate & Assign 80-Question Test</button><button class="secondary" onclick="mockTestManagement()">Cancel</button></div>
+ </div></div>`)
+}
 async function loadMockAssignStudents(){const box=document.getElementById('mockAssignPicker');if(!box)return;const ids=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);if(!ids.length){box.innerHTML='<span class="muted">Select classes above.</span>';return}box.innerHTML='Loading students…';const {data:m,error}=await sb.from('class_students').select('class_id,student_id').in('class_id',ids);if(error){box.innerHTML=message(error.message);return}const sids=[...new Set((m||[]).map(x=>x.student_id))];const {data:students,error:e}=await sb.from('profiles').select('id,full_name,username').in('id',sids).order('full_name');if(e){box.innerHTML=message(e.message);return}const by=new Map();(m||[]).forEach(x=>{if(!by.has(x.class_id))by.set(x.class_id,[]);by.get(x.class_id).push(x.student_id)});box.innerHTML=ids.map(cid=>{const name=document.querySelector(`.mock-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid;const list=(by.get(cid)||[]).map(id=>students.find(s=>s.id===id)).filter(Boolean);return `<div class="assignment"><h3>${esc(name)}</h3><label><input type="radio" name="mockMode_${cid}" value="class" checked onchange="document.getElementById('mockStudents_${cid}').style.display='none'" style="width:auto;margin-right:6px">Entire class</label> <label><input type="radio" name="mockMode_${cid}" value="students" onchange="document.getElementById('mockStudents_${cid}').style.display='block'" style="width:auto;margin-right:6px">Selected students</label><div id="mockStudents_${cid}" style="display:none;margin-top:8px">${list.map(s=>`<label style="display:block;padding:5px"><input class="mock-student" data-class-id="${cid}" type="checkbox" value="${s.id}" style="width:auto;margin-right:6px">${esc(s.full_name)} <span class="muted small">${esc(s.username||'')}</span></label>`).join('')||'<span class="muted">No students.</span>'}</div></div>`}).join('')}
-async function createMockTest(){const title=document.getElementById('mtTitle').value.trim();if(!title)return alert('Enter a test title.');const selected=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);if(!selected.length)return alert('Select at least one class.');let studentIds=[];for(const cid of selected){const mode=document.querySelector(`input[name="mockMode_${cid}"]:checked`)?.value||'class';if(mode==='class'){const {data:m,error}=await sb.from('class_students').select('student_id').eq('class_id',cid);if(error)throw error;studentIds.push(...(m||[]).map(x=>x.student_id))}else studentIds.push(...[...document.querySelectorAll(`.mock-student[data-class-id="${cid}"]:checked`)].map(x=>x.value))}studentIds=[...new Set(studentIds)];if(!studentIds.length)return alert('No students were selected.');try{const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title,time_limit_seconds:7200,status:'published'}).select().single();if(te)throw te;let qrows=[];for(const plan of MOCK_PLAN){const {data:qs,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('part_code',plan.part).eq('active',true);if(error)throw error;let selectedQs=[];if(plan.unit==='passage'){const groups={};(qs||[]).forEach(q=>{if(q.passage_id)(groups[q.passage_id]||=[]).push(q)});const complete=Object.values(groups).filter(g=>g.length===plan.count);if(!complete.length)throw new Error(`${plan.label} has no complete passage group of ${plan.count} questions.`);const group=complete[Math.floor(Math.random()*complete.length)];selectedQs=[...group].sort((a,b)=>(a.question_order||0)-(b.question_order||0));}else{selectedQs=[...(qs||[])].sort(()=>Math.random()-.5).slice(0,plan.count);if(selectedQs.length<plan.count)throw new Error(`${plan.label} has only ${selectedQs.length} usable question(s).`)}qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})))}qrows.forEach((q,i)=>q.question_number=i+1);const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;const recipients=studentIds.map(student_id=>({mock_test_id:test.id,student_id}));const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re;alert(`Mock Test generated successfully.\n\n80 questions\n100 marks\n2 hours\nAssigned to ${recipients.length} student(s).`);mockTestManagement()}catch(e){alert('Could not generate Mock Test: '+(e.message||e))}}
+async function createMockTest(){
+ const title=document.getElementById('mtTitle').value.trim();
+ if(!title)return alert('Enter a test title.');
+ const selected=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);
+ if(!selected.length)return alert('Select at least one class.');
+ let studentIds=[];
+ for(const cid of selected){
+  const mode=document.querySelector(`input[name="mockMode_${cid}"]:checked`)?.value||'class';
+  if(mode==='class'){
+   const {data:m,error}=await sb.from('class_students').select('student_id').eq('class_id',cid);
+   if(error)throw error;studentIds.push(...(m||[]).map(x=>x.student_id));
+  }else studentIds.push(...[...document.querySelectorAll(`.mock-student[data-class-id="${cid}"]:checked`)].map(x=>x.value));
+ }
+ studentIds=[...new Set(studentIds)];
+ if(!studentIds.length)return alert('No students were selected.');
+ try{
+  const {data:bank,error:be}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true);
+  if(be)throw be;
+  const byPart={};(bank||[]).forEach(q=>{(byPart[q.part_code]||=[]).push(q)});
+  const chosenSets={};
+  for(const plan of MOCK_PLAN){
+   const sets=mockBuildSets(byPart[plan.part]||[],plan);
+   if(!sets.length)throw new Error(`${plan.label} has no complete set available.`);
+   const value=document.getElementById(`mockSet_${plan.part}`)?.value||'random';
+   const set=value==='random'?sets[Math.floor(Math.random()*sets.length)]:sets.find(x=>String(x.number)===String(value));
+   if(!set)throw new Error(`${plan.label}: selected set is no longer available.`);
+   chosenSets[plan.part]=set;
+  }
+  const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title,time_limit_seconds:7200,status:'published'}).select().single();
+  if(te)throw te;
+  let qrows=[];
+  for(const plan of MOCK_PLAN){
+   const selectedQs=chosenSets[plan.part].questions;
+   if(selectedQs.length!==plan.count)throw new Error(`${plan.label}: selected set must contain exactly ${plan.count} questions.`);
+   qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})));
+  }
+  qrows.forEach((q,i)=>q.question_number=i+1);
+  const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
+  const recipients=studentIds.map(student_id=>({mock_test_id:test.id,student_id}));
+  const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re;
+  const summary=MOCK_PLAN.map(x=>`${x.label}: ${chosenSets[x.part].label}`).join('\n');
+  alert(`Mock Test generated successfully.\n\n80 questions\n100 marks\n2 hours\nAssigned to ${recipients.length} student(s).\n\nSelected sets:\n${summary}`);
+  mockTestManagement();
+ }catch(e){alert('Could not generate Mock Test: '+(e.message||e))}
+}
 async function studentMockTests(){const {data:links,error}=await sb.from('mock_test_students').select('mock_test_id').eq('student_id',current.id);if(error)return render(`<div class="wrap">${header('Mock Tests')}<div class="card">${message(error.message)}</div></div>`);const ids=(links||[]).map(x=>x.mock_test_id);let tests=[];if(ids.length){const {data,error:e}=await sb.from('mock_tests').select('*').in('id',ids).order('created_at',{ascending:false});if(e)return alert(e.message);tests=tests||[];tests=data||[]}const {data:attempts,error:ae}=await sb.from('mock_test_attempts').select('*').eq('student_id',current.id).in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});if(ae)return alert(ae.message);const latest=new Map();(attempts||[]).forEach(a=>{if(!latest.has(a.mock_test_id))latest.set(a.mock_test_id,a)});render(`<div class="wrap">${header('Mock Tests')}<div class="card"><h2>🎯 Mock Test</h2><p class="muted">80 questions • 100 marks • 2 hours • 1.25 marks per question.</p></div><div class="card"><h2>Available Tests</h2>${tests.length?tests.map(t=>{const a=latest.get(t.id);return `<div class="assignment"><h3>${esc(t.title)}</h3><p class="muted">80 Questions · 100 Marks · 2 Hours</p>${a?.status==='submitted'?`<div class="success"><b>Completed:</b> ${Number(a.score||0).toFixed(2)}/100 (${Number(a.percentage||0).toFixed(2)}%)</div><button class="secondary" onclick="viewMockResult('${a.id}')">View Result</button>`:`<button onclick="startMockTest('${t.id}')">${a?.status==='in_progress'?'Resume Mock Test':'Start Mock Test'}</button>`}</div>`}).join(''):'<p class="muted">No mock tests have been assigned to you.</p>'}</div><button class="secondary" onclick="studentHome()">← Back to Dashboard</button></div>`)}
 async function startMockTest(testId){try{const {data:test,error:te}=await sb.from('mock_tests').select('*').eq('id',testId).single();if(te)throw te;let {data:attempt}=await sb.from('mock_test_attempts').select('*').eq('mock_test_id',testId).eq('student_id',current.id).eq('status','in_progress').order('created_at',{ascending:false}).limit(1).maybeSingle();const now=Date.now();if(attempt&&new Date(attempt.end_at).getTime()<=now){await submitMockAttempt(attempt.id,true);attempt=null}if(!attempt){const start=new Date().toISOString(),end=new Date(now+Number(test.time_limit_seconds||7200)*1000).toISOString();const {data:a,error}=await sb.from('mock_test_attempts').insert({mock_test_id:testId,student_id:current.id,start_at:start,end_at:end,status:'in_progress',total_questions:80,total_marks:100}).select().single();if(error)throw error;attempt=a}const {data:qs,error:qe}=await sb.from('mock_test_questions').select('*').eq('mock_test_id',testId).order('question_number');if(qe)throw qe;const {data:ans}=await sb.from('mock_test_answers').select('question_id,selected_option').eq('attempt_id',attempt.id);const amap=Object.fromEntries((ans||[]).map(x=>[x.question_id,x.selected_option]));window.mockExam={test,attempt,qs:qs||[],answers:amap,index:0};renderMockExam();startMockTimer()}catch(e){alert('Could not start Mock Test: '+(e.message||e))}}
 let mockTimerHandle=null;function startMockTimer(){clearInterval(mockTimerHandle);mockTimerHandle=setInterval(()=>{const el=document.getElementById('mockTimer');if(!el||!window.mockExam)return clearInterval(mockTimerHandle);const left=Math.max(0,new Date(window.mockExam.attempt.end_at).getTime()-Date.now());el.textContent=formatDuration(left);if(left<=0){clearInterval(mockTimerHandle);submitMockAttempt(window.mockExam.attempt.id,true)}},500);}
