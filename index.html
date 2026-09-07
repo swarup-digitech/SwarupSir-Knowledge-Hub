@@ -49,6 +49,8 @@ const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let current=null,profile=null,active=null,answers=[],videoDone=false;
 let bulkStudents=[], importedQuestions=[], importedAnswers={};
+let submittingQuiz=false;
+let currentSubmissionToken=null;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>document.getElementById("app").innerHTML=x;
@@ -1169,11 +1171,14 @@ async function studentHome(){
   const completedIds=new Set([...latestByAssignment.entries()].filter(([_,t])=>Number(t.score||0)*100/Math.max(1,Number(t.total_questions||0))>=80).map(([id])=>id));
   const pending=assignments.filter(a=>!completedIds.has(a.id));
   const completed=assignments.filter(a=>completedIds.has(a.id));
+  const RETRY_DELAY_MS=3*60*60*1000;
+  const latestAttemptByAssignment=new Map();
+  attempts.forEach(t=>{if(!latestAttemptByAssignment.has(t.assignment_id))latestAttemptByAssignment.set(t.assignment_id,t)});
   render(`<div class="wrap">${header("My Assignments")}
     <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p></div>
     <div class="card"><h2>🎯 Mock Test</h2><p class="muted">80 Questions • 4 Sections • 100 Marks • 2 Hours</p><button onclick="studentMockTests()">Open Mock Test</button></div>
     <div class="card"><h2>New Assignments</h2>
-      ${pending.length?pending.map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.group_name?`<p class="small muted">📁 ${esc(a.group_name)}</p>`:""}</div><span class="tag">${a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ"}</span></div>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">${a.assignment_type==="mcq_only"?"Start MCQ Assignment":"Start Assignment"}</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
+      ${pending.length?pending.map(a=>{const last=latestAttemptByAssignment.get(a.id);const lastPct=last?Math.round(Number(last.score||0)*100/Math.max(1,Number(last.total_questions||0))):null;const retryAt=last&&lastPct<80&&last.submitted_at?new Date(new Date(last.submitted_at).getTime()+RETRY_DELAY_MS):null;const locked=!!(retryAt&&retryAt.getTime()>Date.now());return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.group_name?`<p class="small muted">📁 ${esc(a.group_name)}</p>`:""}</div><span class="tag">${a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ"}</span></div>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}${locked?`<div class="notice"><b>Retry available after 3 hours.</b><br>Your last score was ${lastPct}%. You can attempt this assignment again after <b>${retryAt.toLocaleString()}</b>.</div>`:`<span class="small" style="color:#2563eb"><b>${last?"Retry Available":"Not Completed"}</b></span>`}<div class="actions" style="margin-top:10px"><button ${locked?"disabled":""} onclick="startLesson('${a.id}')">${locked?"Available After 3 Hours":(a.assignment_type==="mcq_only"?"Start MCQ Assignment":"Start Assignment")}</button></div></div>`}).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
     </div>
     <div class="card"><h2>Previous Work</h2>
       ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>${a.group_name?`<p class="small muted">📁 ${esc(a.group_name)}</p>`:""}</div><span class="tag">${a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ"}</span></div><p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
@@ -1214,7 +1219,7 @@ async function startLesson(id){
   if(error)return alert(error.message);
 
   const {data:existing,error:ae}=await sb.from("attempts")
-    .select("id,score,total_questions,attempt_number").eq("assignment_id",id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);
+    .select("id,score,total_questions,attempt_number,submitted_at").eq("assignment_id",id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);
 
   if(ae)return alert("Could not check submission status: "+ae.message);
 
@@ -1225,11 +1230,20 @@ async function startLesson(id){
       alert(`You have already passed this assignment with ${pct}%.`);
       return studentHome();
     }
+    if(last.submitted_at){
+      const retryAt=new Date(new Date(last.submitted_at).getTime()+3*60*60*1000);
+      if(retryAt.getTime()>Date.now()){
+        alert(`Your last attempt scored ${pct}%, which is below 80%.\n\nYou can attempt this assignment again after 3 hours, at ${retryAt.toLocaleString()}.`);
+        return studentHome();
+      }
+    }
   }
 
   active=a;
   videoDone=false;
   answers=[];
+  submittingQuiz=false;
+  currentSubmissionToken=(crypto&&crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
   window.quizIndex=0;
   lesson();
 }
@@ -1249,67 +1263,87 @@ function quiz(){
 function goQuestion(i){window.quizIndex=Math.max(0,Math.min(i,active.questions.length-1));quiz()}
 function choose(i,v){answers[i]=v;quiz()}
 async function submitQuiz(){
+  if(submittingQuiz)return;
   if(answers.length<active.questions.length)return alert("Please answer every question.");
+  submittingQuiz=true;
 
-  const {data:existing,error:checkError}=await sb.from("attempts")
-    .select("id,score,total_questions,attempt_number").eq("assignment_id",active.id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);
+  try{
+    const {data:existing,error:checkError}=await sb.from("attempts")
+      .select("id,score,total_questions,attempt_number,submitted_at").eq("assignment_id",active.id).eq("student_id",current.id).order("attempt_number",{ascending:false}).limit(1);
 
-  if(checkError)return alert("Could not check submission status: "+checkError.message);
+    if(checkError)throw new Error("Could not check submission status: "+checkError.message);
 
-  if(existing?.length){
-    const last=existing[0];
-    const pct=Math.round(Number(last.score||0)*100/Math.max(1,Number(last.total_questions||0)));
-    if(pct>=80){
-      alert(`Already passed with ${pct}%. This assignment cannot be submitted again.`);
-      return studentHome();
+    if(existing?.length){
+      const last=existing[0];
+      const pct=Math.round(Number(last.score||0)*100/Math.max(1,Number(last.total_questions||0)));
+      if(pct>=80){
+        alert(`Already passed with ${pct}%. This assignment cannot be submitted again.`);
+        submittingQuiz=false;
+        return studentHome();
+      }
+      if(last.submitted_at){
+        const retryAt=new Date(new Date(last.submitted_at).getTime()+3*60*60*1000);
+        if(retryAt.getTime()>Date.now()){
+          alert(`Your last attempt scored ${pct}%, which is below 80%.\n\nYou can attempt this assignment again after 3 hours, at ${retryAt.toLocaleString()}.`);
+          submittingQuiz=false;
+          return studentHome();
+        }
+      }
     }
-  }
 
-  const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);
-  const nextAttemptNumber=(existing?.[0]?.attempt_number||0)+1;
-  const percentage=Math.round(score*100/Math.max(1,active.questions.length));
+    const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);
+    const nextAttemptNumber=(existing?.[0]?.attempt_number||0)+1;
+    const percentage=Math.round(score*100/Math.max(1,active.questions.length));
+    const submissionToken=currentSubmissionToken||((crypto&&crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-  const {data:attempt,error}=await sb.from("attempts").insert({
-    assignment_id:active.id,
-    student_id:current.id,
-    score,
-    total_questions:active.questions.length,
-    video_completed:videoDone,
-    submitted_at:new Date().toISOString(),
-    attempt_number:nextAttemptNumber
-  }).select().single();
+    const {data:attempt,error}=await sb.from("attempts").insert({
+      assignment_id:active.id,
+      student_id:current.id,
+      score,
+      total_questions:active.questions.length,
+      video_completed:videoDone,
+      submitted_at:new Date().toISOString(),
+      attempt_number:nextAttemptNumber,
+      submission_token:submissionToken
+    }).select().single();
 
-  if(error){
-    if(error.code==="23505"){
-      alert("Already Submitted. This assignment can only be submitted once.");
-      return studentHome();
+    if(error){
+      if(error.code==="23505"){
+        alert("This assignment has already been submitted. Your second click was ignored, so no duplicate submission was created.");
+        submittingQuiz=false;
+        return studentHome();
+      }
+      throw new Error(error.message);
     }
-    return alert(error.message);
+
+    const rows=active.questions.map((q,i)=>({
+      attempt_id:attempt.id,
+      question_id:q.id,
+      selected_option:answers[i],
+      is_correct:answers[i]===q.correct_option
+    }));
+
+    const {error:e}=await sb.from("answers").insert(rows);
+
+    if(e){
+      await sb.from("attempts").delete().eq("id",attempt.id);
+      throw new Error(e.message);
+    }
+
+    const retryAt=new Date(new Date(attempt.submitted_at).getTime()+3*60*60*1000);
+    render(`<div class="wrap">${header("Assignment Completed")}<div class="card" style="text-align:center">
+      <div class="stat">${score} / ${active.questions.length}</div>
+      <h2>${percentage>=80?"Excellent!":"Keep Practicing!"}</h2>
+      ${percentage>=80?`<div class="success"><b>Passed ✓</b><br>You scored ${percentage}%. This assignment is completed.</div>`:`<div class="notice"><b>Score: ${percentage}% — Below 80%</b><br>Your Attempt ${nextAttemptNumber} has been recorded successfully. <b>You can attempt this assignment again after 3 hours, at ${retryAt.toLocaleString()}.</b><br>Please use this waiting period to review your mistakes. Your previous attempt remains safely stored in your attempt history.</div>`}
+      <div class="actions" style="justify-content:center;margin-top:12px">
+        <button onclick="viewPreviousWork('${active.id}','${attempt.id}')">View My Answers</button>
+        <button class="secondary" onclick="studentHome()">Back to Assignments</button>
+      </div>
+    </div></div>`);
+  }catch(e){
+    submittingQuiz=false;
+    alert(e.message||String(e));
   }
-
-  const rows=active.questions.map((q,i)=>({
-    attempt_id:attempt.id,
-    question_id:q.id,
-    selected_option:answers[i],
-    is_correct:answers[i]===q.correct_option
-  }));
-
-  const {error:e}=await sb.from("answers").insert(rows);
-
-  if(e){
-    await sb.from("attempts").delete().eq("id",attempt.id);
-    return alert(e.message);
-  }
-
-  render(`<div class="wrap">${header("Assignment Completed")}<div class="card" style="text-align:center">
-    <div class="stat">${score} / ${active.questions.length}</div>
-    <h2>${percentage>=80?"Excellent!":"Keep Practicing!"}</h2>
-    ${percentage>=80?`<div class="success"><b>Passed ✓</b><br>You scored ${percentage}%. This assignment is completed.</div>`:`<div class="notice"><b>Score: ${percentage}% — Below 80%</b><br>Your Attempt ${nextAttemptNumber} has been recorded. The assignment has been made available again for another attempt. Your previous attempt remains in your attempt history.</div>`}
-    <div class="actions" style="justify-content:center;margin-top:12px">
-      <button onclick="viewPreviousWork('${active.id}','${attempt.id}')">View My Answers</button>
-      <button class="secondary" onclick="studentHome()">Back to Assignments</button>
-    </div>
-  </div></div>`)
 }
 init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start</h2><p>${esc(e.message||e)}</p></div></div>`));
 </script></body></html>
