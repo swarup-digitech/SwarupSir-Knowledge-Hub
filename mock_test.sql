@@ -84,6 +84,13 @@ create table if not exists public.mock_test_answers (
 );
 
 create index if not exists idx_mock_bank_teacher_part on public.mock_question_bank(teacher_id,part_code,active);
+-- Passage metadata used by EVS/Language Excel uploads. A passage is stored once logically
+-- by Passage ID while its five linked questions carry the same passage_id.
+alter table public.mock_question_bank add column if not exists passage_id text;
+alter table public.mock_question_bank add column if not exists passage_title text;
+alter table public.mock_question_bank add column if not exists question_order integer;
+create index if not exists idx_mock_bank_teacher_passage on public.mock_question_bank(teacher_id,part_code,passage_id);
+
 create index if not exists idx_mock_test_teacher on public.mock_tests(teacher_id,created_at desc);
 create index if not exists idx_mock_test_students_student on public.mock_test_students(student_id,mock_test_id);
 create index if not exists idx_mock_attempts_student_test on public.mock_test_attempts(student_id,mock_test_id,status);

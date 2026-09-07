@@ -1,69 +1,91 @@
-Swarup Sir's Knowledge Hub — Complete Package
+SWARUP SIR'S KNOWLEDGE HUB — COMPLETE PACKAGE
+==============================================
 
-This package contains all previous functionality plus the Mock Test module.
+This package includes the previous Knowledge Hub functionality plus the expanded Mock Test question-bank system.
 
-PREVIOUS FUNCTIONALITIES
-- Student-only login and separate teacher login
-- Student PWA/shortcut support using the supplied SKH icon
-- Student assignments with multiple attempts
-- Assignment retry when the latest score is below 80%
-- Multiple classes/students per assignment
-- Teacher Student Accounts: Roll No, Password and Change Class
+PREVIOUS FUNCTIONALITY
+----------------------
+- Student-only login page and separate Teacher Login.
+- Student PWA/shortcut support using the supplied SKH icon.
+- Assignment submission history and retry when the latest score is below 80%.
+- Multiple classes/students can be assigned to an assignment.
+- Teacher Student Accounts: view/change Roll No, Password and actual Class membership.
+- Existing assignment result/previous-work functions.
 
-NEW MOCK TEST FUNCTIONALITY
-- Student Dashboard now has a Mock Test section.
-- Mock Test = 80 questions, 100 marks, 2 hours.
-- 1.25 marks per question.
-- Blueprint:
-  MAT Pattern 4, Figure Series 4, Geometrical 4, Mirror/Water 4, Embedded 4;
-  EVS MCQ 15 + EVS passage 5;
-  Arithmetic 20;
-  Language 4 passages x 5 = 20.
-- Teacher can upload a question bank section/part wise.
-- Bulk upload Type 1: Excel question-bank upload.
-- Bulk upload Type 2: PDF, one question per page + Excel answer key.
-- PDF pages are rendered as images and unnecessary white margins are automatically cropped.
-- PDF question pages are stored in the mock-question-images Supabase Storage bucket.
-- Teacher can view question-bank availability and generate a complete fixed 80-question test.
-- The system randomly selects the required number from each configured part when generating the fixed test.
-- Teacher can assign a generated test to multiple classes and/or selected students from multiple classes.
-- Student timer is based on the saved test deadline and automatically submits when time expires.
-- Student result shows overall score and section-wise breakup.
+MOCK TEST BLUEPRINT
+-------------------
+- 80 questions, 100 marks, 1.25 marks each.
+- 2 hours (120 minutes).
+- MAT Q1-20: five parts, 4 questions each.
+- EVS Q21-40: 15 MCQs + one passage followed by 5 questions.
+- Arithmetic Q41-60: 20 questions.
+- Language Q61-80: four passages, 5 questions each.
+- The supplied MAT Part III numbering is corrected to Q9-12 so all five MAT parts contain four questions.
+
+QUESTION BULK UPLOAD
+--------------------
+1) EVS + LANGUAGE: Excel upload.
+   - Normal questions can be entered in the Questions sheet.
+   - Passage groups use two sheets: Passages and Questions.
+   - Create one Passage ID in Passages and link its five questions to the same Passage ID.
+   - Image URL is optional.
+
+2) MAT + ARITHMETIC: PDF + Answer Key Excel.
+   - One complete question per PDF page.
+   - Each page is rendered as an image in the browser.
+   - Unnecessary white margins are automatically cropped.
+   - Answer Key Excel maps PDF page/question number to A/B/C/D.
+   - The PDF upload is restricted to MAT and Arithmetic parts.
+
+IMAGES LATER
+------------
+- EVS and Language questions may be uploaded without images.
+- From Manage Question Bank, the teacher can edit a question and add/replace an image later.
+- Generated mock tests copy the current bank question data at generation time, so later bank edits do not change an already generated test.
+
+QUESTION BANK MANAGEMENT
+------------------------
+Teacher > Mock Test Management > Manage Question Bank
+- Edit question text/options/correct answer.
+- Change the question's part.
+- Edit passage title/text.
+- Add/replace an image.
+- Activate/deactivate questions.
+- Delete questions.
+- See active-question counts against the required blueprint.
+
+TEST GENERATION
+---------------
+- The system requires enough active questions in every blueprint part.
+- It randomly selects the required count from each part.
+- It creates a fixed 80-question test; assigned students receive the same generated test.
+- The teacher assigns the generated test to multiple classes and/or selected students.
 
 DATABASE SETUP
-1. Keep using the existing SQL files for previous functionality.
-2. Run multi_attempts_80_percent_retry.sql if it has not already been run.
-3. Run mock_test.sql in Supabase SQL Editor.
-4. Do NOT recreate the old uq_attempts_one_submission_per_student index.
+--------------
+Run mock_test.sql in Supabase SQL Editor after the existing assignment/retry database setup.
+The SQL is safe to re-run and adds passage metadata columns to the mock question bank.
 
-MOCK QUESTION EXCEL FORMAT
-Required columns:
-Section | Part | Question | A | B | C | D | Answer
-Optional:
-Passage | Image URL
+Also continue to use multi_attempts_80_percent_retry.sql for the assignment retry feature.
+Do NOT recreate the old uq_attempts_one_submission_per_student unique index.
 
-Valid Part values:
-MAT_PATTERN
-MAT_SERIES
-MAT_GEOMETRICAL
-MAT_MIRROR
-MAT_EMBEDDED
-EVS_MCQ
-EVS_PASSAGE
-ARITHMETIC
-LANG_P1
-LANG_P2
-LANG_P3
-LANG_P4
+STORAGE
+-------
+mock_test.sql creates the public Supabase storage bucket: mock-question-images.
+It is used for cropped PDF question pages and later-added question images.
 
-PDF + ANSWER KEY FORMAT
-- PDF: exactly one complete question per page.
-- Select the corresponding Part before processing the PDF.
-- Answer-key Excel columns: Question No | Correct Option
-- Page 1 maps to Question No 1, page 2 to 2, etc.
-- Correct Option must be A, B, C or D.
+DEPLOYMENT
+----------
+- Replace the frontend files in your Cloudflare Pages project with the package files.
+- Deploy the updated create-students.ts as the create-students Supabase Edge Function.
+- Run the SQL files in Supabase SQL Editor.
+- After deployment, clear/reinstall the old student PWA shortcut if an old cached version appears.
+
+TEMPLATES
+---------
+- mock_question_bank_template.xlsx: Questions + Passages + Instructions sheets.
+- mock_answer_key_template.xlsx: Answer Key + Instructions sheets.
 
 IMPORTANT
-- The PDF method stores the complete cropped page as an image; it does not depend on OCR, so Assamese/non-Latin text, mathematical notation and figures are preserved visually.
-- The generated test stores a snapshot of each selected question, so later edits to the bank do not change an already generated test.
-- The current implementation generates a fixed test (same selected 80 questions for all recipients). A per-student random version can be added later if required.
+---------
+For PDF upload, the complete question (including diagrams/options) should be on one page. The application stores the cropped page as the question image; OCR is not required.
