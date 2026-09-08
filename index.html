@@ -1,3 +1,4 @@
+<!-- Video+MCQ bulk upload robust fix: 2026-09-08 -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -665,28 +666,42 @@ function downloadMCQOnlyAnswerTemplate(){
  XLSX.utils.book_append_sheet(wb,ws,"Answer Key");
  XLSX.writeFile(wb,"MCQ_Only_Answer_Key_Template.xlsx");
 }
-function readMCQAssignmentExcel(ev){
+async function loadMCQAssignmentExcelFile(file){
+ const buf=await file.arrayBuffer();
+ const wb=XLSX.read(buf,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+ const qs=rows.map((row,i)=>({question_no:Number(getMCQCell(row,["Question No","Question Number","No","Number"]))||i+1,question:getMCQCell(row,["Question","Question Text"]),A:getMCQCell(row,["Option A","A"]),B:getMCQCell(row,["Option B","B"]),C:getMCQCell(row,["Option C","C"]),D:getMCQCell(row,["Option D","D"]),answer:getMCQCell(row,["Answer","Correct Option","Correct"]).toUpperCase(),image_url:getMCQCell(row,["Image URL","Question Image URL"])})).filter(x=>x.question||x.image_url||x.A||x.B||x.C||x.D);
+ window.mcqAssignmentImport={mode:"excel",questions:qs,answers:{}};
+ return qs;
+}
+async function loadMCQAssignmentPdfFile(file){
+ const buf=await file.arrayBuffer(),pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise,qs=[];
+ for(let p=1;p<=pdf.numPages;p++){
+  const page=await pdf.getPage(p),base=page.getViewport({scale:1}),scale=Math.min(2.2,Math.max(1.4,1600/base.width)),vp=page.getViewport({scale}),c=document.createElement("canvas"),ctx=c.getContext("2d",{alpha:false});
+  c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);await page.render({canvasContext:ctx,viewport:vp}).promise;
+  const cropped=cropWhiteMargins(c);qs.push({question_no:p,question:"[IMAGE QUESTION]",A:"Option A",B:"Option B",C:"Option C",D:"Option D",answer:"",image_data:cropped.toDataURL("image/jpeg",0.92)});
+ }
+ window.mcqAssignmentImport=window.mcqAssignmentImport||{};window.mcqAssignmentImport.mode="pdf";window.mcqAssignmentImport.questions=qs;window.mcqAssignmentImport.answers=window.mcqAssignmentImport.answers||{};
+ return qs;
+}
+async function loadMCQAssignmentKeyFile(file){
+ const buf=await file.arrayBuffer(),wb=XLSX.read(buf,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""}),answers={};
+ rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No??x.Number);const a=String(x["Correct Option"]??x.Answer??x.Correct??"").trim().toUpperCase();if(Number.isInteger(n)&&n>0&&["A","B","C","D"].includes(a))answers[n]=a});
+ window.mcqAssignmentImport=window.mcqAssignmentImport||{mode:"pdf",questions:[],answers:{}};window.mcqAssignmentImport.answers=answers;return answers;
+}
+async function readMCQAssignmentExcel(ev){
  const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");box.innerHTML=message("Reading MCQ Excel…",true);
- const r=new FileReader();r.onload=e=>{try{
-  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
-  const qs=rows.map((row,i)=>({question_no:Number(getMCQCell(row,["Question No","Question Number","No","Number"]))||i+1,question:getMCQCell(row,["Question","Question Text"]),A:getMCQCell(row,["Option A","A"]),B:getMCQCell(row,["Option B","B"]),C:getMCQCell(row,["Option C","C"]),D:getMCQCell(row,["Option D","D"]),answer:getMCQCell(row,["Answer","Correct Option","Correct"] ).toUpperCase(),image_url:getMCQCell(row,["Image URL","Question Image URL"])})).filter(x=>x.question||x.image_url||x.A||x.B||x.C||x.D);
-  const bad=qs.filter(x=>!x.question||!x.A||!x.B||!x.C||!x.D||!["A","B","C","D"].includes(x.answer));
-  const nums=qs.map(q=>q.question_no),dupNums=nums.filter((n,i)=>nums.indexOf(n)!==i);
-  window.mcqAssignmentImport={mode:"excel",questions:qs,answers:{}};
-  box.innerHTML=message(`Loaded ${qs.length} question(s). ${bad.length?bad.length+" row(s) need correction.":(dupNums.length?"Duplicate Question No found.":"All questions and answer keys look valid.")}`,!bad.length&&!dupNums.length)+`<div class="small muted" style="margin-top:8px">${qs.slice(0,8).map((q,i)=>`${i+1}. ${esc(q.question.slice(0,100))} — ${esc(q.answer||"MISSING")}`).join("<br>")}${qs.length>8?"<br>…":""}</div>`;
- }catch(err){box.innerHTML=message("Could not read Excel: "+err.message)} };r.readAsArrayBuffer(file)
+ try{const qs=await loadMCQAssignmentExcelFile(file);const bad=qs.filter(x=>!x.question||!x.A||!x.B||!x.C||!x.D||!["A","B","C","D"].includes(x.answer));const nums=qs.map(q=>q.question_no),dupNums=nums.filter((n,i)=>nums.indexOf(n)!==i);box.innerHTML=message(`Loaded ${qs.length} question(s). ${bad.length?bad.length+" row(s) need correction.":(dupNums.length?"Duplicate Question No found.":"All questions and answer keys look valid.")}`,!bad.length&&!dupNums.length)+`<div class="small muted" style="margin-top:8px">${qs.slice(0,8).map((q,i)=>`${i+1}. ${esc((q.question||"").slice(0,100))} — ${esc(q.answer||"MISSING")}`).join("<br>")}${qs.length>8?"<br>…":""}</div>`;
+ }catch(err){box.innerHTML=message("Could not read Excel: "+err.message)}
 }
 async function readMCQAssignmentPdf(ev){
  const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");box.innerHTML=message("Reading PDF pages and trimming white space…",true);
- try{const buf=await file.arrayBuffer(),pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise,qs=[];
-  for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),base=page.getViewport({scale:1}),scale=Math.min(2.2,Math.max(1.4,1600/base.width)),vp=page.getViewport({scale}),c=document.createElement("canvas"),ctx=c.getContext("2d",{alpha:false});c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);await page.render({canvasContext:ctx,viewport:vp}).promise;const cropped=cropWhiteMargins(c);qs.push({question_no:p,question:"[IMAGE QUESTION]",A:"Option A",B:"Option B",C:"Option C",D:"Option D",answer:"",image_data:cropped.toDataURL("image/jpeg",0.92)});}
-  window.mcqAssignmentImport=window.mcqAssignmentImport||{};window.mcqAssignmentImport.mode="pdf";window.mcqAssignmentImport.questions=qs;window.mcqAssignmentImport.answers=window.mcqAssignmentImport.answers||{};
-  box.innerHTML=message(`Prepared ${qs.length} cropped question image(s). Now upload the Answer Key Excel.`,true);
-  const key=document.getElementById("mcqAssignmentKey");if(key&&key.files?.[0])readMCQAssignmentKey({target:key});
- }catch(e){box.innerHTML=message("PDF processing failed: "+(e.message||e))}
+ try{const qs=await loadMCQAssignmentPdfFile(file);box.innerHTML=message(`Prepared ${qs.length} cropped question image(s). Now upload the Answer Key Excel.`,true);const key=document.getElementById("mcqAssignmentKey");if(key&&key.files?.[0])await readMCQAssignmentKey({target:key});}
+ catch(e){box.innerHTML=message("PDF processing failed: "+(e.message||e))}
 }
-function readMCQAssignmentKey(ev){
- const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""}),answers={};rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No??x.Number);const a=String(x["Correct Option"]??x.Answer??x.Correct??"").trim().toUpperCase();if(Number.isInteger(n)&&n>0&&["A","B","C","D"].includes(a))answers[n]=a});window.mcqAssignmentImport=window.mcqAssignmentImport||{mode:"pdf",questions:[],answers:{}};window.mcqAssignmentImport.answers=answers;const total=window.mcqAssignmentImport.questions?.length||0;const missing=Array.from({length:total},(_,i)=>i+1).filter(n=>!answers[n]);box.innerHTML=message(`Loaded ${Object.keys(answers).length} answer keys for ${total} PDF question(s). ${missing.length?"Missing: "+missing.join(", "):"All answer keys are present."}`,!missing.length); }catch(err){box.innerHTML=message("Could not read answer key: "+err.message)}};r.readAsArrayBuffer(file)
+async function readMCQAssignmentKey(ev){
+ const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById("mcqAssignmentPreview");
+ try{const answers=await loadMCQAssignmentKeyFile(file);const total=window.mcqAssignmentImport?.questions?.length||0;const missing=Array.from({length:total},(_,i)=>i+1).filter(n=>!answers[n]);box.innerHTML=message(`Loaded ${Object.keys(answers).length} answer keys for ${total} PDF question(s). ${missing.length?"Missing: "+missing.join(", "):"All answer keys are present."}`,!missing.length);}
+ catch(err){box.innerHTML=message("Could not read answer key: "+err.message)}
 }
 async function uploadAssignmentQuestionImage(dataUrl,path){const blob=await(await fetch(dataUrl)).blob();const {error}=await sb.storage.from("assignment-question-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});if(error)throw error;const {data}=sb.storage.from("assignment-question-images").getPublicUrl(path);return data.publicUrl}
 async function loadAssignmentStudentsMulti(){
@@ -717,58 +732,104 @@ async function getAssignmentRecipientIds(){
 async function getStudentsForAssignment(classId){const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;return (members||[]).map(x=>x.student_id)}
 async function assignStudentsToAssignment(assignmentId,classId){const studentIds=await getStudentsForAssignment(classId);if(!studentIds.length)throw new Error("No students were selected or this class has no students.");const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:assignmentId,student_id}));const {error}=await sb.from("assignment_students").insert(rows);if(error)throw error;return rows.length}
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
+async function ensureVideoMCQImportLoaded(method){
+ const state=window.mcqAssignmentImport||{mode:method,questions:[],answers:{}};
+ window.mcqAssignmentImport=state;
+ if(method==='manual') return state;
+ if(method==='excel'){
+  const input=document.getElementById('mcqAssignmentExcel');
+  const file=input?.files?.[0];
+  if(!file) throw new Error('Please choose the Questions Excel file.');
+  const qs=await loadMCQAssignmentExcelFile(file);
+  state.mode='excel'; state.questions=qs;
+  return state;
+ }
+ const pdfInput=document.getElementById('mcqAssignmentPdf');
+ const keyInput=document.getElementById('mcqAssignmentKey');
+ const pdfFile=pdfInput?.files?.[0];
+ const keyFile=keyInput?.files?.[0];
+ if(!pdfFile) throw new Error('Please choose the Questions PDF file.');
+ if(!keyFile) throw new Error('Please choose the Answer Key Excel file.');
+ const qs=await loadMCQAssignmentPdfFile(pdfFile);
+ const answers=await loadMCQAssignmentKeyFile(keyFile);
+ state.mode='pdf'; state.questions=qs; state.answers=answers;
+ return state;
+}
 async function saveAssignment(){
- const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video_mcq";
- if(type==="mcq_only")return saveMCQOnlyAssignment();
- if(!at.value.trim()||!av.value.trim())return alert("Enter title and video URL");
- const method=document.querySelector('input[name="videoQuestionMethod"]:checked')?.value||"manual";
- let imported=window.mcqAssignmentImport||{mode:method,questions:[],answers:{}};
+ const type=document.querySelector('input[name="assignmentType"]:checked')?.value||'video_mcq';
+ if(type==='mcq_only') return saveMCQOnlyAssignment();
+ const title=document.getElementById('at')?.value?.trim()||'';
+ const video=document.getElementById('av')?.value?.trim()||'';
+ const subject=document.getElementById('asub')?.value?.trim()||'';
+ const description=document.getElementById('adesc')?.value?.trim()||'';
+ if(!title) return alert('Enter assignment title.');
+ if(!video) return alert('Enter the YouTube video URL.');
+ const method=document.querySelector('input[name="videoQuestionMethod"]:checked')?.value||'manual';
+ let imported;
+ try{
+  imported=await ensureVideoMCQImportLoaded(method);
+ }catch(e){return alert('Could not load the MCQ file: '+(e.message||e))}
  let importedQs=imported.questions||[];
- if(method!=="manual") {
-  if(!importedQs.length)return alert("Upload the MCQ questions first.");
-  if(imported.mode==="excel"){
-   const bad=importedQs.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D||!["A","B","C","D"].includes(q.answer));
+ if(method!=='manual'){
+  if(!importedQs.length)return alert('No MCQ questions were found in the selected upload. Please choose a valid Excel or PDF file.');
+  if(method==='excel'){
+   const bad=importedQs.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D||!['A','B','C','D'].includes(String(q.answer||'').toUpperCase()));
    const nums=importedQs.map(q=>q.question_no),dups=nums.filter((n,i)=>nums.indexOf(n)!==i);
    if(bad.length)return alert(`${bad.length} question(s) need correction. Every question needs text, four options and a valid A/B/C/D answer.`);
-   if(dups.length)return alert("Duplicate Question No found: "+[...new Set(dups)].join(", "));
+   if(dups.length)return alert('Duplicate Question No found: '+[...new Set(dups)].join(', '));
   }else{
-   const keyNums=Object.keys(imported.answers||{}).map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
-   const missing=importedQs.map(q=>q.question_no).filter(n=>!["A","B","C","D"].includes(String(imported.answers?.[n]||"").toUpperCase()));
+   const answers=imported.answers||{};
+   const keyNums=Object.keys(answers).map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
+   const missing=importedQs.map(q=>q.question_no).filter(n=>!['A','B','C','D'].includes(String(answers[n]||'').toUpperCase()));
    const extras=keyNums.filter(n=>n<1||n>importedQs.length);
-   if(missing.length)return alert("Missing/invalid answer key for PDF question(s): "+missing.join(", "));
-   if(extras.length)return alert("Answer Key contains extra question number(s): "+extras.join(", "));
+   if(missing.length)return alert('Missing/invalid answer key for PDF question(s): '+missing.join(', '));
+   if(extras.length)return alert('Answer Key contains extra question number(s): '+extras.join(', '));
    if(keyNums.length!==importedQs.length)return alert(`PDF has ${importedQs.length} question page(s), but the Answer Key has ${keyNums.length} valid key(s). The counts must match exactly.`);
   }
  }
- let studentCount=0,recipientInfo;
+ let recipientInfo;
  try{
   recipientInfo=await getAssignmentRecipientIds();
-  if(!recipientInfo.studentIds.length)return alert("Select at least one student, or choose an entire class that has students.");
-  studentCount=recipientInfo.studentIds.length;
+  if(!recipientInfo.studentIds.length)return alert('Select at least one student, or choose an entire class that has students.');
  }catch(e){return alert(e.message)}
  let a;
  try{
-  const {data:newAssignmentRow,error}=await sb.from("assignments").insert({class_id:recipientInfo.classIds[0],title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:av.value.trim(),created_by:current.id,assignment_type:"video_mcq",group_name:document.getElementById("agroup")?.value.trim()||null}).select().single();
-  if(error)throw error;a=newAssignmentRow;
+  const {data:newAssignmentRow,error}=await sb.from('assignments').insert({
+   class_id:recipientInfo.classIds[0], title, subject, description,
+   video_url:video, created_by:current.id, assignment_type:'video_mcq',
+   group_name:document.getElementById('agroup')?.value?.trim()||null
+  }).select().single();
+  if(error)throw error;
+  a=newAssignmentRow;
   let qs=[];
-  if(method==="manual"){
-   qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value.trim(),option_b:b.querySelector(".ob").value.trim(),option_c:b.querySelector(".oc").value.trim(),option_d:b.querySelector(".od").value.trim(),correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
-   if(!qs.length)throw new Error("Add at least one MCQ or choose Excel/PDF bulk upload.");
+  if(method==='manual'){
+   qs=[...document.querySelectorAll('.q')].map((b,i)=>({
+    assignment_id:a.id,question_text:b.querySelector('.qt')?.value?.trim()||'',
+    option_a:b.querySelector('.oa')?.value?.trim()||'',option_b:b.querySelector('.ob')?.value?.trim()||'',
+    option_c:b.querySelector('.oc')?.value?.trim()||'',option_d:b.querySelector('.od')?.value?.trim()||'',
+    correct_option:b.querySelector('.co')?.value||'A',question_order:i+1
+   })).filter(q=>q.question_text);
+   if(!qs.length)throw new Error('Add at least one MCQ or choose Excel/PDF bulk upload.');
   }else{
    for(let i=0;i<importedQs.length;i++){
-    const q=importedQs[i];let imageUrl=q.image_url||null;
-    if(q.image_data){const safe=`${current.id}/${a.id}/q-${String(i+1).padStart(4,"0")}-${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;imageUrl=await uploadAssignmentQuestionImage(q.image_data,safe)}
-    qs.push({assignment_id:a.id,question_text:q.question||"[IMAGE QUESTION]",option_a:q.A||"Option A",option_b:q.B||"Option B",option_c:q.C||"Option C",option_d:q.D||"Option D",correct_option:(imported.mode==="pdf"?imported.answers[q.question_no]:q.answer),question_order:i+1,image_url:imageUrl});
+    const q=importedQs[i]; let imageUrl=q.image_url||null;
+    if(q.image_data){
+     const safe=`${current.id}/${a.id}/q-${String(i+1).padStart(4,'0')}-${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;
+     imageUrl=await uploadAssignmentQuestionImage(q.image_data,safe);
+    }
+    qs.push({assignment_id:a.id,question_text:q.question||'[IMAGE QUESTION]',
+     option_a:q.A||'Option A',option_b:q.B||'Option B',option_c:q.C||'Option C',option_d:q.D||'Option D',
+     correct_option:(imported.mode==='pdf'?imported.answers[q.question_no]:q.answer),question_order:i+1,image_url:imageUrl});
    }
   }
-  const {error:qe}=await sb.from("questions").insert(qs);if(qe)throw qe;
+  const {error:qe}=await sb.from('questions').insert(qs);if(qe)throw qe;
   const recipientRows=[...new Set(recipientInfo.studentIds)].map(student_id=>({assignment_id:a.id,student_id}));
-  const {error:recipientErr}=await sb.from("assignment_students").insert(recipientRows);if(recipientErr)throw recipientErr;
-  alert(`Video + MCQ assignment created successfully with ${qs.length} question${qs.length===1?"":"s"} and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);
+  const {error:recipientErr}=await sb.from('assignment_students').insert(recipientRows);if(recipientErr)throw recipientErr;
+  alert(`Video + MCQ assignment created successfully with ${qs.length} question${qs.length===1?'':'s'} and assigned to ${recipientRows.length} student${recipientRows.length===1?'':'s'}.`);
   teacherHome();
  }catch(e){
-  if(a?.id){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignment_students").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id)}
-  alert("Could not create Video + MCQ assignment: "+(e.message||e));
+  if(a?.id){await sb.from('questions').delete().eq('assignment_id',a.id);await sb.from('assignment_students').delete().eq('assignment_id',a.id);await sb.from('assignments').delete().eq('id',a.id)}
+  alert('Could not create Video + MCQ assignment: '+(e.message||e));
  }
 }
 
