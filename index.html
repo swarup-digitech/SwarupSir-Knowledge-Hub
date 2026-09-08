@@ -352,41 +352,111 @@ async function teacherHome(){
  const groupHtml=Object.entries(grouped).map(([g,list])=>`<div class="assignment-group" style="margin-top:16px;border:1px solid #dbe3ee;border-radius:14px;padding:14px;background:#fbfdff"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><h3 style="margin:0">📁 ${esc(g)}</h3><div class="muted small">${list.length} assignment${list.length===1?"":"s"} in this group</div></div></div>${list.map(a=>{const type=a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ";return `<div class="assignment" style="margin-top:10px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${type}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`}).join("")}</div>`).join("");
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div><div class="notice small" style="margin-top:12px"><b>New Assignment</b> supports <b>🎥 Video + MCQ</b> and <b>📝 MCQ Only</b>. Use the same Assignment Group name to keep both types together.</div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="assignmentReports()">📊 Assignment Reports</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div><div class="notice small" style="margin-top:12px"><b>New Assignment</b> supports <b>🎥 Video + MCQ</b> and <b>📝 MCQ Only</b>. Use the same Assignment Group name to keep both types together.</div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
  <div class="card"><h2>Assignments by Group</h2>${groupHtml||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
 }
-async function deleteAssignment(assignmentId){
+async function assignmentReports(){
  try{
-   // Avoid .single(): if RLS returns zero rows, PostgREST throws a coercion error.
-   const {data:list,error:lookupErr}=await sb.from("assignments")
-     .select("id,title").eq("id",assignmentId).eq("created_by",current.id).limit(1);
-   if(lookupErr)throw lookupErr;
-   const a=(list||[])[0];
-   if(!a)return alert("Assignment not found or you do not have permission to delete it.");
-   if(!confirm(`Delete "${a.title}"?\n\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
+  const [{data:assignments,error:ae},{data:classes,error:ce}]=await Promise.all([
+   sb.from("assignments").select("id,title,subject,group_name,assignment_type,created_at").eq("created_by",current.id).order("created_at",{ascending:false}),
+   sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name")
+  ]);
+  if(ae||ce)throw new Error((ae||ce).message);
+  const groups=[...new Set((assignments||[]).map(a=>(a.group_name||"Ungrouped").trim()||"Ungrouped"))].sort();
+  render(`<div class="wrap">${header("Assignment Reports")}<div class="card">
+   <h2>📊 Assignment Reports</h2>
+   <p class="muted">Reports classify every assigned student into exactly one status: <b>🟢 Completed</b> (latest score ≥80%), <b>🟠 Submitted but Not Completed</b> (has attempts but no completed result), or <b>🔴 Not Submitted</b> (no attempts).</p>
+   <div class="grid">
+    <div><label>Assignment Group</label><select id="reportGroup" onchange="filterReportAssignments()"><option value="">All Groups</option>${groups.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div>
+    <div><label>Assignment</label><select id="reportAssignment"><option value="">All Assignments</option>${(assignments||[]).map(a=>`<option value="${a.id}" data-group="${esc((a.group_name||"Ungrouped").trim()||"Ungrouped")}">${esc(a.title)}${a.group_name?` — ${esc(a.group_name)}`:""}</option>`).join("")}</select></div>
+    <div><label>Class</label><select id="reportClass"><option value="">All Classes</option>${(classes||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></div>
+    <div><label>Status</label><select id="reportStatus"><option value="">All Statuses</option><option value="completed">🟢 Submitted & Completed</option><option value="retrying">🟠 Submitted but Not Completed</option><option value="not_submitted">🔴 Not Submitted</option></select></div>
+   </div>
+   <div class="actions" style="margin-top:15px"><button onclick="generateAssignmentReport()">Generate Report</button><button class="secondary" onclick="downloadAssignmentReportExcel()">⬇ Download Excel</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
+  </div><div id="assignmentReportOutput"></div></div>`);
+  window._assignmentReportMeta={assignments:assignments||[],classes:classes||[]};
+ }catch(e){alert("Could not load Assignment Reports: "+(e.message||e))}
+}
+function filterReportAssignments(){
+ const g=document.getElementById("reportGroup")?.value||"", sel=document.getElementById("reportAssignment"); if(!sel)return;
+ [...sel.options].forEach((o,i)=>{if(i===0){o.hidden=false;return}o.hidden=!!(g&&o.dataset.group!==g)});
+ if(sel.selectedOptions[0]?.hidden)sel.value="";
+}
+async function buildAssignmentReportData(){
+ const meta=window._assignmentReportMeta||{}; const group=document.getElementById("reportGroup")?.value||"", assignmentId=document.getElementById("reportAssignment")?.value||"", classId=document.getElementById("reportClass")?.value||"", statusFilter=document.getElementById("reportStatus")?.value||"";
+ let assignments=(meta.assignments||[]).filter(a=>!group||((a.group_name||"Ungrouped").trim()||"Ungrouped")===group).filter(a=>!assignmentId||a.id===assignmentId);
+ if(!assignments.length)return {rows:[],summary:[]};
+ const ids=assignments.map(a=>a.id);
+ const [{data:recipients,error:re},{data:attempts,error:te},{data:profiles,error:pe},{data:classes,error:ce}]=await Promise.all([
+  sb.from("assignment_students").select("assignment_id,student_id").in("assignment_id",ids),
+  sb.from("attempts").select("id,assignment_id,student_id,score,total_questions,submitted_at,attempt_number").in("assignment_id",ids).order("submitted_at",{ascending:false}),
+  sb.from("profiles").select("id,full_name,roll_no").eq("role","student"),
+  sb.from("classes").select("id,name").eq("teacher_id",current.id)
+ ]);
+ if(re||te||pe||ce)throw new Error((re||te||pe||ce).message);
+ const recipientRows=recipients||[], ats=attempts||[], pm=new Map((profiles||[]).map(p=>[p.id,p])), cm=new Map((classes||[]).map(c=>[c.id,c.name]));
+ const classLinks=new Map();
+ const studentIds=[...new Set(recipientRows.map(r=>r.student_id))];
+ if(studentIds.length){const {data:cs,error:cse}=await sb.from("class_students").select("student_id,class_id").in("student_id",studentIds);if(cse)throw new Error(cse.message);(cs||[]).forEach(x=>{if(cm.has(x.class_id)){if(!classLinks.has(x.student_id))classLinks.set(x.student_id,[]);classLinks.get(x.student_id).push(x.class_id)}})}
+ const amap=new Map(); ats.forEach(a=>{const k=a.assignment_id+":"+a.student_id;if(!amap.has(k))amap.set(k,[]);amap.get(k).push(a)});
+ const rows=[];
+ for(const r of recipientRows){
+  const p=pm.get(r.student_id)||{}, a=assignments.find(x=>x.id===r.assignment_id); if(!a)continue;
+  const attemptsFor=amap.get(r.assignment_id+":"+r.student_id)||[];
+  const latest=attemptsFor[0];
+  const pct=latest?Number(latest.score||0)*100/Math.max(1,Number(latest.total_questions||0)):null;
+  const status=latest?(pct>=80?"completed":"retrying"):"not_submitted";
+  const cids=classLinks.get(r.student_id)||[];
+  const classNames=cids.map(id=>cm.get(id)).filter(Boolean);
+  if(classId&&!cids.includes(classId))continue;
+  if(statusFilter&&status!==statusFilter)continue;
+  const retryAt=latest&&pct<80&&latest.submitted_at?new Date(new Date(latest.submitted_at).getTime()+3*60*60*1000):null;
+  rows.push({
+   "Student Name":p.full_name||"", "Roll No":p.roll_no||"", "Class":classNames.join(", "), "Assignment Group":(a.group_name||"Ungrouped").trim()||"Ungrouped", "Assignment":a.title||"", "Type":a.assignment_type==="mcq_only"?"MCQ Only":"Video + MCQ", "Status":status==="completed"?"Submitted & Completed":status==="retrying"?"Submitted but Not Completed":"Not Submitted", "Latest Score":latest?Number(latest.score||0):"", "Percentage":latest?Math.round(pct*100)/100:"", "Attempts":attemptsFor.length, "Last Submitted":latest?.submitted_at?new Date(latest.submitted_at).toLocaleString():"", "Retry Available":retryAt?retryAt.toLocaleString():""
+  });
+ }
+ const key=new Map();
+ rows.forEach(r=>{const k=r.Assignment;if(!key.has(k))key.set(k,{Assignment:k,Assigned:0,Completed:0,Retrying:0,"Not Submitted":0});const x=key.get(k);x.Assigned++;if(r.Status==="Submitted & Completed")x.Completed++;else if(r.Status==="Submitted but Not Completed")x.Retrying++;else x["Not Submitted"]++});
+ return {rows,summary:[...key.values()]};
+}
+async function generateAssignmentReport(){
+ const box=document.getElementById("assignmentReportOutput");if(!box)return;box.innerHTML='<div class="card"><p class="muted">Generating report...</p></div>';
+ try{const d=await buildAssignmentReportData();window._currentAssignmentReport=d;const counts={completed:0,retrying:0,not_submitted:0};d.rows.forEach(r=>{if(r.Status==="Submitted & Completed")counts.completed++;else if(r.Status==="Submitted but Not Completed")counts.retrying++;else counts.not_submitted++});
+  box.innerHTML=`<div class="grid"><div class="card"><div class="muted">🟢 Submitted & Completed</div><div class="stat">${counts.completed}</div></div><div class="card"><div class="muted">🟠 Submitted but Not Completed</div><div class="stat">${counts.retrying}</div></div><div class="card"><div class="muted">🔴 Not Submitted</div><div class="stat">${counts.not_submitted}</div></div></div><div class="card"><h2>Report (${d.rows.length} student-assignment record${d.rows.length===1?"":"s"})</h2>${d.summary.length?`<table><thead><tr><th>Assignment</th><th>Assigned</th><th>Completed</th><th>Retrying</th><th>Not Submitted</th></tr></thead><tbody>${d.summary.map(x=>`<tr><td>${esc(x.Assignment)}</td><td>${x.Assigned}</td><td>${x.Completed}</td><td>${x.Retrying}</td><td>${x["Not Submitted"]}</td></tr>`).join("")}</tbody></table>`:"<p class='muted'>No matching records.</p>"}${d.rows.length?`<div style="overflow:auto;margin-top:15px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Class</th><th>Group</th><th>Assignment</th><th>Status</th><th>Latest %</th><th>Attempts</th><th>Last Submitted</th><th>Retry Available</th></tr></thead><tbody>${d.rows.map(r=>`<tr><td>${esc(r["Student Name"])}</td><td>${esc(r["Roll No"])}</td><td>${esc(r.Class)}</td><td>${esc(r["Assignment Group"])}</td><td>${esc(r.Assignment)}</td><td>${r.Status==="Submitted & Completed"?"🟢 ":r.Status==="Submitted but Not Completed"?"🟠 ":"🔴 "}${esc(r.Status)}</td><td>${r.Percentage===""?"—":r.Percentage+"%"}</td><td>${r.Attempts}</td><td>${esc(r["Last Submitted"]||"—")}</td><td>${esc(r["Retry Available"]||"—")}</td></tr>`).join("")}</tbody></table></div>`:""}</div>`;
+ }catch(e){box.innerHTML=`<div class="card">${message("Could not generate report: "+(e.message||e))}</div>`}
+}
+async function downloadAssignmentReportExcel(){
+ try{const d=window._currentAssignmentReport||await buildAssignmentReportData();if(!d.rows.length)return alert("No matching records to export.");
+  const wb=XLSX.utils.book_new();
+  const summary=d.summary.map(x=>({"Assignment":x.Assignment,"Assigned":x.Assigned,"Submitted & Completed":x.Completed,"Submitted but Not Completed":x.Retrying,"Not Submitted":x["Not Submitted"],"Completion %":x.Assigned?Math.round(x.Completed*10000/x.Assigned)/100:0}));
+  const completed=d.rows.filter(r=>r.Status==="Submitted & Completed");
+  const retrying=d.rows.filter(r=>r.Status==="Submitted but Not Completed");
+  const notSubmitted=d.rows.filter(r=>r.Status==="Not Submitted");
+  const studentMap=new Map(); d.rows.forEach(r=>{const k=r["Student Name"]+"|"+r["Roll No"];if(!studentMap.has(k))studentMap.set(k,{"Student Name":r["Student Name"],"Roll No":r["Roll No"],"Class":r.Class,Assigned:0,"Completed":0,"Retrying":0,"Not Submitted":0});const x=studentMap.get(k);x.Assigned++;if(r.Status==="Submitted & Completed")x.Completed++;else if(r.Status==="Submitted but Not Completed")x.Retrying++;else x["Not Submitted"]++});
+  const add=(name,rows)=>{const ws=XLSX.utils.json_to_sheet(rows);if(rows.length)ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:Math.max(12,Math.min(30,k.length+3))}));XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31))};
+  add("Summary",summary);add("Completed",completed);add("Retrying",retrying);add("Not Submitted",notSubmitted);add("Student Summary",[...studentMap.values()]);
+  const g=document.getElementById("reportGroup")?.value||"All_Groups",safe=g.replace(/[\\/:*?"<>|]+/g,"_").slice(0,60);XLSX.writeFile(wb,`Assignment_Report_${safe}.xlsx`);
+ }catch(e){alert("Could not download report: "+(e.message||e))}
+}
 
-   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);
-   if(ae)throw ae;
+async function deleteAssignment(assignmentId){
+ const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
+ if(error||!a)return alert(error?.message||"Assignment not found.");
+ if(!confirm(`Delete "${a.title}"?\\n\\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
+ try{
+   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
    const attemptIds=(ats||[]).map(x=>x.id);
    if(attemptIds.length){
-     const {error:e}=await sb.from("answers").delete().in("attempt_id",attemptIds);
-     if(e)throw e;
+     const {error:e}=await sb.from("answers").delete().in("attempt_id",attemptIds);if(e)throw e;
+     const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
    }
-   const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);
-   if(e2)throw e2;
-   const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);
-   if(e3)throw e3;
-   const {error:e4}=await sb.from("questions").delete().eq("assignment_id",assignmentId);
-   if(e4)throw e4;
-   const {data:deleted,error:e5}=await sb.from("assignments")
-     .delete().eq("id",assignmentId).eq("created_by",current.id).select("id");
-   if(e5)throw e5;
-   if(!deleted?.length)return alert("The assignment could not be deleted. Please check the teacher RLS policy.");
-   alert("Assignment deleted successfully.");
-   await teacherHome();
- }catch(e){alert("Could not delete assignment.\n\n"+(e.message||e))}
+   const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(e3)throw e3;
+   const {error:e4}=await sb.from("questions").delete().eq("assignment_id",assignmentId);if(e4)throw e4;
+   const {error:e5}=await sb.from("assignments").delete().eq("id",assignmentId).eq("created_by",current.id);if(e5)throw e5;
+   alert("Assignment deleted successfully.");teacherHome();
+ }catch(e){alert("Could not delete assignment.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
 }
 async function reassignFresh(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
