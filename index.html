@@ -358,21 +358,35 @@ async function teacherHome(){
  <div class="card"><h2>Assignments by Group</h2>${groupHtml||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
 }
 async function deleteAssignment(assignmentId){
- const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
- if(error||!a)return alert(error?.message||"Assignment not found.");
- if(!confirm(`Delete "${a.title}"?\\n\\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
  try{
-   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
+   // Avoid .single(): if RLS returns zero rows, PostgREST throws a coercion error.
+   const {data:list,error:lookupErr}=await sb.from("assignments")
+     .select("id,title").eq("id",assignmentId).eq("created_by",current.id).limit(1);
+   if(lookupErr)throw lookupErr;
+   const a=(list||[])[0];
+   if(!a)return alert("Assignment not found or you do not have permission to delete it.");
+   if(!confirm(`Delete "${a.title}"?\n\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
+
+   const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);
+   if(ae)throw ae;
    const attemptIds=(ats||[]).map(x=>x.id);
    if(attemptIds.length){
-     const {error:e}=await sb.from("answers").delete().in("attempt_id",attemptIds);if(e)throw e;
-     const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
+     const {error:e}=await sb.from("answers").delete().in("attempt_id",attemptIds);
+     if(e)throw e;
    }
-   const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(e3)throw e3;
-   const {error:e4}=await sb.from("questions").delete().eq("assignment_id",assignmentId);if(e4)throw e4;
-   const {error:e5}=await sb.from("assignments").delete().eq("id",assignmentId).eq("created_by",current.id);if(e5)throw e5;
-   alert("Assignment deleted successfully.");teacherHome();
- }catch(e){alert("Could not delete assignment.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
+   const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);
+   if(e2)throw e2;
+   const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);
+   if(e3)throw e3;
+   const {error:e4}=await sb.from("questions").delete().eq("assignment_id",assignmentId);
+   if(e4)throw e4;
+   const {data:deleted,error:e5}=await sb.from("assignments")
+     .delete().eq("id",assignmentId).eq("created_by",current.id).select("id");
+   if(e5)throw e5;
+   if(!deleted?.length)return alert("The assignment could not be deleted. Please check the teacher RLS policy.");
+   alert("Assignment deleted successfully.");
+   await teacherHome();
+ }catch(e){alert("Could not delete assignment.\n\n"+(e.message||e))}
 }
 async function reassignFresh(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
