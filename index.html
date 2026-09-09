@@ -349,7 +349,7 @@ async function teacherHome(){
  ]);
  if(ce||ae||se)return render(`<div class="wrap">${header("Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
  const grouped={};(assignments||[]).forEach(a=>{const g=(a.group_name||"Ungrouped").trim()||"Ungrouped";(grouped[g] ||= []).push(a)});
- const groupHtml=Object.entries(grouped).map(([g,list])=>`<div class="assignment-group" style="margin-top:16px;border:1px solid #dbe3ee;border-radius:14px;padding:14px;background:#fbfdff"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><h3 style="margin:0">📁 ${esc(g)}</h3><div class="muted small">${list.length} assignment${list.length===1?"":"s"} in this group</div></div></div>${list.map(a=>{const type=a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ";return `<div class="assignment" style="margin-top:10px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${type}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`}).join("")}</div>`).join("");
+ const groupHtml=Object.entries(grouped).map(([g,list])=>`<div class="assignment-group" style="margin-top:16px;border:1px solid #dbe3ee;border-radius:14px;padding:14px;background:#fbfdff"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><h3 style="margin:0">📁 ${esc(g)}</h3><div class="muted small">${list.length} assignment${list.length===1?"":"s"} in this group</div></div></div>${list.map(a=>{const type=a.assignment_type==="mcq_only"?"📝 MCQ Only":"🎥 Video + MCQ";return `<div class="assignment" style="margin-top:10px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${type}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignment('${a.id}')">✏️ Edit</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`}).join("")}</div>`).join("");
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
  <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="assignmentReports()">📊 Assignment Reports</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div><div class="notice small" style="margin-top:12px"><b>New Assignment</b> supports <b>🎥 Video + MCQ</b> and <b>📝 MCQ Only</b>. Use the same Assignment Group name to keep both types together.</div></div>
@@ -1099,6 +1099,88 @@ async function viewAssignment(id){
  <div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div>
  <div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>q.image_url?`<div class="assignment"><h3>Question ${i+1}</h3><img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:750px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px"><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p><span class="tag">Answer: ${esc(q.correct_option)}</span></div>`).join("")}</div>
  <div class="actions"><button class="secondary" onclick="teacherHome()">← Back</button></div></div>`)
+}
+
+async function editAssignment(id){
+ try{
+  const [{data:a,error:ae},{data:qs,error:qe},{data:recipients,error:re},{data:classes,error:ce}]=await Promise.all([
+   sb.from("assignments").select("*").eq("id",id).eq("created_by",current.id).limit(1),
+   sb.from("questions").select("*").eq("assignment_id",id).order("question_order"),
+   sb.from("assignment_students").select("student_id").eq("assignment_id",id),
+   sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name")
+  ]);
+  if(ae||qe||re||ce)throw new Error((ae||qe||re||ce).message);
+  const assignment=(a||[])[0]; if(!assignment)throw new Error("Assignment not found or you do not have permission to edit it.");
+  window._editAssignment={assignment,questions:qs||[],recipientIds:new Set((recipients||[]).map(x=>x.student_id)),classes:classes||[]};
+  await renderEditAssignment();
+ }catch(e){alert("Could not open assignment editor.\n\n"+(e.message||e))}
+}
+
+async function renderEditAssignment(){
+ const d=window._editAssignment;if(!d)return;
+ const a=d.assignment, type=a.assignment_type||"video_mcq";
+ const classStudents={};
+ for(const c of d.classes){const {data,error}=await sb.from("class_students").select("student_id").eq("class_id",c.id);if(error)throw error;classStudents[c.id]=(data||[]).map(x=>x.student_id)}
+ const allStudentIds=[...new Set(d.classes.flatMap(c=>classStudents[c.id]||[]))];
+ let profiles=[];
+ if(allStudentIds.length){const {data,error}=await sb.from("profiles").select("id,full_name,roll_no").in("id",allStudentIds).eq("role","student");if(error)throw error;profiles=data||[]}
+ const pm=new Map(profiles.map(x=>[x.id,x]));
+ window._editAssignment.classStudents=classStudents;window._editAssignment.profiles=pm;
+ const currentByClass=d.classes.map(c=>({c,students:(classStudents[c.id]||[]).filter(id=>d.recipientIds.has(id))}));
+ render(`<div class="wrap">${header("Edit Assignment")}<div class="card">
+  <h2>✏️ Edit Assignment</h2>
+  <div class="notice small"><b>Important:</b> Existing student attempts are preserved. If you change any correct answer, the system will recalculate the affected students' scores and completion/retry status using the new answer key.</div>
+  <label>Assignment Group</label><input id="ea_group" value="${esc(a.group_name||"")}">
+  <label>Title</label><input id="ea_title" value="${esc(a.title||"")}">
+  <label>Subject</label><input id="ea_subject" value="${esc(a.subject||"")}">
+  ${type==="video_mcq"?`<label>YouTube Video URL</label><input id="ea_video" value="${esc(a.video_url||"")}" placeholder="https://www.youtube.com/watch?v=...">`:``}
+  <label>Description</label><textarea id="ea_desc">${esc(a.description||"")}</textarea>
+  <div class="card" style="background:#f8fafc"><h3>Assigned Students</h3><div class="small muted">Choose students from one or more classes. Saving replaces the current recipient list. Existing attempts remain stored.</div>${currentByClass.map(x=>`<div style="border:1px solid #dbe3ee;border-radius:12px;padding:12px;margin-top:10px;background:#fff"><label style="display:flex;align-items:center;gap:8px"><input class="ea-class" type="checkbox" value="${x.c.id}" ${x.students.length?'checked':''} onchange="toggleEditClass('${x.c.id}')" style="width:auto"><b>${esc(x.c.name)}</b></label><div id="ea_students_${x.c.id}" style="margin-top:8px;display:${x.students.length?'block':'none'}"><div class="actions"><button type="button" class="secondary" onclick="selectEditClassStudents('${x.c.id}',true)">Select All</button><button type="button" class="secondary" onclick="selectEditClassStudents('${x.c.id}',false)">Clear</button></div>${(classStudents[x.c.id]||[]).map(sid=>{const p=pm.get(sid)||{};return `<label style="display:flex;align-items:center;gap:8px;padding:5px 0"><input class="ea-student-${x.c.id}" type="checkbox" value="${sid}" ${d.recipientIds.has(sid)?'checked':''} style="width:auto"><span>${esc(p.full_name||sid)}${p.roll_no?` <span class="muted small">(${esc(p.roll_no)})</span>`:""}</span></label>`}).join("")||'<div class="muted small">No students in this class.</div>'}</div></div>`).join("")}</div>
+  <h3 style="margin-top:22px">MCQ Questions</h3><div class="small muted">You can edit question text, options, correct answer and image URL. Use <b>Replace Image</b> to upload a new image. Existing answers are retained.</div><div id="ea_questions"></div>
+  <div class="actions" style="margin-top:12px"><button type="button" onclick="addEditQuestion()">＋ Add Question</button></div>
+  <div class="actions" style="margin-top:18px"><button onclick="saveEditedAssignment()">💾 Save Changes</button><button class="secondary" onclick="teacherHome()">Cancel</button></div>
+ </div></div>`);
+ renderEditQuestions();
+}
+
+function toggleEditClass(classId){const cb=document.querySelector(`.ea-class[value="${classId}"]`),box=document.getElementById(`ea_students_${classId}`);if(box)box.style.display=cb?.checked?'block':'none';}
+function selectEditClassStudents(classId,yes){document.querySelectorAll(`.ea-student-${classId}`).forEach(x=>x.checked=yes)}
+function renderEditQuestions(){
+ const box=document.getElementById("ea_questions");if(!box)return;const qs=window._editAssignment.questions||[];
+ box.innerHTML=qs.map((q,i)=>editQuestionCard(q,i)).join("");
+}
+function editQuestionCard(q,i){return `<div class="card ea-q" data-index="${i}" style="background:#fbfdff;border:1px solid #dbe3ee;margin-top:10px"><div class="actions" style="justify-content:space-between"><h4 style="margin:0">Question ${i+1}</h4><button type="button" class="danger" onclick="deleteEditQuestion(${i})">Delete Question</button></div><label>Question</label><textarea class="eaq-text">${esc(q.question_text||"")}</textarea><div class="grid"><div><label>Option A</label><input class="eaq-a" value="${esc(q.option_a||"")}"></div><div><label>Option B</label><input class="eaq-b" value="${esc(q.option_b||"")}"></div><div><label>Option C</label><input class="eaq-c" value="${esc(q.option_c||"")}"></div><div><label>Option D</label><input class="eaq-d" value="${esc(q.option_d||"")}"></div></div><label>Correct Answer</label><select class="eaq-key"><option value="A" ${q.correct_option==='A'?'selected':''}>A</option><option value="B" ${q.correct_option==='B'?'selected':''}>B</option><option value="C" ${q.correct_option==='C'?'selected':''}>C</option><option value="D" ${q.correct_option==='D'?'selected':''}>D</option></select><label>Question Image URL (optional)</label><input class="eaq-image" value="${esc(q.image_url||"")}" placeholder="Paste an image URL or leave blank"><div class="actions"><input class="eaq-file" type="file" accept="image/*"><button type="button" class="secondary" onclick="replaceEditQuestionImage(${i})">📷 Replace Image</button><button type="button" class="secondary" onclick="clearEditQuestionImage(${i})">Remove Image</button></div><div class="small muted">${q.id?'Existing question ID: '+esc(q.id):'New question'}</div></div>`}
+async function replaceEditQuestionImage(i){const card=document.querySelector(`.ea-q[data-index="${i}"]`),file=card?.querySelector('.eaq-file')?.files?.[0];if(!file)return alert("Choose an image file first.");try{const q=window._editAssignment.questions[i];const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';const path=`${current.id}/${window._editAssignment.assignment.id}/q-${String(i+1).padStart(4,'0')}-${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;const {data,error}=await sb.storage.from('assignment-question-images').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});if(error)throw error;const {data:pub}=sb.storage.from('assignment-question-images').getPublicUrl(path);card.querySelector('.eaq-image').value=pub.publicUrl;alert("Image uploaded. Save Changes to apply it.")}catch(e){alert("Could not upload image: "+(e.message||e))}}
+function clearEditQuestionImage(i){const card=document.querySelector(`.ea-q[data-index="${i}"]`);if(card)card.querySelector('.eaq-image').value=""}
+function collectEditQuestions(){return [...document.querySelectorAll('.ea-q')].map((card,i)=>({id:window._editAssignment.questions[i]?.id||null,question_text:card.querySelector('.eaq-text')?.value.trim()||'',option_a:card.querySelector('.eaq-a')?.value.trim()||'',option_b:card.querySelector('.eaq-b')?.value.trim()||'',option_c:card.querySelector('.eaq-c')?.value.trim()||'',option_d:card.querySelector('.eaq-d')?.value.trim()||'',correct_option:card.querySelector('.eaq-key')?.value||'A',image_url:card.querySelector('.eaq-image')?.value.trim()||null,question_order:i+1}));}
+function addEditQuestion(){const qs=window._editAssignment.questions;qs.push({id:null,question_text:'',option_a:'',option_b:'',option_c:'',option_d:'',correct_option:'A',image_url:null,question_order:qs.length+1});renderEditQuestions();document.querySelector(`.ea-q[data-index="${qs.length-1}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});}
+function deleteEditQuestion(i){const q=window._editAssignment.questions[i];if(!confirm(`Delete Question ${i+1}? Existing answers to this question will no longer be used for scoring.`))return;window._editAssignment.questions.splice(i,1);renderEditQuestions()}
+async function saveEditedAssignment(){
+ const d=window._editAssignment;if(!d)return;
+ const title=document.getElementById('ea_title')?.value.trim()||'', subject=document.getElementById('ea_subject')?.value.trim()||'';
+ if(!title)return alert('Enter an assignment title.');
+ const qs=collectEditQuestions();if(!qs.length)return alert('An assignment must contain at least one question.');
+ const bad=qs.filter(q=>!q.question_text||!q.option_a||!q.option_b||!q.option_c||!q.option_d||!['A','B','C','D'].includes(q.correct_option));if(bad.length)return alert(`${bad.length} question(s) need correction. Every question needs text, four options and a valid answer.`);
+ const recipientIds=[];for(const c of d.classes){const cb=document.querySelector(`.ea-class[value="${c.id}"]`);if(!cb?.checked)continue;document.querySelectorAll(`.ea-student-${c.id}:checked`).forEach(x=>recipientIds.push(x.value))}
+ const uniqueRecipients=[...new Set(recipientIds)];if(!uniqueRecipients.length)return alert('Select at least one student.');
+ const keyChanged=(d.questions||[]).length!==qs.length || qs.some((q,i)=>{const old=d.questions[i]||{};return q.correct_option!==old.correct_option||q.question_text!==old.question_text||q.option_a!==old.option_a||q.option_b!==old.option_b||q.option_c!==old.option_c||q.option_d!==old.option_d||q.image_url!==old.image_url});
+ const warning=keyChanged?'\n\nThe question set or answer key has changed. Existing attempts will be recalculated using the edited questions and answer key. Students who were previously passed may become retrying, or vice versa, depending on the new key.': '';
+ if(!confirm(`Save changes to this assignment?${warning}`))return;
+ try{
+  const patch={title,subject,description:document.getElementById('ea_desc')?.value.trim()||'',group_name:document.getElementById('ea_group')?.value.trim()||null};
+  if(d.assignment.assignment_type==='video_mcq')patch.video_url=document.getElementById('ea_video')?.value.trim()||null;
+  const {error:ae}=await sb.from('assignments').update(patch).eq('id',d.assignment.id).eq('created_by',current.id);if(ae)throw ae;
+  const oldIds=new Set((d.questions||[]).map(q=>q.id).filter(Boolean)),keptIds=new Set(qs.map(q=>q.id).filter(Boolean));
+  const deleteIds=[...oldIds].filter(id=>!keptIds.has(id));
+  if(deleteIds.length){const {error:e}=await sb.from('answers').delete().in('question_id',deleteIds);if(e)throw e;const {error:e2}=await sb.from('questions').delete().in('id',deleteIds).eq('assignment_id',d.assignment.id);if(e2)throw e2;}
+  for(const q of qs){const row={question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,image_url:q.image_url,question_order:q.question_order};if(q.id){const {error:e}=await sb.from('questions').update(row).eq('id',q.id).eq('assignment_id',d.assignment.id);if(e)throw e}else{const {error:e}=await sb.from('questions').insert({...row,assignment_id:d.assignment.id});if(e)throw e}}
+  const {error:delRec}=await sb.from('assignment_students').delete().eq('assignment_id',d.assignment.id);if(delRec)throw delRec;
+  const {error:addRec}=await sb.from('assignment_students').insert(uniqueRecipients.map(student_id=>({assignment_id:d.assignment.id,student_id})));if(addRec)throw addRec;
+  const {error:rpcErr}=await sb.rpc('recalculate_assignment_scores',{p_assignment_id:d.assignment.id});
+  if(rpcErr)throw new Error('Assignment saved, but score recalculation failed. Run assignment_edit_recalculate.sql in Supabase, then save the assignment again.\n\n'+rpcErr.message);
+  alert('Assignment updated successfully. Existing attempts were preserved and student scores/statuses were recalculated using the current answer key.');
+  teacherHome();
+ }catch(e){alert('Could not save assignment changes.\n\n'+(e.message||e))}
 }
 
 async function results(id){
