@@ -857,9 +857,9 @@ async function studentHome(){
       ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);return `<div class="assignment"><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
   <button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button>
 </div>
-<div style="margin-top:10px">
+${a.video_url?`<div style="margin-top:10px">
   <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
-</div></div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
+</div>`:""}</div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
     </div>
   </div>`);
 
