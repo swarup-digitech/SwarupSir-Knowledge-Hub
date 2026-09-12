@@ -170,7 +170,7 @@ async function teacherHome(){
  if(ce||ae||se)return render(`<div class="wrap">${header("Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${assignments?.length||0}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
  <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
@@ -189,6 +189,74 @@ async function editAssignmentDetails(assignmentId){
  alert("Assignment name and description updated successfully.");
  await teacherHome();
 }
+async function teacherResultsDashboard(){
+  try{
+    const [{data:assignments,error:ae},{data:classes,error:ce},{data:students,error:se}]=await Promise.all([
+      sb.from("assignments").select("id,title,subject,class_id,video_url,created_at").eq("created_by",current.id).order("created_at",{ascending:false}),
+      sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name"),
+      sb.from("profiles").select("id,full_name,roll_no").eq("role","student").order("full_name")
+    ]);
+    if(ae)throw ae;if(ce)throw ce;if(se)throw se;
+    const aids=(assignments||[]).map(a=>a.id);
+    let attempts=[],links=[];
+    if(aids.length){
+      const [{data:at,error:te},{data:ls,error:le}]=await Promise.all([
+        sb.from("attempts").select("id,assignment_id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").in("assignment_id",aids).order("submitted_at",{ascending:false}),
+        sb.from("assignment_students").select("assignment_id,student_id").in("assignment_id",aids)
+      ]);
+      if(te)throw te;if(le)throw le;attempts=at||[];links=ls||[];
+    }
+    window._teacherResults={assignments:assignments||[],classes:classes||[],students:students||[],attempts,links};
+    renderTeacherResultsDashboard();
+  }catch(e){alert("Could not load assignment results: "+(e.message||e));}
+}
+
+function renderTeacherResultsDashboard(){
+  const d=window._teacherResults;if(!d)return;
+  const f=d.filters||{assignment:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
+  const classMap=new Map(d.classes.map(c=>[c.id,c.name])),studentMap=new Map(d.students.map(s=>[s.id,s]));
+  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
+  const assignedKey=new Set(d.links.map(x=>`${x.assignment_id}:${x.student_id}`));
+  let rows=d.attempts.map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{},className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""}));
+  if(f.status==="pending"){
+    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
+    rows=d.links.filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{},className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""}));
+  }else if(f.status==="all"){
+    /* Keep submitted rows only in the main results table; pending assignments are summarized separately. */
+  }
+  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
+  if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
+  if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
+  rows.sort((x,y)=>{
+    let a,b;
+    if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase()}
+    else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase()}
+    else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions))}
+    else {a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0}
+    const dir=f.sort.endsWith("_asc")?1:-1;return a===b?0:a<b?-1*dir:1*dir;
+  });
+  const submitted=d.attempts.length,avg=submitted?Math.round(d.attempts.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||1)),0)/submitted):0;
+  const pendingCount=d.links.filter(x=>!d.attempts.some(a=>a.assignment_id===x.assignment_id&&a.student_id===x.student_id)).length;
+  render(`<div class="wrap">${header("Assignment Results")}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
+      <div class="grid" style="margin-top:15px">
+        <div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
+        <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
+        <div><label>Student</label><select id="trStudent"><option value="all">All Students</option>${d.students.map(s=>`<option value="${s.id}" ${f.student===s.id?"selected":""}>${esc(s.full_name)}${s.roll_no?` — Roll ${esc(s.roll_no)}`:""}</option>`).join("")}</select></div>
+        <div><label>Status</label><select id="trStatus"><option value="all" ${f.status==="all"?"selected":""}>Submitted Results</option><option value="pending" ${f.status==="pending"?"selected":""}>Not Submitted / Pending</option></select></div>
+        <div><label>Minimum Score %</label><input id="trMin" type="number" min="0" max="100" placeholder="0" value="${esc(f.minScore)}"></div>
+        <div><label>Maximum Score %</label><input id="trMax" type="number" min="0" max="100" placeholder="100" value="${esc(f.maxScore)}"></div>
+      </div>
+      <div class="result-controls actions"><b>Sort:</b><select id="trSort"><option value="submitted_desc">Latest submission</option><option value="submitted_asc">Oldest submission</option><option value="student_asc">Student A–Z</option><option value="student_desc">Student Z–A</option><option value="assignment_asc">Assignment A–Z</option><option value="assignment_desc">Assignment Z–A</option><option value="score_desc">Highest score</option><option value="score_asc">Lowest score</option></select><button onclick="applyTeacherResultsFilters()">Apply Filters</button><button class="secondary" onclick="clearTeacherResultsFilters()">Clear Filters</button></div>
+      <div class="result-summary"><span>Submitted: <b>${submitted}</b></span><span>Average: <b>${avg}%</b></span><span>Pending: <b>${pendingCount}</b></span><span>Showing: <b>${rows.length}</b></span></div>
+      <div style="overflow:auto;margin-top:15px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Assignment</th><th>Class</th><th>Score</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(r=>r.type==="pending"?`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.a.title)}</td><td>${esc(r.className||"—")}</td><td>—</td><td><span class="tag" style="background:#fff7ed;color:#c2410c">Not Submitted</span></td><td>—</td><td><button class="secondary" onclick="viewAssignment('${r.a.id}')">View Assignment</button></td></tr>`:`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.a.title)}</td><td>${esc(r.className||"—")}</td><td><b>${r.at.score}/${r.at.total_questions}</b> <span class="small">(${Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)))}%)</span></td><td><span class="tag" style="background:#ecfdf5;color:#166534">Submitted</span></td><td>${r.at.submitted_at?new Date(r.at.submitted_at).toLocaleString():"—"}</td><td><button onclick="results('${r.a.id}')">View Result</button></td></tr>`).join(""):`<tr><td colspan="8"><div class="success"><b>No results match the selected filters.</b></div></td></tr>`}</tbody></table></div>
+    </div></div>`);
+  const sort=document.getElementById("trSort");if(sort)sort.value=f.sort;
+}
+function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
+function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
+
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
