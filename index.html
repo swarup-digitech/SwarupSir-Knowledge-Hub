@@ -688,6 +688,8 @@ function toggleResultDetails(attemptId,type){
   return {q,ans,selected,correct,ok,index:i};
  }).filter(x=>type==="correct"?x.ok:!x.ok);
  box.dataset.open=type;box.style.display="block";
+ if(box.dataset.open===type){box.style.display="none";box.innerHTML="";box.dataset.open="";return;}
+ box.dataset.open=type;box.style.display="block";
  if(!items.length){box.innerHTML=`<div class="success"><b>No ${type} answers.</b></div>`;return;}
  box.innerHTML=items.map(({q,selected,correct,index})=>{
   const opts=[['A',q.option_a],['B',q.option_b],['C',q.option_c],['D',q.option_d]];
@@ -946,7 +948,7 @@ async function viewPreviousWork(assignmentId,attemptId){
   const correctItems=ordered.filter(({x,q})=>x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option));
   const wrongItems=ordered.filter(({x,q})=>!(x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option)));
   window._studentPreviousWork={assignment:a,attempt:at,items:ordered};
-  render(`<div class="wrap">${header("Previous Work")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p><div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="secondary" onclick="toggleStudentAnswerTab('correct')">✓ Correct Answers (${correctItems.length})</button><button class="secondary" onclick="toggleStudentAnswerTab('wrong')">✗ Wrong Answers (${wrongItems.length})</button></div><div id="student-answer-details" style="margin-top:14px"></div></div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
+  render(`<div class="wrap">${header("Previous Work")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p><div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="secondary" onclick="toggleStudentAnswerTab('correct')">✓ Correct Answers (${correctItems.length})</button><button class="secondary" onclick="toggleStudentAnswerTab('wrong')">✗ Wrong Answers (${wrongItems.length})</button></div><div id="student-answer-details" style="display:none;margin-top:14px"></div></div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
   toggleStudentAnswerTab('correct');
  }catch(e){alert("Could not load previous work: "+(e.message||e))}
 }
@@ -955,13 +957,15 @@ function toggleStudentAnswerTab(type){
  const d=window._studentPreviousWork;if(!d)return;
  const box=document.getElementById("student-answer-details");if(!box)return;
  const items=d.items.filter(({x,q})=>{const ok=x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option);return type==="correct"?ok:!ok;});
+ if(box.dataset.open===type){box.style.display="none";box.innerHTML="";box.dataset.open="";return;}
+ box.dataset.open=type;box.style.display="block";
  if(!items.length){box.innerHTML=`<div class="success"><b>No ${type} answers.</b></div>`;return;}
  box.innerHTML=items.map(({x,q},i)=>{
   const opts={A:q?.option_a,B:q?.option_b,C:q?.option_c,D:q?.option_d};
   const selected=x.selected_option||"—", correct=q?.correct_option||"—";
   const selectedText=opts[selected]??selected, correctText=opts[correct]??correct;
   const isCorrect=type==="correct";
-  return `<div class="assignment" style="margin-top:12px"><h3>Question ${q?.question_order||i+1} ${isCorrect?'— ✓ Correct':'— ✗ Wrong'}</h3>${q?.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${q?.question_order||i+1}"></div>`:`<p><b>${esc(q?.question_text||"Question unavailable")}</b></p>`}${[['A',q?.option_a],['B',q?.option_b],['C',q?.option_c],['D',q?.option_d]].map(o=>`<div style="padding:8px 10px;margin:5px 0;border:1px solid #e5e7eb;border-radius:8px"><b>${o[0]}.</b> ${esc(o[1]||"")}</div>`).join('')}<div class="result-answer" style="margin-top:10px"><div><b>Your Selection:</b> ${esc(selected)}${q?.image_url?"":`. ${esc(selectedText)}`}</div><div><b>Answer Key:</b> ${esc(correct)}${q?.image_url?"":`. ${esc(correctText)}`}</div></div>${isCorrect?`<div class="success" style="margin-top:10px"><b>Correct ✓</b></div>`:`<div class="notice" style="margin-top:10px"><b>Wrong ✗</b><br>Your selection: <b>${esc(selected)}${q?.image_url?"":`. ${esc(selectedText)}`}</b><br>Correct answer: <b>${esc(correct)}${q?.image_url?"":`. ${esc(correctText)}`}</b></div>`}${q?.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">🎥 Answer / Solution Video</b><p class="small muted">Watch the explanation for this question.</p><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`;
+  return `<div class="assignment" style="margin-top:12px"><h3 style="color:${isCorrect?'#166534':'#dc2626'}">Question ${q?.question_order||i+1} ${isCorrect?'— ✓ Correct':'— ✗ Wrong'}</h3>${q?.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${q?.question_order||i+1}"></div>`:`<p><b>${esc(q?.question_text||"Question unavailable")}</b></p>`}${[['A',q?.option_a],['B',q?.option_b],['C',q?.option_c],['D',q?.option_d]].map(o=>`<div style="padding:8px 10px;margin:5px 0;border:1px solid #e5e7eb;border-radius:8px"><b>${o[0]}.</b> ${esc(o[1]||"")}</div>`).join('')}<div class="result-answer" style="margin-top:10px"><div><b>Your Selection:</b> ${esc(selected)}${q?.image_url?"":`. ${esc(selectedText)}`}</div><div style="color:#166534"><b>Answer Key:</b> ${esc(correct)}${q?.image_url?"":`. ${esc(correctText)}`}</div></div>${isCorrect?`<div class="success" style="margin-top:10px"><b>Correct ✓</b></div>`:`<div class="notice" style="margin-top:10px"><b>Wrong ✗</b><br>Your selection: <b>${esc(selected)}${q?.image_url?"":`. ${esc(selectedText)}`}</b><br>Correct answer: <b>${esc(correct)}${q?.image_url?"":`. ${esc(correctText)}`}</b></div>`}${q?.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">🎥 Answer / Solution Video</b><p class="small muted">Watch the explanation for this question.</p><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`;
  }).join('');
 }
 
