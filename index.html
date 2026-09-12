@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=DeKthjPmLndDtyjKFo7-Oil2_aqN_58VAgebzOCecAIAbzbu0xnA64YCbjjqZcfbul9lBP86WVit6WB-dwPgKNmzMaWzsqX9gsMxX9x01vo6X9FyfGaMZjnGBLzAN85xGSfShzjeY3uhW4NnX5niX43y8iYKjZeEUpMDeIpOJpn40jcSEpg28mbZxV2h0JbmzHmmiNjnezsGEZfzmF4s7R_TXpSL63OVVL7IwfkbpckY8kTh6jXpXseDT50_94SN1dlhmPl0_E_4wywQR5F1vw" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -55,7 +55,8 @@ const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let current=null,profile=null,active=null,answers=[],videoDone=false;
 let studentRefreshTimer=null, studentDashboardSnapshot=null;
-let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={}, importedSingleExcel=false;
+let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={}, importedSingleExcel=false, importedForNewAssignment=false;
+let newAssignmentDraft=null;
 let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
@@ -363,7 +364,20 @@ async function newAssignment(){
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
  <label>Class</label><select id="ac" onchange="loadAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
  <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="assignMode" value="class" checked onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Entire class</label><label><input type="radio" name="assignMode" value="students" onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Selected students</label><div id="studentPicker" class="small muted">The assignment will be given to all students in the selected class.</div></div>
- <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea><div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="bulkImportMCQs()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);addQ();addQ();loadAssignmentStudents(classes[0].id)
+ <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea><div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);
+ if(newAssignmentDraft){
+   const d=newAssignmentDraft;
+   if(d.classId)document.getElementById("ac").value=d.classId;
+   const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
+   const modeRadio=document.querySelector(`input[name="assignMode"][value="${d.assignMode}"]`);if(modeRadio)modeRadio.checked=true;
+   document.getElementById("at").value=d.title;document.getElementById("asub").value=d.subject;document.getElementById("av").value=d.video;document.getElementById("adesc").value=d.description;
+   document.getElementById("qs").innerHTML="";
+   const notice=document.createElement("div");notice.className="success";notice.innerHTML=`<b>${importedQuestions.length} question(s) imported.</b> They will be added when you click <b>Save & Assign</b>.`;
+   document.getElementById("qs").appendChild(notice);
+   loadAssignmentStudents(d.classId||classes[0].id).then(()=>{
+     if(d.assignMode==="students")d.selectedStudents.forEach(id=>{const cb=document.querySelector(`.assignment-student[value="${id}"]`);if(cb)cb.checked=true});
+   });
+ }else{addQ();addQ();loadAssignmentStudents(classes[0].id)}
 }
 function toggleAssignmentVideoFields(){const video=document.querySelector('input[name="assignmentType"]:checked')?.value==="video";const box=document.getElementById("assignmentVideoField");if(box)box.style.display=video?"block":"none"}
 async function loadAssignmentStudents(classId){
@@ -401,13 +415,35 @@ async function saveAssignment(){
  if(type==="video"&&!videoUrl)return alert("Enter the YouTube video URL for this video assignment.");
  let studentCount=0;try{const previewIds=await getStudentsForAssignment(ac.value);if(!previewIds.length)return alert("Select at least one student or add students to this class.");studentCount=previewIds.length}catch(e){return alert(e.message)}
  const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,created_by:current.id}).select().single();if(error)return alert(error.message);
- const qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
+ let qs=[];
+ if(importedForNewAssignment&&importedQuestions.length){
+   const imageMode=importedQuestions.some(q=>q.image_mode);
+   qs=importedQuestions.map((q,i)=>{const n=importedSingleExcel?(q.sourceNo||i+1):(i+1);return {assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question.trim(),option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[n],explanation:importedExplanations[n]||null,question_order:i+1,image_url:imageMode?q.image_data:null}});
+ }else{
+   qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
+ }
  if(!qs.length){await sb.from("assignments").delete().eq("id",a.id);return alert("Add at least one question.")}
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}
  try{await assignStudentsToAssignment(a.id,ac.value)}catch(e){await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
- alert(`${type==="video"?"Video":"No-video"} assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);teacherHome()
+ alert(`${type==="video"?"Video":"No-video"} assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);
+ importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;
+ teacherHome()
 }
 
+function startBulkImportFromNewAssignment(){
+ newAssignmentDraft={
+  type:document.querySelector('input[name="assignmentType"]:checked')?.value||"video",
+  classId:document.getElementById("ac")?.value||"",
+  assignMode:document.querySelector('input[name="assignMode"]:checked')?.value||"class",
+  selectedStudents:[...document.querySelectorAll(".assignment-student:checked")].map(x=>x.value),
+  title:document.getElementById("at")?.value||"",
+  subject:document.getElementById("asub")?.value||"",
+  video:document.getElementById("av")?.value||"",
+  description:document.getElementById("adesc")?.value||""
+ };
+ importedForNewAssignment=true;
+ bulkImportMCQs();
+}
 async function bulkImportMCQs(){
  importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;
  render(`<div class="wrap">${header("Import MCQs")}<div class="card">
@@ -544,10 +580,19 @@ function showImportedMCQs(){
     <h3>Question ${i+1}</h3><div class="question-image-wrap"><img class="question-image" src="${q.image_data}" alt="Question ${i+1}"></div>
     <p><b>Correct answer:</b></p><div class="actions">${["A","B","C","D"].map(o=>`<button type="button" class="answer-key-btn ${importedAnswers[importedSingleExcel?(q.sourceNo||i+1):i+1]===o?"selected-key":""}" onclick="setImportedAnswer(${importedSingleExcel?(q.sourceNo||i+1):i+1},'${o}')">${o}</button>`).join("")}</div>${importedExplanations[importedSingleExcel?(q.sourceNo||i+1):i+1]?`<div class="notice" style="margin-top:10px"><b>Explanation:</b> ${esc(importedExplanations[importedSingleExcel?(q.sourceNo||i+1):i+1])}</div>`:""}
    </div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question)}</b><p>A. ${esc(q.A)}</p><p>B. ${esc(q.B)}</p><p>C. ${esc(q.C)}</p><p>D. ${esc(q.D)}</p><span class="tag">Answer: ${esc(importedAnswers[importedSingleExcel?(q.sourceNo||i+1):i+1]||"MISSING")}</span>${importedExplanations[importedSingleExcel?(q.sourceNo||i+1):i+1]?`<div class="notice" style="margin-top:10px"><b>Explanation:</b> ${esc(importedExplanations[importedSingleExcel?(q.sourceNo||i+1):i+1])}</div>`:""}</div>`).join("")}</div>
-  <div class="actions"><button onclick="saveImportedMCQs()">Use These MCQs in New Assignment</button><button class="secondary" onclick="bulkImportMCQs()">← Choose Another Method</button><button class="secondary" onclick="teacherHome()">← Home</button></div>
+  <div class="actions"><button onclick="${importedForNewAssignment?'returnImportedToNewAssignment()':'saveImportedMCQs()'}">${importedForNewAssignment?'Use These Questions in This Assignment':'Use These MCQs in New Assignment'}</button><button class="secondary" onclick="bulkImportMCQs()">← Choose Another Method</button><button class="secondary" onclick="teacherHome()">← Home</button></div>
  </div></div>`)
 }
 function setImportedAnswer(n,opt){importedAnswers[n]=opt;showImportedMCQs()}
+function returnImportedToNewAssignment(){
+ if(!importedQuestions.length)return alert("No imported questions are available.");
+ const missing=importedQuestions.map((q,i)=>importedSingleExcel?(q.sourceNo||i+1):(i+1)).filter(n=>!importedAnswers[n]);
+ if(missing.length)return alert("Please select the correct answer for question(s): "+missing.join(", "));
+ const imageMode=importedQuestions.some(q=>q.image_mode);
+ if(!imageMode){const invalid=importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D);if(invalid.length)return alert("Some questions are incomplete. Please check the imported file.")}
+ newAssignment();
+}
+
 async function saveImportedMCQs(){
  const imageMode=importedQuestions.some(q=>q.image_mode);
  const missing=importedQuestions.map((q,i)=>importedSingleExcel?(q.sourceNo||i+1):(i+1)).filter(n=>!importedAnswers[n]);
