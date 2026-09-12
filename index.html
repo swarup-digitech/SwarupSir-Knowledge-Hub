@@ -55,7 +55,7 @@ const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let current=null,profile=null,active=null,answers=[],videoDone=false;
 let studentRefreshTimer=null, studentDashboardSnapshot=null;
-let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={};
+let bulkStudents=[], importedQuestions=[], importedAnswers={};
 let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
@@ -403,24 +403,23 @@ async function saveAssignment(){
 }
 
 async function bulkImportMCQs(){
- importedQuestions=[];importedAnswers={};importedExplanations={};
+ importedQuestions=[];importedAnswers={};
  render(`<div class="wrap">${header("Import MCQs")}<div class="card">
  <h2>Choose an upload method</h2>
  <p class="muted">You can use either method. Method 1 keeps the existing PDF + Excel workflow. Method 2 treats every PDF page as an image, so Assamese and other non-Latin text is displayed exactly as it appears in the PDF.</p>
  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
   <div class="card" style="border:2px solid #2563eb;background:#f8fbff">
    <span class="tag">METHOD 1</span><h3>PDF + Excel Answer Key</h3>
-   <p class="small muted">PDF: one question per page. Excel: Question No + Correct Option + Explanation (optional).</p>
+   <p class="small muted">PDF: one question per page. Excel: Question No + Correct Option.</p>
    <label>Questions PDF</label><input id="qpdf" type="file" accept=".pdf" onchange="readMCQPdf(event)">
-   <label>Answer Key Excel</label><input id="akey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)"><div class="small muted">Columns: <b>Question No</b>, <b>Correct Option</b>, <b>Explanation</b> (optional)</div>
+   <label>Answer Key Excel</label><input id="akey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
   </div>
   <div class="card" style="border:2px solid #16a34a;background:#f7fff9">
    <span class="tag" style="background:#dcfce7;color:#166534">METHOD 2 — RECOMMENDED FOR ASSAMESE</span>
    <h3>PDF — Image per Page</h3>
    <p class="small muted">Each page becomes an image. No OCR is used, so Assamese text, special symbols, fractions and mathematical notation remain visually correct.</p>
    <label>Questions PDF</label><input id="imagePdf" type="file" accept=".pdf" onchange="readImagePdf(event)">
-   <label>Answer Key Excel (optional)</label><input id="imageAkey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
-   <div class="notice small">Excel is optional. If provided, use Question No + Correct Option + Explanation (optional). Otherwise choose the correct answer (A/B/C/D) on the next screen.</div>
+   <div class="notice small">No Excel file is required. On the next screen, choose the correct answer (A/B/C/D) for each page.</div>
   </div>
  </div>
  <div id="mcqPreview"></div>
@@ -471,7 +470,7 @@ async function readImagePdf(ev){
    const imageData=cropped.toDataURL("image/jpeg",0.92);
    arr.push({page:p,image_data:imageData,question:"",A:"",B:"",C:"",D:"",image_mode:true});
   }
-  importedQuestions=arr;importedAnswers={};importedExplanations={};
+  importedQuestions=arr;importedAnswers={};
   box.innerHTML=message(`Converted ${arr.length} PDF page${arr.length===1?"":"s"} to question images. Click Preview / Continue to set the answer key.`,true)
  }catch(e){box.innerHTML=message("PDF image conversion failed: "+(e.message||e))}
 }
@@ -485,9 +484,9 @@ function parseQuestionText(text,pageNo){
 }
 function readAnswerExcel(ev){
  const file=ev.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{
-  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});importedAnswers={};importedExplanations={};
-  rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No),a=String(x["Correct Option"]??x.Answer??"").trim().toUpperCase(),ex=String(x["Explanation"]??x["Explanation Text"]??x["Solution Explanation"]??"").trim();if(n&&["A","B","C","D"].includes(a)){importedAnswers[n]=a;if(ex)importedExplanations[n]=ex}});
-  document.getElementById("mcqPreview").innerHTML=message(`Loaded ${Object.keys(importedAnswers).length} answer keys${Object.keys(importedExplanations).length?` and ${Object.keys(importedExplanations).length} explanations`:"."}`,true)
+  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});importedAnswers={};
+  rows.forEach(x=>{const n=Number(x["Question No"]??x["Question Number"]??x.No),a=String(x["Correct Option"]??x.Answer??"").trim().toUpperCase();if(n&&["A","B","C","D"].includes(a))importedAnswers[n]=a});
+  document.getElementById("mcqPreview").innerHTML=message(`Loaded ${Object.keys(importedAnswers).length} answer keys.`,true)
  }catch(err){document.getElementById("mcqPreview").innerHTML=message("Could not read answer Excel: "+err.message)}};r.readAsArrayBuffer(file)
 }
 function showImportedMCQs(){
@@ -500,8 +499,8 @@ function showImportedMCQs(){
   </div>
   <div id="importReview">${importedQuestions.map((q,i)=>imageMode?`<div class="assignment">
     <h3>Question ${i+1}</h3><div class="question-image-wrap"><img class="question-image" src="${q.image_data}" alt="Question ${i+1}"></div>
-    <p><b>Correct answer:</b></p><div class="actions">${["A","B","C","D"].map(o=>`<button type="button" class="answer-key-btn ${importedAnswers[i+1]===o?"selected-key":""}" onclick="setImportedAnswer(${i+1},'${o}')">${o}</button>`).join("")}</div>${importedExplanations[i+1]?`<div class="notice" style="margin-top:10px"><b>Explanation:</b> ${esc(importedExplanations[i+1])}</div>`:""}
-   </div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question)}</b><p>A. ${esc(q.A)}</p><p>B. ${esc(q.B)}</p><p>C. ${esc(q.C)}</p><p>D. ${esc(q.D)}</p><span class="tag">Answer: ${esc(importedAnswers[i+1]||"MISSING")}</span>${importedExplanations[i+1]?`<div class="notice" style="margin-top:10px"><b>Explanation:</b> ${esc(importedExplanations[i+1])}</div>`:""}</div>`).join("")}</div>
+    <p><b>Correct answer:</b></p><div class="actions">${["A","B","C","D"].map(o=>`<button type="button" class="answer-key-btn ${importedAnswers[i+1]===o?"selected-key":""}" onclick="setImportedAnswer(${i+1},'${o}')">${o}</button>`).join("")}</div>
+   </div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question)}</b><p>A. ${esc(q.A)}</p><p>B. ${esc(q.B)}</p><p>C. ${esc(q.C)}</p><p>D. ${esc(q.D)}</p><span class="tag">Answer: ${esc(importedAnswers[i+1]||"MISSING")}</span></div>`).join("")}</div>
   <div class="actions"><button onclick="saveImportedMCQs()">Use These MCQs in New Assignment</button><button class="secondary" onclick="bulkImportMCQs()">← Choose Another Method</button><button class="secondary" onclick="teacherHome()">← Home</button></div>
  </div></div>`)
 }
@@ -531,7 +530,7 @@ async function finishImportedAssignment(){
  if(!iat.value.trim())return alert("Enter an assignment title.");let studentIds;try{studentIds=await getImportedStudentIds(iac.value);if(!studentIds.length)return alert("Select at least one student or add students to this class.")}catch(e){return alert(e.message)}
  const {data:a,error}=await sb.from("assignments").insert({class_id:iac.value,title:iat.value.trim(),subject:ias.value.trim(),description:iad.value.trim(),video_url:iav.value.trim()||"https://www.youtube.com/",created_by:current.id}).select().single();if(error)return alert(error.message);
  const imageMode=importedQuestions.some(q=>q.image_mode);
- const qs=importedQuestions.map((q,i)=>({assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question,option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[i+1],explanation:importedExplanations[i+1]||null,question_order:i+1,image_url:imageMode?q.image_data:null}));
+ const qs=importedQuestions.map((q,i)=>({assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question,option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[i+1],question_order:i+1,image_url:imageMode?q.image_data:null}));
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert("Could not save imported questions: "+e.message)}
  const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:a.id,student_id}));const {error:ae}=await sb.from("assignment_students").insert(rows);if(ae){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment created, but student assignment failed: "+ae.message)}
  alert(`Assignment created and assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome()
@@ -572,9 +571,6 @@ async function editAssignmentQuestions(id){
             <label class="solution-video-label">Solution Video — YouTube link (optional)</label>
             <input class="question-video-url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${esc(q.solution_video_url||"")}">
             <div class="small muted">Students can view this video with the answer key after submitting their assignment.</div>
-            <label style="font-weight:700;color:#334155">Explanation (optional)</label>
-            <textarea class="question-explanation" placeholder="Explain why the answer is correct...">${esc(q.explanation||"")}</textarea>
-            <div class="small muted">Shown to students only after they submit, near the answer key and solution video.</div>
           </div>
           <div class="question-save-row"><button type="button" class="secondary" onclick="saveSingleEditedQuestion('${id}','${q.id}')">💾 Save This Question</button><span class="small muted">Saves only this question.</span></div>
         </div>`).join("")}</div>
@@ -601,8 +597,7 @@ function getEditedQuestion(card){
     option_d:card.querySelector('.edit-option[data-option="D"]')?.value?.trim()||"Option D",
     correct_option:card.querySelector(".edit-correct-option")?.value||"A",
     hint:card.querySelector(".question-hint")?.value?.trim()||null,
-    solution_video_url:card.querySelector(".question-video-url")?.value?.trim()||null,
-    explanation:card.querySelector(".question-explanation")?.value?.trim()||null
+    solution_video_url:card.querySelector(".question-video-url")?.value?.trim()||null
   };
 }
 async function saveSingleEditedQuestion(assignmentId,questionId){
@@ -702,7 +697,7 @@ function toggleResultDetails(attemptId,type){
    <h3 style="margin-top:0">Q${q.question_order||index+1} — ${type==="correct"?'✓ Correct':'✗ Wrong'}</h3>
    ${q.image_url?`<img src="${esc(q.image_url)}" alt="Question ${q.question_order||index+1}" style="display:block;width:100%;max-height:650px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px;margin-bottom:12px">`:`<div style="font-weight:700;margin-bottom:10px">${esc(q.question_text||"Question unavailable")}</div>`}
    ${opts.map(o=>`<div style="padding:9px 12px;margin:6px 0;border-radius:9px;border:1px solid ${o[0]===correct?'#16a34a':o[0]===selected&&o[0]!==correct?'#dc2626':'#e5e7eb'};background:${o[0]===correct?'#f0fdf4':o[0]===selected&&o[0]!==correct?'#fef2f2':'#fff'}"><b>${o[0]}.</b> ${esc(o[1]||'')}</div>`).join('')}
-   <div class="result-answer" style="margin-top:12px"><span>Student Answer: <b>${esc(selected)}</b></span><span style="color:#166534"><b>Answer Key: ${esc(correct)}</b></span></div>${q?.explanation?`<div style="margin-top:10px;padding:12px 14px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px;line-height:1.5"><b style="color:#166534">Explanation:</b><div style="margin-top:4px;white-space:pre-wrap">${esc(q.explanation)}</div></div>`:""}
+   <div class="result-answer" style="margin-top:12px"><span>Student Answer: <b>${esc(selected)}</b></span><span>Answer Key: <b>${esc(correct)}</b></span></div>
    <div class="${type==="correct"?'result-correct':'result-wrong'}" style="margin-top:8px"><b>${type==="correct"?'✓ Correct':'✗ Wrong'}</b></div>
   </div>`;
  }).join('');
@@ -884,27 +879,20 @@ async function studentHome(){
   const snapshot=[...completedIds].sort().join("|");
   const previousSnapshot=studentDashboardSnapshot;
   studentDashboardSnapshot=snapshot;
-  const previousWithVideo=completed.filter(a=>!!a.video_url);
-  const previousWithoutVideo=completed.filter(a=>!a.video_url);
-  const assignmentCard=(a,isCompleted=false)=>{
-    const x=isCompleted?attempts.find(t=>t.assignment_id===a.id):null;
-    const pct=x&&Number(x.total_questions)?Math.round(Number(x.score||0)*100/Number(x.total_questions)):0;
-    return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}${isCompleted?`<p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div>${a.video_url?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}`:`<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div>`}</div>`;
-  };
   render(`<div class="wrap">${header("My Assignments")}
     <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div>
-    <div class="card">
-      <div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        <button id="student-dash-tab-new" onclick="showStudentDashboardTab('new')">New Assignments (${pending.length})</button>
-        <button id="student-dash-tab-video" class="secondary" onclick="showStudentDashboardTab('video')">Previous — With Video (${previousWithVideo.length})</button>
-        <button id="student-dash-tab-novideo" class="secondary" onclick="showStudentDashboardTab('novideo')">Previous — Without Video (${previousWithoutVideo.length})</button>
-      </div>
-      <div id="student-dash-panel-new">${pending.length?pending.map(a=>assignmentCard(a,false)).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}</div>
-      <div id="student-dash-panel-video" style="display:none">${previousWithVideo.length?previousWithVideo.map(a=>assignmentCard(a,true)).join(""):"<p class='muted'>No completed assignments with video.</p>"}</div>
-      <div id="student-dash-panel-novideo" style="display:none">${previousWithoutVideo.length?previousWithoutVideo.map(a=>assignmentCard(a,true)).join(""):"<p class='muted'>No completed assignments without video.</p>"}</div>
+    <div class="card"><h2>New Assignments</h2>
+      ${pending.length?pending.map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
+    </div>
+    <div class="card"><h2>Previous Work</h2>
+      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);const pct=Number(x?.total_questions)?Math.round(Number(x.score||0)*100/Number(x.total_questions)):0;return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div><p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
+  <button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button>
+</div>
+${a.video_url?`<div style="margin-top:10px">
+  <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
+</div>`:""}</div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
     </div>
   </div>`);
-
 
   // Keep the dashboard in sync while it is open. The database job removes
   // failed submissions after 3 hours; when that happens the assignment moves
@@ -928,12 +916,6 @@ async function studentHome(){
     }catch(_e){}
   },60000);
 }
-function showStudentDashboardTab(type){
-  const panels={new:"student-dash-panel-new",video:"student-dash-panel-video",novideo:"student-dash-panel-novideo"};
-  const tabs={new:"student-dash-tab-new",video:"student-dash-tab-video",novideo:"student-dash-tab-novideo"};
-  Object.keys(panels).forEach(k=>{const el=document.getElementById(panels[k]);if(el)el.style.display=k===type?"block":"none";const b=document.getElementById(tabs[k]);if(b){if(k===type)b.classList.remove("secondary");else b.classList.add("secondary");}});
-}
-
 async function watchCompletedVideo(assignmentId){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   try{
@@ -967,6 +949,7 @@ async function viewPreviousWork(assignmentId,attemptId){
   const wrongItems=ordered.filter(({x,q})=>!(x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option)));
   window._studentPreviousWork={assignment:a,attempt:at,items:ordered};
   render(`<div class="wrap">${header("Previous Work")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p><div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="secondary" onclick="toggleStudentAnswerTab('correct')">✓ Correct Answers (${correctItems.length})</button><button class="secondary" onclick="toggleStudentAnswerTab('wrong')">✗ Wrong Answers (${wrongItems.length})</button></div><div id="student-answer-details" style="display:none;margin-top:14px"></div></div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
+  toggleStudentAnswerTab('correct');
  }catch(e){alert("Could not load previous work: "+(e.message||e))}
 }
 
