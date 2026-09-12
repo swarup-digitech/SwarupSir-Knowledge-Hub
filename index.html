@@ -884,20 +884,27 @@ async function studentHome(){
   const snapshot=[...completedIds].sort().join("|");
   const previousSnapshot=studentDashboardSnapshot;
   studentDashboardSnapshot=snapshot;
+  const previousWithVideo=completed.filter(a=>!!a.video_url);
+  const previousWithoutVideo=completed.filter(a=>!a.video_url);
+  const assignmentCard=(a,isCompleted=false)=>{
+    const x=isCompleted?attempts.find(t=>t.assignment_id===a.id):null;
+    const pct=x&&Number(x.total_questions)?Math.round(Number(x.score||0)*100/Number(x.total_questions)):0;
+    return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}${isCompleted?`<p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div>${a.video_url?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}`:`<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div>`}</div>`;
+  };
   render(`<div class="wrap">${header("My Assignments")}
     <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div>
-    <div class="card"><h2>New Assignments</h2>
-      ${pending.length?pending.map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>${a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div></div>`).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}
-    </div>
-    <div class="card"><h2>Previous Work</h2>
-      ${completed.length?completed.map(a=>{const x=attempts.find(t=>t.assignment_id===a.id);const pct=Number(x?.total_questions)?Math.round(Number(x.score||0)*100/Number(x.total_questions)):0;return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div><p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p><div style="margin-top:12px">
-  <button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button>
-</div>
-${a.video_url?`<div style="margin-top:10px">
-  <button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button>
-</div>`:""}</div>`}).join(""):"<p class='muted'>No previous submissions yet.</p>"}
+    <div class="card">
+      <div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <button id="student-dash-tab-new" onclick="showStudentDashboardTab('new')">New Assignments (${pending.length})</button>
+        <button id="student-dash-tab-video" class="secondary" onclick="showStudentDashboardTab('video')">Previous — With Video (${previousWithVideo.length})</button>
+        <button id="student-dash-tab-novideo" class="secondary" onclick="showStudentDashboardTab('novideo')">Previous — Without Video (${previousWithoutVideo.length})</button>
+      </div>
+      <div id="student-dash-panel-new">${pending.length?pending.map(a=>assignmentCard(a,false)).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have completed all assignments currently assigned to you.</span></div>"}</div>
+      <div id="student-dash-panel-video" style="display:none">${previousWithVideo.length?previousWithVideo.map(a=>assignmentCard(a,true)).join(""):"<p class='muted'>No completed assignments with video.</p>"}</div>
+      <div id="student-dash-panel-novideo" style="display:none">${previousWithoutVideo.length?previousWithoutVideo.map(a=>assignmentCard(a,true)).join(""):"<p class='muted'>No completed assignments without video.</p>"}</div>
     </div>
   </div>`);
+
 
   // Keep the dashboard in sync while it is open. The database job removes
   // failed submissions after 3 hours; when that happens the assignment moves
@@ -921,6 +928,12 @@ ${a.video_url?`<div style="margin-top:10px">
     }catch(_e){}
   },60000);
 }
+function showStudentDashboardTab(type){
+  const panels={new:"student-dash-panel-new",video:"student-dash-panel-video",novideo:"student-dash-panel-novideo"};
+  const tabs={new:"student-dash-tab-new",video:"student-dash-tab-video",novideo:"student-dash-tab-novideo"};
+  Object.keys(panels).forEach(k=>{const el=document.getElementById(panels[k]);if(el)el.style.display=k===type?"block":"none";const b=document.getElementById(tabs[k]);if(b){if(k===type)b.classList.remove("secondary");else b.classList.add("secondary");}});
+}
+
 async function watchCompletedVideo(assignmentId){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   try{
