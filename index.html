@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=T5YKHE5t0LiH7PufsHSWT92fF8Ypah1lLpYF7mSC-wokF7NPuPeJwJy2sAhgTtHi4OU6_nOaFiMRpVoH0OSGxd1QyDcwTSTgia5EHI-jHR3JNogHUfxfobFjNadvepajf54AO6AZpaf4bveFY9dbgNpLl9l_g3wKd_3lvazdFbwN5APlp1WjDOyTrhI5Jynl8ZF_FgusQY4PLqQvU_Ekc_RJbiGTvgLD9mgVFyFHLuh6vDKuAtzrq0V3c3-JG6n5HK6z9tIIpS6qdSLRhMvqIps38lrCYuVrCh8TqVHmNA39xbtUATxFtdHoLU_Y_sfI" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -172,7 +172,7 @@ async function teacherHome(){
  <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Video Assignment</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="bulkImportMCQs()">↑ Import MCQs (PDF / Image)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit / Add Hints</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
+ <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
 }
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
@@ -606,6 +606,18 @@ async function editAssignmentQuestions(id){
         <div class="actions"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="viewAssignment('${id}')">Cancel</button></div>
       </div></div>`);
   }catch(e){alert("Could not open question editor: "+(e.message||e));}
+}
+function editAssignmentSupport(id,type){
+  editAssignmentQuestions(id);
+  setTimeout(()=>switchQuestionEditorTab('support'),80);
+  setTimeout(()=>{
+    const first=document.querySelector('.question-hint, .question-video-url, .question-explanation');
+    let target=null;
+    if(type==='hint')target=document.querySelector('.question-hint');
+    if(type==='video')target=document.querySelector('.question-video-url');
+    if(type==='explanation')target=document.querySelector('.question-explanation');
+    if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.focus();}
+  },140);
 }
 function switchQuestionEditorTab(tab){
   const isQuestions=tab!=="support";
