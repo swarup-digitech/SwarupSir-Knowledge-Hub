@@ -32,7 +32,7 @@ const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn')
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'">'+esc(t)+'</div>'}
 // If already signed in, go straight to the main application.
-sb.auth.getSession().then(({data:{session}})=>{if(session)location.replace('main.html')});
+sb.auth.getSession().then(({data:{session}})=>{if(session)location.replace('index.html')});
 document.getElementById('loginForm').addEventListener('submit',async e=>{
  e.preventDefault(); const roll=rollNo.value.trim(),pw=password.value;
  if(!roll||!pw)return show('Enter Roll No and Password.');
@@ -46,7 +46,7 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
    const {data:{user}}=await sb.auth.getUser();
    if(!user)throw new Error('Student session could not be created.');
    show('Login successful. Opening Student Dashboard...',true);
-   setTimeout(()=>location.replace('main.html'),250);
+   setTimeout(()=>location.replace('index.html'),250);
  }catch(err){show(err.message||String(err));btn.disabled=false;btn.textContent='Login'}
 });
 </script>
