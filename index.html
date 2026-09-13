@@ -244,6 +244,36 @@ async function teacherResultsDashboard(){
   }catch(e){alert("Could not load assignment results: "+(e.message||e));}
 }
 
+function updateTeacherResultsSubGroupOptions(){
+  const d=window._teacherResults;if(!d)return;
+  const main=document.getElementById("trMainGroup")?.value||"all";
+  const sub=document.getElementById("trSubGroup");if(!sub)return;
+  const available=[...new Set(d.assignments.filter(a=>main==="all"||a.main_group===main).map(a=>a.sub_group).filter(Boolean))];
+  const current=sub.value;
+  sub.innerHTML=`<option value="all">All Sub-Groups</option>${SUB_GROUPS.filter(g=>available.includes(g)).map(g=>`<option value="${g}">${g}</option>`).join("")}`;
+  sub.value=available.includes(current)?current:"all";
+  updateTeacherResultsAssignmentOptions();
+}
+function updateTeacherResultsAssignmentOptions(){
+  const d=window._teacherResults;if(!d)return;
+  const main=document.getElementById("trMainGroup")?.value||"all";
+  const sub=document.getElementById("trSubGroup")?.value||"all";
+  const sel=document.getElementById("trAssignment");if(!sel)return;
+  const current=sel.value;
+  const filtered=d.assignments.filter(a=>
+    (main==="all"||a.main_group===main) &&
+    (sub==="all"||a.sub_group===sub)
+  );
+  sel.innerHTML=`<option value="all">All Assignments</option>${filtered.map(a=>`<option value="${a.id}">${esc(a.title)}</option>`).join("")}`;
+  sel.value=filtered.some(a=>a.id===current)?current:"all";
+}
+function teacherResultsMainGroupChanged(){
+  updateTeacherResultsSubGroupOptions();
+}
+function teacherResultsSubGroupChanged(){
+  updateTeacherResultsAssignmentOptions();
+}
+
 function renderTeacherResultsDashboard(){
   const d=window._teacherResults;if(!d)return;
   const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
@@ -274,7 +304,7 @@ function renderTeacherResultsDashboard(){
     <div class="card">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
       <div class="grid" style="margin-top:15px">
-        <div><label>Main Group</label><select id="trMainGroup"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}" ${f.mainGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}" ${f.subGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
+        <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}" ${f.mainGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}" ${f.subGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
         <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
         <div><label>Student</label><select id="trStudent"><option value="all">All Students</option>${d.students.map(s=>`<option value="${s.id}" ${f.student===s.id?"selected":""}>${esc(s.full_name)}${s.roll_no?` — Roll ${esc(s.roll_no)}`:""}</option>`).join("")}</select></div>
         <div><label>Status</label><select id="trStatus"><option value="all" ${f.status==="all"?"selected":""}>Submitted Results</option><option value="pending" ${f.status==="pending"?"selected":""}>Not Submitted / Pending</option></select></div>
@@ -285,7 +315,7 @@ function renderTeacherResultsDashboard(){
       <div class="result-summary"><span>Submitted: <b>${submitted}</b></span><span>Average: <b>${avg}%</b></span><span>Pending: <b>${pendingCount}</b></span><span>Showing: <b>${rows.length}</b></span></div>
       <div style="overflow:auto;margin-top:15px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Assignment</th><th>Class</th><th>Score</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(r=>r.type==="pending"?`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.a.title)}</td><td>${esc(r.className||"—")}</td><td>—</td><td><span class="tag" style="background:#fff7ed;color:#c2410c">Not Submitted</span></td><td>—</td><td><button class="secondary" onclick="viewAssignment('${r.a.id}')">View Assignment</button></td></tr>`:`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.a.title)}</td><td>${esc(r.className||"—")}</td><td><b>${r.at.score}/${r.at.total_questions}</b> <span class="small">(${Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)))}%)</span></td><td><span class="tag" style="background:#ecfdf5;color:#166534">Submitted</span></td><td>${r.at.submitted_at?new Date(r.at.submitted_at).toLocaleString():"—"}</td><td><button onclick="results('${r.a.id}')">View Result</button></td></tr>`).join(""):`<tr><td colspan="8"><div class="success"><b>No results match the selected filters.</b></div></td></tr>`}</tbody></table></div>
     </div></div>`);
-  const sort=document.getElementById("trSort");if(sort)sort.value=f.sort;
+  const sort=document.getElementById("trSort");if(sort)sort.value=f.sort;updateTeacherResultsSubGroupOptions();const sub=document.getElementById("trSubGroup");if(sub&&f.subGroup&&sub.querySelector(`option[value="${CSS.escape(f.subGroup)}"]`))sub.value=f.subGroup;updateTeacherResultsAssignmentOptions();const as=document.getElementById("trAssignment");if(as&&f.assignment&&as.querySelector(`option[value="${CSS.escape(f.assignment)}"]`))as.value=f.assignment;
 }
 function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
 function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
