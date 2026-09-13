@@ -173,13 +173,21 @@ Deno.serve(async (req) => {
     for (const item of items) {
       const name = String(item.name ?? "").trim();
       const rollNo = String(item.roll_no ?? item.rollNo ?? "").trim();
-      const email = String(item.email ?? "").trim().toLowerCase();
+      let email = String(item.email ?? "").trim().toLowerCase();
       const password = String(item.password ?? "");
       const classId = String(item.class_id ?? "").trim();
 
-      if (!name || !rollNo || !email || !password || !classId) {
-        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, email, password and class are required."});
+      if (!name || !rollNo || !password || !classId) {
+        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, password and class are required."});
         continue;
+      }
+
+      // Classroom login uses Roll No + Password, so teachers do not need
+      // to supply a real email address. Create a private internal email
+      // only for Supabase Auth.
+      if (!email) {
+        const safeRoll = rollNo.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "student";
+        email = `student-${safeRoll}-${crypto.randomUUID().slice(0,8)}@students.swarupsir.local`;
       }
       if (password.length < 6) {
         results.push({success:false,name,email,error:"Password must contain at least 6 characters."});
