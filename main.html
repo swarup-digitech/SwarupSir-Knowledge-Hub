@@ -384,7 +384,6 @@ async function teacherHome(){
    sb.from("profiles").select("*").eq("role","student").order("full_name")
  ]);
  if(ce||ae||se)return render(`<div class="wrap">${header("Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
- const normalAssignments=(assignments||[]).filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock");
  render(`<div class="wrap">${header("Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
  <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
@@ -395,7 +394,7 @@ async function teacherHome(){
      <div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
      <div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
    </div>
-   <div id="teacherAssignmentsList">${renderTeacherAssignmentCards(normalAssignments)}</div>
+   <div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments||[])}</div>
  </div></div>`);
 }
 function renderTeacherAssignmentCards(assignments){
