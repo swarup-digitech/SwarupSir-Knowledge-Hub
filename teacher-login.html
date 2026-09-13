@@ -30,6 +30,7 @@ const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn');
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function show(t){msg.innerHTML='<div class="notice">'+esc(t)+'</div>'}
+sb.auth.getSession().then(({data:{session}})=>{if(session)location.replace('main.html')});
 document.getElementById('loginForm').addEventListener('submit',async e=>{
  e.preventDefault();btn.disabled=true;btn.textContent='Signing in...';
  const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});
