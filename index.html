@@ -1348,12 +1348,21 @@ async function viewPreviousWork(assignmentId,attemptId){
   const feedback=(type,items)=>renderStudentAnswerItems(items,type);
   render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p>
     <div class="success" style="margin-top:14px"><b>Answer Review</b><br>Your selected answers, the correct answer key, explanations, and available solution videos are shown below.</div>
-    <h2 style="margin-top:20px;color:#166534">✓ Correct Answers (${correctItems.length})</h2>
-    <div id="student-correct-details">${feedback("correct",correctItems)}</div>
-    <h2 style="margin-top:24px;color:#dc2626">✗ Wrong Answers (${wrongItems.length})</h2>
-    <div id="student-wrong-details">${feedback("wrong",wrongItems)}</div>
+    <div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;margin-bottom:16px">
+      <button id="student-answer-tab-correct" onclick="showStudentAnswerTab('correct')">✓ Correct Answers (${correctItems.length})</button>
+      <button id="student-answer-tab-wrong" class="secondary" onclick="showStudentAnswerTab('wrong')">✗ Wrong Answers (${wrongItems.length})</button>
+    </div>
+    <div id="student-answer-panel-correct">${feedback("correct",correctItems)}</div>
+    <div id="student-answer-panel-wrong" style="display:none">${feedback("wrong",wrongItems)}</div>
   </div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
  }catch(e){alert("Could not load previous work: "+(e.message||e))}
+}
+
+function showStudentAnswerTab(type){
+  const cp=document.getElementById("student-answer-panel-correct"),wp=document.getElementById("student-answer-panel-wrong"),ct=document.getElementById("student-answer-tab-correct"),wt=document.getElementById("student-answer-tab-wrong");
+  if(!cp||!wp||!ct||!wt)return;
+  if(type==="wrong"){cp.style.display="none";wp.style.display="block";ct.classList.add("secondary");wt.classList.remove("secondary");}
+  else{cp.style.display="block";wp.style.display="none";ct.classList.remove("secondary");wt.classList.add("secondary");}
 }
 
 function renderStudentAnswerItems(items,type){
