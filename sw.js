@@ -2,6 +2,7 @@ const CACHE_NAME = 'swarup-sir-knowledge-hub-v1';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/main.html',
   '/student-login.html',
   '/teacher-login.html',
   '/manifest.webmanifest',
@@ -20,5 +21,5 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
   event.respondWith(fetch(req).then(res => {
     const copy=res.clone(); caches.open(CACHE_NAME).then(c=>c.put(req,copy)).catch(()=>{}); return res;
-  }).catch(()=>caches.match(req).then(r=>r || caches.match('/index.html'))));
+  }).catch(()=>caches.match(req).then(r=>r || caches.match('/main.html') || caches.match('/index.html'))));
 });

@@ -85,16 +85,12 @@ Deno.serve(async (req) => {
         .eq("classes.teacher_id", caller.user.id);
       if (me) return json({error:me.message},400);
 
-      const map = new Map<string, {classes:string[], class_details:{id:string,name:string}[]}>();
+      const map = new Map<string, {classes:string[]}>();
       for (const row of memberships ?? []) {
         const sid = row.student_id as string;
         const cls = row.classes as any;
-        if (!map.has(sid)) map.set(sid,{classes:[],class_details:[]});
-        const entry = map.get(sid)!;
-        if (cls?.name && !entry.classes.includes(cls.name)) entry.classes.push(cls.name);
-        if (cls?.id && cls?.name && !entry.class_details.some(x=>x.id===cls.id)) {
-          entry.class_details.push({id:cls.id,name:cls.name});
-        }
+        if (!map.has(sid)) map.set(sid,{classes:[]});
+        if (cls?.name && !map.get(sid)!.classes.includes(cls.name)) map.get(sid)!.classes.push(cls.name);
       }
       const ids = [...map.keys()];
       if (!ids.length) return json({success:true,students:[]});
@@ -111,8 +107,7 @@ Deno.serve(async (req) => {
         email:cm.get(p.id)?.email || p.username || "",
         password:cm.get(p.id)?.password_plaintext || "",
         updated_at:cm.get(p.id)?.updated_at || null,
-        classes:map.get(p.id)?.classes || [],
-        class_details:map.get(p.id)?.class_details || []
+        classes:map.get(p.id)?.classes || []
       }))});
     }
 
@@ -135,74 +130,6 @@ Deno.serve(async (req) => {
       const { error: upErr } = await admin.from("profiles").update({roll_no:rollNo}).eq("id",studentId);
       if (upErr) return json({error:upErr.message},400);
       return json({success:true,roll_no:rollNo});
-    }
-
-    // ------------------------------------------------------------
-    // Teacher: change a student's class
-    // ------------------------------------------------------------
-    if (body.action === "setStudentClass") {
-      const studentId = String(body.student_id ?? "").trim();
-      const newClassId = String(body.class_id ?? "").trim();
-      if (!studentId || !newClassId)
-        return json({error:"Student and new class are required."},400);
-
-      const { data: currentMemberships, error: currentErr } = await admin
-        .from("class_students")
-        .select("class_id, classes!inner(id, teacher_id)")
-        .eq("student_id", studentId)
-        .eq("classes.teacher_id", caller.user.id);
-
-      if (currentErr) return json({error:currentErr.message},400);
-      if (!currentMemberships?.length)
-        return json({error:"This student is not in one of your classes."},403);
-
-      const { data: destination, error: destinationErr } = await admin
-        .from("classes")
-        .select("id, name, teacher_id")
-        .eq("id", newClassId)
-        .single();
-
-      if (destinationErr || !destination)
-        return json({error:"Destination class was not found."},404);
-
-      if (destination.teacher_id !== caller.user.id)
-        return json({error:"You can only move a student to one of your own classes."},403);
-
-      if (currentMemberships.some((m:any) => m.class_id === newClassId)) {
-        return json({
-          success:true,
-          class_id:newClassId,
-          class_name:destination.name,
-          message:"Student is already in this class."
-        });
-      }
-
-      const teacherClassIds = currentMemberships.map((m:any) => m.class_id);
-
-      const { error: deleteErr } = await admin
-        .from("class_students")
-        .delete()
-        .eq("student_id", studentId)
-        .in("class_id", teacherClassIds);
-
-      if (deleteErr) return json({error:deleteErr.message},400);
-
-      const { error: insertErr } = await admin
-        .from("class_students")
-        .insert({class_id:newClassId, student_id:studentId});
-
-      if (insertErr) {
-        await admin.from("class_students").insert(
-          teacherClassIds.map((class_id:string)=>({class_id,student_id:studentId}))
-        );
-        return json({error:insertErr.message},400);
-      }
-
-      return json({
-        success:true,
-        class_id:newClassId,
-        class_name:destination.name
-      });
     }
 
     // ------------------------------------------------------------
