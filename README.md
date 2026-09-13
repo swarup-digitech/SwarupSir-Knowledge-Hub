@@ -1,19 +1,9 @@
-# Swarup Sir's Knowledge Hub — Complete Project
+# Swarup Sir's Knowledge Hub
 
-This package contains the complete working web app plus the new bulk-import features.
+GitHub-ready build. Mock Test is a separate module from normal Assignments.
 
-Main app:
-- index.html
+Features include teacher/student login, MCQ assignments, multiple-class assignment, correct/wrong answer review, hints, solution videos, automatic low-score retry, PWA support, and separate Mock Test Management with four question banks: MAT, EVS, Arithmetic and Language.
 
-Secure server function:
-- edge-function/index.ts
+Mock Test blueprint: 80 questions, 100 marks, 2 hours.
 
-Database policy:
-- supabase_teacher_student_policy.sql
-
-Demo files:
-- demo_students.xlsx
-- demo_mcq_questions.pdf
-- demo_answer_key.xlsx
-
-Start with STEP_BY_STEP_SETUP.md.
+See `SETUP_GITHUB_CLOUDFLARE_SUPABASE.md` for deployment.
