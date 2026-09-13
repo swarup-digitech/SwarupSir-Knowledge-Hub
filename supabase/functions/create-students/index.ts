@@ -164,45 +164,6 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------
-    // Teacher: delete a student account and its related records
-    // ------------------------------------------------------------
-    if (body.action === "deleteStudent") {
-      const studentId = String(body.student_id ?? "").trim();
-      if (!studentId) return json({error:"Student is required."},400);
-
-      const { data: membership, error: me } = await admin
-        .from("class_students")
-        .select("student_id, classes!inner(teacher_id)")
-        .eq("student_id", studentId)
-        .eq("classes.teacher_id", caller.user.id)
-        .limit(1);
-      if (me || !membership?.length) return json({error:"This student is not in one of your classes."},403);
-
-      const { data: attemptRows, error: ae } = await admin
-        .from("attempts").select("id").eq("student_id", studentId);
-      if (ae) return json({error:ae.message},400);
-      const attemptIds = (attemptRows ?? []).map(x => x.id);
-      if (attemptIds.length) {
-        const { error: ansErr } = await admin.from("answers").delete().in("attempt_id", attemptIds);
-        if (ansErr) return json({error:ansErr.message},400);
-        const { error: attErr } = await admin.from("attempts").delete().in("id", attemptIds);
-        if (attErr) return json({error:attErr.message},400);
-      }
-
-      const { error: asErr } = await admin.from("assignment_students").delete().eq("student_id", studentId);
-      if (asErr) return json({error:asErr.message},400);
-      const { error: csErr } = await admin.from("class_students").delete().eq("student_id", studentId);
-      if (csErr) return json({error:csErr.message},400);
-      const { error: credErr } = await admin.from("student_credentials").delete().eq("student_id", studentId);
-      if (credErr) return json({error:credErr.message},400);
-      const { error: profileErr } = await admin.from("profiles").delete().eq("id", studentId);
-      if (profileErr) return json({error:profileErr.message},400);
-      const { error: authErr } = await admin.auth.admin.deleteUser(studentId);
-      if (authErr) return json({error:authErr.message},400);
-      return json({success:true});
-    }
-
-    // ------------------------------------------------------------
     // Existing bulk/single student creation flow
     // ------------------------------------------------------------
     const items = Array.isArray(body.students) ? body.students : [body];
@@ -212,13 +173,12 @@ Deno.serve(async (req) => {
     for (const item of items) {
       const name = String(item.name ?? "").trim();
       const rollNo = String(item.roll_no ?? item.rollNo ?? "").trim();
-      const suppliedEmail = String(item.email ?? "").trim().toLowerCase();
+      const email = String(item.email ?? "").trim().toLowerCase();
       const password = String(item.password ?? "");
-      const email = suppliedEmail || `student-${rollNo.replace(/[^a-z0-9._-]/gi,"-").toLowerCase()}@students.swarupsir.local`;
       const classId = String(item.class_id ?? "").trim();
 
-      if (!name || !rollNo || !password || !classId) {
-        results.push({success:false,name,email,roll_no:rollNo,error:"Name, Roll No, Password and Class are required."});
+      if (!name || !rollNo || !email || !password || !classId) {
+        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, email, password and class are required."});
         continue;
       }
       if (password.length < 6) {
