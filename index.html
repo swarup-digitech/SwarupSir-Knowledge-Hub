@@ -70,6 +70,10 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 const render=x=>document.getElementById("app").innerHTML=x;
 const header=t=>`<div class="top"><h1>${t}</h1><button class="secondary" onclick="logout()">Logout</button></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
+const MAIN_GROUPS=["JNV Eng","JNV Ass"];
+const SUB_GROUPS=["EVS","Mental Ability","Arithmetic","Language"];
+const groupLabel=a=>a?.main_group&&a?.sub_group?`${esc(a.main_group)} · ${esc(a.sub_group)}`:"Not grouped";
+const groupBadge=a=>a?.main_group&&a?.sub_group?`<span class="tag">${groupLabel(a)}</span>`:`<span class="tag" style="background:#f1f5f9;color:#64748b">Not grouped</span>`;
 function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?&]v=([^&]+)/)||v.match(/youtu\.be\/([^?]+)/);return m?"https://www.youtube.com/embed/"+m[1]:v}
 
 async function init(){
@@ -173,7 +177,20 @@ async function teacherHome(){
  <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>${(assignments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>"}</div></div>`);
+ <div class="card"><h2>Assignments</h2>
+   <div class="grid" style="margin-bottom:12px">
+     <div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
+     <div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
+   </div>
+   <div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments||[])}</div>
+ </div></div>`);
+}
+function renderTeacherAssignmentCards(assignments){
+ return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
+}
+function filterTeacherAssignments(){
+ const main=document.getElementById("teacherAssignmentMainFilter")?.value||"all",sub=document.getElementById("teacherAssignmentSubFilter")?.value||"all";
+ document.querySelectorAll(".teacher-assignment-row").forEach(row=>{const ok=(main==="all"||row.dataset.mainGroup===main)&&(sub==="all"||row.dataset.subGroup===sub);row.style.display=ok?"block":"none";});
 }
 async function editAssignmentDetails(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title,description").eq("id",assignmentId).eq("created_by",current.id).single();
@@ -189,10 +206,26 @@ async function editAssignmentDetails(assignmentId){
  alert("Assignment name and description updated successfully.");
  await teacherHome();
 }
+async function editAssignmentGroup(assignmentId){
+ const {data:a,error}=await sb.from("assignments").select("id,title,main_group,sub_group").eq("id",assignmentId).eq("created_by",current.id).single();
+ if(error||!a)return alert(error?.message||"Assignment not found.");
+ const main=prompt(`Main Group for "${a.title}":\n\n1. JNV Eng\n2. JNV Ass`,a.main_group||"JNV Eng");
+ if(main===null)return;
+ const mainTrim=main.trim();
+ if(!MAIN_GROUPS.includes(mainTrim))return alert("Please enter exactly: JNV Eng or JNV Ass.");
+ const sub=prompt(`Sub-Group for "${a.title}":\n\n1. EVS\n2. Mental Ability\n3. Arithmetic\n4. Language`,a.sub_group||"EVS");
+ if(sub===null)return;
+ const subTrim=sub.trim();
+ if(!SUB_GROUPS.includes(subTrim))return alert("Please enter one of: EVS, Mental Ability, Arithmetic, Language.");
+ const {error:upError}=await sb.from("assignments").update({main_group:mainTrim,sub_group:subTrim}).eq("id",assignmentId).eq("created_by",current.id);
+ if(upError)return alert("Could not update assignment group.\n\n"+(upError.message||upError));
+ alert("Assignment group updated successfully.");
+ await teacherHome();
+}
 async function teacherResultsDashboard(){
   try{
     const [{data:assignments,error:ae},{data:classes,error:ce},{data:students,error:se}]=await Promise.all([
-      sb.from("assignments").select("id,title,subject,class_id,video_url,created_at").eq("created_by",current.id).order("created_at",{ascending:false}),
+      sb.from("assignments").select("id,title,subject,class_id,video_url,created_at,main_group,sub_group").eq("created_by",current.id).order("created_at",{ascending:false}),
       sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name"),
       sb.from("profiles").select("id,full_name,roll_no").eq("role","student").order("full_name")
     ]);
@@ -213,7 +246,7 @@ async function teacherResultsDashboard(){
 
 function renderTeacherResultsDashboard(){
   const d=window._teacherResults;if(!d)return;
-  const f=d.filters||{assignment:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
+  const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
   const classMap=new Map(d.classes.map(c=>[c.id,c.name])),studentMap=new Map(d.students.map(s=>[s.id,s]));
   const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
   const assignedKey=new Set(d.links.map(x=>`${x.assignment_id}:${x.student_id}`));
@@ -224,7 +257,7 @@ function renderTeacherResultsDashboard(){
   }else if(f.status==="all"){
     /* Keep submitted rows only in the main results table; pending assignments are summarized separately. */
   }
-  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
+  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup)&&(!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
   if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
   if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
   rows.sort((x,y)=>{
@@ -241,7 +274,7 @@ function renderTeacherResultsDashboard(){
     <div class="card">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
       <div class="grid" style="margin-top:15px">
-        <div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
+        <div><label>Main Group</label><select id="trMainGroup"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}" ${f.mainGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}" ${f.subGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
         <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
         <div><label>Student</label><select id="trStudent"><option value="all">All Students</option>${d.students.map(s=>`<option value="${s.id}" ${f.student===s.id?"selected":""}>${esc(s.full_name)}${s.roll_no?` — Roll ${esc(s.roll_no)}`:""}</option>`).join("")}</select></div>
         <div><label>Status</label><select id="trStatus"><option value="all" ${f.status==="all"?"selected":""}>Submitted Results</option><option value="pending" ${f.status==="pending"?"selected":""}>Not Submitted / Pending</option></select></div>
@@ -254,8 +287,8 @@ function renderTeacherResultsDashboard(){
     </div></div>`);
   const sort=document.getElementById("trSort");if(sort)sort.value=f.sort;
 }
-function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
-function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
+function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
+function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
 
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
@@ -444,6 +477,7 @@ async function newAssignment(){
  const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
  render(`<div class="wrap">${header("New Assignment")}<div class="card">
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Main Group</label><select id="aMainGroup">${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="aSubGroup">${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div></div><div class="small muted">Choose JNV Eng or JNV Ass, then EVS, Mental Ability, Arithmetic or Language.</div></div>
  <label>Class</label><select id="ac" onchange="loadAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
  <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="assignMode" value="class" checked onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Entire class</label><label><input type="radio" name="assignMode" value="students" onchange="toggleAssignmentStudents()" style="width:auto;margin-right:8px">Selected students</label><div id="studentPicker" class="small muted">The assignment will be given to all students in the selected class.</div></div>
  <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea><div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);
@@ -452,7 +486,9 @@ async function newAssignment(){
    if(d.classId)document.getElementById("ac").value=d.classId;
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
    const modeRadio=document.querySelector(`input[name="assignMode"][value="${d.assignMode}"]`);if(modeRadio)modeRadio.checked=true;
-   document.getElementById("at").value=d.title;document.getElementById("asub").value=d.subject;document.getElementById("av").value=d.video;document.getElementById("adesc").value=d.description;
+   document.getElementById("at").value=d.title;document.getElementById("asub").value=d.subject;
+    if(document.getElementById("aMainGroup"))document.getElementById("aMainGroup").value=d.mainGroup||"JNV Eng";
+    if(document.getElementById("aSubGroup"))document.getElementById("aSubGroup").value=d.subGroup||"EVS";document.getElementById("av").value=d.video;document.getElementById("adesc").value=d.description;
    document.getElementById("qs").innerHTML="";
    const notice=document.createElement("div");notice.className="success";notice.innerHTML=`<b>${importedQuestions.length} question(s) imported.</b> They will be added when you click <b>Save & Assign</b>.`;
    document.getElementById("qs").appendChild(notice);
@@ -496,7 +532,7 @@ async function saveAssignment(){
  if(!at.value.trim())return alert("Enter an assignment title.");
  if(type==="video"&&!videoUrl)return alert("Enter the YouTube video URL for this video assignment.");
  let studentCount=0;try{const previewIds=await getStudentsForAssignment(ac.value);if(!previewIds.length)return alert("Select at least one student or add students to this class.");studentCount=previewIds.length}catch(e){return alert(e.message)}
- const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,created_by:current.id}).select().single();if(error)return alert(error.message);
+ const {data:a,error}=await sb.from("assignments").insert({class_id:ac.value,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,main_group:document.getElementById("aMainGroup")?.value||"JNV Eng",sub_group:document.getElementById("aSubGroup")?.value||"EVS",created_by:current.id}).select().single();if(error)return alert(error.message);
  let qs=[];
  if(importedForNewAssignment&&importedQuestions.length){
    const imageMode=importedQuestions.some(q=>q.image_mode);
@@ -518,6 +554,8 @@ function startBulkImportFromNewAssignment(){
   classId:document.getElementById("ac")?.value||"",
   assignMode:document.querySelector('input[name="assignMode"]:checked')?.value||"class",
   selectedStudents:[...document.querySelectorAll(".assignment-student:checked")].map(x=>x.value),
+  mainGroup:document.getElementById("aMainGroup")?.value||"JNV Eng",
+  subGroup:document.getElementById("aSubGroup")?.value||"EVS",
   title:document.getElementById("at")?.value||"",
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
@@ -1068,11 +1106,12 @@ async function studentHome(){
   const assignmentCard=(a,isCompleted=false)=>{
     const x=isCompleted?attempts.find(t=>t.assignment_id===a.id):null;
     const pct=x&&Number(x.total_questions)?Math.round(Number(x.score||0)*100/Number(x.total_questions)):0;
-    return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}${isCompleted?`<p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p>${pct<80?`<div class="notice small" style="margin-top:10px">⚠️ <b>Below 80%:</b> This attempt will reset after <b>3 hours</b> and the assignment will be available again. <b>80% or above:</b> Your submission remains final.</div>`:""}<div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div>${a.video_url?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}`:`<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div>`}</div>`;
+    return `<div class="assignment student-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div style="margin-top:6px">${groupBadge(a)}</div></div><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}${isCompleted?`<p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p>${pct<80?`<div class="notice small" style="margin-top:10px">⚠️ <b>Below 80%:</b> This attempt will reset after <b>3 hours</b> and the assignment will be available again. <b>80% or above:</b> Your submission remains final.</div>`:""}<div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div>${a.video_url?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}`:`<span class="small" style="color:#2563eb"><b>Not Completed</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div>`}</div>`;
   };
   render(`<div class="wrap">${header("My Assignments")}
-    <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Complete your new assignments and review your previous work here.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div>
+    <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">Assignments are organized under JNV Eng / JNV Ass and the four subject groups: EVS, Mental Ability, Arithmetic and Language.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div>
     <div class="card">
+      <div class="grid" style="margin-bottom:14px"><div><label>Main Group</label><select id="studentMainGroupFilter" onchange="filterStudentDashboardAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="studentSubGroupFilter" onchange="filterStudentDashboardAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div></div>
       <div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
         <button id="student-dash-tab-new" onclick="showStudentDashboardTab('new')">New Assignments (${pending.length})</button>
         <button id="student-dash-tab-video" class="secondary" onclick="showStudentDashboardTab('video')">Previous — With Video (${previousWithVideo.length})</button>
@@ -1106,6 +1145,10 @@ async function studentHome(){
       }
     }catch(_e){}
   },60000);
+}
+function filterStudentDashboardAssignments(){
+ const main=document.getElementById("studentMainGroupFilter")?.value||"all",sub=document.getElementById("studentSubGroupFilter")?.value||"all";
+ document.querySelectorAll(".student-assignment-row").forEach(row=>{const ok=(main==="all"||row.dataset.mainGroup===main)&&(sub==="all"||row.dataset.subGroup===sub);row.style.display=ok?"block":"none";});
 }
 function showStudentDashboardTab(type){
   const panels={new:"student-dash-panel-new",video:"student-dash-panel-video",novideo:"student-dash-panel-novideo"};
