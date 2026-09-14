@@ -1373,13 +1373,23 @@ async function viewPreviousWork(assignmentId,attemptId){
   const feedback=(type,items)=>renderStudentAnswerItems(items,type);
   render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p>
     <div class="success" style="margin-top:14px"><b>Answer Review</b><br>Your selected answers, the correct answer key, explanations, and available solution videos are shown below.</div>
-    <h2 style="margin-top:20px;color:#166534">✓ Correct Answers (${correctItems.length})</h2>
-    <div id="student-correct-details">${feedback("correct",correctItems)}</div>
-    <h2 style="margin-top:24px;color:#dc2626">✗ Wrong Answers (${wrongItems.length})</h2>
-    <div id="student-wrong-details">${feedback("wrong",wrongItems)}</div>
+    <div class="card" style="margin-top:20px;padding:0;overflow:hidden">
+      <button type="button" onclick="toggleStudentAnswerGroup('student-correct-details',this)" style="width:100%;border:0;background:#f0fdf4;padding:16px 18px;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:18px;font-weight:800;color:#166534">
+        <span>✓ Correct Answers (${correctItems.length})</span><span class="student-group-icon">＋</span>
+      </button>
+      <div id="student-correct-details" style="display:none;padding:0 12px 12px">${feedback("correct",correctItems)}</div>
+    </div>
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
+      <button type="button" onclick="toggleStudentAnswerGroup('student-wrong-details',this)" style="width:100%;border:0;background:#fef2f2;padding:16px 18px;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:18px;font-weight:800;color:#dc2626">
+        <span>✗ Wrong Answers (${wrongItems.length})</span><span class="student-group-icon">＋</span>
+      </button>
+      <div id="student-wrong-details" style="display:none;padding:0 12px 12px">${feedback("wrong",wrongItems)}</div>
+    </div>
   </div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
  }catch(e){alert("Could not load previous work: "+(e.message||e))}
 }
+
+function toggleStudentAnswerGroup(id,btn){const box=document.getElementById(id);if(!box)return;const isClosed=box.style.display==='none'||box.style.display==='';box.style.display=isClosed?'block':'none';const icon=btn?btn.querySelector('.student-group-icon'):null;if(icon)icon.textContent=isClosed?'−':'＋'}
 
 function renderStudentAnswerItems(items,type){
   if(!items.length)return `<div class="success"><b>No ${type} answers.</b></div>`;
