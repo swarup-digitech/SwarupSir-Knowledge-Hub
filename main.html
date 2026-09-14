@@ -1370,10 +1370,11 @@ async function viewPreviousWork(assignmentId,attemptId){
   const feedback=(type,items)=>renderStudentAnswerItems(items,type);
   render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p>
     <div class="success" style="margin-top:14px"><b>Answer Review</b><br>Your selected answers, the correct answer key, explanations, and available solution videos are shown below.</div>
-    <h2 style="margin-top:20px;color:#166534">✓ Correct Answers (${correctItems.length})</h2>
-    <div id="student-correct-details">${feedback("correct",correctItems)}</div>
-    <h2 style="margin-top:24px;color:#dc2626">✗ Wrong Answers (${wrongItems.length})</h2>
-    <div id="student-wrong-details">${feedback("wrong",wrongItems)}</div>
+    <div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px">
+      <button id="student-result-tab-correct" onclick="toggleStudentAnswerTab('correct')">✓ Correct Answers (${correctItems.length})</button>
+      <button id="student-result-tab-wrong" class="secondary" onclick="toggleStudentAnswerTab('wrong')">✗ Wrong Answers (${wrongItems.length})</button>
+    </div>
+    <div id="student-answer-details" style="display:none;margin-top:14px"></div>
   </div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
  }catch(e){alert("Could not load previous work: "+(e.message||e))}
 }
@@ -1392,10 +1393,25 @@ function renderStudentAnswerItems(items,type){
 function toggleStudentAnswerTab(type){
   const d=window._studentPreviousWork;if(!d)return;
   const box=document.getElementById("student-answer-details");if(!box)return;
-  const items=d.items.filter(({x,q})=>{const ok=x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option);return type==="correct"?ok:!ok;});
-  if(box.dataset.open===type){box.style.display="none";box.innerHTML="";box.dataset.open="";return;}
-  box.dataset.open=type;box.style.display="block";
+  const correctTab=document.getElementById("student-result-tab-correct");
+  const wrongTab=document.getElementById("student-result-tab-wrong");
+  const items=d.items.filter(({x,q})=>{
+    const ok=x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option);
+    return type==="correct"?ok:!ok;
+  });
+  if(box.dataset.open===type){
+    box.style.display="none";
+    box.innerHTML="";
+    box.dataset.open="";
+    if(correctTab)correctTab.classList.remove("active");
+    if(wrongTab)wrongTab.classList.add("secondary");
+    return;
+  }
+  box.dataset.open=type;
+  box.style.display="block";
   box.innerHTML=renderStudentAnswerItems(items,type);
+  if(correctTab)correctTab.classList.toggle("secondary",type!=="correct");
+  if(wrongTab)wrongTab.classList.toggle("secondary",type!=="wrong");
 }
 
 async function startLesson(id){
