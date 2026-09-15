@@ -650,7 +650,7 @@ async function manageStudentAccounts(){
     <td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td>
     <td><b>${esc(s.course||"JNVST-6")}</b></td><td>${esc(cls?.name||((s.classes||[]).join(", "))||"—")}</td>
     <td><div class="actions">
-      <button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button>
+      
       <button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button>
       <button class="secondary" onclick="changeStudentClass('${s.id}','${esc(s.full_name)}','${esc(s.course||"JNVST-6")}','${esc(cls?.id||"")}')">Class</button>
       <button class="danger" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button>
@@ -661,7 +661,6 @@ async function manageStudentAccounts(){
  }catch(e){alert(e.message||String(e))}
 }
 
-async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
 async function changeStudentClass(studentId,name,currentCourse,currentClassId){
  try{
   const j=await callTeacherFn({action:"listStudentClasses",student_id:studentId});
