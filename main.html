@@ -116,6 +116,15 @@ async function init(){
   }
   if(p.role==="student"){
     const chosenCourse=localStorage.getItem("skh_selected_course")||"";
+    const profileCourse=String(p.course||"").trim().toUpperCase();
+
+    // School Course students do not need JNV course selection.
+    if(profileCourse==="SCHOOL"){
+      window.loginMode="student";
+      return studentHome();
+    }
+
+    // JNV students must match the course selected on the JNV login page.
     if(!["JNVST-6","JNVST-9"].includes(chosenCourse) || p.course!==chosenCourse){
       await sb.auth.signOut();
       localStorage.removeItem("skh_selected_course");
@@ -149,7 +158,10 @@ async function doStudentLogin(){
     current=(await sb.auth.getUser()).data.user;
     const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();
     if(pe||!p||p.role!=="student"){await sb.auth.signOut();msg.innerHTML=message("This is not a student account.");return}
-    profile=p;window.loginMode="student";studentHome();setTimeout(showStudentInstallPrompt,700);
+    profile=p;
+    window.loginMode="student";
+    studentHome();
+    setTimeout(showStudentInstallPrompt,700);
   }catch(e){msg.innerHTML=message(e.message||String(e))}
 }
 async function doTeacherLogin(){
