@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}.student-select-box{margin:12px 0;padding:12px;border:1px solid #dbe3ee;border-radius:12px;background:#f8fafc}.student-select-box.hidden{display:none}.assessment-student-row{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;margin:7px 0;cursor:pointer}.assessment-student-row input{width:auto;margin:0}.assessment-student-row:hover{background:#eff6ff}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
 const SUPABASE_URL='https://jupefjdquakqsizapzbv.supabase.co',SUPABASE_KEY='sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP',CREATE_STUDENT_FN='create-students';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let teacher=null,students=[],classes=[],groups=[],assessments=[],bulkRows=[];
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -30,16 +30,145 @@ async function newAssessment(){
  document.getElementById('app').innerHTML=`${header('New School Assessment')}<div class="card">
  <label>Assessment Name</label><input id="at" placeholder="Mathematics Unit Test 1">
  <label>Subject</label><input id="as" placeholder="Mathematics">
- <label>Class</label><select id="ac" onchange="refreshAssessmentGroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
- <label>Sub-division (optional)</label><select id="ag"><option value="">Entire class</option></select>
- <div class="notice small">If a sub-division is selected, only students in that sub-division can see the assessment. Otherwise all students in the selected class can see it.</div>
+ <label>Class</label><select id="ac" onchange="refreshAssessmentGroups();refreshAssessmentStudents()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+ <label>Assignment Target</label>
+ <select id="atarget" onchange="toggleAssessmentTarget()">
+   <option value="class">Entire class</option>
+   <option value="subdivision">Sub-division</option>
+   <option value="selected">Particular students</option>
+ </select>
+ <label>Sub-division <span class="small muted">(used for Sub-division target or to narrow the student list)</span></label>
+ <select id="ag" onchange="refreshAssessmentStudents()"><option value="">Entire class</option></select>
+ <div id="assessmentStudentBox" class="student-select-box hidden">
+   <div class="notice small"><b>Select the students who should receive this assessment.</b> Only checked students will see it on their School Dashboard.</div>
+   <div class="actions" style="margin:8px 0">
+     <button type="button" class="secondary" onclick="selectAllAssessmentStudents()">Select All</button>
+     <button type="button" class="secondary" onclick="clearAssessmentStudents()">Clear All</button>
+   </div>
+   <div id="assessmentStudentList"></div>
+ </div>
+ <div class="notice small" id="assessmentTargetHelp">All students in the selected class will be able to see this assessment.</div>
  <label>Deadline</label><input id="ad" type="datetime-local">
  <div class="actions"><button onclick="saveAssessment()">Save & Add Questions</button><button class="secondary" onclick="home()">Cancel</button></div>
  </div></div>`;
  refreshAssessmentGroups();
+ toggleAssessmentTarget();
 }
-function refreshAssessmentGroups(){const classId=document.getElementById('ac')?.value||'',sel=document.getElementById('ag');if(!sel)return;const gs=groups.filter(g=>g.class_id===classId);sel.innerHTML='<option value="">Entire class</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}
-async function saveAssessment(){if(!at.value.trim())return alert('Enter assessment name.');if(!ac.value)return alert('Select a class.');const payload={title:at.value.trim(),subject:as.value.trim(),class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id};const {data,error}=await sb.from('school_assessments').insert(payload).select().single();if(error)return alert(error.message);editQuestions(data.id)}
+
+function refreshAssessmentGroups(){
+ const classId=document.getElementById('ac')?.value||'';
+ const sel=document.getElementById('ag');
+ if(!sel)return;
+ const current=sel.value;
+ const gs=groups.filter(g=>g.class_id===classId);
+ sel.innerHTML='<option value="">Entire class</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+ if(gs.some(g=>g.id===current))sel.value=current;
+}
+
+function toggleAssessmentTarget(){
+ const target=document.getElementById('atarget')?.value||'class';
+ const box=document.getElementById('assessmentStudentBox');
+ const help=document.getElementById('assessmentTargetHelp');
+ const group=document.getElementById('ag');
+ if(!box||!help)return;
+
+ if(target==='selected'){
+   box.classList.remove('hidden');
+   help.textContent='Only the checked students will be able to see this assessment. The Sub-division field can be used to narrow the student list.';
+   refreshAssessmentStudents();
+ }else{
+   box.classList.add('hidden');
+   if(target==='subdivision'){
+     help.textContent='Only students in the selected sub-division will be able to see this assessment.';
+     if(group&&!group.value) help.textContent='Please select a sub-division for this target.';
+   }else{
+     help.textContent='All students in the selected class will be able to see this assessment.';
+   }
+ }
+}
+
+function assessmentStudentsForSelection(){
+ const classId=document.getElementById('ac')?.value||'';
+ const groupId=document.getElementById('ag')?.value||'';
+ return students.filter(s=>s.class_id===classId && (!groupId || s.school_group_id===groupId));
+}
+
+function refreshAssessmentStudents(){
+ const target=document.getElementById('atarget')?.value||'class';
+ const box=document.getElementById('assessmentStudentList');
+ if(target!=='selected'||!box)return;
+
+ const list=assessmentStudentsForSelection();
+ const checked=new Set([...document.querySelectorAll('.assessment-student-check:checked')].map(x=>x.value));
+
+ box.innerHTML=list.length
+   ? list.map(s=>`<label class="assessment-student-row">
+       <input type="checkbox" class="assessment-student-check" value="${s.id}" ${checked.has(s.id)?'checked':''}>
+       <span><b>${esc(s.full_name||'Student')}</b> <span class="muted">— Roll No: ${esc(s.roll_no||'')}</span>
+       ${s.className?`<span class="small muted"> • ${esc(s.className)}</span>`:''}</span>
+     </label>`).join('')
+   : '<div class="notice">No students found for the selected class/sub-division.</div>';
+}
+
+function selectAllAssessmentStudents(){
+ document.querySelectorAll('.assessment-student-check').forEach(x=>x.checked=true);
+}
+
+function clearAssessmentStudents(){
+ document.querySelectorAll('.assessment-student-check').forEach(x=>x.checked=false);
+}
+
+async function saveAssessment(){
+ if(!at.value.trim())return alert('Enter assessment name.');
+ if(!ac.value)return alert('Select a class.');
+
+ const target=document.getElementById('atarget')?.value||'class';
+ const groupId=document.getElementById('ag')?.value||null;
+
+ if(target==='subdivision'&&!groupId)
+   return alert('Select a sub-division.');
+
+ const selectedIds=target==='selected'
+   ? [...document.querySelectorAll('.assessment-student-check:checked')].map(x=>x.value)
+   : [];
+
+ if(target==='selected'&&!selectedIds.length)
+   return alert('Select at least one student.');
+
+ const assignmentMode=
+   target==='selected'?'selected':
+   target==='subdivision'?'subdivision':'class';
+
+ const payload={
+   title:at.value.trim(),
+   subject:as.value.trim(),
+   class_id:ac.value,
+   school_group_id:target==='subdivision'?groupId:null,
+   assignment_mode:assignmentMode,
+   deadline:ad.value?new Date(ad.value).toISOString():null,
+   created_by:teacher.id
+ };
+
+ const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
+ if(error)return alert(error.message);
+
+ if(target==='selected'){
+   const rows=selectedIds.map(student_id=>({
+     assessment_id:data.id,
+     student_id
+   }));
+
+   const {error:me}=await sb.from('school_assessment_students').insert(rows);
+
+   if(me){
+     await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);
+     return alert('Could not save selected students: '+me.message);
+   }
+ }
+
+ editQuestions(data.id);
+}
+
 async function editQuestions(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const group=groups.find(g=>g.id===a.school_group_id);const total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);document.getElementById('app').innerHTML=`${header('Questions — '+esc(a.title))}<div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div><div id="qbox">${(q||[]).map(x=>`<div class="student-card"><label>Question ${x.question_order}</label><textarea id="qt_${x.id}">${esc(x.question_text)}</textarea><label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${x.marks}"><div class="actions"><button onclick="saveQ('${x.id}','${id}')">Save</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div></div>`).join('')}</div><div class="actions"><button onclick="addQ('${id}')">+ Add Question</button><button onclick="reviewAssessment('${id}')">📊 Review Submissions</button><button class="secondary" onclick="home()">Back</button></div></div>`}
 async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return alert(error.message);editQuestions(id)}
 async function saveQ(qid,aid){const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid);const value=Number(m.value);if(!t?.value.trim())return alert('Question text is required.');if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');const {error}=await sb.from('school_questions').update({question_text:t.value.trim(),marks:value}).eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
