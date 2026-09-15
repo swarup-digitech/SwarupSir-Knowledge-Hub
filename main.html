@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=Ei2msmpbmvLul-uqDlXowQJZf6Bcln1vSxB6XVZDourjng6sGpdgQnEBMItls1eBs48EscofdIFoFvnuq32xevetWfuDp2b6hsl_vGEk2I48CaodS2wewv4LjiCi6gf6EFMIr6Evl2Pr2znic1isFiZiE9SMTJqWM4Ap-nYUVG_Sw9f5igVIQn6frMl_KRg7-CfBOPh4iOUpjcJD5KN0feHfP-f-IhocAnmUI3XFV62PWHmT0QiJY4PlCmMotJJZSH5riY1vZw6bjjKWl01gK09VdsqCCNBlZVMVKWI_2SWpFhFv1LHTrTIHHEjcSAUD5BZo5ARbj0yuyXUEQC8Anlckunyc_wv3w_tRI7qnbZI" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=EQxhHGBVQHsmWE6EIaR3dfHpd5RCYhxQWyqT6hhUccSDOxhFOqsZHKW0OCcZoqJ-sjrYto3BN4qjMspczuOfMHa7yPbVQ6VMwhR-MdSz8V52eX211IeZYhKH3c-gVdNPQ9twwcltyR8XWBBWUzz0fR9opH1vnbG5DfztZLrmfw-IENF2D4Uy7-IXzuHE2ewEZ_PI32XbLhDCpw_mggkttFKHn6AiHgUYBt5mxLg8mNxAubLxS4IseEPmVC6IlDztAQB5oq1iuUY_ATSp3ne1pLArfh8DWNirZ6-iXD8UpzQobJKJ9n9xdG4-mUib_4DlkU009C1BfDV8CYRGznXFchOjfFeW0AddzoO77jRTbaA" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -117,11 +117,15 @@ async function init(){
   if(p.role==="student"){
     const chosenCourse=localStorage.getItem("skh_selected_course")||"";
     const profileCourse=String(p.course||"").trim().toUpperCase();
+    const schoolAssignmentsMode=new URLSearchParams(location.search).get("school")==="1";
 
-    // School Course students do not need JNV course selection.
+    // School Course students normally use the School Dashboard.
+    // When they click "Open Assignments" from that dashboard, allow the
+    // regular assignment screen without redirecting back to School Dashboard.
     if(profileCourse==="SCHOOL"){
       window.loginMode="student";
-      return location.replace("/school-dashboard.html");
+      if(!schoolAssignmentsMode) return location.replace("/school-dashboard.html");
+      return studentHome();
     }
 
     // JNV students must match the course selected on the JNV login page.
