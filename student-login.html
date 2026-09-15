@@ -174,14 +174,10 @@ button{
     <h2 class="login-title">🎓 Student Login</h2>
 
     <form id="loginForm">
-      <div class="form-group">
-        <label for="course">Select Your Course</label>
-        <select id="course" required style="width:100%;padding:15px 16px;border:1px solid #d7e5f2;border-radius:12px;background:#fff;color:#0b2f57;font-size:16px;outline:none">
-          <option value="">Choose your course</option>
-          <option value="JNVST-6">JNVST-6 — Navodaya Selection Test for Class VI</option>
-          <option value="JNVST-9">JNVST-9 — Navodaya Selection Test for Class IX</option>
-          <option value="SCHOOL">School Course</option>
-        </select>
+      <div class="selected-course-box">
+        <div class="selected-course-label">Selected Course</div>
+        <div id="selectedCourseName" class="selected-course-name">JNVST</div>
+        <button type="button" class="change-course" onclick="location.href='/index.html'">← Change Course</button>
       </div>
 
       <div class="form-group">
@@ -275,14 +271,16 @@ sb.auth.getSession().then(async ({data:{session}})=>{
     await sb.auth.signOut();
   }
 });
+const selectedCourseOnPage=new URLSearchParams(location.search).get('course') || localStorage.getItem('skh_selected_course') || '';
+const courseNames={'JNVST-6':'JNVST-6 — Navodaya Selection Test for Class VI','JNVST-9':'JNVST-9 — Navodaya Selection Test for Class IX'};
+if(!courseNames[selectedCourseOnPage]){ location.replace('/index.html'); }
+else { document.getElementById('selectedCourseName').textContent=courseNames[selectedCourseOnPage]; localStorage.setItem('skh_selected_course',selectedCourseOnPage); }
 document.getElementById('loginForm').addEventListener('submit',async e=>{
  e.preventDefault();
- const selectedCourse=document.getElementById('course').value;
+ const selectedCourse=new URLSearchParams(location.search).get('course') || localStorage.getItem('skh_selected_course') || '';
  const roll=rollNo.value.trim(),pw=password.value;
- if(!selectedCourse)return show('Please select your course.');
- if(selectedCourse==='SCHOOL'){
-   localStorage.setItem('skh_selected_course','SCHOOL');
-   location.replace('/school-dashboard.html');
+ if(!['JNVST-6','JNVST-9'].includes(selectedCourse)){
+   location.replace('/index.html');
    return;
  }
  if(!roll||!pw)return show('Enter Roll No and Password.');
