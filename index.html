@@ -3,10 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Swarup Sir's Knowledge Hub</title>
+<meta name="theme-color" content="#087ed7">
+<title>Choose Course — Swarup Sir's Knowledge Hub</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(180deg,#eaf6ff 0%,#f8fbff 100%);color:#172033;min-height:100vh;overflow-x:hidden}
+.top-band{height:145px;background:linear-gradient(135deg,#087ed7,#36a9ef);border-radius:0 0 50% 50%/0 0 28% 28%;position:absolute;top:0;left:-8%;width:116%;z-index:0}
+.bottom-band{height:95px;background:linear-gradient(135deg,#087ed7,#36a9ef);border-radius:50% 50% 0 0/55% 55% 0 0;position:fixed;bottom:0;left:-8%;width:116%;z-index:0}
+.page{position:relative;z-index:1;min-height:100vh;padding:35px 16px 115px;display:flex;justify-content:center}
+.container{width:min(720px,100%);text-align:center}
+.logo-wrap{width:405px;max-width:92vw;height:175px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}
+.logo{max-width:100%;max-height:175px;object-fit:contain;filter:drop-shadow(0 5px 10px #0002)}
+.welcome{margin:0 auto 22px}.welcome h1{margin:0 0 8px;font-size:31px;color:#075ea8}.welcome p{margin:0;color:#516274;font-size:16px;line-height:1.5}
+.card{background:#fff;border-radius:24px;padding:27px 24px;box-shadow:0 12px 38px #087ed71c;border:1px solid #e2eef8}
+.card h2{margin:0 0 7px;color:#163b5c;font-size:24px}.subtitle{color:#64748b;margin:0 0 20px;font-size:14px}
+.course-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.course{display:flex;align-items:center;text-align:left;gap:16px;width:100%;padding:18px;border:1px solid #d8e7f3;border-radius:18px;background:#fff;cursor:pointer;transition:.18s;box-shadow:0 3px 12px #0b4f7b0a}
+.course:hover{transform:translateY(-2px);border-color:#5aaee5;box-shadow:0 8px 20px #087ed71c}
+.icon{width:56px;height:56px;min-width:56px;border-radius:16px;background:#e8f5ff;display:grid;place-items:center;font-size:28px}
+.course h3{margin:0 0 5px;color:#0b5f9e;font-size:19px}.course p{margin:0;color:#64748b;font-size:13px;line-height:1.4}.arrow{margin-left:auto;color:#087ed7;font-size:25px;font-weight:bold}
+.teacher{margin-top:17px}.teacher button{border:0;background:transparent;color:#087ed7;font-weight:700;cursor:pointer;font-size:14px;padding:8px 12px}
+.footer{position:fixed;z-index:2;bottom:17px;left:0;width:100%;text-align:center;color:#fff;font-size:13px;line-height:1.45;padding:0 12px}.footer b{display:block;font-size:14px;margin-bottom:2px}
+@media(max-width:520px){.page{padding-top:22px}.logo-wrap{height:145px}.logo{max-height:145px}.welcome h1{font-size:26px}.card{padding:23px 16px}.course{padding:15px}.icon{width:50px;height:50px;min-width:50px;font-size:25px}}
+</style>
 </head>
 <body>
-<p>Opening Swarup Sir's Knowledge Hub…</p>
-<script>location.replace('/main.html');</script>
+<div class="top-band"></div>
+<div class="page">
+  <main class="container">
+    <div class="logo-wrap">
+      <img class="logo" src="/skh-icon.png" alt="Swarup Sir's Knowledge Hub" onerror="this.style.display='none'">
+    </div>
+
+    <section class="welcome">
+      <h1>Welcome Students!</h1>
+      <p>Please choose your course to continue.</p>
+    </section>
+
+    <section class="card">
+      <h2>📚 Choose Your Course</h2>
+      <p class="subtitle">Select the course you are enrolled in.</p>
+
+      <div class="course-grid">
+        <button class="course" type="button" onclick="selectCourse('JNVST-6')">
+          <span class="icon">🎓</span>
+          <span><h3>JNVST-6</h3><p>Navodaya Selection Test for Class VI</p></span>
+          <span class="arrow">›</span>
+        </button>
+
+        <button class="course" type="button" onclick="selectCourse('JNVST-9')">
+          <span class="icon">📘</span>
+          <span><h3>JNVST-9</h3><p>Navodaya Selection Test for Class IX</p></span>
+          <span class="arrow">›</span>
+        </button>
+
+        <button class="course" type="button" onclick="selectCourse('SCHOOL')">
+          <span class="icon">🏫</span>
+          <span><h3>School Course</h3><p>School-based learning and assessments</p></span>
+          <span class="arrow">›</span>
+        </button>
+      </div>
+
+      <div class="teacher">
+        <button type="button" onclick="location.href='/teacher-login.html'">👨‍🏫 Teacher Login</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="bottom-band"></div>
+<div class="footer">
+  <b>🛡️ Your learning. Your progress. Your success.</b>
+  © 2026 Swarup Sir's Knowledge Hub
+</div>
+
+<script>
+function selectCourse(course){
+  try{localStorage.setItem('selectedStudentCourse',course)}catch(e){}
+  if(course==='SCHOOL'){
+    location.href='/school-dashboard.html';
+  }else{
+    location.href='/student-login.html';
+  }
+}
+</script>
 </body>
 </html>
+
