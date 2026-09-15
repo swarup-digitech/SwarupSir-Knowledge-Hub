@@ -1,20 +1,13 @@
 {
-  "id": "/student-login.html",
-  "name": "SKH — Swarup Sir's Knowledge Hub",
-  "short_name": "SKH",
-  "description": "Student-only access to Swarup Sir's Knowledge Hub.",
-  "start_url": "/student-login.html",
-  "scope": "/",
-  "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
-  "background_color": "#eef8ff",
-  "theme_color": "#087ed7",
-  "icons": [
-    {
-      "src": "/skh-icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+  "name":"Swarup Sir's Knowledge Hub",
+  "short_name":"SKH",
+  "start_url":"/index.html",
+  "display":"standalone",
+  "background_color":"#eef8ff",
+  "theme_color":"#087ed7",
+  "description":"Swarup Sir's Knowledge Hub - Student Learning Portal",
+  "icons":[
+    {"src":"/skh-icon.png","sizes":"192x98","type":"image/png","purpose":"any maskable"},
+    {"src":"/skh-icon.png","sizes":"404x206","type":"image/png","purpose":"any maskable"}
   ]
 }
