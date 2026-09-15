@@ -269,16 +269,26 @@ sb.auth.getSession().then(async ({data:{session}})=>{
   if(!session) return;
   const {data:p}=await sb.from("profiles").select("role,course").eq("id",session.user.id).single();
   const chosen=new URLSearchParams(location.search).get("course") || localStorage.getItem("skh_selected_course") || "";
-  if(p?.role==="student" && ["JNVST-6","JNVST-9"].includes(chosen) && p.course===chosen){
-    location.replace("/main.html");
+  if(p?.role==="student" && (
+      (["JNVST-6","JNVST-9"].includes(chosen) && p.course===chosen) ||
+      (String(chosen).toUpperCase()==="SCHOOL" && String(p.course||"").toUpperCase()==="SCHOOL")
+    )){
+    location.replace("/main.html?mode=student&portal=SCHOOL");
   }else{
     await sb.auth.signOut();
   }
 });
 const selectedCourseOnPage=new URLSearchParams(location.search).get('course') || localStorage.getItem('skh_selected_course') || '';
-const courseNames={'JNVST-6':'JNVST-6 — Navodaya Selection Test for Class VI','JNVST-9':'JNVST-9 — Navodaya Selection Test for Class IX'};
+const courseNames={
+  'JNVST-6':'JNVST-6 — Navodaya Selection Test for Class VI',
+  'JNVST-9':'JNVST-9 — Navodaya Selection Test for Class IX',
+  'SCHOOL':'School Course'
+};
 if(!courseNames[selectedCourseOnPage]){ location.replace('/index.html'); }
-else { document.getElementById('selectedCourseName').textContent=courseNames[selectedCourseOnPage]; localStorage.setItem('skh_selected_course',selectedCourseOnPage); }
+else {
+  document.getElementById('selectedCourseName').textContent=courseNames[selectedCourseOnPage];
+  localStorage.setItem('skh_selected_course',selectedCourseOnPage);
+}
 (function restoreSavedStudentLogin(){
   const savedKey='skh_saved_student_login_'+selectedCourseOnPage;
   try{
@@ -291,7 +301,9 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
  e.preventDefault();
  const selectedCourse=new URLSearchParams(location.search).get('course') || localStorage.getItem('skh_selected_course') || '';
  const roll=rollNo.value.trim(),pw=password.value;
- if(!['JNVST-6','JNVST-9'].includes(selectedCourse)){
+ const validJnv=['JNVST-6','JNVST-9'].includes(selectedCourse);
+ const validSchool=String(selectedCourse).toUpperCase()==='SCHOOL';
+ if(!validJnv && !validSchool){
    location.replace('/index.html');
    return;
  }
@@ -308,7 +320,8 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
    if(!user)throw new Error('Student session could not be created.');
    const {data:profile,error:profileError}=await sb.from('profiles').select('id,full_name,roll_no,username,role,course').eq('id',user.id).single();
    if(profileError||!profile||profile.role!=='student')throw new Error('This account is not a student account.');
-   if(profile.course!==selectedCourse)throw new Error(`This Roll No is registered for ${profile.course||'another course'}. Please choose the correct course.`);
+   if(String(profile.course||'').toUpperCase()!==String(selectedCourse||'').toUpperCase())
+      throw new Error(`This Roll No is registered for ${profile.course||'another course'}. Please choose the correct course.`);
    if(document.getElementById('rememberDevice')?.checked){
       localStorage.setItem('skh_saved_student_login_'+selectedCourse,JSON.stringify({roll:String(profile.roll_no||roll),password:pw,saved_at:new Date().toISOString()}));
    }
@@ -318,12 +331,15 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
       installCard.classList.add('show');
       installBtn.textContent='📱 Add SKH to Home Screen';
       setTimeout(async()=>{
-        if(!deferredInstallPrompt){location.replace('/main.html');return;}
+        if(!deferredInstallPrompt){
+          location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html');
+          return;
+       }
         deferredInstallPrompt.prompt();
         await deferredInstallPrompt.userChoice.catch(()=>null);
         deferredInstallPrompt=null;
         installCard.classList.remove('show');
-        setTimeout(()=>location.replace('/main.html'),250);
+        setTimeout(()=>location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html'),250);
       },300);
    }else{
       setTimeout(()=>location.replace('/main.html'),250);
