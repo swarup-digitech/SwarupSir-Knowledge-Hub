@@ -412,6 +412,14 @@ async function getSchoolTeacherScope(){
 function schoolFilterProfiles(rows){return schoolTeacherMode?(rows||[]).filter(x=>String(x.course||'').toUpperCase()==='SCHOOL'):(rows||[])}
 function schoolFilterMembers(members,schoolIds){return schoolTeacherMode?(members||[]).filter(x=>schoolIds.has(x.student_id)):(members||[])}
 
+function renderTeacherAssignmentCards(assignments){
+ return (assignments||[]).map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title||"Untitled Assignment")}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${a.assignment_type==="MOCK"||a.assignment_type==="mock"?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
+}
+function filterTeacherAssignments(){
+ const main=document.getElementById("teacherAssignmentMainFilter")?.value||"all",sub=document.getElementById("teacherAssignmentSubFilter")?.value||"all";
+ document.querySelectorAll(".teacher-assignment-row").forEach(row=>{const ok=(main==="all"||row.dataset.mainGroup===main)&&(sub==="all"||row.dataset.subGroup===sub);row.style.display=ok?"block":"none";});
+}
+
 async function teacherHome(){
  let classes=[],assignments=[],students=[];
  try{
