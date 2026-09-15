@@ -1368,13 +1368,14 @@ async function viewPreviousWork(assignmentId,attemptId){
   const wrongItems=ordered.filter(({x,q})=>!(x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option)));
   window._studentPreviousWork={assignment:a,attempt:at,items:ordered};
   const feedback=(type,items)=>renderStudentAnswerItems(items,type);
-  render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p>
-    <div class="success" style="margin-top:14px"><b>Answer Review</b><br>Your selected answers, the correct answer key, explanations, and available solution videos are shown below.</div>
-    <h2 style="margin-top:20px;color:#166534">✓ Correct Answers (${correctItems.length})</h2>
-    <div id="student-correct-details">${feedback("correct",correctItems)}</div>
-    <h2 style="margin-top:24px;color:#dc2626">✗ Wrong Answers (${wrongItems.length})</h2>
-    <div id="student-wrong-details">${feedback("wrong",wrongItems)}</div>
-  </div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
+   render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions}</p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p>
+     <div class="success" style="margin-top:14px"><b>Answer Review</b><br>Click a group below to view only those answers.</div>
+     <div class="result-tabs" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+       <button type="button" onclick="toggleStudentAnswerTab('correct')">✓ Correct Answers (${correctItems.length})</button>
+       <button type="button" class="secondary" onclick="toggleStudentAnswerTab('wrong')">✗ Wrong Answers (${wrongItems.length})</button>
+     </div>
+     <div id="student-answer-details" style="display:none;margin-top:16px"></div>
+   </div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
  }catch(e){alert("Could not load previous work: "+(e.message||e))}
 }
 
