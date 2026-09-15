@@ -400,7 +400,7 @@ async function mockTeacherResults(){const {data:tests,error}=await sb.from('mock
 
 async function getSchoolTeacherScope(){
   const [{data:classes,error:ce},{data:students,error:se}]=await Promise.all([
-    sb.from('classes').select('id,name,description').eq('teacher_id',current.id).order('name'),
+    sb.from('classes').select('id,name,description,course').eq('teacher_id',current.id).eq('course','SCHOOL').order('name'),
     sb.from('profiles').select('id,full_name,username,roll_no,course').eq('role','student').eq('course','SCHOOL').order('full_name')
   ]);
   if(ce)throw ce;if(se)throw se;
@@ -640,12 +640,43 @@ async function callTeacherFn(body){
  const j=await res.json().catch(()=>({}));if(!res.ok||j.error)throw new Error(j.error||"Request failed.");return j;
 }
 async function manageStudentAccounts(){
- try{const j=await callTeacherFn({action:"listCredentials",course:schoolTeacherMode?'SCHOOL':''});const students=j.students||[];
- render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Teachers can view and change classroom Roll No and Password.</div><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Course</th><th>Class</th><th>Action</th></tr></thead><tbody>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td><b>${esc(s.course||"JNVST-6")}</b></td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><div class="actions"><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button class="secondary" onclick="changeStudentCourse('${s.id}','${esc(s.full_name)}','${esc(s.course||"JNVST-6")}')">Course</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="6">No students found.</td></tr>`}</tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
+ try{
+  const j=await callTeacherFn({action:"listCredentials",course:schoolTeacherMode?'SCHOOL':''});
+  const students=j.students||[];
+  render(`<div class="wrap">${header("Student Accounts")}<div class="card">
+   <div class="notice">Course is fixed for each student. Teachers can change only the Class / Sub-group within the student's existing course.</div>
+   <div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Course</th><th>Class / Sub-group</th><th>Action</th></tr></thead><tbody>
+   ${students.map(s=>{const cls=(s.class_items||[])[0]||null;return `<tr>
+    <td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td>
+    <td><b>${esc(s.course||"JNVST-6")}</b></td><td>${esc(cls?.name||((s.classes||[]).join(", "))||"—")}</td>
+    <td><div class="actions">
+      <button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button>
+      <button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button>
+      <button class="secondary" onclick="changeStudentClass('${s.id}','${esc(s.full_name)}','${esc(s.course||"JNVST-6")}','${esc(cls?.id||"")}')">Class</button>
+      <button class="danger" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button>
+    </div></td></tr>`}).join("")||`<tr><td colspan="6">No students found.</td></tr>`}
+   </tbody></table></div>
+   <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+  </div></div>`)
  }catch(e){alert(e.message||String(e))}
 }
+
 async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
-async function changeStudentCourse(studentId,name,currentCourse){const v=prompt(`Course for ${name}: JNVST-6, JNVST-9 or SCHOOL`,currentCourse||"JNVST-6");if(v===null)return;const course=v.trim().toUpperCase();if(!["JNVST-6","JNVST-9","SCHOOL"].includes(course))return alert("Use JNVST-6, JNVST-9 or SCHOOL.");try{await callTeacherFn({action:"setStudentCourse",student_id:studentId,course});alert("Course updated.");manageStudentAccounts()}catch(e){alert(e.message||String(e))}}
+async function changeStudentClass(studentId,name,currentCourse,currentClassId){
+ try{
+  const j=await callTeacherFn({action:"listStudentClasses",student_id:studentId});
+  const classes=j.classes||[];
+  if(!classes.length)return alert(`No classes/sub-groups are defined for ${currentCourse}. Create a class under this course first.`);
+  const opts=classes.map(c=>`<option value="${esc(c.id)}" ${c.id===currentClassId?'selected':''}>${esc(c.name)}</option>`).join('');
+  const html=`<div class="card" style="max-width:560px;margin:40px auto"><h2>Change Class / Sub-group</h2><p><b>Student:</b> ${esc(name)}</p><p><b>Course:</b> <span class="tag">${esc(currentCourse)}</span> 🔒</p><label>Class / Sub-group</label><select id="studentClassSelect">${opts}</select><div class="notice small" style="margin-top:10px">Only classes belonging to <b>${esc(currentCourse)}</b> are shown. The course cannot be changed here.</div><div class="actions" style="margin-top:14px"><button onclick="saveStudentClass('${studentId}','${esc(name)}','${esc(currentCourse)}')">Save Class</button><button class="secondary" onclick="manageStudentAccounts()">Cancel</button></div></div>`;
+  render(`<div class="wrap">${header("Student Accounts")}${html}</div>`);
+ }catch(e){alert(e.message||String(e))}
+}
+async function saveStudentClass(studentId,name,currentCourse){
+ const classId=document.getElementById('studentClassSelect')?.value||''; if(!classId)return alert('Select a class.');
+ try{await callTeacherFn({action:'setStudentClass',student_id:studentId,class_id:classId});alert(`${name} is now assigned to the selected class under ${currentCourse}.`);await manageStudentAccounts()}catch(e){alert(e.message||String(e))}
+}
+
 async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
 async function deleteStudentAccount(studentId,name){
  if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account, classroom memberships, assignments and submitted answers.`))return;
@@ -658,8 +689,11 @@ async function deleteStudentAccount(studentId,name){
  }
 }
 
-async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)}
-async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id});if(error)return alert(error.message);teacherHome()}
+async function newClass(){
+ const defaultCourse=schoolTeacherMode?'SCHOOL':'JNVST-6';
+ render(`<div class="wrap">${header("New Class / Sub-group")}<div class="card"><label>Course</label><select id="classCourse"><option value="JNVST-6" ${defaultCourse==='JNVST-6'?'selected':''}>JNVST-6</option><option value="JNVST-9" ${defaultCourse==='JNVST-9'?'selected':''}>JNVST-9</option><option value="SCHOOL" ${defaultCourse==='SCHOOL'?'selected':''}>SCHOOL COURSE</option></select><label>Class / Sub-group Name</label><input id="cn" placeholder="e.g. Navodaya_Eng or Class VIII"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
+}
+async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const course=document.getElementById('classCourse')?.value||'JNVST-6';if(schoolTeacherMode&&course!=='SCHOOL')return alert('School Teacher can create classes only under SCHOOL COURSE.');const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id,course});if(error)return alert(error.message);teacherHome()}
 
 async function addStudent(){
  let classes=[]; if(schoolTeacherMode){try{classes=(await getSchoolTeacherScope()).classes}catch(e){return alert(e.message)}} else {const {data,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(error)return alert(error.message);classes=data||[]}
