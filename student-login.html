@@ -167,13 +167,23 @@ button{
 
   <div class="welcome">
     <h1>Welcome Students!</h1>
-    <p>Login to access your assignments, tests and learning materials.</p>
+    <p>Select your course and login to access your assignments, tests and learning materials.</p>
   </div>
 
   <div class="card">
     <h2 class="login-title">🎓 Student Login</h2>
 
     <form id="loginForm">
+      <div class="form-group">
+        <label for="course">Select Your Course</label>
+        <select id="course" required style="width:100%;padding:15px 16px;border:1px solid #d7e5f2;border-radius:12px;background:#fff;color:#0b2f57;font-size:16px;outline:none">
+          <option value="">Choose your course</option>
+          <option value="JNVST-6">JNVST-6 — Navodaya Selection Test for Class VI</option>
+          <option value="JNVST-9">JNVST-9 — Navodaya Selection Test for Class IX</option>
+          <option value="SCHOOL">School Course</option>
+        </select>
+      </div>
+
       <div class="form-group">
         <label for="rollNo">Roll No</label>
         <input id="rollNo" type="text" inputmode="numeric"
@@ -201,9 +211,9 @@ button{
     </div>
   </div>
 
-  <div class="footer"><font color=#000000>
+  <div class="footer">
     🛡️ Your learning. Your progress. Your success.
-    <small>© 2026 Swarup Sir's Knowledge Hub</small></font>
+    <small>© 2026 Swarup Sir's Knowledge Hub</small>
   </div>
 </div>
 <script>
@@ -253,11 +263,30 @@ document.getElementById('togglePassword').addEventListener('click',()=>{
 });
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'">'+esc(t)+'</div>'}
-// Stay on the student login screen until the student submits the form.
-// This avoids redirect loops when a previous Supabase session exists.
+// STUDENT-ONLY entry point.
+// A student session may continue to the application.
+// A teacher session is signed out and remains on this page.
+sb.auth.getSession().then(async ({data:{session}})=>{
+  if(!session) return;
+  const {data:p}=await sb.from("profiles").select("role").eq("id",session.user.id).single();
+  if(p?.role==="student"){
+    location.replace("/main.html");
+  }else{
+    await sb.auth.signOut();
+  }
+});
 document.getElementById('loginForm').addEventListener('submit',async e=>{
- e.preventDefault(); const roll=rollNo.value.trim(),pw=password.value;
+ e.preventDefault();
+ const selectedCourse=document.getElementById('course').value;
+ const roll=rollNo.value.trim(),pw=password.value;
+ if(!selectedCourse)return show('Please select your course.');
+ if(selectedCourse==='SCHOOL'){
+   localStorage.setItem('skh_selected_course','SCHOOL');
+   location.replace('/school-dashboard.html');
+   return;
+ }
  if(!roll||!pw)return show('Enter Roll No and Password.');
+ localStorage.setItem('skh_selected_course',selectedCourse);
  btn.disabled=true;btn.textContent='Signing in...';
  try{
    const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify({action:'studentLogin',roll_no:roll,password:pw})});
@@ -279,10 +308,10 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
         await deferredInstallPrompt.userChoice;
         deferredInstallPrompt=null;
         installCard.classList.remove('show');
-        setTimeout(()=>location.replace('/main.html'),250);
+        setTimeout(()=>location.replace('/index.html'),250);
       },300);
     }else{
-      setTimeout(()=>location.replace('/main.html'),250);
+      setTimeout(()=>location.replace('/index.html'),250);
     }
  }catch(err){show(err.message||String(err));btn.disabled=false;btn.textContent='Login'}
 });
