@@ -1,92 +1,19 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#087ed7">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Choose Course — Swarup Sir's Knowledge Hub</title>
+<meta name="theme-color" content="#087ed7">
 <style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(180deg,#eaf6ff 0%,#f8fbff 100%);color:#172033;min-height:100vh;overflow-x:hidden}
-.top-band{height:145px;background:linear-gradient(135deg,#087ed7,#36a9ef);border-radius:0 0 50% 50%/0 0 28% 28%;position:absolute;top:0;left:-8%;width:116%;z-index:0}
-.bottom-band{height:95px;background:linear-gradient(135deg,#087ed7,#36a9ef);border-radius:50% 50% 0 0/55% 55% 0 0;position:fixed;bottom:0;left:-8%;width:116%;z-index:0}
-.page{position:relative;z-index:1;min-height:100vh;padding:35px 16px 115px;display:flex;justify-content:center}
-.container{width:min(720px,100%);text-align:center}
-.logo-wrap{width:405px;max-width:92vw;height:175px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}
-.logo{max-width:100%;max-height:175px;object-fit:contain;filter:drop-shadow(0 5px 10px #0002)}
-.welcome{margin:0 auto 22px}.welcome h1{margin:0 0 8px;font-size:31px;color:#075ea8}.welcome p{margin:0;color:#516274;font-size:16px;line-height:1.5}
-.card{background:#fff;border-radius:24px;padding:27px 24px;box-shadow:0 12px 38px #087ed71c;border:1px solid #e2eef8}
-.card h2{margin:0 0 7px;color:#163b5c;font-size:24px}.subtitle{color:#64748b;margin:0 0 20px;font-size:14px}
-.course-grid{display:grid;grid-template-columns:1fr;gap:14px}
-.course{display:flex;align-items:center;text-align:left;gap:16px;width:100%;padding:18px;border:1px solid #d8e7f3;border-radius:18px;background:#fff;cursor:pointer;transition:.18s;box-shadow:0 3px 12px #0b4f7b0a}
-.course:hover{transform:translateY(-2px);border-color:#5aaee5;box-shadow:0 8px 20px #087ed71c}
-.icon{width:56px;height:56px;min-width:56px;border-radius:16px;background:#e8f5ff;display:grid;place-items:center;font-size:28px}
-.course h3{margin:0 0 5px;color:#0b5f9e;font-size:19px}.course p{margin:0;color:#64748b;font-size:13px;line-height:1.4}.arrow{margin-left:auto;color:#087ed7;font-size:25px;font-weight:bold}
-.teacher{margin-top:17px}.teacher button{border:0;background:transparent;color:#087ed7;font-weight:700;cursor:pointer;font-size:14px;padding:8px 12px}
-.footer{position:fixed;z-index:2;bottom:17px;left:0;width:100%;text-align:center;color:#fff;font-size:13px;line-height:1.45;padding:0 12px}.footer b{display:block;font-size:14px;margin-bottom:2px}
-@media(max-width:520px){.page{padding-top:22px}.logo-wrap{height:145px}.logo{max-height:145px}.welcome h1{font-size:26px}.card{padding:23px 16px}.course{padding:15px}.icon{width:50px;height:50px;min-width:50px;font-size:25px}}
-</style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif}body{min-height:100vh;background:linear-gradient(180deg,#eef8ff 0%,#f8fcff 55%,#edf7ff 100%);color:#0b2f57;display:flex;justify-content:center;overflow-x:hidden;position:relative}body:before{content:"";position:fixed;left:-8%;right:-8%;top:-78px;height:120px;background:#1679c9;border-radius:0 0 50% 50%;z-index:0}body:after{content:"";position:fixed;left:-8%;right:-8%;bottom:-72px;height:110px;background:#1268ad;border-radius:50% 50% 0 0;z-index:0}.page{width:min(620px,100%);min-height:100vh;padding:28px 16px 80px;position:relative;z-index:1;display:flex;align-items:center}.card{width:100%;background:rgba(255,255,255,.98);border-radius:28px;padding:32px 22px 26px;box-shadow:0 14px 40px rgba(19,67,105,.15)}.brand{text-align:center;color:#07508d;font-size:29px;font-weight:800;margin:0}.subtitle{text-align:center;color:#41688f;font-size:17px;line-height:1.45;margin:10px auto 26px}.course{display:block;width:100%;text-align:left;background:#fff;border:2px solid #d9eaf7;border-radius:18px;padding:18px 18px;margin:12px 0;cursor:pointer;color:#0b2f57;transition:.15s;box-shadow:0 5px 14px rgba(18,70,110,.06)}.course:hover{border-color:#087ed7;transform:translateY(-1px)}.course .num{display:inline-flex;width:34px;height:34px;border-radius:50%;align-items:center;justify-content:center;background:#087ed7;color:#fff;font-weight:800;margin-right:10px}.course .title{font-size:18px;font-weight:800;color:#07508d}.course .desc{display:block;margin:8px 0 0 44px;color:#55728c;font-size:14px;line-height:1.4}.footer{text-align:center;margin-top:20px;color:#55728c;font-size:13px}.footer small{display:block;margin-top:5px}@media(max-width:480px){.page{padding:20px 14px 70px}.card{padding:27px 17px 22px}.brand{font-size:25px}.subtitle{font-size:16px}.course{padding:16px}.course .title{font-size:17px}}</style>
 </head>
-<body>
-<div class="top-band"></div>
-<div class="page">
-  <main class="container">
-    <div class="logo-wrap">
-      <img class="logo" src="/skh-icon.png" alt="Swarup Sir's Knowledge Hub" onerror="this.style.display='none'">
-    </div>
-
-    <section class="welcome">
-      <h1>Welcome Students!</h1>
-      <p>Please choose your course to continue.</p>
-    </section>
-
-    <section class="card">
-      <h2>📚 Choose Your Course</h2>
-      <p class="subtitle">Select the course you are enrolled in.</p>
-
-      <div class="course-grid">
-        <button class="course" type="button" onclick="selectCourse('JNVST-6')">
-          <span class="icon">🎓</span>
-          <span><h3>JNVST-6</h3><p>Navodaya Selection Test for Class VI</p></span>
-          <span class="arrow">›</span>
-        </button>
-
-        <button class="course" type="button" onclick="selectCourse('JNVST-9')">
-          <span class="icon">📘</span>
-          <span><h3>JNVST-9</h3><p>Navodaya Selection Test for Class IX</p></span>
-          <span class="arrow">›</span>
-        </button>
-
-        <button class="course" type="button" onclick="selectCourse('SCHOOL')">
-          <span class="icon">🏫</span>
-          <span><h3>School Course</h3><p>School-based learning and assessments</p></span>
-          <span class="arrow">›</span>
-        </button>
-      </div>
-
-      <div class="teacher">
-        <button type="button" onclick="location.href='/teacher-login.html'">👨‍🏫 Teacher Login</button>
-      </div>
-    </section>
-  </main>
-</div>
-
-<div class="bottom-band"></div>
-<div class="footer">
-  <b>🛡️ Your learning. Your progress. Your success.</b>
-  © 2026 Swarup Sir's Knowledge Hub
-</div>
-
-<script>
-function selectCourse(course){
-  try{localStorage.setItem('selectedStudentCourse',course)}catch(e){}
-  if(course==='SCHOOL'){
-    location.href='/school-dashboard.html';
-  }else{
-    location.href='/student-login.html';
-  }
-}
-</script>
-</body>
-</html>
-
+<body><main class="page"><section class="card">
+<h1 class="brand">Swarup Sir's Knowledge Hub</h1>
+<p class="subtitle">Choose your course to continue</p>
+<button class="course" onclick="choose('JNVST-6')"><span class="num">1</span><span class="title">JNVST-6</span><span class="desc">Navodaya Selection Test for Class VI</span></button>
+<button class="course" onclick="choose('JNVST-9')"><span class="num">2</span><span class="title">JNVST-9</span><span class="desc">Navodaya Selection Test for Class IX</span></button>
+<button class="course" onclick="choose('SCHOOL')"><span class="num">3</span><span class="title">School Course</span><span class="desc">School-based learning and assessments</span></button>
+<div class="footer">🛡️ Your learning. Your progress. Your success.<small>© 2026 Swarup Sir's Knowledge Hub</small></div>
+</section></main>
+<script>function choose(course){localStorage.setItem('skh_selected_course',course);if(course==='SCHOOL'){location.href='/school-dashboard.html';return}location.href='/student-login.html?course='+encodeURIComponent(course)}</script>
+</body></html>
