@@ -264,8 +264,9 @@ function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'
 // A teacher session is signed out and remains on this page.
 sb.auth.getSession().then(async ({data:{session}})=>{
   if(!session) return;
-  const {data:p}=await sb.from("profiles").select("role").eq("id",session.user.id).single();
-  if(p?.role==="student"){
+  const {data:p}=await sb.from("profiles").select("role,course").eq("id",session.user.id).single();
+  const chosen=new URLSearchParams(location.search).get("course") || localStorage.getItem("skh_selected_course") || "";
+  if(p?.role==="student" && ["JNVST-6","JNVST-9"].includes(chosen) && p.course===chosen){
     location.replace("/main.html");
   }else{
     await sb.auth.signOut();
