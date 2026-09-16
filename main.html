@@ -1405,9 +1405,11 @@ async function downloadAllResultsExcel(){
   }catch(e){ alert("Could not download results: "+(e.message||e)); }
 }
 
+
 async function schoolStudentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
 
+  // Render the landing shell immediately.
   render(`<div class="wrap">${header("Student Dashboard")}
     <div class="card">
       <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
@@ -1422,31 +1424,36 @@ async function schoolStudentHome(){
     const {data:links,error:le}=await sb.from("assignment_students")
       .select("assignment_id").eq("student_id",current.id);
     if(le)throw le;
-    const ids=[...new Set((links||[]).map(x=>x.assignment_id).filter(Boolean))];
 
+    const ids=[...new Set((links||[]).map(x=>x.assignment_id).filter(Boolean))];
     let assignments=[],attempts=[];
     if(ids.length){
       const [{data:a,error:ae},{data:at,error:ate}]=await Promise.all([
-        sb.from("assignments").select("id,title,subject,deadline,assignment_type,video_url,main_group,sub_group,time_limit,created_at")
+        sb.from("assignments")
+          .select("id,title,subject,deadline,assignment_type,video_url,main_group,sub_group,time_limit,created_at")
           .in("id",ids).order("created_at",{ascending:false}),
-        sb.from("attempts").select("assignment_id,score,total_questions,submitted_at")
-          .eq("student_id",current.id).in("assignment_id",ids).order("submitted_at",{ascending:false})
+        sb.from("attempts")
+          .select("assignment_id,score,total_questions,submitted_at")
+          .eq("student_id",current.id).in("assignment_id",ids)
+          .order("submitted_at",{ascending:false})
       ]);
       if(ae)throw ae;
       if(ate)throw ate;
       assignments=(a||[]).filter(x=>x.assignment_type!=="MOCK"&&x.assignment_type!=="mock");
       attempts=at||[];
     }
+
     const completedIds=new Set(attempts.map(x=>x.assignment_id));
     const pendingAssignments=assignments.filter(a=>!completedIds.has(a.id));
 
+    // School assessments for this student's class/sub-division.
     const [{data:members,error:me},{data:assessments,error:ase}]=await Promise.all([
       sb.from("class_students").select("class_id").eq("student_id",current.id),
-      sb.from("school_assessments").select("id,title,subject,deadline,school_group_id,class_id,created_at")
-        .order("created_at",{ascending:false})
+      sb.from("school_assessments").select("id,title,subject,deadline,school_group_id,class_id,created_at").order("created_at",{ascending:false})
     ]);
     if(me)throw me;
     if(ase)throw ase;
+
     const classIds=new Set((members||[]).map(x=>x.class_id));
     const allowedAssessments=(assessments||[]).filter(a=>{
       if(!a.class_id || !classIds.has(a.class_id))return false;
@@ -1458,7 +1465,8 @@ async function schoolStudentHome(){
       const aidList=allowedAssessments.map(a=>a.id);
       const [{data:qs,error:qe},{data:subs,error:se}]=await Promise.all([
         sb.from("school_questions").select("id,assessment_id").in("assessment_id",aidList),
-        sb.from("school_answer_submissions").select("assessment_id,question_id,status")
+        sb.from("school_answer_submissions")
+          .select("assessment_id,question_id,status")
           .eq("student_id",current.id).eq("is_current",true).in("assessment_id",aidList)
       ]);
       if(qe)throw qe;
@@ -1467,20 +1475,23 @@ async function schoolStudentHome(){
       (qs||[]).forEach(q=>totalBy.set(q.assessment_id,(totalBy.get(q.assessment_id)||0)+1));
       (subs||[]).forEach(s=>answeredBy.set(s.assessment_id,(answeredBy.get(s.assessment_id)||0)+1));
       pendingAssessments=allowedAssessments.filter(a=>{
-        const total=totalBy.get(a.id)||0, answered=answeredBy.get(a.id)||0;
+        const total=totalBy.get(a.id)||0;
+        const answered=answeredBy.get(a.id)||0;
         return total===0 || answered<total;
       }).length;
     }
 
+    // Mock-test assigned count. Keep this lightweight and independent.
     let pendingMocks=0;
     try{
-      const {data:mockStudents,error:me2}=await sb.from("mock_test_students").select("mock_test_id").eq("student_id",current.id);
+      const {data:mockStudents,error:me2}=await sb.from("mock_test_students")
+        .select("mock_test_id").eq("student_id",current.id);
       if(!me2 && (mockStudents||[]).length){
         const mockIds=[...new Set(mockStudents.map(x=>x.mock_test_id).filter(Boolean))];
-        const [{data:mockTests},{data:mockAttempts}]=await Promise.all([
-          sb.from("mock_tests").select("id,deadline").in("id",mockIds),
-          sb.from("mock_test_attempts").select("mock_test_id,submitted_at").eq("student_id",current.id).in("mock_test_id",mockIds)
-        ]);
+        const {data:mockTests}=await sb.from("mock_tests")
+          .select("id,deadline").in("id",mockIds);
+        const {data:mockAttempts}=await sb.from("mock_test_attempts")
+          .select("mock_test_id,submitted_at").eq("student_id",current.id).in("mock_test_id",mockIds);
         const done=new Set((mockAttempts||[]).map(x=>x.mock_test_id));
         pendingMocks=(mockTests||[]).filter(x=>!done.has(x.id)).length;
       }
@@ -1493,6 +1504,7 @@ async function schoolStudentHome(){
 
     const content=document.getElementById("school-dashboard-content");
     if(!content)return;
+
     content.innerHTML=`
       <div class="notice" style="font-size:16px">${summary}</div>
 
@@ -1534,7 +1546,6 @@ async function schoolStudentHome(){
     if(content)content.innerHTML=`<div class="card">${message("Could not load your dashboard: "+(e.message||String(e)))}</div>`;
   }
 }
-
 
 async function studentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
