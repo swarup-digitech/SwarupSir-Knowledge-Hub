@@ -165,6 +165,12 @@ async function init(){
   profile=p;
   if(p.role==="student"){
     cacheStudentProfile(p);
+    const portal=new URLSearchParams(location.search).get("portal");
+    if(p.course==="SCHOOL"){
+      if(portal==="SCHOOL_ASSIGNMENTS") return studentHome();
+      if(portal==="SCHOOL_MOCK") return studentMockTests();
+      return schoolStudentHome();
+    }
     return studentHome();
   }
   if(p.role==="teacher") return teacherHome();
@@ -1399,6 +1405,148 @@ async function downloadAllResultsExcel(){
   }catch(e){ alert("Could not download results: "+(e.message||e)); }
 }
 
+
+async function schoolStudentHome(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+
+  // Render the landing shell immediately.
+  render(`<div class="wrap">${header("Student Dashboard")}
+    <div class="card">
+      <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
+      <p class="muted">Roll No: <b>${esc(profile?.roll_no||"")}</b> &nbsp; | &nbsp; School Course</p>
+    </div>
+    <div id="school-dashboard-content">
+      <div class="card"><div class="success"><b>Loading your dashboard…</b></div></div>
+    </div>
+  </div>`);
+
+  try{
+    const {data:links,error:le}=await sb.from("assignment_students")
+      .select("assignment_id").eq("student_id",current.id);
+    if(le)throw le;
+
+    const ids=[...new Set((links||[]).map(x=>x.assignment_id).filter(Boolean))];
+    let assignments=[],attempts=[];
+    if(ids.length){
+      const [{data:a,error:ae},{data:at,error:ate}]=await Promise.all([
+        sb.from("assignments")
+          .select("id,title,subject,deadline,assignment_type,video_url,main_group,sub_group,time_limit,created_at")
+          .in("id",ids).order("created_at",{ascending:false}),
+        sb.from("attempts")
+          .select("assignment_id,score,total_questions,submitted_at")
+          .eq("student_id",current.id).in("assignment_id",ids)
+          .order("submitted_at",{ascending:false})
+      ]);
+      if(ae)throw ae;
+      if(ate)throw ate;
+      assignments=(a||[]).filter(x=>x.assignment_type!=="MOCK"&&x.assignment_type!=="mock");
+      attempts=at||[];
+    }
+
+    const completedIds=new Set(attempts.map(x=>x.assignment_id));
+    const pendingAssignments=assignments.filter(a=>!completedIds.has(a.id));
+
+    // School assessments for this student's class/sub-division.
+    const [{data:members,error:me},{data:assessments,error:ase}]=await Promise.all([
+      sb.from("class_students").select("class_id").eq("student_id",current.id),
+      sb.from("school_assessments").select("id,title,subject,deadline,school_group_id,class_id,created_at").order("created_at",{ascending:false})
+    ]);
+    if(me)throw me;
+    if(ase)throw ase;
+
+    const classIds=new Set((members||[]).map(x=>x.class_id));
+    const allowedAssessments=(assessments||[]).filter(a=>{
+      if(!a.class_id || !classIds.has(a.class_id))return false;
+      return !a.school_group_id || a.school_group_id===profile.school_group_id;
+    });
+
+    let pendingAssessments=0;
+    if(allowedAssessments.length){
+      const aidList=allowedAssessments.map(a=>a.id);
+      const [{data:qs,error:qe},{data:subs,error:se}]=await Promise.all([
+        sb.from("school_questions").select("id,assessment_id").in("assessment_id",aidList),
+        sb.from("school_answer_submissions")
+          .select("assessment_id,question_id,status")
+          .eq("student_id",current.id).eq("is_current",true).in("assessment_id",aidList)
+      ]);
+      if(qe)throw qe;
+      if(se)throw se;
+      const totalBy=new Map(), answeredBy=new Map();
+      (qs||[]).forEach(q=>totalBy.set(q.assessment_id,(totalBy.get(q.assessment_id)||0)+1));
+      (subs||[]).forEach(s=>answeredBy.set(s.assessment_id,(answeredBy.get(s.assessment_id)||0)+1));
+      pendingAssessments=allowedAssessments.filter(a=>{
+        const total=totalBy.get(a.id)||0;
+        const answered=answeredBy.get(a.id)||0;
+        return total===0 || answered<total;
+      }).length;
+    }
+
+    // Mock-test assigned count. Keep this lightweight and independent.
+    let pendingMocks=0;
+    try{
+      const {data:mockStudents,error:me2}=await sb.from("mock_test_students")
+        .select("mock_test_id").eq("student_id",current.id);
+      if(!me2 && (mockStudents||[]).length){
+        const mockIds=[...new Set(mockStudents.map(x=>x.mock_test_id).filter(Boolean))];
+        const {data:mockTests}=await sb.from("mock_tests")
+          .select("id,deadline").in("id",mockIds);
+        const {data:mockAttempts}=await sb.from("mock_test_attempts")
+          .select("mock_test_id,submitted_at").eq("student_id",current.id).in("mock_test_id",mockIds);
+        const done=new Set((mockAttempts||[]).map(x=>x.mock_test_id));
+        pendingMocks=(mockTests||[]).filter(x=>!done.has(x.id)).length;
+      }
+    }catch(_){}
+
+    const totalPending=pendingAssignments.length+pendingAssessments+pendingMocks;
+    const summary=totalPending
+      ? `📌 You have <b>${pendingAssignments.length}</b> pending assignment${pendingAssignments.length===1?"":"s"}, <b>${pendingMocks}</b> pending Mock Test${pendingMocks===1?"":"s"} and <b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}.`
+      : `📌 You have no pending assignments, Mock Tests or assessments.`;
+
+    const content=document.getElementById("school-dashboard-content");
+    if(!content)return;
+
+    content.innerHTML=`
+      <div class="notice" style="font-size:16px">${summary}</div>
+
+      <section class="card" style="border:2px solid #7c3aed;background:#faf5ff">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;color:#6d28d9">🎯 Mock Tests</h2>
+            <p class="muted" style="margin:6px 0 0">Separate from assignments • 80 Questions • 100 Marks • 2 Hours</p>
+            <p style="margin:10px 0 0"><b>${pendingMocks}</b> pending Mock Test${pendingMocks===1?"":"s"}</p>
+          </div>
+          <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_MOCK'">View Mock Tests</button>
+        </div>
+      </section>
+
+      <section class="card" style="border:2px solid #0f766e;background:#f0fdfa">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;color:#0f766e">📝 School Assessments</h2>
+            <p class="muted" style="margin:6px 0 0">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
+            <p style="margin:10px 0 0"><b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}</p>
+          </div>
+          <button onclick="location.href='/school-dashboard.html?view=assessments'">Open My Assessments</button>
+        </div>
+      </section>
+
+      <section class="card" style="border:2px solid #2563eb;background:#eff6ff">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;color:#1d4ed8">📚 My Assignments</h2>
+            <p class="muted" style="margin:6px 0 0">Regular MCQ and video assignments assigned to you.</p>
+            <p style="margin:10px 0 0"><b>${pendingAssignments.length}</b> pending assignment${pendingAssignments.length===1?"":"s"}</p>
+          </div>
+          <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSIGNMENTS'">Open My Assignments</button>
+        </div>
+      </section>
+    `;
+  }catch(e){
+    const content=document.getElementById("school-dashboard-content");
+    if(content)content.innerHTML=`<div class="card">${message("Could not load your dashboard: "+(e.message||String(e)))}</div>`;
+  }
+}
+
 async function studentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
 
@@ -1458,13 +1606,7 @@ async function studentHome(){
   };
 
   render(`<div class="wrap">${header("My Assignments")}
-    ${profile.course==="SCHOOL"?`<div class="card" style="border:2px solid #0f766e;background:#f0fdfa">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div><h2 style="margin:0;color:#0f766e">📝 School Assessments</h2>
-        <p class="muted" style="margin:6px 0 0">Teacher-created assessments • Upload handwritten answers • View teacher feedback</p></div>
-        <button onclick="location.href='/school-dashboard.html?view=assessments'">Open School Assessments</button>
-      </div>
-    </div>`:""}
+    
     <div class="card" style="border:2px solid #7c3aed;background:#faf5ff">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div><h2 style="margin:0;color:#6d28d9">🎯 Mock Tests</h2>
