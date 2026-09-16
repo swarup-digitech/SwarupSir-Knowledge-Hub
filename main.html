@@ -1422,7 +1422,7 @@ async function schoolStudentLanding(){
 
     const totalPending= pendingAssignments.length + pendingAssessments;
     const summaryMessage=totalPending
-      ? `You have <b>${pendingAssignments}</b> pending assignment${pendingAssignments===1?"":"s"} and <b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}.`
+      ? `You have <b>${pendingAssignments.length}</b> pending assignment${pendingAssignments.length===1?"":"s"} and <b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}.`
       : `You have no pending assignments or assessments.`;
 
     render(`<div class="wrap">
@@ -1440,7 +1440,7 @@ async function schoolStudentLanding(){
         <section class="card" style="border:2px solid #2563eb;background:#eff6ff;min-height:190px">
           <h2 style="color:#1d4ed8;margin-bottom:8px">📚 My Assignments</h2>
           <p class="muted">Regular MCQ and video assignments assigned to you.</p>
-          <p><b>${pendingAssignments}</b> pending assignment${pendingAssignments===1?"":"s"}</p>
+          <p><b>${pendingAssignments.length}</b> pending assignment${pendingAssignments.length===1?"":"s"}</p>
           <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSIGNMENTS'">Open My Assignments</button>
         </section>
 
@@ -1448,7 +1448,7 @@ async function schoolStudentLanding(){
           <h2 style="color:#0f766e;margin-bottom:8px">📝 My Assessments</h2>
           <p class="muted">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
           <p><b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}</p>
-          <button onclick="location.href='/school-dashboard.html'">Open My Assessments</button>
+          <button onclick="location.href='/school-dashboard.html?view=assessments'">Open My Assessments</button>
         </section>
       </div>
 
