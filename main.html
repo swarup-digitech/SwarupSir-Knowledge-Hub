@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#2563eb">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="manifest" href="/student-app.webmanifest">
+<link rel="icon" href="/skh-icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=kkDQdw2M8OvgAS2PwpULIQvbzxK4aIo8vZ2v1CB-a_-GZ99X63MfmXZyZvdNzJXJcsybyJctXqnrZzKgh-qJZ-5A4lKJqB1CWuAlSVUm1s4e8x0BgWrpWVng5kzFlRKOHkl1YAvN4U5FHYHv7AenJM8S_kZ5DaGOd6iL6KCwPbleQqztvIvkZRW9gnzbo6kvxy9hGXdcqV3Mv9Fqybvj1IgcpFxu7nN9yZYEMHoPY4MtMnW_2nSSRRGig20HtBaHFb8X5gVkBybC-8LTEGFjDCpDl2f0VyA3RXBszbd7V8Yk5eD0c8uuM8A5AJG-W7Cc" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -62,7 +62,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 </style>
 </head>
 <body><div id="app"></div>
-<div id="installBanner" class="install-banner" role="dialog" aria-live="polite"><div class="install-banner-row"><img class="install-icon" src="/icon-192.png" alt="Knowledge Hub icon"><div><h3>Install Knowledge Hub</h3><p class="muted small">Add a shortcut to this device for quick student access.</p></div></div><div id="installHelp" class="small muted" style="margin-top:8px"></div><div class="install-actions"><button id="installAppBtn" type="button">＋ Add to Home Screen</button><button class="secondary" id="installLaterBtn" type="button">Not now</button></div></div>
+<div id="installBanner" class="install-banner" role="dialog" aria-live="polite"><div class="install-banner-row"><img class="install-icon" src="/skh-icon-192.png" alt="Knowledge Hub icon"><div><h3>Install Knowledge Hub</h3><p class="muted small">Add a shortcut to this device for quick student access.</p></div></div><div id="installHelp" class="small muted" style="margin-top:8px"></div><div class="install-actions"><button id="installAppBtn" type="button">＋ Add to Home Screen</button><button class="secondary" id="installLaterBtn" type="button">Not now</button></div></div>
 <script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
 const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
@@ -76,7 +76,7 @@ let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
 function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent);}
-function setupPWAInstall(){if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;});window.addEventListener("appinstalled",()=>{deferredInstallPrompt=null;localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();});}
+function setupPWAInstall(){if("serviceWorker" in navigator)navigator.serviceWorker.register("/student-sw.js").catch(()=>{});window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;});window.addEventListener("appinstalled",()=>{deferredInstallPrompt=null;localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();});}
 function hideInstallBanner(){document.getElementById("installBanner")?.classList.remove("show");}
 function showStudentInstallPrompt(){if(!profile||profile.role!=="student"||isStandalone()||localStorage.getItem(PWA_INSTALL_KEY))return;const b=document.getElementById("installBanner"),help=document.getElementById("installHelp"),btn=document.getElementById("installAppBtn");if(!b||!btn)return;help.textContent=isIOS()&&!deferredInstallPrompt?"On iPhone/iPad: tap Share, then choose “Add to Home Screen”.":"Tap Add to Home Screen and confirm the installation.";b.classList.add("show");btn.onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();const choice=await deferredInstallPrompt.userChoice.catch(()=>null);deferredInstallPrompt=null;if(choice?.outcome==="accepted")localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();}else if(isIOS()){alert("To add Knowledge Hub: tap Share, then choose “Add to Home Screen”.");}else{alert("If your browser shows an install icon in the address bar or menu, choose “Install” or “Add to Home Screen”.");}};document.getElementById("installLaterBtn").onclick=()=>{localStorage.setItem(PWA_INSTALL_KEY,"later");hideInstallBanner();};}
 setupPWAInstall();
@@ -118,6 +118,7 @@ function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?
 
 async function init(){
   const mode=new URLSearchParams(location.search).get("mode");
+  const portal=new URLSearchParams(location.search).get("portal");
   window.loginMode=mode==="student"?"student":mode==="teacher"?"teacher":"chooser";
 
   const {data:{session}}=await sb.auth.getSession();
@@ -129,53 +130,56 @@ async function init(){
 
   current=session.user;
 
-  // For students, use a very short-lived local profile cache so the dashboard
-  // can appear immediately while the authoritative profile is refreshed.
+  // Student path: always use the authoritative profile.course for routing.
   if(window.loginMode==="student"){
     const cached=getCachedStudentProfile(current.id);
-    if(cached&&cached.role==="student"){
+    if(cached?.role==="student"){
       profile=cached;
-      window.loginMode="student";
-      renderStudentDashboardLoading();
-      studentHome().catch(e=>{
-        render(`<div class="wrap">${header("Student Dashboard")}<div class="card">${message(e.message||String(e))}</div></div>`);
-      });
-      // Refresh the profile in the background and refresh the dashboard only
-      // if the course/name/class information has changed.
-      sb.from("profiles").select("*").eq("id",current.id).single().then(({data:p,error})=>{
-        if(error||!p||p.role!=="student")return;
-        const oldKey=JSON.stringify({n:profile?.full_name,c:profile?.course,g:profile?.school_group_id});
-        const newKey=JSON.stringify({n:p.full_name,c:p.course,g:p.school_group_id});
-        cacheStudentProfile(p);
-        profile=p;
-        if(oldKey!==newKey) studentHome().catch(()=>{});
-      }).catch(()=>{});
-      return;
+      if(String(profile.course||"").toUpperCase()==="SCHOOL"){
+        if(portal==="SCHOOL_ASSIGNMENTS") return studentHome();
+        if(portal==="SCHOOL_MOCK") return studentMockTests();
+        if(portal==="SCHOOL_ASSESSMENTS") return schoolStudentAssessments();
+        return schoolStudentHome();
+      }
+      if(["JNVST-6","JNVST-9"].includes(String(profile.course||"").toUpperCase())) return studentHome();
     }
-  }
 
-  const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();
-  if(error||!p){
-    await sb.auth.signOut();
-    if(window.loginMode==="student") return studentLoginPage();
-    if(window.loginMode==="teacher") return teacherLoginPage();
-    return login();
-  }
+    const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();
+    if(error||!p||p.role!=="student"){
+      await sb.auth.signOut();
+      return window.location.replace("/index.html");
+    }
 
-  profile=p;
-  if(p.role==="student"){
+    profile=p;
     cacheStudentProfile(p);
-    const portal=new URLSearchParams(location.search).get("portal");
-    if(p.course==="SCHOOL"){
+
+    const course=String(p.course||"").trim().toUpperCase();
+    if(course==="SCHOOL"){
       if(portal==="SCHOOL_ASSIGNMENTS") return studentHome();
       if(portal==="SCHOOL_MOCK") return studentMockTests();
       if(portal==="SCHOOL_ASSESSMENTS") return schoolStudentAssessments();
       return schoolStudentHome();
     }
-    return studentHome();
+
+    if(course==="JNVST-6" || course==="JNVST-9") return studentHome();
+
+    await sb.auth.signOut();
+    localStorage.removeItem("skh_selected_course");
+    return window.location.replace("/index.html");
   }
+
+  // Teacher path.
+  const {data:p,error}=await sb.from("profiles").select("*").eq("id",current.id).single();
+  if(error||!p){
+    await sb.auth.signOut();
+    if(window.loginMode==="teacher") return teacherLoginPage();
+    return login();
+  }
+  profile=p;
   if(p.role==="teacher") return teacherHome();
-  return login();
+
+  await sb.auth.signOut();
+  return window.location.replace("/index.html");
 }
 function login(){
   window.loginMode="chooser";
@@ -193,15 +197,25 @@ async function doStudentLogin(){
   const roll=rollNo.value.trim(),pw=studentPassword.value;
   if(!roll||!pw){msg.innerHTML=message("Enter Roll No and Password.");return}
   try{
-    const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},body:JSON.stringify({action:"studentLogin",roll_no:roll,password:pw})});
+    const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},
+      body:JSON.stringify({action:"studentLogin",roll_no:roll,password:pw})
+    });
     const j=await res.json().catch(()=>({}));
-    if(!res.ok||j.error){msg.innerHTML=message(j.error||"Invalid Roll No or Password.");return}
+    if(!res.ok||j.error)throw new Error(j.error||"Invalid Roll No or Password.");
     const {error:e}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
-    if(e){msg.innerHTML=message(e.message);return}
+    if(e)throw e;
     current=(await sb.auth.getUser()).data.user;
     const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();
-    if(pe||!p||p.role!=="student"){await sb.auth.signOut();msg.innerHTML=message("This is not a student account.");return}
-    profile=p;window.loginMode="student";studentHome();setTimeout(showStudentInstallPrompt,700);
+    if(pe||!p||p.role!=="student")throw new Error("This is not a student account.");
+    profile=p;cacheStudentProfile(p);
+    const chosen=String(localStorage.getItem("skh_selected_course")||"").toUpperCase();
+    const actual=String(p.course||"").toUpperCase();
+    if(!chosen || chosen!==actual)throw new Error(`This Roll No is registered for ${p.course||"another course"}. Please choose the correct course.`);
+    if(actual==="SCHOOL")return schoolStudentHome();
+    if(actual==="JNVST-6"||actual==="JNVST-9")return studentHome();
+    throw new Error("This student account has no valid course.");
   }catch(e){msg.innerHTML=message(e.message||String(e))}
 }
 async function doTeacherLogin(){
@@ -714,21 +728,39 @@ async function callTeacherFn(body){
  const j=await res.json().catch(()=>({}));if(!res.ok||j.error)throw new Error(j.error||"Request failed.");return j;
 }
 async function manageStudentAccounts(){
- try{const j=await callTeacherFn({action:"listCredentials"});const students=j.students||[];
- render(`<div class="wrap">${header("Student Accounts")}<div class="card"><div class="notice">Teachers can view and change classroom Roll No and Password.</div><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr></thead><tbody>${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td><td><div class="actions"><button onclick="changeStudentRollNo('${s.id}','${esc(s.full_name)}','${esc(s.roll_no||"")}')">Roll No</button><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}</tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)
+ try{
+  const j=await callTeacherFn({action:"listCredentials"});
+  const students=j.students||[];
+  render(`<div class="wrap">${header("Student Accounts")}
+  <div class="card">
+    <div class="notice">Roll No is fixed after assignment. Teachers can change the Password, but cannot change the Roll No.</div>
+    <div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr></thead><tbody>
+    ${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td><b>${esc(s.roll_no||"—")}</b></td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td>
+    <td><div class="actions"><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}
+    </tbody></table></div>
+    <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+  </div></div>`)
  }catch(e){alert(e.message||String(e))}
 }
-async function changeStudentRollNo(studentId,name,currentRoll){const v=prompt(`New Roll No for ${name}:`,currentRoll);if(v===null)return;if(!v.trim())return alert("Roll No is required.");try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
-async function changeStudentPassword(studentId,name){const v=prompt(`New password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function changeStudentRollNo(){alert("Roll No is fixed and cannot be changed after the student is assigned.");}
+
+async function changeStudentPassword(studentId,name){
+  const v=prompt(`New password for ${name}:`);
+  if(v===null)return;
+  if(v.length<6)return alert("Password must contain at least 6 characters.");
+  try{
+    await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});
+    alert("Password updated successfully.");
+    await manageStudentAccounts();
+  }catch(e){alert(e.message||String(e));}
+}
 async function deleteStudentAccount(studentId,name){
- if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account, classroom memberships, assignments and submitted answers.`))return;
- try{
-  await callTeacherFn({action:"deleteStudent",student_id:studentId});
-  alert(`${name} was deleted successfully.`);
-  await manageStudentAccounts();
- }catch(e){
-  alert("Could not delete student.\n\n"+(e.message||String(e)));
- }
+  if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account and related application records.`))return;
+  try{
+    await callTeacherFn({action:"deleteStudent",student_id:studentId});
+    alert(`${name} was deleted successfully.`);
+    await manageStudentAccounts();
+  }catch(e){alert("Could not delete student.\n\n"+(e.message||String(e)));}
 }
 
 async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)}
@@ -1836,6 +1868,20 @@ async function startLesson(id){
   }
 
   lesson();
+}
+async function watchCompletedVideo(id){
+  try{
+    const {data:a,error}=await sb.from("assignments").select("id,title,subject,video_url").eq("id",id).single();
+    if(error||!a)return alert(error?.message||"Assignment not found.");
+    if(!a.video_url)return alert("This assignment has no video.");
+    render(`<div class="wrap">${header(esc(a.title))}
+      <div class="card">
+        <p class="muted">${esc(a.subject||"")}</p>
+        <iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>
+        <div class="actions" style="margin-top:12px"><button onclick="studentHome()">← Back to Assignments</button></div>
+      </div>
+    </div>`);
+  }catch(e){alert("Could not open video: "+(e.message||e));}
 }
 function lesson(){render(`<div class="wrap">${header(esc(active.title))}<div class="card"><p class="muted">${esc(active.subject||"")}</p>${active.video_url?`<iframe class="video" src="${esc(embed(active.video_url))}" allowfullscreen></iframe>`:""}<div class="notice">Watch the lesson, then continue to the questions.</div><button onclick="videoWatched()">Video watched — Continue to Questions</button></div></div>`)}
 async function videoWatched(){videoDone=true;const {data:qs,error}=await sb.from("questions").select("*").eq("assignment_id",active.id).order("question_order");if(error)return alert(error.message);active.questions=qs||[];quiz()}

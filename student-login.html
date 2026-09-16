@@ -262,22 +262,23 @@ document.getElementById('togglePassword').addEventListener('click',()=>{
 });
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'">'+esc(t)+'</div>'}
-// STUDENT-ONLY entry point.
-// A student session may continue to the application.
-// A teacher session is signed out and remains on this page.
-sb.auth.getSession().then(async ({data:{session}})=>{
-  if(!session) return;
+// Student-only entry point. Reuse a valid session only when its real course
+// matches the course selected on this page.
+(async()=>{
+ try{
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session)return;
   const {data:p}=await sb.from("profiles").select("role,course").eq("id",session.user.id).single();
-  const chosen=new URLSearchParams(location.search).get("course") || localStorage.getItem("skh_selected_course") || "";
-  if(p?.role==="student" && (
-      (["JNVST-6","JNVST-9"].includes(chosen) && p.course===chosen) ||
-      (String(chosen).toUpperCase()==="SCHOOL" && String(p.course||"").toUpperCase()==="SCHOOL")
-    )){
-    location.replace("/main.html?mode=student&portal=SCHOOL");
-  }else{
-    await sb.auth.signOut();
+  const chosen=new URLSearchParams(location.search).get("course")||localStorage.getItem("skh_selected_course")||"";
+  const actual=String(p?.course||"").toUpperCase();
+  const wanted=String(chosen||"").toUpperCase();
+  if(p?.role==="student" && wanted && actual===wanted){
+    location.replace(actual==="SCHOOL"?"/main.html?mode=student&portal=SCHOOL":"/main.html?mode=student");
+    return;
   }
-});
+  await sb.auth.signOut();
+ }catch(_){}
+})();
 const selectedCourseOnPage=new URLSearchParams(location.search).get('course') || localStorage.getItem('skh_selected_course') || '';
 const courseNames={
   'JNVST-6':'JNVST-6 — Navodaya Selection Test for Class VI',
@@ -332,14 +333,14 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
       installBtn.textContent='📱 Add SKH to Home Screen';
       setTimeout(async()=>{
         if(!deferredInstallPrompt){
-          location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html');
+          location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html?mode=student');
           return;
        }
         deferredInstallPrompt.prompt();
         await deferredInstallPrompt.userChoice.catch(()=>null);
         deferredInstallPrompt=null;
         installCard.classList.remove('show');
-        setTimeout(()=>location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html'),250);
+        setTimeout(()=>location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html?mode=student'),250);
       },300);
    }else{
       setTimeout(()=>location.replace('/main.html'),250);
