@@ -110,7 +110,11 @@ async function init(){
   }
   profile=p;
   if(p.role==="teacher") return teacherHome();
-  if(p.role==="student") return studentHome();
+  if(p.role==="student"){
+    const portal=new URLSearchParams(location.search).get("portal");
+    if(portal==="SCHOOL_ASSIGNMENTS") return studentAssignmentsHome();
+    return studentHome();
+  }
   return login();
 }
 function login(){
@@ -1342,7 +1346,125 @@ async function downloadAllResultsExcel(){
   }catch(e){ alert("Could not download results: "+(e.message||e)); }
 }
 
+
 async function studentHome(){
+  // School Course gets a simple landing page first.
+  if(String(profile?.course||"").toUpperCase()==="SCHOOL"){
+    return schoolStudentLanding();
+  }
+  return studentAssignmentsHome();
+}
+
+async function schoolStudentLanding(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+  try{
+    // Regular MCQ/video assignments assigned to this student.
+    const {data:links,error:le}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);
+    if(le)throw le;
+
+    const ids=(links||[]).map(x=>x.assignment_id);
+    let assignments=[],attempts=[];
+    if(ids.length){
+      const {data:a,error:ae}=await sb.from("assignments").select("id,title,subject,deadline,assignment_type,video_url,main_group,sub_group,time_limit,created_at").in("id",ids).order("created_at",{ascending:false});
+      if(ae)throw ae;
+      assignments=(a||[]).filter(x=>x.assignment_type!=="MOCK"&&x.assignment_type!=="mock");
+
+      const {data:at,error:ate}=await sb.from("attempts").select("*").eq("student_id",current.id).in("assignment_id",ids).order("submitted_at",{ascending:false});
+      if(ate)throw ate;
+      attempts=at||[];
+    }
+
+    const completedAssignmentIds=new Set(attempts.map(t=>t.assignment_id));
+    const pendingAssignments=assignments.filter(a=>!completedAssignmentIds.has(a.id));
+
+    // School assessments allowed for this student's current class/sub-division.
+    const [{data:members,error:me},{data:assessments,error:se}]=await Promise.all([
+      sb.from("class_students").select("class_id").eq("student_id",current.id),
+      sb.from("school_assessments").select("*").order("created_at",{ascending:false})
+    ]);
+    if(me)throw me;
+    if(se)throw se;
+
+    const classIds=new Set((members||[]).map(x=>x.class_id));
+    const allowedAssessments=(assessments||[]).filter(a=>{
+      if(!a.class_id || !classIds.has(a.class_id)) return false;
+      if(a.school_group_id) return a.school_group_id===profile.school_group_id;
+      return true;
+    });
+
+    let pendingAssessments=allowedAssessments.length;
+    if(allowedAssessments.length){
+      const aidList=allowedAssessments.map(a=>a.id);
+      const {data:qs,error:qe}=await sb.from("school_questions").select("id,assessment_id").in("assessment_id",aidList);
+      if(qe)throw qe;
+
+      const {data:subs,error:supe}=await sb.from("school_answer_submissions")
+        .select("assessment_id,question_id,status")
+        .eq("student_id",current.id)
+        .eq("is_current",true)
+        .in("assessment_id",aidList);
+      if(supe)throw supe;
+
+      const totalBy=new Map();
+      const answeredBy=new Map();
+      (qs||[]).forEach(q=>totalBy.set(q.assessment_id,(totalBy.get(q.assessment_id)||0)+1));
+      (subs||[]).forEach(s=>{
+        const key=s.assessment_id;
+        answeredBy.set(key,(answeredBy.get(key)||0)+1);
+      });
+
+      pendingAssessments=allowedAssessments.filter(a=>{
+        const total=totalBy.get(a.id)||0;
+        const answered=answeredBy.get(a.id)||0;
+        return total===0 || answered<total;
+      }).length;
+    }
+
+    const totalPending= pendingAssignments.length + pendingAssessments;
+    const summaryMessage=totalPending
+      ? `You have <b>${pendingAssignments}</b> pending assignment${pendingAssignments===1?"":"s"} and <b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}.`
+      : `You have no pending assignments or assessments.`;
+
+    render(`<div class="wrap">
+      ${header("Student Dashboard")}
+      <div class="card">
+        <h2>Welcome, ${esc(profile.full_name||"Student")}</h2>
+        <p class="muted">Roll No: <b>${esc(profile.roll_no||"")}</b> &nbsp; | &nbsp; School Course</p>
+      </div>
+
+      <div class="notice" style="font-size:16px">
+        📌 ${summaryMessage}
+      </div>
+
+      <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <section class="card" style="border:2px solid #2563eb;background:#eff6ff;min-height:190px">
+          <h2 style="color:#1d4ed8;margin-bottom:8px">📚 My Assignments</h2>
+          <p class="muted">Regular MCQ and video assignments assigned to you.</p>
+          <p><b>${pendingAssignments}</b> pending assignment${pendingAssignments===1?"":"s"}</p>
+          <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSIGNMENTS'">Open My Assignments</button>
+        </section>
+
+        <section class="card" style="border:2px solid #0f766e;background:#f0fdfa;min-height:190px">
+          <h2 style="color:#0f766e;margin-bottom:8px">📝 My Assessments</h2>
+          <p class="muted">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
+          <p><b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}</p>
+          <button onclick="location.href='/school-dashboard.html'">Open My Assessments</button>
+        </section>
+      </div>
+
+      <div class="card" style="background:#f8fafc">
+        <p class="small muted" style="margin:0">
+          Your assignments and School Assessments are kept separate so you can easily find and complete each type of work.
+        </p>
+      </div>
+    </div>`);
+    setTimeout(showStudentInstallPrompt,300);
+  }catch(e){
+    render(`<div class="wrap">${header("Student Dashboard")}<div class="card">${message(e.message||String(e))}</div></div>`);
+  }
+}
+
+async function studentAssignmentsHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const {data:links,error:le}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);
   if(le)return render(`<div class="wrap">${header("My Assignments")}<div class="card">${message(le.message)}</div></div>`);
@@ -1359,7 +1481,7 @@ async function studentHome(){
     const isMock=(a.assignment_type==="MOCK"||a.assignment_type==="mock");const isVideo=!isMock&&(a.assignment_type==="VIDEO"||(!a.assignment_type&&!!a.video_url));
     return `<div class="assignment student-assignment-row ${!isCompleted?"student-new-highlight":""}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p><div style="margin-top:6px">${!isCompleted?`<span class="student-new-badge">NEW</span> `:""}${isMock?`<span class="mock-badge">📝 MOCK TEST</span>`:groupBadge(a)}</div></div><span class="tag">${isMock?`⏱ ${Number(a.time_limit||120)} min`:isVideo?"MCQ + Video":"MCQ"}</span></div>${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}${isCompleted?`<p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p>${pct<80?`<div class="notice small" style="margin-top:10px">⚠️ <b>Below 80%:</b> This attempt will reset after <b>3 hours</b> and the assignment will be available again. <b>80% or above:</b> Your submission remains final.</div>`:""}<div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div>${isVideo?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}`:`<span class="small" style="color:#166534"><b>Not Submitted</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">${isMock?"Start Mock Test":"Start Assignment"}</button></div>`}</div>`;
   };
-  render(`<div class="wrap">${header("My Assignments")}${profile.course==="SCHOOL"?`<div class="card" style="border:2px solid #0f766e;background:#f0fdfa"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0;color:#0f766e">📝 School Assessments</h2><p class="muted" style="margin:6px 0 0">Teacher-created assessments • Upload handwritten answers • View teacher feedback</p></div><button onclick="location.href='/school-dashboard.html'">Open School Assessments</button></div></div>`:""}<div class="card" style="border:2px solid #7c3aed;background:#faf5ff"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0;color:#6d28d9">🎯 Mock Tests</h2><p class="muted" style="margin:6px 0 0">Separate from assignments • 80 Questions • 100 Marks • 2 Hours</p></div><button onclick="studentMockTests()">View Mock Tests</button></div></div><div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">New and not-submitted assignments are highlighted automatically.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div><div class="card"><div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"><button id="student-dash-tab-new" onclick="showStudentDashboardTab('new')">New Assignments (${pending.length})</button><button id="student-dash-tab-completed" class="secondary" onclick="showStudentDashboardTab('completed')">Completed Assignments (${completed.length})</button></div><div id="student-dash-panel-new">${pending.length?pending.map(a=>assignmentCard(a,false)).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have no pending assignments.</span></div>"}</div><div id="student-dash-panel-completed" style="display:none">${completed.length?completed.map(a=>assignmentCard(a,true)).join(""):"<p class='muted'>No completed assignments.</p>"}</div></div></div>`);
+  render(`<div class="wrap">${header("My Assignments")}<div class="card" style="border:2px solid #7c3aed;background:#faf5ff"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0;color:#6d28d9">🎯 Mock Tests</h2><p class="muted" style="margin:6px 0 0">Separate from assignments • 80 Questions • 100 Marks • 2 Hours</p></div><button onclick="studentMockTests()">View Mock Tests</button></div></div><div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2><p class="muted">New and not-submitted assignments are highlighted automatically.</p><div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div></div><div class="card"><div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"><button id="student-dash-tab-new" onclick="showStudentDashboardTab('new')">New Assignments (${pending.length})</button><button id="student-dash-tab-completed" class="secondary" onclick="showStudentDashboardTab('completed')">Completed Assignments (${completed.length})</button></div><div id="student-dash-panel-new">${pending.length?pending.map(a=>assignmentCard(a,false)).join(""):"<div class='success'><b>No New Assignments</b><br><span class='small'>You have no pending assignments.</span></div>"}</div><div id="student-dash-panel-completed" style="display:none">${completed.length?completed.map(a=>assignmentCard(a,true)).join(""):"<p class='muted'>No completed assignments.</p>"}</div></div></div>`);
   setTimeout(showStudentInstallPrompt,300);
 }
 
