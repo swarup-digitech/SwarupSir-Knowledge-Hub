@@ -169,7 +169,7 @@ async function init(){
     if(p.course==="SCHOOL"){
       if(portal==="SCHOOL_ASSIGNMENTS") return studentHome();
       if(portal==="SCHOOL_MOCK") return studentMockTests();
-      if(portal==="SCHOOL_ASSESSMENTS") return schoolStudentHome();
+      if(portal==="SCHOOL_ASSESSMENTS") return schoolStudentAssessments();
       return schoolStudentHome();
     }
     return studentHome();
@@ -1407,6 +1407,108 @@ async function downloadAllResultsExcel(){
 }
 
 
+async function schoolStudentAssessments(){
+  // Dedicated in-app School Assessments view. This does not call studentHome()
+  // and therefore cannot open or mix with the normal Assignments view.
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+
+  render(`<div class="wrap">${header("📝 My Assessments")}
+    <div class="card">
+      <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
+      <p class="muted">Roll No: <b>${esc(profile?.roll_no||"")}</b> &nbsp; | &nbsp; School Course</p>
+    </div>
+    <div id="school-assessments-only-content">
+      <div class="card"><div class="success"><b>Loading your assessments…</b></div></div>
+    </div>
+  </div>`);
+
+  try{
+    // Load the student's class memberships and assessments in parallel.
+    const [{data:members,error:me},{data:assessments,error:ae}]=await Promise.all([
+      sb.from("class_students").select("class_id").eq("student_id",current.id),
+      sb.from("school_assessments")
+        .select("id,title,subject,deadline,school_group_id,class_id,created_at")
+        .order("created_at",{ascending:false})
+    ]);
+    if(me)throw me;
+    if(ae)throw ae;
+
+    const classIds=new Set((members||[]).map(x=>x.class_id));
+    const allowed=(assessments||[]).filter(a=>{
+      if(!a.class_id || !classIds.has(a.class_id))return false;
+      return !a.school_group_id || a.school_group_id===profile.school_group_id;
+    });
+
+    const aidList=allowed.map(a=>a.id);
+    let submissions=[];
+    if(aidList.length){
+      const {data:s,error:se}=await sb.from("school_answer_submissions")
+        .select("assessment_id,question_id,status,is_current")
+        .eq("student_id",current.id)
+        .eq("is_current",true)
+        .in("assessment_id",aidList);
+      if(se)throw se;
+      submissions=s||[];
+    }
+
+    const answeredBy=new Map();
+    submissions.forEach(s=>answeredBy.set(
+      s.assessment_id,(answeredBy.get(s.assessment_id)||0)+1
+    ));
+
+    // An assessment remains pending until all its questions have current submissions.
+    let questionCounts=new Map();
+    if(aidList.length){
+      const {data:qs,error:qe}=await sb.from("school_questions")
+        .select("id,assessment_id")
+        .in("assessment_id",aidList);
+      if(qe)throw qe;
+      (qs||[]).forEach(q=>questionCounts.set(
+        q.assessment_id,(questionCounts.get(q.assessment_id)||0)+1
+      ));
+    }
+
+    const pending=allowed.filter(a=>{
+      const total=questionCounts.get(a.id)||0;
+      const answered=answeredBy.get(a.id)||0;
+      return total===0 || answered<total;
+    });
+
+    const assessmentCards=(pending.length?pending:allowed).map(a=>`
+      <div class="assignment">
+        <div class="question-head">
+          <div>
+            <h3 style="margin:0 0 5px">${esc(a.title)}</h3>
+            <div class="muted">${esc(a.subject||"")}</div>
+          </div>
+          <span class="tag">${a.school_group_id?"Sub-division":"Entire class"}</span>
+        </div>
+        ${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:""}
+        <button onclick="location.href='/school-dashboard.html?assessment=${encodeURIComponent(a.id)}'">Open Assessment</button>
+      </div>`).join("");
+
+    const content=document.getElementById("school-assessments-only-content");
+    if(!content)return;
+
+    content.innerHTML=`
+      <div class="notice" style="font-size:16px">
+        📌 <b>${pending.length}</b> pending assessment${pending.length===1?"":"s"}.
+      </div>
+      <section class="card" style="border:2px solid #0f766e;background:#f0fdfa">
+        <h2 style="margin:0 0 8px;color:#0f766e">📝 My Assessments</h2>
+        <p class="muted">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
+        ${assessmentCards || '<div class="success"><b>No assessments assigned.</b></div>'}
+      </section>
+      <div class="actions">
+        <button class="secondary" onclick="schoolStudentHome()">← Back</button>
+        <button class="secondary" onclick="schoolStudentHome()">🏠 Home</button>
+      </div>`;
+  }catch(e){
+    const content=document.getElementById("school-assessments-only-content");
+    if(content)content.innerHTML=`<div class="card">${message("Could not load School Assessments: "+(e.message||String(e)))}</div>`;
+  }
+}
+
 async function schoolStudentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const schoolPortal=new URLSearchParams(location.search).get("portal")||"";
@@ -1553,7 +1655,7 @@ async function schoolStudentHome(){
               <p class="muted" style="margin:6px 0 0">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
               <p style="margin:10px 0 0"><b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}</p>
             </div>
-            <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSESSMENTS'">Open My Assessments</button>
+            <button onclick="schoolStudentAssessments()">Open My Assessments</button>
           </div>
         </section>
 
