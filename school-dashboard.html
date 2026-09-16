@@ -5,15 +5,35 @@ const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co",SUPABASE_KEY="sb_p
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let current=null,profile=null,schoolGroupName='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const render=x=>document.getElementById('app').innerHTML=x;
 const header=title=>`<div class="top"><div><h1>${title}</h1><div class="muted small">Swarup Sir's Knowledge Hub</div></div><button class="secondary" onclick="logout()">Logout</button></div>`;
-async function init(){if(localStorage.getItem('skh_selected_course')!=='SCHOOL'){location.replace('/index.html');return}const {data:{session}}=await sb.auth.getSession();if(!session){location.replace('/school-login.html');return}current=session.user;const {data:p,error}=await sb.from('profiles').select('*').eq('id',current.id).single();if(error||!p||p.role!=='student'||p.course!=='SCHOOL'){await sb.auth.signOut();location.replace('/school-login.html');return}profile=p;if(profile.school_group_id){const {data:g}=await sb.from('school_course_groups').select('name').eq('id',profile.school_group_id).maybeSingle();schoolGroupName=g?.name||''}await schoolHome()}
-async function schoolHome(){const {data:assessments,error}=await sb.from('school_assessments').select('*').order('created_at',{ascending:false});if(error)return render(header('School Dashboard')+`<div class="card"><div class="notice">${esc(error.message)}</div></div>`);const allowed=(assessments||[]).filter(a=>a.class_id&&a.school_group_id?(a.school_group_id===profile.school_group_id):a.class_id&&studentClassIds.has(a.class_id));
+async function init(){
+  try{
+    if(localStorage.getItem('skh_selected_course')!=='SCHOOL'){location.replace('/index.html');return}
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session){location.replace('/school-login.html');return}
+    current=session.user;
+    const {data:p,error}=await sb.from('profiles').select('*').eq('id',current.id).single();
+    if(error||!p||p.role!=='student'||p.course!=='SCHOOL'){
+      await sb.auth.signOut();
+      location.replace('/school-login.html');
+      return;
+    }
+    profile=p;
+    if(profile.school_group_id){
+      const {data:g}=await sb.from('school_course_groups').select('name').eq('id',profile.school_group_id).maybeSingle();
+      schoolGroupName=g?.name||'';
+    }
+    await loadStudentClasses();
+    await schoolHome();
+  }catch(e){
+    render(`<div class="wrap"><div class="card"><div class="notice"><b>Unable to open School Dashboard.</b><br>${esc(e.message||String(e))}</div><button class="secondary" onclick="location.replace('/school-login.html')">← Back to Login</button></div></div>`);
+  }
+}
+async function schoolHome(){
+ if(current && studentClassIds.size===0) await loadStudentClasses();
+ const {data:assessments,error}=await sb.from('school_assessments').select('*').order('created_at',{ascending:false});if(error)return render(header('School Dashboard')+`<div class="card"><div class="notice">${esc(error.message)}</div></div>`);const allowed=(assessments||[]).filter(a=>a.class_id&&a.school_group_id?(a.school_group_id===profile.school_group_id):a.class_id&&studentClassIds.has(a.class_id));
  const aids=allowed.map(a=>a.id);let subs=[];if(aids.length){const {data:s,error:se}=await sb.from('school_answer_submissions').select('id,assessment_id,question_id,status,awarded_marks,submitted_at').eq('student_id',current.id).eq('is_current',true).in('assessment_id',aids);if(se)return render(header('School Dashboard')+`<div class="card"><div class="notice">${esc(se.message)}</div></div>`);subs=s||[]}
  const subKey=new Set(subs.map(s=>s.assessment_id+'|'+s.question_id));const cards=allowed.map(a=>`<div class="assignment"><div class="question-head"><div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')}</div></div><span class="tag">${a.school_group_id?'Sub-division':'Entire class'}</span></div>${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:''}<button onclick="openAssessment('${a.id}')">Open Assessment</button></div>`).join('');
- const assessmentOnly=new URLSearchParams(location.search).get('view')==='assessments';
- const welcome=`<div class="card"><h2>Welcome, ${esc(profile.full_name||'Student')}</h2><p class="muted">Roll No: <b>${esc(profile.roll_no||'')}</b> &nbsp; | &nbsp; School Course${schoolGroupName?` &nbsp; | &nbsp; Sub-division: <b>${esc(schoolGroupName)}</b>`:''}</p></div>`;
- const assessmentSection=`<section class="card"><h2>📝 School Assessments</h2><p class="muted">Teacher-created questions, marks and answer uploads.</p>${cards||'<div class="success"><b>No assessments available.</b><br><span class="small">Your teacher has not assigned a school assessment yet.</span></div>'}</section>`;
- const assignmentSection=`<section class="card"><h2>📚 Assignments</h2><p class="muted">Your regular MCQ/video assignments remain in the same familiar student format.</p><div class="actions"><button onclick="location.href='/main.html?mode=student&school=1'">Open Assignments</button></div></section>`;
- render(`<div class="wrap">${header(assessmentOnly?'📝 My Assessments':'🏫 School Dashboard')}${welcome}${assessmentOnly?assessmentSection:`<div class="grid">${assignmentSection}${assessmentSection}</div>`}${assessmentOnly?`<button class="secondary" onclick="location.href='/main.html?mode=student&school=1'">← My Assignments</button>`:''}</div>`)
+ render(`<div class="wrap">${header('🏫 School Dashboard')}<div class="card"><h2>Welcome, ${esc(profile.full_name||'Student')}</h2><p class="muted">Roll No: <b>${esc(profile.roll_no||'')}</b> &nbsp; | &nbsp; School Course${schoolGroupName?` &nbsp; | &nbsp; Sub-division: <b>${esc(schoolGroupName)}</b>`:''}</p></div><div class="grid"><section class="card"><h2>📚 Assignments</h2><p class="muted">Your regular MCQ/video assignments remain in the same familiar student format.</p><div class="actions"><button onclick="location.href='/main.html?mode=student&school=1'">Open Assignments</button></div></section><section class="card"><h2>📝 School Assessments</h2><p class="muted">Teacher-created questions, marks and answer uploads.</p>${cards||'<div class="success"><b>No assessments available.</b><br><span class="small">Your teacher has not assigned a school assessment yet.</span></div>'}</section></div></div>`)
 }
 let studentClassIds=new Set();
 async function loadStudentClasses(){const {data:m}=await sb.from('class_students').select('class_id').eq('student_id',current.id);studentClassIds=new Set((m||[]).map(x=>x.class_id));}
@@ -57,5 +77,5 @@ async function fileToBase64(file){return await new Promise((resolve,reject)=>{co
 function sanitizeFilePart(s){return String(s||'Assessment').replace(/[\\/:*?"<>|#%{}~&]/g,'_').replace(/\s+/g,' ').trim().slice(0,90)||'Assessment'}
 const _openAssessment=openAssessment;openAssessment=async function(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).single();if(ae)return alert(ae.message);if(a.school_group_id&&a.school_group_id!==profile.school_group_id)return alert('This assessment is assigned to another subdivision.');if(!studentClassIds.has(a.class_id))return alert('This assessment is not assigned to your class.');currentAssessmentId=id;currentAssessmentTitle=a.title;const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const {data:subs,error:se}=await sb.from('school_answer_submissions').select('id,question_id,status,awarded_marks,teacher_comment,submitted_at').eq('assessment_id',id).eq('student_id',current.id).eq('is_current',true);if(se)return alert(se.message);const subMap=new Map((subs||[]).map(x=>[x.question_id,x]));const {data:files,error:fe}=subs?.length?await sb.from('school_answer_files').select('submission_id,page_no,file_name,drive_url,mime_type,file_size_bytes').in('submission_id',subs.map(x=>x.id)).order('page_no'):{data:[],error:null};if(fe)return alert(fe.message);const fileMap=new Map();for(const f of(files||[])){if(!fileMap.has(f.submission_id))fileMap.set(f.submission_id,[]);fileMap.get(f.submission_id).push(f)}render(`<div class="wrap">${header('📝 '+esc(a.title))}<div class="card"><div class="question-head"><div><h2 style="margin:0">${esc(a.title)}</h2><div class="muted">${esc(a.subject||'')}</div></div><button class="secondary" onclick="schoolHome()">← Assessments</button></div>${a.deadline?`<div class="notice small">Deadline: ${new Date(a.deadline).toLocaleString()}</div>`:''}</div>${(q||[]).map(x=>renderQuestion(x,subMap.get(x.id),fileMap.get(subMap.get(x.id)?.id)||[])).join('')||'<div class="card"><div class="notice">No questions have been added yet.</div></div>'}</div>`)};
 async function logout(){await sb.auth.signOut();localStorage.removeItem('skh_school_student');localStorage.removeItem('skh_school_roll');location.replace('/school-login.html')}
-(async()=>{await loadStudentClasses();await init()})();
+init();
 </script></body></html>
