@@ -169,6 +169,7 @@ async function init(){
     if(p.course==="SCHOOL"){
       if(portal==="SCHOOL_ASSIGNMENTS") return studentHome();
       if(portal==="SCHOOL_MOCK") return studentMockTests();
+      if(portal==="SCHOOL_ASSESSMENTS") return schoolStudentHome();
       return schoolStudentHome();
     }
     return studentHome();
@@ -1408,6 +1409,8 @@ async function downloadAllResultsExcel(){
 
 async function schoolStudentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+  const schoolPortal=new URLSearchParams(location.search).get("portal")||"";
+  const assessmentOnly=schoolPortal==="SCHOOL_ASSESSMENTS";
 
   // Render the landing shell immediately.
   render(`<div class="wrap">${header("Student Dashboard")}
@@ -1505,42 +1508,66 @@ async function schoolStudentHome(){
     const content=document.getElementById("school-dashboard-content");
     if(!content)return;
 
-    content.innerHTML=`
-      <div class="notice" style="font-size:16px">${summary}</div>
-
-      <section class="card" style="border:2px solid #7c3aed;background:#faf5ff">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <h2 style="margin:0;color:#6d28d9">🎯 Mock Tests</h2>
-            <p class="muted" style="margin:6px 0 0">Separate from assignments • 80 Questions • 100 Marks • 2 Hours</p>
-            <p style="margin:10px 0 0"><b>${pendingMocks}</b> pending Mock Test${pendingMocks===1?"":"s"}</p>
+    const assessmentCards=allowedAssessments.length
+      ? allowedAssessments.map(a=>`<div class="assignment">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+            <div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||"")}</div></div>
+            <span class="tag">${a.school_group_id?"Sub-division":"Entire class"}</span>
           </div>
-          <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_MOCK'">View Mock Tests</button>
-        </div>
-      </section>
+          ${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:""}
+          <button onclick="location.href='/school-dashboard.html?assessment=${encodeURIComponent(a.id)}'">Open Assessment</button>
+        </div>`).join("")
+      : '<div class="success"><b>No assessments available.</b><br><span class="small">Your teacher has not assigned a School Assessment yet.</span></div>';
 
-      <section class="card" style="border:2px solid #0f766e;background:#f0fdfa">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <h2 style="margin:0;color:#0f766e">📝 School Assessments</h2>
-            <p class="muted" style="margin:6px 0 0">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
-            <p style="margin:10px 0 0"><b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}</p>
-          </div>
-          <button onclick="location.href='/school-dashboard.html?view=assessments'">Open My Assessments</button>
-        </div>
-      </section>
+    if(assessmentOnly){
+      content.innerHTML=`
+        <div class="notice" style="font-size:16px">📌 You have <b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}.</div>
+        <section class="card" style="border:2px solid #0f766e;background:#f0fdfa">
+          <h2 style="margin:0 0 8px;color:#0f766e">📝 My Assessments</h2>
+          <p class="muted">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
+          ${assessmentCards}
+        </section>
+        <div class="actions" style="margin-top:4px">
+          <button class="secondary" onclick="location.replace('/main.html?mode=student')">← Back</button>
+          <button class="secondary" onclick="location.replace('/main.html?mode=student')">🏠 Home</button>
+        </div>`;
+    }else{
+      content.innerHTML=`
+        <div class="notice" style="font-size:16px">${summary}</div>
 
-      <section class="card" style="border:2px solid #2563eb;background:#eff6ff">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <h2 style="margin:0;color:#1d4ed8">📚 My Assignments</h2>
-            <p class="muted" style="margin:6px 0 0">Regular MCQ and video assignments assigned to you.</p>
-            <p style="margin:10px 0 0"><b>${pendingAssignments.length}</b> pending assignment${pendingAssignments.length===1?"":"s"}</p>
+        <section class="card" style="border:2px solid #7c3aed;background:#faf5ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div>
+              <h2 style="margin:0;color:#6d28d9">🎯 Mock Tests</h2>
+              <p class="muted" style="margin:6px 0 0">Separate from assignments • 80 Questions • 100 Marks • 2 Hours</p>
+              <p style="margin:10px 0 0"><b>${pendingMocks}</b> pending Mock Test${pendingMocks===1?"":"s"}</p>
+            </div>
+            <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_MOCK'">View Mock Tests</button>
           </div>
-          <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSIGNMENTS'">Open My Assignments</button>
-        </div>
-      </section>
-    `;
+        </section>
+
+        <section class="card" style="border:2px solid #0f766e;background:#f0fdfa">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div>
+              <h2 style="margin:0;color:#0f766e">📝 School Assessments</h2>
+              <p class="muted" style="margin:6px 0 0">Teacher-created questions, marks, handwritten answer uploads and feedback.</p>
+              <p style="margin:10px 0 0"><b>${pendingAssessments}</b> pending assessment${pendingAssessments===1?"":"s"}</p>
+            </div>
+            <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSESSMENTS'">Open My Assessments</button>
+          </div>
+        </section>
+
+        <section class="card" style="border:2px solid #2563eb;background:#eff6ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <div>
+              <h2 style="margin:0;color:#1d4ed8">📚 My Assignments</h2>
+              <p class="muted" style="margin:6px 0 0">Regular MCQ and video assignments assigned to you.</p>
+              <p style="margin:10px 0 0"><b>${pendingAssignments.length}</b> pending assignment${pendingAssignments.length===1?"":"s"}</p>
+            </div>
+            <button onclick="location.href='/main.html?mode=student&portal=SCHOOL_ASSIGNMENTS'">Open My Assignments</button>
+          </div>
+        </section>`;
+    }
   }catch(e){
     const content=document.getElementById("school-dashboard-content");
     if(content)content.innerHTML=`<div class="card">${message("Could not load your dashboard: "+(e.message||String(e)))}</div>`;
