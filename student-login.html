@@ -343,7 +343,7 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
         setTimeout(()=>location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html?mode=student'),250);
       },300);
    }else{
-      setTimeout(()=>location.replace('/main.html'),250);
+      setTimeout(()=>location.replace(validSchool ? '/main.html?mode=student&portal=SCHOOL' : '/main.html?mode=student'),250);
    }
  }catch(err){show(err.message||String(err));btn.disabled=false;btn.textContent='Login'}
 });
