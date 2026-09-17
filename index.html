@@ -668,13 +668,17 @@ function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._
 async function downloadFilteredTeacherResultsExcel(){
   try{
     const d=window._teacherResults;
-    if(!d){alert("Assessment Results are not loaded. Please open Assignment Results first.");return;}
+    if(!d){ alert("Assessment Results are not loaded. Please open Assignment Results first."); return; }
+    if(typeof XLSX==="undefined"){ alert("Excel library is not loaded. Please refresh the page and try again."); return; }
+
     const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
     const classMap=new Map((d.classes||[]).map(c=>[c.id,c.name]));
     const studentMap=new Map((d.students||[]).map(s=>[s.id,s]));
     const assignmentMap=new Map((d.assignments||[]).map(a=>[a.id,a]));
+
+    // Build exactly the same dataset used by the visible filtered table.
     let rows=(d.attempts||[]).map(at=>({
-      type:"submitted",at,a:assignmentMap.get(at.assignment_id),
+      type:"submitted",at:at,a:assignmentMap.get(at.assignment_id),
       p:studentMap.get(at.student_id)||{},
       className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""
     }));
@@ -695,15 +699,15 @@ async function downloadFilteredTeacherResultsExcel(){
       (!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&
       (!f.student||f.student==="all"||r.p.id===f.student)
     );
-    if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
-    if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
+    if(f.minScore!=="") rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
+    if(f.maxScore!=="") rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
 
     rows.sort((x,y)=>{
       let a,b;
       if(f.sort==="student_asc"||f.sort==="student_desc"){
-        a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase();
+        a=(x.p.full_name||"").toLowerCase(); b=(y.p.full_name||"").toLowerCase();
       }else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){
-        a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase();
+        a=(x.a.title||"").toLowerCase(); b=(y.a.title||"").toLowerCase();
       }else if(f.sort==="score_asc"||f.sort==="score_desc"){
         a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));
         b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));
@@ -715,86 +719,62 @@ async function downloadFilteredTeacherResultsExcel(){
       return a===b?0:a<b?-1*dir:1*dir;
     });
 
-    if(!rows.length){alert("No results match the selected filters.");return;}
+    if(!rows.length){ alert("No results match the selected filters."); return; }
 
-    const submittedRows=rows.filter(r=>r.type==="submitted");
-    const attemptIds=submittedRows.map(r=>r.at.id);
-    const assignmentIds=[...new Set(rows.map(r=>r.a.id).filter(Boolean))];
-
-    let qs=[];
-    if(assignmentIds.length){
-      const {data,error}=await sb.from("questions")
-        .select("id,assignment_id,question_order,correct_option")
-        .in("assignment_id",assignmentIds).order("question_order");
-      if(error)throw new Error(error.message);
-      qs=qs||data||[];
-    }
-
-    let answerRows=[];
-    if(attemptIds.length){
-      const {data,error}=await sb.from("answers")
-        .select("attempt_id,question_id,selected_option")
-        .in("attempt_id",attemptIds);
-      if(error)throw new Error(error.message);
-      answerRows=data||[];
-    }
-
-    const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
-    const questionsByAssignment=new Map();
-    qs.forEach(q=>{
-      if(!questionsByAssignment.has(q.assignment_id))questionsByAssignment.set(q.assignment_id,[]);
-      questionsByAssignment.get(q.assignment_id).push(q);
-    });
-
-    const exportRows=rows.map(r=>{
-      const scorePct=r.type==="pending"?"":Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)));
-      const row={
-        "Student Name":r.p.full_name||"",
-        "Roll No":r.p.roll_no||"",
-        "Assignment Name":r.a.title||"",
-        "Main Group":r.a.main_group||"",
-        "Sub-Group":r.a.sub_group||"",
-        "Class":r.className||"",
-        "Score":r.type==="pending"?"":r.at.score,
-        "Total Questions":r.type==="pending"?"":r.at.total_questions,
-        "Score %":scorePct,
-        "Status":r.type==="pending"?"Not Submitted":"Submitted",
-        "Submitted":r.at?.submitted_at?new Date(r.at.submitted_at).toLocaleString():"",
-        "Attempt No":r.at?.attempt_number||""
-      };
-      if(r.type==="submitted"){
-        (questionsByAssignment.get(r.a.id)||[]).forEach((q,i)=>{
-          const n=q.question_order||i+1;
-          const ans=am.get(`${r.at.id}:${q.id}`);
-          row[`Q${n} Option`]=ans?.selected_option||"";
-          row[`Q${n} Answer Key`]=q.correct_option||"";
-        });
-      }
-      row["Total Marks"]=r.type==="pending"?"":r.at.score;
-      return row;
-    });
+    // First create the Excel from the filtered rows immediately.
+    // This guarantees that download does not depend on another Supabase query.
+    const exportRows=rows.map(r=>({
+      "Student Name":r.p.full_name||"",
+      "Roll No":r.p.roll_no||"",
+      "Assignment Name":r.a.title||"",
+      "Main Group":r.a.main_group||"",
+      "Sub-Group":r.a.sub_group||"",
+      "Class":r.className||"",
+      "Score":r.type==="pending"?"":r.at.score,
+      "Total Questions":r.type==="pending"?"":r.at.total_questions,
+      "Score %":r.type==="pending"?"":Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1))),
+      "Status":r.type==="pending"?"Not Submitted":"Submitted",
+      "Submitted":r.at?.submitted_at?new Date(r.at.submitted_at).toLocaleString():"",
+      "Attempt No":r.at?.attempt_number||""
+    }));
 
     const ws=XLSX.utils.json_to_sheet(exportRows);
-    ws["!cols"]=Object.keys(exportRows[0]).map(k=>({wch:Math.max(12,Math.min(28,k.length+3))}));
+    ws["!cols"]=Object.keys(exportRows[0]).map(k=>({wch:Math.max(12,Math.min(30,k.length+3))}));
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
 
     const parts=[];
-    if(f.mainGroup&&f.mainGroup!=="all")parts.push(String(f.mainGroup).replace(/[\\/:*?"<>|]+/g,"_"));
-    if(f.subGroup&&f.subGroup!=="all")parts.push(String(f.subGroup).replace(/[\\/:*?"<>|]+/g,"_"));
+    if(f.mainGroup&&f.mainGroup!=="all")parts.push(String(f.mainGroup));
+    if(f.subGroup&&f.subGroup!=="all")parts.push(String(f.subGroup));
     if(f.assignment&&f.assignment!=="all"){
-      const a=assignmentMap.get(f.assignment);
-      if(a?.title)parts.push(String(a.title).replace(/[\\/:*?"<>|]+/g,"_"));
+      const a=assignmentMap.get(f.assignment); if(a?.title)parts.push(String(a.title));
     }
     if(f.classId&&f.classId!=="all"){
-      const c=classMap.get(f.classId);
-      if(c)parts.push(String(c).replace(/[\\/:*?"<>|]+/g,"_"));
+      const c=classMap.get(f.classId); if(c)parts.push(String(c));
+    }
+    if(f.student&&f.student!=="all"){
+      const st=studentMap.get(f.student); if(st?.full_name)parts.push(String(st.full_name));
     }
     if(f.status&&f.status!=="all")parts.push(f.status==="pending"?"Pending":"Submitted");
-    const suffix=parts.length?`_${parts.join("_").slice(0,90)}`:"";
-    XLSX.writeFile(wb,`JNVST_Assessment_Filtered_Results${suffix}.xlsx`);
+
+    const clean=x=>String(x||"").replace(/[\\/:*?"<>|]+/g,"_").replace(/\s+/g,"_").slice(0,40);
+    const suffix=parts.length?"_"+parts.map(clean).filter(Boolean).join("_").slice(0,120):"";
+    const filename=`JNVST_Assessment_Filtered_Results${suffix}.xlsx`;
+
+    // Use XLSX.write + Blob as the primary download method; it is more reliable
+    // in hosted/PWA environments than relying only on XLSX.writeFile().
+    const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=filename; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+
+    alert(`Excel downloaded successfully.\n\n${rows.length} filtered record(s) exported.`);
   }catch(e){
-    alert("Could not download filtered results: "+(e.message||e));
+    console.error("Filtered Excel download error:",e);
+    alert("Could not download filtered results:\n\n"+(e.message||e));
   }
 }
 
