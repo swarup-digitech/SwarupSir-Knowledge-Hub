@@ -84,7 +84,23 @@ setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>document.getElementById("app").innerHTML=x;
-const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="history.length>1?history.back():location.replace('/index.html')">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace('/index.html')">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
+function goBack(){
+  // This app never changes the URL when moving between internal screens
+  // (render() just rewrites the page in place), and the login pages use
+  // location.replace() so they don't leave history entries either. That
+  // means the real browser history often skips straight past every screen
+  // the person has seen in this app and lands on whatever page was open
+  // in this tab before the app was ever loaded (e.g. an old Teacher Login
+  // visit) - not the app's own previous screen. So "Back" is routed
+  // explicitly by role/course instead of relying on browser history.
+  if(window.loginMode==="student"){
+    if(String(profile?.course||"").toUpperCase()==="SCHOOL") return schoolStudentHome();
+    return studentHome();
+  }
+  if(window.loginMode==="teacher") return teacherHome();
+  return location.replace("/index.html");
+}
+const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="goBack()">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="goBack()">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
 const STUDENT_PROFILE_CACHE_PREFIX="skh_student_profile_v1_";
 function getCachedStudentProfile(userId){
