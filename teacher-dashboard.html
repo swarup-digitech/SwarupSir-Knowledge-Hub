@@ -22,7 +22,7 @@ function home(){document.getElementById('app').innerHTML=`${header('School Teach
 <button onclick="manageGroups()">▣ School Course Sub-divisions</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=downloadAllResultsExcel'">⬇ All Results (Excel)</button>
 </div>
-</div><div class="card" style="border:2px solid #2563eb;background:#fbfdff"><h2>📝 School Assessments</h2><p class="muted">Create assessments, add questions individually, or upload many questions at once.</p>${assessments.length?assessments.map(a=>`<div class="student-card"><h3>${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')} ${a.total_marks?`• ${a.total_marks} marks`:''}</div><div class="actions" style="margin-top:9px"><button onclick="editQuestions('${a.id}')">✎ Questions</button><button onclick="reviewAssessment('${a.id}')">📊 Review Submissions</button><button onclick="reassignSchoolAssessment('${a.id}')">↻ Reassign</button><button class="secondary" onclick="deleteAssessment('${a.id}')">Delete</button></div></div>`).join(''):'<p class="muted">No School assessments yet.</p>'}<div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button></div></div>`}
+</div><div class="card" style="border:2px solid #2563eb;background:#fbfdff"><h2>📝 School Assessments</h2><p class="muted">Create assessments, add questions individually, or upload many questions at once.</p>${assessments.length?assessments.map(a=>`<div class="student-card"><h3>${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')} ${a.total_marks?`• ${a.total_marks} marks`:''}</div><div class="actions" style="margin-top:9px"><button onclick="editQuestions('${a.id}')">✎ Questions & Solutions</button><button onclick="editAssessmentDetails('${a.id}')">⚙ Edit</button><button onclick="reviewAssessment('${a.id}')">📊 Review Submissions</button><button onclick="reassignSchoolAssessment('${a.id}')">↻ Reassign</button><button class="secondary" onclick="deleteAssessment('${a.id}')">Delete</button></div></div>`).join(''):'<p class="muted">No School assessments yet.</p>'}<div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button></div></div>`}
 function addStudent(){if(!classes.length)return alert('Create a School class first.');document.getElementById('app').innerHTML=`${header('Add School Student')}<div class="card"><label>Student Name</label><input id="sn"><label>Roll No</label><input id="sr"><label>Password</label><input id="sp" type="text" placeholder="At least 6 characters"><label>Class</label><select id="sc" onchange="refreshSchoolStudentGroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>School Course Sub-division</label><select id="sg"></select><div id="sm"></div><div class="actions" style="margin-top:12px"><button onclick="saveStudent()">Create Student</button><button class="secondary" onclick="home()">Cancel</button></div></div>`;refreshSchoolStudentGroups()}
 function refreshSchoolStudentGroups(){const classId=document.getElementById('sc')?.value,sel=document.getElementById('sg');if(!sel)return;const opts=groups.filter(g=>g.class_id===classId).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');sel.innerHTML='<option value="">No subdivision</option>'+opts}
 async function saveStudent(){try{const j=await fn({action:'createStudents',students:[{name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value,course:'SCHOOL',school_group_id:sg.value||null}]});const r=j.results?.[0];if(!r?.success)throw Error(r?.error||'Could not create student');alert('Student created successfully.');await load();home()}catch(e){sm.innerHTML=msg(e.message)}}
@@ -263,8 +263,9 @@ async function saveBulkAssessmentQuestions(){
     rows=bulkAssessmentRows.map(x=>({
       assessment_id:aid,
       question_order:0,
-      question_text:x.hint?`${x.question}\n\nHint: ${x.hint}`:x.question,
-      marks:x.marks
+      question_text:x.question,
+      marks:x.marks,
+      hint:x.hint||''
     }));
   }else if(bulkAssessmentPdfPages.length){
     if(!Object.keys(bulkAssessmentPdfMeta).length)return alert('Upload the Marks / Hint Excel for the PDF first.');
@@ -364,35 +365,124 @@ async function saveAssessmentAndBulk(){
  await load();
  bulkQuestionUpload(data.id);
 }
-async function editQuestions(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const group=groups.find(g=>g.id===a.school_group_id);const total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);document.getElementById('app').innerHTML=`${header('Questions — '+esc(a.title))}<div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div><div id="qbox">${(q||[]).map(x=>`<div class="student-card">
-  <label>Question ${x.question_order}</label>
-  ${x.question_image_url
-    ? `<div class="question-image-wrap" style="margin:8px 0 12px"><img class="question-image" src="${esc(x.question_image_url)}" alt="Question ${x.question_order}"></div><div class="small muted">Image question — Assamese/PDF content is stored as an image.</div>`
-    : `<textarea id="qt_${x.id}">${esc(x.question_text||'')}</textarea>`}
-  <label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${x.marks}">
-  ${x.hint?`<div class="notice small"><b>Hint:</b> ${esc(x.hint)}</div>`:''}
-  <div class="actions"><button onclick="saveQ('${x.id}','${id}')">Save</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div>
-</div>`).join('')}</div><div class="actions">
-  <button onclick="addQ('${id}')">+ Add Question</button>
-  <button onclick="bulkQuestionUpload('${id}')" style="background:#16a34a">📥 Bulk Questions Upload</button>
-  <button onclick="reviewAssessment('${id}')">📊 Review Submissions</button>
-  <button class="secondary" onclick="home()">Back</button>
-</div></div>`}
+function solutionTypeLabel(t){return t==='text'?'📝 Written Explanation':t==='youtube'?'🎥 YouTube Video':'📎 '+String(t||'File').toUpperCase()}
+function youtubeEmbed(url){
+  const u=String(url||'').trim();
+  let id='';
+  try{const x=new URL(u); if(x.hostname.includes('youtu.be'))id=x.pathname.slice(1).split('/')[0]; if(x.hostname.includes('youtube.com'))id=x.searchParams.get('v')||x.pathname.split('/').filter(Boolean).pop()||''; if(id)return 'https://www.youtube.com/embed/'+encodeURIComponent(id)}catch(e){}
+  return '';
+}
+function solutionListHtml(qid,solutions){
+  return (solutions||[]).map(sol=>{
+    const body=sol.solution_type==='text'
+      ? `<div class="small" style="white-space:pre-wrap;margin-top:5px">${esc(sol.content||'')}</div>`
+      : sol.solution_type==='youtube'
+        ? `<div class="small"><a target="_blank" rel="noopener" href="${esc(sol.youtube_url||'#')}">${esc(sol.youtube_url||'')}</a></div>`
+        : `<div class="small"><a target="_blank" rel="noopener" href="${esc(sol.file_url||'#')}">${esc(sol.file_name||'Open file')}</a></div>`;
+    return `<div class="student-card" style="margin-top:8px;background:#fbfdff"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b>${solutionTypeLabel(sol.solution_type)}</b>${sol.title?` <span class="muted">— ${esc(sol.title)}</span>`:''}${body}</div><button class="danger" type="button" onclick="deleteQuestionSolution('${sol.id}','${qid}')">Delete</button></div></div>`;
+  }).join('')||'<div class="small muted">No solutions added yet.</div>';
+}
+async function editAssessmentDetails(id){
+ const {data:a,error}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
+ if(error||!a)return alert(error?.message||'Assessment not found.');
+ const cls=classes.find(c=>c.id===a.class_id),group=groups.find(g=>g.id===a.school_group_id);
+ const localDeadline=a.deadline?new Date(a.deadline).toISOString().slice(0,16):'';
+ document.getElementById('app').innerHTML=`${header('Edit Assessment — '+esc(a.title))}<div class="card">
+ <label>Assessment Name</label><input id="ea_title" value="${esc(a.title||'')}">
+ <label>Subject</label><input id="ea_subject" value="${esc(a.subject||'')}">
+ <label>Class</label><select id="ea_class" disabled><option>${esc(cls?.name||'—')}</option></select>
+ <label>Sub-division</label><input value="${esc(group?.name||'Entire class')}" disabled>
+ <label>Deadline</label><input id="ea_deadline" type="datetime-local" value="${esc(localDeadline)}">
+ <div class="notice small" style="margin-top:12px">Class and sub-division are kept fixed after creation so an existing assessment is not accidentally moved to another group.</div>
+ <div class="actions" style="margin-top:12px"><button onclick="saveAssessmentDetails('${id}')">💾 Save Assessment</button><button class="secondary" onclick="editQuestions('${id}')">Questions & Solutions</button><button class="secondary" onclick="home()">Cancel</button></div>
+ </div>`;
+}
+async function saveAssessmentDetails(id){
+ const title=document.getElementById('ea_title')?.value.trim(); if(!title)return alert('Assessment name is required.');
+ const deadline=document.getElementById('ea_deadline')?.value; const payload={title,subject:document.getElementById('ea_subject')?.value.trim()||null,deadline:deadline?new Date(deadline).toISOString():null};
+ const {error}=await sb.from('school_assessments').update(payload).eq('id',id).eq('created_by',teacher.id); if(error)return alert(error.message); await load(); alert('Assessment details saved.'); editQuestions(id);
+}
+async function editQuestions(id){
+ currentEditingAssessmentId=id;
+ const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
+ if(ae)return alert(ae.message);
+ const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');
+ if(qe)return alert(qe.message);
+ const qids=(q||[]).map(x=>x.id);
+ let solutions=[];
+ if(qids.length){const {data:so,error:soe}=await sb.from('school_question_solutions').select('*').in('question_id',qids).order('display_order').order('created_at');if(soe)return alert(soe.message);solutions=so||[];}
+ const smap=new Map(); for(const x of solutions){if(!smap.has(x.question_id))smap.set(x.question_id,[]);smap.get(x.question_id).push(x)}
+ const group=groups.find(g=>g.id===a.school_group_id),total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);
+ document.getElementById('app').innerHTML=`${header('Questions & Solutions — '+esc(a.title))}
+ <div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div>
+ <div class="actions" style="margin-top:10px"><button onclick="editAssessmentDetails('${id}')">⚙ Edit Assessment</button><button onclick="bulkQuestionUpload('${id}')" style="background:#16a34a">📥 Bulk Questions Upload</button><button onclick="reviewAssessment('${id}')">📊 Review Submissions</button><button class="secondary" onclick="home()">← Dashboard</button></div></div>
+ <div id="qbox">${(q||[]).map(x=>{const sols=smap.get(x.id)||[];return `<div class="student-card" id="qcard_${x.id}">
+   <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><label style="margin:0">Question ${x.question_order}</label><span class="tag">${Number(x.marks)||0} Marks</span></div>
+   ${x.question_image_url?`<div style="margin:8px 0 12px;text-align:center"><img src="${esc(x.question_image_url)}" alt="Question ${x.question_order}" style="max-width:100%;max-height:650px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px;padding:6px"></div><div class="small muted">Image question — Assamese/PDF content is stored as an image.</div>`:`<label>Question Text</label><textarea id="qt_${x.id}" rows="4">${esc(x.question_text||'')}</textarea>`}
+   <label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${esc(x.marks)}">
+   <label>Hint (optional)</label><textarea id="qh_${x.id}" rows="2" placeholder="Helpful clue without giving the answer...">${esc(x.hint||'')}</textarea>
+   <div class="actions" style="margin-top:9px"><button onclick="saveQ('${x.id}','${id}')">💾 Save Question</button><button class="secondary" onclick="document.getElementById('sol_${x.id}').open=true">📚 Solutions (${sols.length})</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div>
+   <details id="sol_${x.id}" style="margin-top:10px;border:1px solid #dbe3ee;border-radius:12px;padding:10px;background:#f8fafc"><summary style="cursor:pointer;font-weight:700">📚 Solution Manager</summary>
+    <div class="notice small" style="margin-top:10px">Solutions are shown to a student only when <b>the student's answer for this question is reviewed</b> and <b>Show solution to students</b> is enabled.</div>
+    <label>Written Explanation</label><textarea id="st_${x.id}" rows="5" placeholder="Step-by-step solution...">${esc((sols.find(s=>s.solution_type==='text')||{}).content||'')}</textarea>
+    <div class="actions" style="margin-top:8px"><button onclick="saveWrittenSolution('${x.id}','${id}')">💾 Save Written Explanation</button></div>
+    <label style="margin-top:12px">YouTube Solution Video</label><input id="sv_${x.id}" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${esc((sols.find(s=>s.solution_type==='youtube')||{}).youtube_url||'')}">
+    <div class="actions" style="margin-top:8px"><button onclick="saveVideoSolution('${x.id}','${id}')">🎥 Save YouTube Video</button></div>
+    <label style="margin-top:12px">Solution File — PDF / Word / Image</label><input id="sf_${x.id}" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp">
+    <div class="actions" style="margin-top:8px"><button onclick="uploadQuestionSolutionFile('${x.id}','${id}')">📎 Upload Solution File</button></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px"><input id="ss_${x.id}" type="checkbox" style="width:auto" ${x.show_solution?'checked':''} onchange="toggleSolutionRelease('${x.id}',this.checked)"> Show solution to students after review</label>
+    <div id="solList_${x.id}" style="margin-top:8px">${solutionListHtml(x.id,sols)}</div>
+   </details>
+ </div>`}).join('')||'<div class="card"><div class="notice">No questions have been added yet.</div></div>'}</div>`;
+}
 async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return alert(error.message);editQuestions(id)}
 async function saveQ(qid,aid){
-  const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid);
-  const value=Number(m.value);
-  if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');
-  const payload={marks:value};
-  if(t){
-    if(!t.value.trim())return alert('Question text is required.');
-    payload.question_text=t.value.trim();
-  }
-  const {error}=await sb.from('school_questions').update(payload).eq('id',qid);
-  if(error)return alert(error.message);
-  editQuestions(aid);
+ const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid),h=document.getElementById('qh_'+qid); const value=Number(m?.value);
+ if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');
+ const payload={marks:value,hint:h?.value?.trim()||null};
+ if(t){if(!t.value.trim())return alert('Question text is required.');payload.question_text=t.value.trim();}
+ const {error}=await sb.from('school_questions').update(payload).eq('id',qid).eq('assessment_id',aid);if(error)return alert(error.message);editQuestions(aid);
 }
 async function delQ(qid,aid){if(!confirm('Delete question?'))return;const {error}=await sb.from('school_questions').delete().eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
+async function saveWrittenSolution(qid,aid){
+ const content=document.getElementById('st_'+qid)?.value.trim()||'';
+ const {data:old}=await sb.from('school_question_solutions').select('id').eq('question_id',qid).eq('solution_type','text').limit(1);
+ if(old?.[0]){const {error}=await sb.from('school_question_solutions').update({content,title:'Written Explanation'}).eq('id',old[0].id);if(error)return alert(error.message);}
+ else if(content){const {error}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'text',title:'Written Explanation',content,display_order:10});if(error)return alert(error.message);}
+ else return alert('Enter a written explanation first.');
+ alert('Written explanation saved.');editQuestions(aid);
+}
+async function saveVideoSolution(qid,aid){
+ const url=document.getElementById('sv_'+qid)?.value.trim()||'';if(!url)return alert('Enter a YouTube link.');if(!youtubeEmbed(url))return alert('Please enter a valid YouTube video link.');
+ const {data:old}=await sb.from('school_question_solutions').select('id').eq('question_id',qid).eq('solution_type','youtube').limit(1);
+ if(old?.[0]){const {error}=await sb.from('school_question_solutions').update({youtube_url:url,title:'YouTube Solution'}).eq('id',old[0].id);if(error)return alert(error.message);}
+ else {const {error}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'youtube',title:'YouTube Solution',youtube_url:url,display_order:20});if(error)return alert(error.message);}
+ alert('YouTube solution saved.');editQuestions(aid);
+}
+function sanitizeSolutionFileName(name){return String(name||'solution').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-100)||'solution';}
+async function uploadQuestionSolutionFile(qid,aid){
+ const input=document.getElementById('sf_'+qid),file=input?.files?.[0];if(!file)return alert('Choose a PDF, Word or image file.');
+ const max=20*1024*1024;if(file.size>max)return alert('Solution file is larger than 20 MB.');
+ try{
+  const path=`${teacher.id}/${aid}/${qid}/${crypto.randomUUID()}-${sanitizeSolutionFileName(file.name)}`;
+  const {error:ue}=await sb.storage.from('school-question-solutions').upload(path,file,{contentType:file.type||'application/octet-stream',upsert:false});if(ue)throw ue;
+  const {data:pu}=sb.storage.from('school-question-solutions').getPublicUrl(path);
+  const {error:ie}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'file',title:file.name,file_name:file.name,file_url:pu.publicUrl,storage_path:path,mime_type:file.type||null,file_size_bytes:file.size,display_order:30});
+  if(ie){await sb.storage.from('school-question-solutions').remove([path]);throw ie;}
+  alert('Solution file uploaded.');editQuestions(aid);
+ }catch(e){alert('Could not upload solution: '+(e.message||e));}
+}
+async function toggleSolutionRelease(qid,checked){
+ const {error}=await sb.from('school_questions').update({show_solution:!!checked}).eq('id',qid);if(error){alert('Could not change solution visibility: '+error.message);editQuestions(currentEditingAssessmentId);}
+}
+let currentEditingAssessmentId='';
+async function deleteQuestionSolution(solutionId,qid){
+ if(!confirm('Delete this solution?'))return;
+ const {data:s,error:se}=await sb.from('school_question_solutions').select('storage_path').eq('id',solutionId).single();if(se)return alert(se.message);
+ if(s?.storage_path)await sb.storage.from('school-question-solutions').remove([s.storage_path]);
+ const {error}=await sb.from('school_question_solutions').delete().eq('id',solutionId);if(error)return alert(error.message);
+ editQuestions(currentEditingAssessmentId);
+}
 async function reviewAssessment(id){
  const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
  if(ae)return alert(ae.message);

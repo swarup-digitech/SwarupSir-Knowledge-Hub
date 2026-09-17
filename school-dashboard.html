@@ -3,7 +3,7 @@
 
 .question-image-wrap{margin:12px 0 16px;padding:10px;background:#f8fafc;border:1px solid #dbe3ee;border-radius:12px;text-align:center}
 .question-image{display:block;max-width:100%;width:auto;height:auto;max-height:900px;margin:0 auto;border-radius:8px;object-fit:contain}
-.question-image-error{padding:12px;color:#b91c1c;background:#fff7ed;border-radius:8px;font-size:13px}
+.question-image-error{padding:12px;color:#b91c1c;background:#fff7ed;border-radius:8px;font-size:13px}.solution-video-wrap{position:relative;width:100%;max-width:760px;aspect-ratio:16/9;margin:9px 0}.solution-video-wrap iframe{width:100%;height:100%;border:0;border-radius:10px}
 </style></head><body><div id="app"></div><script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co",SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP",UPLOAD_FN="upload-school-answer";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let current=null,profile=null,schoolGroupName='';
@@ -97,22 +97,25 @@ async function openAssessment(id){
    sb.from('school_answer_submissions').select('id,question_id,status,awarded_marks,teacher_comment,submitted_at').eq('assessment_id',id).eq('student_id',current.id).eq('is_current',true)
  ]);
  if(qe)return alert(qe.message);if(se)return alert(se.message);
- const assessmentReviewed=(subs||[]).some(x=>x.status==='reviewed');
+ const allReviewed=(subs||[]).length>0&&(subs||[]).every(x=>String(x.status||'').toLowerCase()==='reviewed');
+ const qids=(q||[]).map(x=>x.id);
+ const {data:solutions,error:sole}=qids.length?await sb.from('school_question_solutions').select('*').in('question_id',qids).order('display_order').order('created_at'):{data:[],error:null};
+ if(sole)return alert(sole.message);
  const {data:files,error:fe}=subs?.length?await sb.from('school_answer_files').select('submission_id,page_no,file_name,drive_url,mime_type,file_size_bytes').in('submission_id',subs.map(x=>x.id)).order('page_no'):{data:[],error:null};
  if(fe)return alert(fe.message);
- const subMap=new Map((subs||[]).map(x=>[x.question_id,x]));
- const fileMap=new Map();
+ const subMap=new Map((subs||[]).map(x=>[x.question_id,x])),fileMap=new Map();
  for(const f of(files||[])){if(!fileMap.has(f.submission_id))fileMap.set(f.submission_id,[]);fileMap.get(f.submission_id).push(f)}
+ const solutionMap=new Map();for(const x of(solutions||[])){if(!solutionMap.has(x.question_id))solutionMap.set(x.question_id,[]);solutionMap.get(x.question_id).push(x)}
  render(`<div class="wrap">${header('📝 '+esc(a.title))}
    <div class="card"><div class="question-head"><div><h2 style="margin:0">${esc(a.title)}</h2><div class="muted">${esc(a.subject||'')}</div></div>
    <div class="actions"><button class="secondary" onclick="location.replace('/main.html?mode=student&portal=SCHOOL_ASSESSMENTS')">← Assessments</button><button class="secondary" onclick="location.replace('/main.html?mode=student')">🏠 Home</button></div></div>
    ${a.deadline?`<div class="notice small">Deadline: ${new Date(a.deadline).toLocaleString()}</div>`:''}
-   ${assessmentReviewed?`<div class="notice"><b>🔒 Assessment reviewed.</b> Uploading is locked until the teacher reassigns this assessment.</div>`:''}</div>
-   ${(q||[]).map(x=>renderQuestion(x,subMap.get(x.id),fileMap.get(subMap.get(x.id)?.id)||[],assessmentReviewed)).join('')||'<div class="card"><div class="notice">No questions have been added yet.</div></div>'}
+   ${allReviewed?`<div class="success"><b>✓ All current submitted answers have been reviewed.</b></div>`:''}</div>
+   ${(q||[]).map(x=>renderQuestion(x,subMap.get(x.id),fileMap.get(subMap.get(x.id)?.id)||[],allReviewed,solutionMap.get(x.id)||[])).join('')||'<div class="card"><div class="notice">No questions have been added yet.</div></div>'}
  </div>`)
 }
-function renderQuestion(q,sub,files,assessmentReviewed=false){
-  const key='q_'+q.id,reviewed=assessmentReviewed||sub?.status==='reviewed';
+function renderQuestion(q,sub,files,assessmentReviewed=false,solutions=[]){
+  const key='q_'+q.id,reviewed=String(sub?.status||'').toLowerCase()==='reviewed';
 
   const questionContent=q.question_image_url
     ? `<div class="question-image-wrap">
@@ -136,6 +139,8 @@ function renderQuestion(q,sub,files,assessmentReviewed=false){
       <span class="marks">${q.marks} Marks</span>
     </div>
 
+    ${q.hint?`<div class="notice small" style="margin-top:10px"><b>💡 Hint:</b> ${esc(q.hint)}</div>`:''}
+
     <div class="upload-box">
       <div><b>Your Answer</b> ${sub?.status==='reviewed'
         ? '<span class="tag">Reviewed</span>'
@@ -147,8 +152,10 @@ function renderQuestion(q,sub,files,assessmentReviewed=false){
 
       ${sub?.teacher_comment?`<div class="success small" style="margin-top:9px"><b>Teacher comment:</b> ${esc(sub.teacher_comment)}${sub.awarded_marks!==null?`<br><b>Marks:</b> ${sub.awarded_marks}/${q.marks}`:''}</div>`:''}
 
+      ${(reviewed&&q.show_solution&&solutions.length)?`<div class="solution-box" style="margin-top:12px;border:2px solid #16a34a;border-radius:12px;padding:13px;background:#f0fdf4"><h3 style="margin:0 0 10px;color:#166534">📚 Solution</h3>${solutions.map(sol=>sol.solution_type==='text'?`<div style="margin-bottom:12px"><b>📝 Explanation</b><div style="white-space:pre-wrap;margin-top:5px">${esc(sol.content||'')}</div></div>`:sol.solution_type==='youtube'?`<div style="margin-bottom:12px"><b>🎥 Video Solution</b><div class="solution-video-wrap"><iframe src="${esc(solutionYoutubeEmbed(sol.youtube_url))}" title="Solution video" allowfullscreen></iframe></div><a target="_blank" rel="noopener" href="${esc(sol.youtube_url||'#')}">Open YouTube video</a></div>`:`<div style="margin-bottom:8px"><b>📎 ${esc(sol.file_name||'Solution file')}</b><br><a class="upload-item" target="_blank" rel="noopener" href="${esc(sol.file_url||'#')}">Open solution file${sol.file_size_bytes?` (${formatBytes(sol.file_size_bytes)})`:''}</a></div>`).join('')}</div>`:''}
+
       ${reviewed
-        ? `<div class="notice small" style="margin-top:10px"><b>🔒 Assessment reviewed.</b> Your answer cannot be changed or removed after teacher review.</div>`
+        ? `<div class="notice small" style="margin-top:10px"><b>🔒 Answer reviewed.</b> Your answer cannot be changed or removed after teacher review.</div>`
         : `<div class="notice small" style="margin-top:10px"><b>✏️ Before teacher review:</b> You can replace/re-upload your answer or remove your current submission.</div>
            <input id="${key}_camera" class="hidden" type="file" accept="image/*" capture="environment" onchange="addCameraPhoto('${q.id}',event)">
            <input id="${key}_images" class="hidden" type="file" accept="image/*" multiple onchange="addGalleryImages('${q.id}',event)">
@@ -169,6 +176,7 @@ function renderQuestion(q,sub,files,assessmentReviewed=false){
     </div>
   </div>`;
 }
+function solutionYoutubeEmbed(url){const u=String(url||'').trim();try{const x=new URL(u);let id='';if(x.hostname.includes('youtu.be'))id=x.pathname.slice(1).split('/')[0];else if(x.hostname.includes('youtube.com'))id=x.searchParams.get('v')||x.pathname.split('/').filter(Boolean).pop()||'';return id?'https://www.youtube.com/embed/'+encodeURIComponent(id):''}catch(e){return ''}}
 function formatBytes(n){n=Number(n||0);if(!n)return'0 B';if(n<1024)return n+' B';if(n<1024*1024)return(n/1024).toFixed(0)+' KB';return(n/1024/1024).toFixed(2)+' MB'}
 const queues={};
 const replaceModes={};
@@ -221,8 +229,8 @@ async function removeSubmission(questionId,submissionId){
  }catch(e){alert('Could not remove submission: '+(e.message||e))}
 }
 async function uploadQueued(questionId,questionOrder,maxMarks){const arr=qstate(questionId).slice();if(!arr.length)return;
- const {data:lockCheck}=await sb.from('school_answer_submissions').select('status').eq('assessment_id',currentAssessmentId).eq('student_id',current.id).eq('is_current',true);
- if((lockCheck||[]).some(x=>String(x.status||'').toLowerCase()==='reviewed')){alert('This assessment has been reviewed. Your answers are locked.');return;}
+ const {data:lockCheck}=await sb.from('school_answer_submissions').select('status').eq('assessment_id',currentAssessmentId).eq('student_id',current.id).eq('question_id',questionId).eq('is_current',true);
+ if((lockCheck||[]).some(x=>String(x.status||'').toLowerCase()==='reviewed')){alert('This question has already been reviewed. It cannot be changed until the teacher reassigns the assessment.');return;}
  const status=document.getElementById('q_'+questionId+'_status'),bar=document.getElementById('q_'+questionId+'_progress'),inner=bar.querySelector('div'),btn=document.getElementById('q_'+questionId+'_upload');status.textContent=replaceModes[questionId]?'Replacing answer…':'Uploading…';btn.disabled=true;bar.classList.remove('hidden');inner.style.width='0%';
  try{
   if(replaceModes[questionId])await retireCurrentSubmission(questionId);
