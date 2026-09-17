@@ -571,13 +571,25 @@ async function editAssignmentGroup(assignmentId){
 }
 async function teacherResultsDashboard(){
   try{
-    const [{data:assignments,error:ae},{data:classes,error:ce},{data:students,error:se}]=await Promise.all([
+    const [{data:allAssignments,error:ae},{data:allClasses,error:ce},{data:allStudents,error:se}]=await Promise.all([
       sb.from("assignments").select("id,title,subject,class_id,video_url,created_at,main_group,sub_group").eq("created_by",current.id).order("created_at",{ascending:false}),
-      sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name"),
-      sb.from("profiles").select("id,full_name,roll_no").eq("role","student").order("full_name")
+      sb.from("classes").select("id,name,course").eq("teacher_id",current.id).order("name"),
+      sb.from("profiles").select("id,full_name,roll_no,course").eq("role","student").order("full_name")
     ]);
     if(ae)throw ae;if(ce)throw ce;if(se)throw se;
-    const aids=(assignments||[]).map(a=>a.id);
+
+    // Keep the Results page strictly separated by teacher portal.
+    // School teachers see only assignments attached to SCHOOL classes and SCHOOL students;
+    // JNVST teachers see only assignments attached to JNVST classes and JNVST students.
+    const classes=(allClasses||[]).filter(c=>schoolTeacherMode
+      ? String(c.course||"").trim().toUpperCase()==="SCHOOL"
+      : String(c.course||"").trim().toUpperCase()!=="SCHOOL");
+    const classIds=new Set(classes.map(c=>c.id));
+    const assignments=(allAssignments||[]).filter(a=>classIds.has(a.class_id));
+    const students=(allStudents||[]).filter(s=>schoolTeacherMode
+      ? String(s.course||"").trim().toUpperCase()==="SCHOOL"
+      : ["JNVST-6","JNVST-9"].includes(String(s.course||"").trim().toUpperCase()));
+    const aids=assignments.map(a=>a.id);
     let attempts=[],links=[];
     if(aids.length){
       const [{data:at,error:te},{data:ls,error:le}]=await Promise.all([
@@ -586,7 +598,7 @@ async function teacherResultsDashboard(){
       ]);
       if(te)throw te;if(le)throw le;attempts=at||[];links=ls||[];
     }
-    window._teacherResults={assignments:assignments||[],classes:classes||[],students:students||[],attempts,links};
+    window._teacherResults={assignments,classes,students,attempts,links};
     renderTeacherResultsDashboard();
   }catch(e){alert("Could not load assignment results: "+(e.message||e));}
 }
@@ -649,7 +661,7 @@ function renderTeacherResultsDashboard(){
   const pendingCount=d.links.filter(x=>!d.attempts.some(a=>a.assignment_id===x.assignment_id&&a.student_id===x.student_id)).length;
   render(`<div class="wrap">${header("Assignment Results")}
     <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadFilteredTeacherResultsExcel()">⬇ Download Filtered Excel</button><button class="secondary" onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
       <div class="grid" style="margin-top:15px">
         <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}" ${f.mainGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}" ${f.subGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
         <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
@@ -666,6 +678,93 @@ function renderTeacherResultsDashboard(){
 }
 function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
 function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
+
+
+function getFilteredTeacherResultRows(){
+  const d=window._teacherResults;if(!d)return [];
+  const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
+  const classMap=new Map(d.classes.map(c=>[c.id,c.name]));
+  const studentMap=new Map(d.students.map(s=>[s.id,s]));
+  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
+  let rows=d.attempts.map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{},className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""}));
+  if(f.status==="pending"){
+    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
+    rows=d.links.filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{},className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""}));
+  }
+  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup)&&(!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
+  if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
+  if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
+  rows.sort((x,y)=>{
+    let a,b;
+    if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase()}
+    else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase()}
+    else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions))}
+    else {a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0}
+    const dir=f.sort.endsWith("_asc")?1:-1;return a===b?0:a<b?-1*dir:1*dir;
+  });
+  return rows;
+}
+
+async function downloadFilteredTeacherResultsExcel(){
+  try{
+    const d=window._teacherResults;if(!d){alert("Please open Assignment Results first.");return;}
+    const rows=getFilteredTeacherResultRows();
+    if(!rows.length){alert("No results match the selected filters.");return;}
+
+    const submittedRows=rows.filter(r=>r.type==="submitted");
+    const attemptIds=submittedRows.map(r=>r.at.id).filter(Boolean);
+    const assignmentIds=[...new Set(submittedRows.map(r=>r.a?.id).filter(Boolean))];
+    let questions=[],answers=[];
+    if(assignmentIds.length){
+      const {data:q,error:qe}=await sb.from("questions").select("id,assignment_id,question_order,correct_option").in("assignment_id",assignmentIds).order("question_order");
+      if(qe)throw qe;questions=q||[];
+    }
+    if(attemptIds.length){
+      const {data:a,error:ae}=await sb.from("answers").select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
+      if(ae)throw ae;answers=a||[];
+    }
+    const am=new Map(answers.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
+    const qByAssignment=new Map();
+    questions.forEach(q=>{if(!qByAssignment.has(q.assignment_id))qByAssignment.set(q.assignment_id,[]);qByAssignment.get(q.assignment_id).push(q)});
+
+    const exportRows=rows.map(r=>{
+      const p=r.p||{},a=r.a||{};
+      const at=r.at;
+      const pct=at?Number(at.score||0)*100/Math.max(1,Number(at.total_questions||1)):null;
+      const row={
+        "Student Name":p.full_name||"",
+        "Roll No":p.roll_no||"",
+        "Course":schoolTeacherMode?"School Course":(String(p.course||"").toUpperCase()==="JNVST-9"?"JNVST Class IX":"JNVST Class VI"),
+        "Class":r.className||"",
+        "Assignment Name":a.title||"",
+        "Main Group":a.main_group||"",
+        "Sub-Group":a.sub_group||"",
+        "Status":r.type==="pending"?"Not Submitted":"Submitted",
+        "Score":at?at.score:"",
+        "Total Questions":at?at.total_questions:"",
+        "Percentage":pct===null?"":Math.round(pct*100)/100,
+        "Submitted":at?.submitted_at?new Date(at.submitted_at).toLocaleString():"",
+        "Attempt No":at?.attempt_number||""
+      };
+      (qByAssignment.get(a.id)||[]).forEach((q,i)=>{
+        const n=q.question_order||i+1;
+        const ans=at?am.get(`${at.id}:${q.id}`):null;
+        row[`Q${n} Option`]=ans?.selected_option||"";
+        row[`Q${n} Answer Key`]=q.correct_option||"";
+      });
+      row["Total Marks"]=at?at.score:"";
+      return row;
+    });
+
+    const ws=XLSX.utils.json_to_sheet(exportRows);
+    ws["!cols"]=Object.keys(exportRows[0]).map(k=>({wch:Math.max(12,Math.min(28,k.length+3))}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
+    const courseName=schoolTeacherMode?"School_Course":"JNVST";
+    const stamp=new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb,`SwarupSir_${courseName}_Filtered_Assessment_Results_${stamp}.xlsx`);
+  }catch(e){alert("Could not download filtered results: "+(e.message||e));}
+}
 
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
@@ -1427,10 +1526,17 @@ async function downloadAssignmentResultsExcel(assignmentId){
 
 async function downloadAllResultsExcel(){
   try{
-    const {data:as,error:ae}=await sb.from("assignments")
-      .select("id,title,created_by").eq("created_by",profile.id).order("created_at",{ascending:false});
+    const [{data:allAs,error:ae},{data:allCls,error:ce}]=await Promise.all([
+      sb.from("assignments").select("id,title,created_by,class_id").eq("created_by",profile.id).order("created_at",{ascending:false}),
+      sb.from("classes").select("id,course").eq("teacher_id",profile.id)
+    ]);
     if(ae) throw new Error(ae.message);
-    if(!as?.length){ alert("No assignments found."); return; }
+    if(ce) throw new Error(ce.message);
+    const allowedClassIds=new Set((allCls||[]).filter(c=>schoolTeacherMode
+      ? String(c.course||"").trim().toUpperCase()==="SCHOOL"
+      : String(c.course||"").trim().toUpperCase()!=="SCHOOL").map(c=>c.id));
+    const as=(allAs||[]).filter(a=>allowedClassIds.has(a.class_id));
+    if(!as.length){ alert(schoolTeacherMode?"No School Course assignments found.":"No JNVST assignments found."); return; }
 
     const assignmentIds=as.map(a=>a.id);
     const {data:qs,error:qe}=await sb.from("questions")
