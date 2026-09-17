@@ -647,7 +647,7 @@ function renderTeacherResultsDashboard(){
   const pendingCount=d.links.filter(x=>!d.attempts.some(a=>a.assignment_id===x.assignment_id&&a.student_id===x.student_id)).length;
   render(`<div class="wrap">${header("Assignment Results")}
     <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadFilteredResultsExcel()">⬇ Download Filtered Results (Excel)</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadFilteredTeacherResultsExcel()">⬇ Download Filtered Results (Excel)</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
       <div class="grid" style="margin-top:15px">
         <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}" ${f.mainGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}" ${f.subGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
         <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
@@ -664,6 +664,76 @@ function renderTeacherResultsDashboard(){
 }
 function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
 function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
+
+function downloadFilteredTeacherResultsExcel(){
+  try{
+    const d=window._teacherResults;
+    if(!d){ alert("Assignment results are not loaded yet."); return; }
+    const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
+    const classMap=new Map((d.classes||[]).map(c=>[c.id,c.name]));
+    const studentMap=new Map((d.students||[]).map(s=>[s.id,s]));
+    const assignmentMap=new Map((d.assignments||[]).map(a=>[a.id,a]));
+    const submittedKeys=new Set((d.attempts||[]).map(x=>`${x.assignment_id}:${x.student_id}`));
+    let rows=[];
+    if(f.status==="pending"){
+      rows=(d.links||[]).filter(x=>!submittedKeys.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{}}));
+    }else{
+      rows=(d.attempts||[]).map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{}}));
+    }
+    rows=rows.filter(r=>{
+      const a=r.a||{}, p=r.p||{};
+      const score=r.type==="pending"?null:Number(r.at?.score||0)*100/Math.max(1,Number(r.at?.total_questions||1));
+      return (f.assignment==="all"||a.id===f.assignment) &&
+        (f.mainGroup==="all"||a.main_group===f.mainGroup) &&
+        (f.subGroup==="all"||a.sub_group===f.subGroup) &&
+        (f.classId==="all"||a.class_id===f.classId) &&
+        (f.student==="all"||p.id===f.student) &&
+        (f.minScore===""||r.type==="pending"||score>=Number(f.minScore)) &&
+        (f.maxScore===""||r.type==="pending"||score<=Number(f.maxScore));
+    });
+    rows.sort((x,y)=>{
+      let a,b;
+      if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase();}
+      else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a?.title||"").toLowerCase();b=(y.a?.title||"").toLowerCase();}
+      else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));}
+      else {a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0;}
+      const dir=f.sort.endsWith("_asc")?1:-1;
+      return a===b?0:(a<b?-1:1)*dir;
+    });
+    if(!rows.length){ alert("No records match the selected filters."); return; }
+    const exportRows=rows.map((r,i)=>{
+      const a=r.a||{}, p=r.p||{}, at=r.at;
+      const scorePct=r.type==="pending"?"":Math.round(Number(at.score||0)*100/Math.max(1,Number(at.total_questions||1)));
+      return {
+        "Sl No":i+1,
+        "Student Name":p.full_name||"Student",
+        "Roll No":p.roll_no||"",
+        "Assignment Name":a.title||"",
+        "Main Group":a.main_group||"",
+        "Sub-Group":a.sub_group||"",
+        "Class":classMap.get(a.class_id)||"",
+        "Score":r.type==="pending"?"":at.score,
+        "Total Questions":r.type==="pending"?"":at.total_questions,
+        "Score %":scorePct,
+        "Status":r.type==="pending"?"Not Submitted":"Submitted",
+        "Submitted":at?.submitted_at?new Date(at.submitted_at).toLocaleString():"",
+        "Attempt No":r.type==="pending"?"":(at.attempt_number||1)
+      };
+    });
+    const ws=XLSX.utils.json_to_sheet(exportRows);
+    ws["!cols"]=Object.keys(exportRows[0]).map(k=>({wch:Math.max(12,Math.min(30,k.length+3))}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
+    const parts=[];
+    if(f.mainGroup!=="all")parts.push(f.mainGroup);
+    if(f.subGroup!=="all")parts.push(f.subGroup);
+    if(f.assignment!=="all")parts.push((assignmentMap.get(f.assignment)?.title||"Assignment"));
+    if(f.classId!=="all")parts.push(classMap.get(f.classId)||"Class");
+    if(f.status!=="all")parts.push(f.status==="pending"?"Pending":"Submitted");
+    const safe=(parts.join("_")||"Filtered_Results").replace(/[\\/:*?"<>|]+/g,"_").slice(0,80);
+    XLSX.writeFile(wb,`JNVST_${safe}_Results.xlsx`);
+  }catch(e){ alert("Could not download filtered results: "+(e.message||e)); console.error(e); }
+}
 
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
@@ -1423,158 +1493,74 @@ async function downloadAssignmentResultsExcel(assignmentId){
   }catch(e){ alert("Could not download results: "+(e.message||e)); }
 }
 
-function getTeacherFilteredResultRows(){
-  const d=window._teacherResults;
-  if(!d) return [];
-  const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
-  const classMap=new Map((d.classes||[]).map(c=>[c.id,c.name]));
-  const studentMap=new Map((d.students||[]).map(s=>[s.id,s]));
-  const assignmentMap=new Map((d.assignments||[]).map(a=>[a.id,a]));
-  let rows=(d.attempts||[]).map(at=>({
-    type:"submitted",at,a:assignmentMap.get(at.assignment_id),
-    p:studentMap.get(at.student_id)||{},
-    className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""
-  }));
-  if(f.status==="pending"){
-    const submitted=new Set((d.attempts||[]).map(x=>`${x.assignment_id}:${x.student_id}`));
-    rows=(d.links||[]).filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({
-      type:"pending",at:null,a:assignmentMap.get(x.assignment_id),
-      p:studentMap.get(x.student_id)||{},
-      className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""
-    }));
-  }
-  rows=rows.filter(r=>r.a&&
-    (!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&
-    (!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup)&&
-    (!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup)&&
-    (!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&
-    (!f.student||f.student==="all"||r.p.id===f.student)
-  );
-  if(f.minScore!=="") rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
-  if(f.maxScore!=="") rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
-  rows.sort((x,y)=>{
-    let a,b;
-    if(f.sort==="student_asc"||f.sort==="student_desc"){
-      a=(x.p.full_name||"").toLowerCase(); b=(y.p.full_name||"").toLowerCase();
-    }else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){
-      a=(x.a.title||"").toLowerCase(); b=(y.a.title||"").toLowerCase();
-    }else if(f.sort==="score_asc"||f.sort==="score_desc"){
-      a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));
-      b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));
-    }else{
-      a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;
-      b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0;
-    }
-    const dir=f.sort.endsWith("_asc")?1:-1;
-    return a===b?0:a<b?-1*dir:1*dir;
-  });
-  return rows;
-}
-
-function downloadFilteredResultsExcel(){
+async function downloadAllResultsExcel(){
   try{
-    const d=window._teacherResults;
-    if(!d){alert("Assessment results are not loaded yet. Please open Assignment Results again.");return;}
-    const rows=getTeacherFilteredResultRows();
-    if(!rows.length){alert("No records match the selected filters. Apply your filters and try again.");return;}
+    const {data:as,error:ae}=await sb.from("assignments")
+      .select("id,title,created_by").eq("created_by",profile.id).order("created_at",{ascending:false});
+    if(ae) throw new Error(ae.message);
+    if(!as?.length){ alert("No assignments found."); return; }
 
-    const questionByAssignment=new Map();
-    const attemptIds=rows.filter(r=>r.type==="submitted"&&r.at).map(r=>r.at.id);
+    const assignmentIds=as.map(a=>a.id);
+    const {data:qs,error:qe}=await sb.from("questions")
+      .select("id,assignment_id,question_order,correct_option")
+      .in("assignment_id",assignmentIds).order("question_order");
+    if(qe) throw new Error(qe.message);
 
-    // Build the basic filtered-result export first. This works for both submitted and pending rows.
-    const excelRows=rows.map((r,i)=>{
-      const scorePct=r.type==="submitted"&&r.at
-        ? Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)))
-        : "";
-      return {
-        "Sl No":i+1,
-        "Student Name":r.p?.full_name||"Student",
-        "Roll No":r.p?.roll_no||"",
-        "Assignment Name":r.a?.title||"",
-        "Main Group":r.a?.main_group||"",
-        "Sub-Group":r.a?.sub_group||"",
-        "Class":r.className||"",
-        "Score":r.type==="submitted"?Number(r.at?.score||0):"",
-        "Total Questions":r.type==="submitted"?Number(r.at?.total_questions||0):"",
-        "Score %":scorePct,
-        "Status":r.type==="pending"?"Not Submitted":"Submitted",
-        "Submitted":r.type==="submitted"&&r.at?.submitted_at?new Date(r.at.submitted_at).toLocaleString():"",
-        "Attempt No":r.type==="submitted"?(r.at?.attempt_number||1):""
+    const {data:ats,error:te}=await sb.from("attempts")
+      .select("id,assignment_id,student_id,score,total_questions,submitted_at,attempt_number")
+      .in("assignment_id",assignmentIds).order("submitted_at",{ascending:true});
+    if(te) throw new Error(te.message);
+
+    const studentIds=[...new Set((ats||[]).map(x=>x.student_id))];
+    let profiles=[];
+    if(studentIds.length){
+      const {data:p,error:pe}=await sb.from("profiles")
+        .select("id,full_name,roll_no").in("id",studentIds);
+      if(pe) throw new Error(pe.message);
+      profiles=p||[];
+    }
+
+    const attemptIds=(ats||[]).map(x=>x.id);
+    let answerRows=[];
+    if(attemptIds.length){
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
+      if(are) throw new Error(are.message);
+      answerRows=ar||[];
+    }
+
+    const pm=new Map(profiles.map(p=>[p.id,p]));
+    const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
+    const asm=new Map(as.map(a=>[a.id,a]));
+
+    const rows=(ats||[]).map(at=>{
+      const p=pm.get(at.student_id)||{}, a=asm.get(at.assignment_id)||{};
+      const row={
+        "Student Name":p.full_name||at.student_id,
+        "Roll No":p.roll_no||"",
+        "Assignment Name":a.title||"",
+        "Score":at.score,
+        "Total Questions":at.total_questions,
+        "Submitted":at.submitted_at?new Date(at.submitted_at).toLocaleString():"",
+        "Attempt No":at.attempt_number||1
       };
+      (qs||[]).filter(q=>q.assignment_id===at.assignment_id).forEach((q,i)=>{
+        const n=q.question_order||i+1, ans=am.get(`${at.id}:${q.id}`);
+        row[`Q${n} Option`]=ans?.selected_option||"";
+        row[`Q${n} Answer Key`]=q.correct_option||"";
+      });
+      row["Total Marks"]=at.score;
+      return row;
     });
 
-    // Add question-wise answers for submitted records when the question/answer data is available.
-    // We intentionally fetch these asynchronously, then create the workbook from the filtered rows only.
-    const selectedAssignmentIds=[...new Set(rows.map(r=>r.a?.id).filter(Boolean))];
-    const finish=async()=>{
-      try{
-        let qs=[],answerRows=[];
-        if(selectedAssignmentIds.length){
-          const {data:q,error:qe}=await sb.from("questions")
-            .select("id,assignment_id,question_order,correct_option")
-            .in("assignment_id",selectedAssignmentIds).order("question_order");
-          if(qe)throw qe;
-          qs=q||[];
-        }
-        if(attemptIds.length){
-          const {data:ar,error:ae}=await sb.from("answers")
-            .select("attempt_id,question_id,selected_option")
-            .in("attempt_id",attemptIds);
-          if(ae)throw ae;
-          answerRows=ar||[];
-        }
-        const am=new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
-        const qByA=new Map();
-        qs.forEach(q=>{if(!qByA.has(q.assignment_id))qByA.set(q.assignment_id,[]);qByA.get(q.assignment_id).push(q);});
-        rows.forEach((r,i)=>{
-          if(r.type!=="submitted"||!r.at)return;
-          (qByA.get(r.a?.id)||[]).forEach((q,j)=>{
-            const n=q.question_order||j+1,ans=am.get(`${r.at.id}:${q.id}`);
-            excelRows[i][`Q${n} Option`]=ans?.selected_option||"";
-            excelRows[i][`Q${n} Answer Key`]=q.correct_option||"";
-          });
-        });
+    if(!rows.length){ alert("No student submissions are available yet."); return; }
 
-        const ws=XLSX.utils.json_to_sheet(excelRows);
-        const keys=Object.keys(excelRows[0]||{});
-        ws["!cols"]=keys.map(k=>({wch:Math.max(12,Math.min(30,k.length+3))}));
-        const wb=XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
-
-        const f=d.filters||{};
-        const parts=[];
-        if(f.mainGroup&&f.mainGroup!=="all")parts.push(`Main-${f.mainGroup}`);
-        if(f.subGroup&&f.subGroup!=="all")parts.push(`Sub-${f.subGroup}`);
-        if(f.assignment&&f.assignment!=="all"){
-          const a=d.assignments.find(x=>x.id===f.assignment);if(a)parts.push(a.title);
-        }
-        if(f.classId&&f.classId!=="all"){
-          const c=d.classes.find(x=>x.id===f.classId);if(c)parts.push(`Class-${c?.name||"selected"}`);
-        }
-        if(f.student&&f.student!=="all"){
-          const st=d.students.find(x=>x.id===f.student);if(st)parts.push(`Student-${st?.roll_no||st?.full_name||"selected"}`);
-        }
-        if(f.status&&f.status!=="all")parts.push(f.status==="pending"?"Pending":"Submitted");
-        const safe=(parts.join("_")||"Filtered_Assessment_Results").replace(/[\\/:*?"<>|]+/g,"_").slice(0,100);
-        const filename=`JNVST_${safe}_${new Date().toISOString().slice(0,10)}.xlsx`;
-
-        // Use an explicit Blob + anchor download for reliable browser/PWA downloading.
-        const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-        const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement("a");
-        a.href=url;a.download=filename;a.style.display="none";
-        document.body.appendChild(a);a.click();
-        setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1000);
-      }catch(e){alert("Could not download filtered results: "+(e.message||e));}
-    };
-    finish();
-  }catch(e){alert("Could not prepare filtered results: "+(e.message||e));}
-}
-
-async function downloadAllResultsExcel(){
-  // Keep the old dashboard command working, but route it to the reliable filtered exporter.
-  return downloadFilteredResultsExcel();
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:Math.max(12,Math.min(28,k.length+3))}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"All Results");
+    XLSX.writeFile(wb,"SwarupSir_All_Assignment_Results.xlsx");
+  }catch(e){ alert("Could not download results: "+(e.message||e)); }
 }
 
 
