@@ -487,51 +487,84 @@ async function submitMockAttempt(attemptId,auto=false){try{clearInterval(mockTim
 async function viewMockResult(attemptId){const {data:a,error:ae}=await sb.from('mock_test_attempts').select('*,mock_tests(title)').eq('id',attemptId).eq('student_id',current.id).single();if(ae)return alert(ae.message);const {data:answers,error:ansErr}=await sb.from('mock_test_answers').select('id').eq('attempt_id',attemptId);if(ansErr)return alert(ansErr.message);const r=a.section_results||{},answered=(answers||[]).length;render(`<div class="wrap">${header('Mock Test Result')}<div class="card"><h2>${esc(a.mock_tests?.title||'Mock Test')}</h2><div class="result-summary"><div><b>Score</b><br>${Number(a.score||0).toFixed(2)}/100</div><div><b>Percentage</b><br>${Number(a.percentage||0).toFixed(2)}%</div><div><b>Attempted</b><br>${answered}/80</div><div><b>Unanswered</b><br>${80-answered}</div></div></div><div class="card"><h2>Section-wise Result</h2><table><thead><tr><th>Section</th><th>Correct</th><th>Questions</th><th>Marks</th></tr></thead><tbody>${Object.entries(r).map(([k,x])=>`<tr><td>${esc(k)}</td><td>${x.correct}</td><td>${x.questions}</td><td>${Number(x.marks||0).toFixed(2)}</td></tr>`).join('')}</tbody></table></div><button class="secondary" onclick="studentMockTests()">← Back to Mock Tests</button></div>`)}
 async function mockTeacherResults(){const {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});if(error)return alert(error.message);const ids=(tests||[]).map(x=>x.id);const {data:ats,error:ae}=await sb.from('mock_test_attempts').select('*').in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});if(ae)return alert(ae.message);const pids=[...new Set((ats||[]).map(x=>x.student_id))];const {data:ps}=pids.length?await sb.from('profiles').select('id,full_name,roll_no').in('id',pids):{data:[]};const pm=new Map((ps||[]).map(x=>[x.id,x]));render(`<div class="wrap">${header('Mock Test Results')}<div class="card"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th></tr></thead><tbody>${(ats||[]).map(a=>`<tr><td>${esc((tests||[]).find(t=>t.id===a.mock_test_id)?.title||'')}</td><td>${esc(pm.get(a.student_id)?.full_name||'')}</td><td>${esc(pm.get(a.student_id)?.roll_no||'')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td></tr>`).join('')||'<tr><td colspan="7">No attempts yet.</td></tr>'}</tbody></table><div class="actions" style="margin-top:15px"><button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div></div></div>`)}
 
+function jnvstBaseKey(c){
+ const n=String(c?.name||"").trim().toUpperCase().replace(/\s+/g," ");
+ const course=String(c?.course||"").trim().toUpperCase();
+ if(n==="JNVST-VI"||n==="JNVST-6"||n==="JNVST CLASS VI"||n==="JNVST CLASS 6"||n==="CLASS VI"||n==="CLASS 6"||course==="JNVST-6"&&/JNVST\s*(?:-|\s)?(?:CLASS\s*)?(?:VI|6)$/i.test(n))return "JNVST-VI";
+ if(n==="JNVST-IX"||n==="JNVST-9"||n==="JNVST CLASS IX"||n==="JNVST CLASS 9"||n==="CLASS IX"||n==="CLASS 9"||course==="JNVST-9"&&/JNVST\s*(?:-|\s)?(?:CLASS\s*)?(?:IX|9)$/i.test(n))return "JNVST-IX";
+ return "";
+}
+function jnvstSubgroupParent(c){
+ const d=String(c?.description||"");
+ const m=d.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?/i);
+ return m?m[1].toUpperCase():"";
+}
+async function ensureJnvstBaseClasses(allClasses){
+ const existing=allClasses||[];
+ const created=[];
+ for(const base of [{key:"JNVST-VI",name:"JNVST-VI",course:"JNVST-6",description:"Fixed JNVST Class VI group. Create sub-groups under this group."},{key:"JNVST-IX",name:"JNVST-IX",course:"JNVST-9",description:"Fixed JNVST Class IX group. Create sub-groups under this group."}]){
+  let found=existing.find(c=>jnvstBaseKey(c)===base.key);
+  if(!found){
+   const {data,error}=await sb.from("classes").insert({name:base.name,description:base.description,teacher_id:current.id,course:base.course}).select("*").single();
+   if(error)throw error;
+   found=data; created.push(data);
+  }
+ }
+ return existing.concat(created);
+}
+function renderJnvstClassManager(classes,students,assignments){
+ const bases=["JNVST-VI","JNVST-IX"];
+ const baseCards=bases.map(key=>{
+  const base=classes.find(c=>jnvstBaseKey(c)===key);
+  const subs=classes.filter(c=>jnvstSubgroupParent(c)===key);
+  const directStudents=base?students.filter(s=>s.class_id===base.id).length:0;
+  return `<div class="student-card" style="border:2px solid #dbeafe;background:#f8fbff">
+   <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+    <div><h3 style="margin:0">${key==="JNVST-VI"?"📘 JNVST-VI (Class VI)":"📗 JNVST-IX (Class IX)"}</h3><div class="muted small">Fixed class — cannot be deleted.</div></div>
+    <span class="tag">${subs.length} Sub-group${subs.length===1?"":"s"}</span>
+   </div>
+   <div class="small" style="margin-top:7px">${directStudents} student(s) directly in this fixed class.</div>
+   <div style="margin-top:10px">${subs.length?subs.map(c=>{const sc=students.filter(s=>s.class_id===c.id).length,ac=assignments.filter(a=>a.class_id===c.id).length;return `<div class="student-card" style="background:#fff"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b>${esc(c.name)}</b><div class="muted small">${sc} student(s) • ${ac} assignment(s)</div>${String(c.description||"").replace(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?\s*/i,"")?`<div class="small muted">${esc(String(c.description||"").replace(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?\s*/i,""))}</div>`:""}</div><button class="danger" onclick="deleteJnvstClass('${c.id}')">Delete</button></div></div>`}).join(""):"<div class='muted small'>No sub-groups yet.</div>"}</div>
+   <button style="margin-top:10px" onclick="newJnvstSubgroup('${key}')">+ Create Sub-group</button>
+  </div>`;
+ }).join("");
+ const legacy=classes.filter(c=>!jnvstBaseKey(c)&&!jnvstSubgroupParent(c));
+ return `${baseCards}${legacy.length?`<div class="student-card"><h3>Other JNVST Classes</h3><p class="muted small">Older/custom JNVST classes are kept here. They can be deleted when they have no students or assignments.</p>${legacy.map(c=>`<div class="student-card"><div style="display:flex;justify-content:space-between;gap:8px"><div><b>${esc(c.name)}</b><div class="small muted">${students.filter(s=>s.class_id===c.id).length} student(s) • ${assignments.filter(a=>a.class_id===c.id).length} assignment(s)</div></div><button class="danger" onclick="deleteJnvstClass('${c.id}')">Delete</button></div></div>`).join("")}</div>`:""}`;
+}
 async function teacherHome(){
- const [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se}]=await Promise.all([
+ let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
    sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
    sb.from("profiles").select("*").eq("role","student").order("full_name")
  ]);
+ if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
+ try{allClasses=await ensureJnvstBaseClasses(allClasses||[])}catch(e){return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message("Could not prepare the fixed JNVST classes: "+(e.message||e))}</div></div>`)}
  const classes=(allClasses||[]).filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL");
  const classIds=new Set(classes.map(c=>c.id));
  const students=(allStudents||[]).filter(st=>["JNVST-6","JNVST-9"].includes(String(st.course||"").trim().toUpperCase()));
+ // class_students is the source of truth for student -> class membership.
+ if(students.length){const {data:members}=await sb.from("class_students").select("student_id,class_id").in("student_id",students.map(s=>s.id));const cm=new Map((members||[]).map(x=>[x.student_id,x.class_id]));students.forEach(s=>s.class_id=cm.get(s.id)||"")}
  const assignments=(allAssignments||[]).filter(a=>classIds.has(a.class_id));
  const normalAssignments=assignments.filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock");
-
- if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
-
+ window._jnvstClasses=classes;window._jnvstStudents=students;window._jnvstAssignments=assignments;
  render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}
-  <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
-   <h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2>
-   <p class="muted" style="margin:6px 0 0">Class VI • Class IX • JNVST-6 / JNVST-9</p>
-  </div>
-  <div class="grid">
-   <div class="card"><div class="muted">JNVST Classes</div><div class="stat">${classes.length}</div></div>
-   <div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div>
-   <div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div>
-  </div>
-  <div class="card"><div class="actions">
-   <button onclick="newClass()">+ New Class</button>
-   <button onclick="addStudent()">+ Add Student</button>
-   <button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button>
-   <button onclick="newAssignment()">+ New Assignment</button>
-   <button onclick="teacherResultsDashboard()">📊 Assignment Results</button>
-   <button onclick="mockTestManagement()">🎯 Mock Test Management</button>
-   <button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button>
-   <button onclick="manageStudentAccounts()">👥 Student Accounts</button>
-  </div></div>
-  <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.course?`• ${esc(st.course)}`:""}</div></div>`).join("")||"<p class='muted'>No JNVST students yet.</p>"}</div>
-  <div class="card"><h2>Classes</h2>${classes.map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p class="muted">${esc(c.course||"JNVST")} ${c.description?`• ${esc(c.description)}`:""}</p></div>`).join("")||"<p class='muted'>No JNVST classes yet.</p>"}</div>
-  <div class="card"><h2>Assignments</h2>
-   <div class="grid" style="margin-bottom:12px">
-    <div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
-    <div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
-   </div>
-   <div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div>
-  </div>
+  <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">Class VI • Class IX • JNVST-VI / JNVST-IX</p></div>
+  <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
+  <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage JNVST Classes</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
+  <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.course?`• ${esc(st.course)}`:""} ${st.class_id?`• ${esc(classes.find(c=>c.id===st.class_id)?.name||"")}`:""}</div></div>`).join("")||"<p class='muted'>No JNVST students yet.</p>"}</div>
+  <div class="card"><h2>JNVST Classes</h2>${renderJnvstClassManager(classes,students,assignments)}</div>
+  <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div></div>
  </div>`);
 }
+function manageJnvstClasses(){
+ const classes=(window._jnvstClasses||[]);
+ const students=(window._jnvstStudents||[]),assignments=(window._jnvstAssignments||[]);
+ render(`<div class="wrap">${header("Manage JNVST Classes")}<div class="card"><div class="notice"><b>Fixed classes:</b> JNVST-VI (Class VI) and JNVST-IX (Class IX) are always available and cannot be deleted. You can create sub-groups under either fixed class.</div><div class="actions" style="margin-top:12px"><button onclick="newJnvstSubgroup('JNVST-VI')">+ Sub-group under JNVST-VI</button><button onclick="newJnvstSubgroup('JNVST-IX')">+ Sub-group under JNVST-IX</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div><div class="card">${renderJnvstClassManager(classes,students,assignments)}</div></div>`);
+}
+async function newJnvstSubgroup(parent){render(`<div class="wrap">${header("Create JNVST Sub-group")}<div class="card"><div class="tag">Parent: ${esc(parent)}</div><label>Sub-group Name</label><input id="jnvstSubName" placeholder="Group A / Batch 1 / Evening Batch"><label>Description</label><textarea id="jnvstSubDesc" placeholder="Optional description"></textarea><div class="actions"><button onclick="saveJnvstSubgroup('${parent}')">Create Sub-group</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`)}
+async function saveJnvstSubgroup(parent){const name=document.getElementById("jnvstSubName")?.value.trim();const desc=document.getElementById("jnvstSubDesc")?.value.trim()||"";if(!name)return alert("Enter a sub-group name.");const exists=(window._jnvstClasses||[]).some(c=>String(c.name||"").trim().toLowerCase()===name.toLowerCase()&&jnvstSubgroupParent(c)===parent);if(exists)return alert("A sub-group with this name already exists under this class.");const course=parent==="JNVST-VI"?"JNVST-6":"JNVST-9";const fullDesc=`JNVST_SUBGROUP_PARENT:${parent}| ${desc}`.trim();const {error}=await sb.from("classes").insert({name,description:fullDesc,teacher_id:current.id,course});if(error)return alert(error.message);await teacherHome();setTimeout(manageJnvstClasses,250)}
+async function deleteJnvstClass(id){const c=(window._jnvstClasses||[]).find(x=>x.id===id);if(!c)return;if(jnvstBaseKey(c))return alert("JNVST-VI and JNVST-IX are fixed classes and cannot be deleted.");const [{data:members,error:me},{data:assignments,error:ae}]=await Promise.all([sb.from("class_students").select("student_id").eq("class_id",id),sb.from("assignments").select("id,title").eq("class_id",id)]);if(me)return alert(me.message);if(ae)return alert(ae.message);if((members||[]).length)return alert("This class/sub-group has students assigned to it. Move or remove the students before deleting the class.");if((assignments||[]).length)return alert("This class/sub-group has assignments. Delete or reassign those assignments before deleting the class.");if(!confirm(`Delete class/sub-group "${c.name}"?`))return;const {error}=await sb.from("classes").delete().eq("id",id).eq("teacher_id",current.id);if(error)return alert("Could not delete class: "+error.message);await teacherHome()}
+
 function renderTeacherAssignmentCards(assignments){
  return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}${(a.assignment_type==="MOCK"||a.assignment_type==="mock")?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
 }
@@ -908,8 +941,8 @@ async function deleteStudentAccount(studentId,name){
   }catch(e){alert("Could not delete student.\n\n"+(e.message||String(e)));}
 }
 
-async function newClass(){render(`<div class="wrap">${header("New Class")}<div class="card"><label>Class name</label><input id="cn" placeholder="Class VI - Mathematics"><label>Description</label><textarea id="cd"></textarea><div class="actions"><button onclick="saveClass()">Create Class</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div></div></div>`)}
-async function saveClass(){if(!cn.value.trim())return alert("Enter class name");const {error}=await sb.from("classes").insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:current.id});if(error)return alert(error.message);teacherHome()}
+async function newClass(){return manageJnvstClasses()}
+async function saveClass(){return alert("For JNVST, use Manage JNVST Classes to create a sub-group under Class VI or Class IX.")}
 
 async function addStudent(){
  const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");

@@ -1,0 +1,9 @@
+-- JNVST fixed classes are managed by the web app.
+-- No new table/column is required. On first JNVST teacher dashboard load, the app creates
+-- these two classes for the logged-in teacher if they do not already exist:
+--   JNVST-VI  (course = JNVST-6)
+--   JNVST-IX  (course = JNVST-9)
+-- Sub-groups are stored as normal rows in public.classes with a description prefix:
+--   JNVST_SUBGROUP_PARENT:JNVST-VI| ...
+--   JNVST_SUBGROUP_PARENT:JNVST-IX| ...
+-- Existing class_students and assignments remain compatible.
