@@ -84,7 +84,17 @@ setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>document.getElementById("app").innerHTML=x;
-const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="history.length>1?history.back():location.replace('/index.html')">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace('/index.html')">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
+const homeUrl=()=>{
+  if(profile?.role==="student"){
+    const c=String(profile?.course||"").trim().toUpperCase();
+    if(c==="SCHOOL") return "/main.html?mode=student&portal=SCHOOL";
+    if(c==="JNVST-6"||c==="JNVST-9") return "/main.html?mode=student";
+  }
+  if(profile?.role==="teacher") return schoolTeacherMode ? "/teacher-dashboard.html" : "/main.html?mode=teacher&portal=JNVST";
+  return "/index.html";
+};
+const goHome=()=>window.location.replace(homeUrl());
+const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="history.length>1?history.back():location.replace('/index.html')">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="goHome()">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
 const STUDENT_PROFILE_CACHE_PREFIX="skh_student_profile_v1_";
 function getCachedStudentProfile(userId){
@@ -201,10 +211,37 @@ async function init(){
   await sb.auth.signOut();
   return window.location.replace("/index.html");
 }
-function login(){
-  window.loginMode="chooser";
-  render(`<div class="wrap"><div class="card login" style="text-align:center"><h1>Swarup Sir's Knowledge Hub</h1><p class="muted">Choose your login</p><div class="actions" style="display:grid;gap:12px"><button onclick="studentLoginPage()" style="width:100%;font-size:17px;padding:14px">🎓 Student Login</button><button class="secondary" onclick="teacherLoginPage()" style="width:100%;font-size:17px;padding:14px">👨‍🏫 Teacher Login</button></div></div></div>`);
+function selectStudentCourse(course){
+  const c=String(course||"").trim().toUpperCase();
+  if(!["JNVST-6","JNVST-9","SCHOOL"].includes(c))return;
+  localStorage.setItem("skh_selected_course",c);
+  if(c==="SCHOOL") window.location.replace("/school-login.html");
+  else window.location.replace("/student-login.html?course="+encodeURIComponent(c));
 }
+function courseSelection(){
+  window.loginMode="chooser";
+  render(`<div class="wrap">
+    <div class="card" style="text-align:center;max-width:900px;margin:6vh auto 18px">
+      <h1 style="margin-bottom:6px">Swarup Sir's Knowledge Hub</h1>
+      <p class="muted" style="margin-top:0">Select your course to continue</p>
+      <div class="grid" style="margin-top:22px">
+        <div class="card" style="border:2px solid #2563eb;background:#eff6ff;margin:0;cursor:pointer" onclick="selectStudentCourse('JNVST-6')">
+          <div style="font-size:38px">🎓</div><h2>JNVST Class VI</h2><p class="muted">Navodaya Selection Test • Class VI</p><button>Student Login</button>
+        </div>
+        <div class="card" style="border:2px solid #7c3aed;background:#f5f3ff;margin:0;cursor:pointer" onclick="selectStudentCourse('JNVST-9')">
+          <div style="font-size:38px">🎓</div><h2>JNVST Class IX</h2><p class="muted">Navodaya Selection Test • Class IX</p><button>Student Login</button>
+        </div>
+        <div class="card" style="border:2px solid #0891b2;background:#ecfeff;margin:0;cursor:pointer" onclick="selectStudentCourse('SCHOOL')">
+          <div style="font-size:38px">🏫</div><h2>School Course</h2><p class="muted">School assignments and assessments</p><button>Student Login</button>
+        </div>
+      </div>
+      <div style="margin-top:22px;padding-top:18px;border-top:1px solid #e5e7eb">
+        <button class="secondary" onclick="teacherLoginPage()">👨‍🏫 Teacher Login</button>
+      </div>
+    </div>
+  </div>`);
+}
+function login(){ return courseSelection(); }
 function studentLoginPage(){
   window.loginMode="student";
   render(`<div class="wrap"><div class="card login"><h1>🎓 Student Login</h1><p class="muted">Login using your Roll No and Password.</p><label>Roll No</label><input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Roll No"><label>Password</label><input id="studentPassword" type="password" autocomplete="current-password" placeholder="Enter Password"><button onclick="doStudentLogin()">Login</button><div id="msg"></div></div></div>`);
@@ -253,28 +290,31 @@ async function logout(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const wasStudent = profile?.role === "student" || window.loginMode === "student";
   const wasTeacher = profile?.role === "teacher" || window.loginMode === "teacher";
+  const course=String(profile?.course||localStorage.getItem("skh_selected_course")||"").trim().toUpperCase();
+  const teacherPortal=schoolTeacherMode ? "SCHOOL" : "JNVST";
 
   await sb.auth.signOut();
+  current=null; profile=null; active=null; answers=[]; videoDone=false;
 
-  current = null;
-  profile = null;
-  active = null;
-  answers = [];
-  videoDone = false;
-
-  // Students always return to the standalone student login page.
-  if (wasStudent) {
-    window.location.replace("/student-login.html");
+  if(wasStudent){
+    if(course==="SCHOOL"){
+      localStorage.setItem("skh_selected_course","SCHOOL");
+      window.location.replace("/school-login.html");
+      return;
+    }
+    if(course==="JNVST-6"||course==="JNVST-9"){
+      localStorage.setItem("skh_selected_course",course);
+      window.location.replace("/student-login.html?course="+encodeURIComponent(course));
+      return;
+    }
+    window.location.replace("/index.html");
     return;
   }
-
-  // Teachers return to the teacher login page.
-  if (wasTeacher) {
-    window.location.replace("/teacher-login.html");
+  if(wasTeacher){
+    window.location.replace("/teacher-login.html?portal="+encodeURIComponent(teacherPortal));
     return;
   }
-
-  window.location.replace("/teacher-login.html");
+  window.location.replace("/index.html");
 }
 
 
@@ -619,135 +659,30 @@ function teacherResultsSubGroupChanged(){
   updateTeacherResultsAssignmentOptions();
 }
 
-
-function getFilteredTeacherResultRows(){
-  const d=window._teacherResults;
-  if(!d) return [];
-  const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
-  const classMap=new Map(d.classes.map(c=>[c.id,c.name]));
-  const studentMap=new Map(d.students.map(s=>[s.id,s]));
-  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
-  let rows=d.attempts.map(at=>({
-    type:"submitted",
-    at,
-    a:assignmentMap.get(at.assignment_id),
-    p:studentMap.get(at.student_id)||{},
-    className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""
-  }));
-  if(f.status==="pending"){
-    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
-    rows=d.links
-      .filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`))
-      .map(x=>({
-        type:"pending",
-        at:null,
-        a:assignmentMap.get(x.assignment_id),
-        p:studentMap.get(x.student_id)||{},
-        className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""
-      }));
-  }else if(f.status==="all"){
-    // "All" means submitted results in this dashboard.
-  }
-  rows=rows.filter(r=>
-    r.a &&
-    (!f.assignment||f.assignment==="all"||r.a.id===f.assignment) &&
-    (!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup) &&
-    (!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup) &&
-    (!f.classId||f.classId==="all"||r.a.class_id===f.classId) &&
-    (!f.student||f.student==="all"||r.p.id===f.student)
-  );
-  if(f.minScore!==""){
-    rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
-  }
-  if(f.maxScore!==""){
-    rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
-  }
-  rows.sort((x,y)=>{
-    let a,b;
-    if(f.sort==="student_asc"||f.sort==="student_desc"){
-      a=(x.p.full_name||"").toLowerCase(); b=(y.p.full_name||"").toLowerCase();
-    }else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){
-      a=(x.a.title||"").toLowerCase(); b=(y.a.title||"").toLowerCase();
-    }else if(f.sort==="score_asc"||f.sort==="score_desc"){
-      a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));
-      b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));
-    }else{
-      a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;
-      b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0;
-    }
-    const dir=f.sort.endsWith("_asc")?1:-1;
-    return a===b?0:a<b?-1*dir:1*dir;
-  });
-  return rows;
-}
-
-function downloadFilteredTeacherResultsExcel(){
-  try{
-    const d=window._teacherResults;
-    if(!d){ alert("Assignment Results data is not loaded."); return; }
-    const rows=getFilteredTeacherResultRows();
-    if(!rows.length){
-      alert("No results match the selected filters.");
-      return;
-    }
-
-    const f=d.filters||{};
-    const exportRows=rows.map((r,i)=>{
-      const score=r.type==="pending" ? "" : Number(r.at.score||0);
-      const total=r.type==="pending" ? "" : Number(r.at.total_questions||0);
-      const scorePct=r.type==="pending" ? "" : Math.round(score*100/Math.max(1,total));
-      return {
-        "Sl No":i+1,
-        "Student Name":r.p?.full_name||"Student",
-        "Roll No":r.p?.roll_no||"",
-        "Assignment":r.a?.title||"",
-        "Main Group":r.a?.main_group||"",
-        "Sub-Group":r.a?.sub_group||"",
-        "Class":r.className||"",
-        "Score":score,
-        "Total Questions":total,
-        "Score %":scorePct,
-        "Status":r.type==="pending"?"Not Submitted":"Submitted",
-        "Submitted":r.at?.submitted_at?new Date(r.at.submitted_at).toLocaleString():"",
-        "Attempt No":r.type==="pending"?"":(r.at.attempt_number||1)
-      };
-    });
-
-    const ws=XLSX.utils.json_to_sheet(exportRows);
-    ws["!cols"]=Object.keys(exportRows[0]).map(k=>({wch:Math.max(12,Math.min(30,k.length+4))}));
-
-    const filterRows=[
-      {"Filter":"Main Group","Selected":f.mainGroup==="all"||!f.mainGroup?"All Main Groups":f.mainGroup},
-      {"Filter":"Sub-Group","Selected":f.subGroup==="all"||!f.subGroup?"All Sub-Groups":f.subGroup},
-      {"Filter":"Assignment","Selected":f.assignment==="all"||!f.assignment?"All Assignments":(d.assignments.find(a=>a.id===f.assignment)?.title||f.assignment)},
-      {"Filter":"Class","Selected":f.classId==="all"||!f.classId?"All Classes":(d.classes.find(c=>c.id===f.classId)?.name||f.classId)},
-      {"Filter":"Student","Selected":f.student==="all"||!f.student?"All Students":(d.students.find(s=>s.id===f.student)?.full_name||f.student)},
-      {"Filter":"Status","Selected":f.status==="pending"?"Not Submitted / Pending":"Submitted Results"},
-      {"Filter":"Minimum Score %","Selected":f.minScore??""},
-      {"Filter":"Maximum Score %","Selected":f.maxScore??""},
-      {"Filter":"Sort","Selected":f.sort||"submitted_desc"},
-      {"Filter":"Exported Rows","Selected":rows.length}
-    ];
-    const fs=XLSX.utils.json_to_sheet(filterRows);
-    fs["!cols"]=[{wch:22},{wch:45}];
-
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
-    XLSX.utils.book_append_sheet(wb,fs,"Applied Filters");
-
-    const stamp=new Date().toISOString().slice(0,10);
-    const safe=("JNVST_Filtered_Assignment_Results_"+stamp).replace(/[\\/:*?"<>|]+/g,"_");
-    XLSX.writeFile(wb,`${safe}.xlsx`);
-  }catch(e){
-    alert("Could not download filtered results: "+(e.message||e));
-    console.error("Filtered results export error",e);
-  }
-}
-
 function renderTeacherResultsDashboard(){
   const d=window._teacherResults;if(!d)return;
   const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
-  const rows=getFilteredTeacherResultRows();
+  const classMap=new Map(d.classes.map(c=>[c.id,c.name])),studentMap=new Map(d.students.map(s=>[s.id,s]));
+  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
+  const assignedKey=new Set(d.links.map(x=>`${x.assignment_id}:${x.student_id}`));
+  let rows=d.attempts.map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{},className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""}));
+  if(f.status==="pending"){
+    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
+    rows=d.links.filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{},className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""}));
+  }else if(f.status==="all"){
+    /* Keep submitted rows only in the main results table; pending assignments are summarized separately. */
+  }
+  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup)&&(!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
+  if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
+  if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
+  rows.sort((x,y)=>{
+    let a,b;
+    if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase()}
+    else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase()}
+    else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions))}
+    else {a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0}
+    const dir=f.sort.endsWith("_asc")?1:-1;return a===b?0:a<b?-1*dir:1*dir;
+  });
   const submitted=d.attempts.length,avg=submitted?Math.round(d.attempts.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||1)),0)/submitted):0;
   const pendingCount=d.links.filter(x=>!d.attempts.some(a=>a.assignment_id===x.assignment_id&&a.student_id===x.student_id)).length;
   render(`<div class="wrap">${header("Assignment Results")}
@@ -769,6 +704,80 @@ function renderTeacherResultsDashboard(){
 }
 function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
 function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
+
+function downloadFilteredTeacherResultsExcel(){
+  try{
+    const d=window._teacherResults;
+    if(!d){alert("Assignment results are not loaded yet.");return;}
+    const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
+    const classMap=new Map((d.classes||[]).map(c=>[c.id,c.name]));
+    const studentMap=new Map((d.students||[]).map(s=>[s.id,s]));
+    const assignmentMap=new Map((d.assignments||[]).map(a=>[a.id,a]));
+    const submittedKeys=new Set((d.attempts||[]).map(x=>`${x.assignment_id}:${x.student_id}`));
+    let rows=(d.attempts||[]).map(at=>({
+      type:"submitted",
+      at,
+      a:assignmentMap.get(at.assignment_id),
+      p:studentMap.get(at.student_id)||{},
+      className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""
+    }));
+    if(f.status==="pending"){
+      rows=(d.links||[]).filter(x=>!submittedKeys.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({
+        type:"pending",
+        at:null,
+        a:assignmentMap.get(x.assignment_id),
+        p:studentMap.get(x.student_id)||{},
+        className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""
+      }));
+    }
+    rows=rows.filter(r=>r.a &&
+      (!f.assignment||f.assignment==="all"||r.a.id===f.assignment) &&
+      (!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup) &&
+      (!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup) &&
+      (!f.classId||f.classId==="all"||r.a.class_id===f.classId) &&
+      (!f.student||f.student==="all"||r.p.id===f.student));
+    if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
+    if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
+    rows.sort((x,y)=>{
+      let a,b;
+      if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase();}
+      else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase();}
+      else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));}
+      else{a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0;}
+      const dir=f.sort.endsWith("_asc")?1:-1;
+      return a===b?0:a<b?-1*dir:1*dir;
+    });
+    const exportRows=rows.map((r,i)=>{
+      const pct=r.type==="pending"?"":Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)));
+      return {
+        "Sl No":i+1,
+        "Student":r.p.full_name||"Student",
+        "Roll No":r.p.roll_no||"",
+        "Assignment":r.a.title||"",
+        "Main Group":r.a.main_group||"",
+        "Sub-Group":r.a.sub_group||"",
+        "Class":r.className||"",
+        "Score":r.type==="pending"?"":r.at.score,
+        "Total Questions":r.type==="pending"?"":r.at.total_questions,
+        "Score %":pct,
+        "Status":r.type==="pending"?"Not Submitted":"Submitted",
+        "Submitted":r.type==="pending"?"":(r.at.submitted_at?new Date(r.at.submitted_at).toLocaleString():"")
+      };
+    });
+    if(!exportRows.length){alert("No records match the selected filters.");return;}
+    const ws=XLSX.utils.json_to_sheet(exportRows);
+    ws["!cols"]=[12,24,14,32,16,20,20,12,18,12,18,24];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
+    const safe=v=>String(v||"").replace(/[\\/:*?"<>|]+/g,"_").replace(/\s+/g," ").trim();
+    const parts=[f.mainGroup!=="all"?f.mainGroup:"JNVST",f.subGroup!=="all"?f.subGroup:"",f.classId!=="all"?(classMap.get(f.classId)||""):"",f.assignment!=="all"?(assignmentMap.get(f.assignment)?.title||""):"",f.status!=="all"?f.status:"",`N${exportRows.length}`].filter(Boolean);
+    XLSX.writeFile(wb,`${safe(parts.join("_"))}_Assessment_Results.xlsx`);
+  }catch(e){
+    console.error("Filtered results Excel error:",e);
+    alert("Could not download filtered results: "+(e.message||e));
+  }
+}
+
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");

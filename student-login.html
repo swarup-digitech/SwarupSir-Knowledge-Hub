@@ -157,7 +157,7 @@ button{
   input{height:56px}
   .login-btn{height:58px}
 }
-.remember{display:flex;align-items:center;gap:9px;margin:4px 0 15px;font-size:14px;color:#426787}.remember input{width:18px;height:18px;flex:0 0 auto}
+.login-nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.login-nav button{margin-top:0}.home-course{display:inline-block;background:#e8f2fb;color:#07508d;border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}.remember{display:flex;align-items:center;gap:9px;margin:4px 0 15px;font-size:14px;color:#426787}.remember input{width:18px;height:18px;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -178,7 +178,7 @@ button{
       <div class="selected-course-box">
         <div class="selected-course-label">Selected Course</div>
         <div id="selectedCourseName" class="selected-course-name">JNVST</div>
-        <button type="button" class="change-course" onclick="location.href='/index.html'">← Change Course</button>
+        <div class="login-nav"><button type="button" class="change-course" onclick="location.replace('/index.html')">← Change Course</button><button type="button" class="home-course" onclick="location.replace('/index.html')">🏠 Home</button></div>
       </div>
 
       <div class="form-group">
