@@ -619,30 +619,135 @@ function teacherResultsSubGroupChanged(){
   updateTeacherResultsAssignmentOptions();
 }
 
+
+function getFilteredTeacherResultRows(){
+  const d=window._teacherResults;
+  if(!d) return [];
+  const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
+  const classMap=new Map(d.classes.map(c=>[c.id,c.name]));
+  const studentMap=new Map(d.students.map(s=>[s.id,s]));
+  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
+  let rows=d.attempts.map(at=>({
+    type:"submitted",
+    at,
+    a:assignmentMap.get(at.assignment_id),
+    p:studentMap.get(at.student_id)||{},
+    className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""
+  }));
+  if(f.status==="pending"){
+    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
+    rows=d.links
+      .filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`))
+      .map(x=>({
+        type:"pending",
+        at:null,
+        a:assignmentMap.get(x.assignment_id),
+        p:studentMap.get(x.student_id)||{},
+        className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""
+      }));
+  }else if(f.status==="all"){
+    // "All" means submitted results in this dashboard.
+  }
+  rows=rows.filter(r=>
+    r.a &&
+    (!f.assignment||f.assignment==="all"||r.a.id===f.assignment) &&
+    (!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup) &&
+    (!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup) &&
+    (!f.classId||f.classId==="all"||r.a.class_id===f.classId) &&
+    (!f.student||f.student==="all"||r.p.id===f.student)
+  );
+  if(f.minScore!==""){
+    rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
+  }
+  if(f.maxScore!==""){
+    rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
+  }
+  rows.sort((x,y)=>{
+    let a,b;
+    if(f.sort==="student_asc"||f.sort==="student_desc"){
+      a=(x.p.full_name||"").toLowerCase(); b=(y.p.full_name||"").toLowerCase();
+    }else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){
+      a=(x.a.title||"").toLowerCase(); b=(y.a.title||"").toLowerCase();
+    }else if(f.sort==="score_asc"||f.sort==="score_desc"){
+      a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));
+      b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));
+    }else{
+      a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;
+      b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0;
+    }
+    const dir=f.sort.endsWith("_asc")?1:-1;
+    return a===b?0:a<b?-1*dir:1*dir;
+  });
+  return rows;
+}
+
+function downloadFilteredTeacherResultsExcel(){
+  try{
+    const d=window._teacherResults;
+    if(!d){ alert("Assignment Results data is not loaded."); return; }
+    const rows=getFilteredTeacherResultRows();
+    if(!rows.length){
+      alert("No results match the selected filters.");
+      return;
+    }
+
+    const f=d.filters||{};
+    const exportRows=rows.map((r,i)=>{
+      const score=r.type==="pending" ? "" : Number(r.at.score||0);
+      const total=r.type==="pending" ? "" : Number(r.at.total_questions||0);
+      const scorePct=r.type==="pending" ? "" : Math.round(score*100/Math.max(1,total));
+      return {
+        "Sl No":i+1,
+        "Student Name":r.p?.full_name||"Student",
+        "Roll No":r.p?.roll_no||"",
+        "Assignment":r.a?.title||"",
+        "Main Group":r.a?.main_group||"",
+        "Sub-Group":r.a?.sub_group||"",
+        "Class":r.className||"",
+        "Score":score,
+        "Total Questions":total,
+        "Score %":scorePct,
+        "Status":r.type==="pending"?"Not Submitted":"Submitted",
+        "Submitted":r.at?.submitted_at?new Date(r.at.submitted_at).toLocaleString():"",
+        "Attempt No":r.type==="pending"?"":(r.at.attempt_number||1)
+      };
+    });
+
+    const ws=XLSX.utils.json_to_sheet(exportRows);
+    ws["!cols"]=Object.keys(exportRows[0]).map(k=>({wch:Math.max(12,Math.min(30,k.length+4))}));
+
+    const filterRows=[
+      {"Filter":"Main Group","Selected":f.mainGroup==="all"||!f.mainGroup?"All Main Groups":f.mainGroup},
+      {"Filter":"Sub-Group","Selected":f.subGroup==="all"||!f.subGroup?"All Sub-Groups":f.subGroup},
+      {"Filter":"Assignment","Selected":f.assignment==="all"||!f.assignment?"All Assignments":(d.assignments.find(a=>a.id===f.assignment)?.title||f.assignment)},
+      {"Filter":"Class","Selected":f.classId==="all"||!f.classId?"All Classes":(d.classes.find(c=>c.id===f.classId)?.name||f.classId)},
+      {"Filter":"Student","Selected":f.student==="all"||!f.student?"All Students":(d.students.find(s=>s.id===f.student)?.full_name||f.student)},
+      {"Filter":"Status","Selected":f.status==="pending"?"Not Submitted / Pending":"Submitted Results"},
+      {"Filter":"Minimum Score %","Selected":f.minScore??""},
+      {"Filter":"Maximum Score %","Selected":f.maxScore??""},
+      {"Filter":"Sort","Selected":f.sort||"submitted_desc"},
+      {"Filter":"Exported Rows","Selected":rows.length}
+    ];
+    const fs=XLSX.utils.json_to_sheet(filterRows);
+    fs["!cols"]=[{wch:22},{wch:45}];
+
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");
+    XLSX.utils.book_append_sheet(wb,fs,"Applied Filters");
+
+    const stamp=new Date().toISOString().slice(0,10);
+    const safe=("JNVST_Filtered_Assignment_Results_"+stamp).replace(/[\\/:*?"<>|]+/g,"_");
+    XLSX.writeFile(wb,`${safe}.xlsx`);
+  }catch(e){
+    alert("Could not download filtered results: "+(e.message||e));
+    console.error("Filtered results export error",e);
+  }
+}
+
 function renderTeacherResultsDashboard(){
   const d=window._teacherResults;if(!d)return;
   const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
-  const classMap=new Map(d.classes.map(c=>[c.id,c.name])),studentMap=new Map(d.students.map(s=>[s.id,s]));
-  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
-  const assignedKey=new Set(d.links.map(x=>`${x.assignment_id}:${x.student_id}`));
-  let rows=d.attempts.map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{},className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""}));
-  if(f.status==="pending"){
-    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
-    rows=d.links.filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{},className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""}));
-  }else if(f.status==="all"){
-    /* Keep submitted rows only in the main results table; pending assignments are summarized separately. */
-  }
-  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup)&&(!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
-  if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
-  if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
-  rows.sort((x,y)=>{
-    let a,b;
-    if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase()}
-    else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase()}
-    else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions))}
-    else {a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0}
-    const dir=f.sort.endsWith("_asc")?1:-1;return a===b?0:a<b?-1*dir:1*dir;
-  });
+  const rows=getFilteredTeacherResultRows();
   const submitted=d.attempts.length,avg=submitted?Math.round(d.attempts.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||1)),0)/submitted):0;
   const pendingCount=d.links.filter(x=>!d.attempts.some(a=>a.assignment_id===x.assignment_id&&a.student_id===x.student_id)).length;
   render(`<div class="wrap">${header("Assignment Results")}
@@ -664,7 +769,6 @@ function renderTeacherResultsDashboard(){
 }
 function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
 function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
-\nfunction downloadFilteredTeacherResultsExcel(){\n  try{\n    const d=window._teacherResults;\n    if(!d){alert("Assignment results are not loaded yet.");return;}\n    const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};\n    const classMap=new Map((d.classes||[]).map(c=>[c.id,c.name]));\n    const studentMap=new Map((d.students||[]).map(s=>[s.id,s]));\n    const assignmentMap=new Map((d.assignments||[]).map(a=>[a.id,a]));\n    const submittedKeys=new Set((d.attempts||[]).map(x=>`${x.assignment_id}:${x.student_id}`));\n    let rows=(d.attempts||[]).map(at=>({\n      type:"submitted",\n      at,\n      a:assignmentMap.get(at.assignment_id),\n      p:studentMap.get(at.student_id)||{},\n      className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""\n    }));\n    if(f.status==="pending"){\n      rows=(d.links||[]).filter(x=>!submittedKeys.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({\n        type:"pending",\n        at:null,\n        a:assignmentMap.get(x.assignment_id),\n        p:studentMap.get(x.student_id)||{},\n        className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""\n      }));\n    }\n    rows=rows.filter(r=>r.a &&\n      (!f.assignment||f.assignment==="all"||r.a.id===f.assignment) &&\n      (!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup) &&\n      (!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup) &&\n      (!f.classId||f.classId==="all"||r.a.class_id===f.classId) &&\n      (!f.student||f.student==="all"||r.p.id===f.student));\n    if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));\n    if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));\n    rows.sort((x,y)=>{\n      let a,b;\n      if(f.sort==="student_asc"||f.sort==="student_desc"){a=(x.p.full_name||"").toLowerCase();b=(y.p.full_name||"").toLowerCase();}\n      else if(f.sort==="assignment_asc"||f.sort==="assignment_desc"){a=(x.a.title||"").toLowerCase();b=(y.a.title||"").toLowerCase();}\n      else if(f.sort==="score_asc"||f.sort==="score_desc"){a=x.type==="pending"?-1:Number(x.at.score)*100/Math.max(1,Number(x.at.total_questions));b=y.type==="pending"?-1:Number(y.at.score)*100/Math.max(1,Number(y.at.total_questions));}\n      else{a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0;}\n      const dir=f.sort.endsWith("_asc")?1:-1;\n      return a===b?0:a<b?-1*dir:1*dir;\n    });\n    const exportRows=rows.map((r,i)=>{\n      const pct=r.type==="pending"?"":Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)));\n      return {\n        "Sl No":i+1,\n        "Student":r.p.full_name||"Student",\n        "Roll No":r.p.roll_no||"",\n        "Assignment":r.a.title||"",\n        "Main Group":r.a.main_group||"",\n        "Sub-Group":r.a.sub_group||"",\n        "Class":r.className||"",\n        "Score":r.type==="pending"?"":r.at.score,\n        "Total Questions":r.type==="pending"?"":r.at.total_questions,\n        "Score %":pct,\n        "Status":r.type==="pending"?"Not Submitted":"Submitted",\n        "Submitted":r.type==="pending"?"":(r.at.submitted_at?new Date(r.at.submitted_at).toLocaleString():"")\n      };\n    });\n    if(!exportRows.length){alert("No records match the selected filters.");return;}\n    const ws=XLSX.utils.json_to_sheet(exportRows);\n    ws["!cols"]=[12,24,14,32,16,20,20,12,18,12,18,24];\n    const wb=XLSX.utils.book_new();\n    XLSX.utils.book_append_sheet(wb,ws,"Filtered Results");\n    const safe=v=>String(v||"").replace(/[\\/:*?"<>|]+/g,"_").replace(/\s+/g," ").trim();\n    const parts=[f.mainGroup!=="all"?f.mainGroup:"JNVST",f.subGroup!=="all"?f.subGroup:"",f.classId!=="all"?(classMap.get(f.classId)||""):"",f.assignment!=="all"?(assignmentMap.get(f.assignment)?.title||""):"",f.status!=="all"?f.status:"",`N${exportRows.length}`].filter(Boolean);\n    XLSX.writeFile(wb,`${safe(parts.join("_"))}_Assessment_Results.xlsx`);\n  }catch(e){\n    console.error("Filtered results Excel error:",e);\n    alert("Could not download filtered results: "+(e.message||e));\n  }\n}\n
 async function deleteAssignment(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
