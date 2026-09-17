@@ -5,8 +5,8 @@
 .question-image{display:block;max-width:100%;width:auto;height:auto;max-height:900px;margin:0 auto;border-radius:8px;object-fit:contain}
 .question-image-error{padding:12px;color:#b91c1c;background:#fff7ed;border-radius:8px;font-size:13px}
 
-.assessment-stats{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}.assessment-stat{flex:1;min-width:145px;padding:10px 12px;border:1px solid #dbe3ee;border-radius:11px;background:#f8fafc}.assessment-stat b{display:block;font-size:16px;color:#172033}.assessment-stat span{display:block;margin-top:3px;font-size:12px;color:#64748b;font-weight:600}@media(max-width:600px){.assessment-stat{min-width:0}}
-</style></head><body><div id="app"></div><script>
+.assessment-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 16px}.assessment-stat{padding:11px 12px;border:1px solid #cbd5e1;border-radius:11px;background:#f8fafc;text-align:center}.assessment-stat b{display:block;font-size:18px;color:#172033}.assessment-stat span{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:700}.assessment-stat.total{background:#eff6ff;border-color:#bfdbfe}.assessment-stat.submitted{background:#f0fdf4;border-color:#bbf7d0}.assessment-stat.reviewed{background:#fefce8;border-color:#fde68a}@media(max-width:600px){.assessment-stats{grid-template-columns:1fr 1fr}.assessment-stat.total{grid-column:1/-1}}
+</style></head><body><div id="app"></div><!-- ASSESSMENT PROGRESS FIX v2 --><script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co",SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP",UPLOAD_FN="upload-school-answer";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let current=null,profile=null,schoolGroupName='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const render=x=>document.getElementById('app').innerHTML=x;
@@ -76,9 +76,9 @@ async function schoolHome(){
    return `<div class="assignment">
      <div class="question-head"><div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')}</div></div><span class="tag">${a.school_group_id?'Sub-division':'Entire class'}</span></div>
      <div class="assessment-stats">
-       <div class="assessment-stat"><b>📋 ${total}</b><span>Total Questions</span></div>
-       <div class="assessment-stat"><b>⬆ ${submitted}</b><span>Submitted</span></div>
-       <div class="assessment-stat"><b>✓ ${reviewed}</b><span>Reviewed</span></div>
+       <div class="assessment-stat total"><b>📋 ${total}</b><span>Total Questions</span></div>
+       <div class="assessment-stat submitted"><b>⬆ ${submitted}</b><span>Answers Submitted</span></div>
+       <div class="assessment-stat reviewed"><b>✓ ${reviewed}</b><span>Answers Reviewed</span></div>
      </div>
      ${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:''}
      <button onclick="openAssessment('${a.id}')">Open Assessment</button>
