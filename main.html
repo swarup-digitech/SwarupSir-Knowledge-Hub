@@ -482,6 +482,220 @@ async function submitMockAttempt(attemptId,auto=false){try{clearInterval(mockTim
 async function viewMockResult(attemptId){const {data:a,error:ae}=await sb.from('mock_test_attempts').select('*,mock_tests(title)').eq('id',attemptId).eq('student_id',current.id).single();if(ae)return alert(ae.message);const {data:answers,error:ansErr}=await sb.from('mock_test_answers').select('id').eq('attempt_id',attemptId);if(ansErr)return alert(ansErr.message);const r=a.section_results||{},answered=(answers||[]).length;render(`<div class="wrap">${header('Mock Test Result')}<div class="card"><h2>${esc(a.mock_tests?.title||'Mock Test')}</h2><div class="result-summary"><div><b>Score</b><br>${Number(a.score||0).toFixed(2)}/100</div><div><b>Percentage</b><br>${Number(a.percentage||0).toFixed(2)}%</div><div><b>Attempted</b><br>${answered}/80</div><div><b>Unanswered</b><br>${80-answered}</div></div></div><div class="card"><h2>Section-wise Result</h2><table><thead><tr><th>Section</th><th>Correct</th><th>Questions</th><th>Marks</th></tr></thead><tbody>${Object.entries(r).map(([k,x])=>`<tr><td>${esc(k)}</td><td>${x.correct}</td><td>${x.questions}</td><td>${Number(x.marks||0).toFixed(2)}</td></tr>`).join('')}</tbody></table></div><button class="secondary" onclick="studentMockTests()">← Back to Mock Tests</button></div>`)}
 async function mockTeacherResults(){const {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});if(error)return alert(error.message);const ids=(tests||[]).map(x=>x.id);const {data:ats,error:ae}=await sb.from('mock_test_attempts').select('*').in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});if(ae)return alert(ae.message);const pids=[...new Set((ats||[]).map(x=>x.student_id))];const {data:ps}=pids.length?await sb.from('profiles').select('id,full_name,roll_no').in('id',pids):{data:[]};const pm=new Map((ps||[]).map(x=>[x.id,x]));render(`<div class="wrap">${header('Mock Test Results')}<div class="card"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th></tr></thead><tbody>${(ats||[]).map(a=>`<tr><td>${esc((tests||[]).find(t=>t.id===a.mock_test_id)?.title||'')}</td><td>${esc(pm.get(a.student_id)?.full_name||'')}</td><td>${esc(pm.get(a.student_id)?.roll_no||'')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td></tr>`).join('')||'<tr><td colspan="7">No attempts yet.</td></tr>'}</tbody></table><div class="actions" style="margin-top:15px"><button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div></div></div>`)}
 
+// ---------------- School Assessments (teacher-created, bulk question import) ----------------
+let schoolQuestions=[], schoolMarksMap={}, schoolAssessmentClasses=[];
+
+async function schoolAssessmentsManagement(){
+ const {data:classes,error:ce}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).eq("course","SCHOOL").order("name");
+ if(ce)return alert(ce.message);
+ schoolAssessmentClasses=classes||[];
+ const {data:assessments,error:ae}=await sb.from("school_assessments").select("id,title,subject,deadline,class_id,school_group_id,created_at").eq("teacher_id",current.id).order("created_at",{ascending:false});
+ if(ae)return render(`<div class="wrap">${header("School Assessments")}<div class="card">${message(ae.message)}</div><div class="actions"><button class="secondary" onclick="teacherHome()">← Back</button></div></div>`);
+ const classMap=new Map(schoolAssessmentClasses.map(c=>[c.id,c.name]));
+ render(`<div class="wrap">${header("School Assessments")}
+  <div class="card"><div class="actions"><button onclick="newSchoolAssessment()">+ New School Assessment</button><button class="secondary" onclick="teacherHome()">← Back</button></div></div>
+  <div class="card"><h2>Your Assessments</h2>
+   ${(assessments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><p class="muted" style="margin:0">${esc(a.subject||"")} · ${esc(classMap.get(a.class_id)||"Unknown class")}</p></div>${a.deadline?`<span class="tag">Deadline: ${new Date(a.deadline).toLocaleDateString()}</span>`:""}</div><div class="actions" style="margin-top:10px"><button onclick="viewSchoolAssessmentQuestions('${a.id}')">View Questions</button><button class="danger" onclick="deleteSchoolAssessment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No School Assessments yet.</p>"}
+  </div></div>`);
+}
+
+async function viewSchoolAssessmentQuestions(id){
+ const {data:a,error:ae}=await sb.from("school_assessments").select("*").eq("id",id).eq("teacher_id",current.id).single();
+ if(ae||!a)return alert(ae?.message||"Assessment not found.");
+ const {data:qs,error:qe}=await sb.from("school_questions").select("*").eq("assessment_id",id).order("question_order");
+ if(qe)return alert(qe.message);
+ render(`<div class="wrap">${header(esc(a.title))}<div class="card">
+   ${(qs||[]).map(q=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px"><h3 style="margin:0">Question ${q.question_order}</h3><span class="tag">${q.marks} Marks</span></div>${q.question_image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.question_image_url)}" alt="Question ${q.question_order}"></div>`:`<div style="white-space:pre-wrap;margin-top:8px">${esc(q.question_text||"")}</div>`}${q.hint?`<div class="notice small" style="margin-top:8px"><b>Hint:</b> ${esc(q.hint)}</div>`:""}</div>`).join("")||"<p class='muted'>No questions added yet.</p>"}
+   <div class="actions" style="margin-top:15px"><button class="secondary" onclick="schoolAssessmentsManagement()">← Back</button></div>
+ </div></div>`);
+}
+
+async function deleteSchoolAssessment(id){
+ if(!confirm("Delete this School Assessment and all its questions? This cannot be undone."))return;
+ const {error}=await sb.from("school_assessments").delete().eq("id",id).eq("teacher_id",current.id);
+ if(error)return alert(error.message);
+ schoolAssessmentsManagement();
+}
+
+function newSchoolAssessment(){
+ schoolQuestions=[];schoolMarksMap={};
+ if(!schoolAssessmentClasses.length){alert("Create a School Course class first.");return newClass()}
+ render(`<div class="wrap">${header("New School Assessment")}<div class="card">
+  <label>Class</label><select id="saClass" onchange="refreshSchoolAssessmentGroups()">${schoolAssessmentClasses.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
+  <label>Sub-division (optional)</label><select id="saGroup"><option value="">Entire class</option></select>
+  <label>Title</label><input id="saTitle" placeholder="e.g. Unit 3 Written Test">
+  <label>Subject</label><input id="saSubject">
+  <label>Deadline (optional)</label><input id="saDeadline" type="datetime-local">
+  <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3>
+   <p class="small muted">Upload questions in bulk using one of the two methods below, or add a question manually.</p>
+   <span class="tag">METHOD 1</span>
+   <h4 style="margin:8px 0 4px">Excel Only</h4>
+   <p class="small muted">One Excel file with the question text, marks, and an optional hint. No PDF needed.</p>
+   <label>Questions Excel</label><input id="saExcelOnly" type="file" accept=".xlsx,.xls" onchange="readSchoolQuestionExcel(event)">
+   <div class="notice small">Columns: <b>Question, Marks, Hint</b> (Hint is optional).</div>
+   <div style="margin-top:16px"><span class="tag" style="background:#ffedd5;color:#c2410c">METHOD 2</span></div>
+   <h4 style="margin:8px 0 4px">PDF (one question per page) + Marks Excel</h4>
+   <p class="small muted">Each PDF page becomes one question image. Large white page margins are trimmed automatically. Marks and hints come from a separate Excel keyed by question number.</p>
+   <label>Questions PDF</label><input id="saPdf" type="file" accept="application/pdf" onchange="readSchoolQuestionPdf(event)">
+   <label>Marks Excel</label><input id="saMarksExcel" type="file" accept=".xlsx,.xls" onchange="readSchoolMarksExcel(event)">
+   <div class="notice small">Columns: <b>Question No, Marks, Hint</b> (Hint is optional).</div>
+   <div id="saImportStatus" class="small" style="margin-top:10px"></div>
+  </div>
+  <h3>Manual Questions</h3>
+  <div id="saManualRows"></div>
+  <div class="actions"><button type="button" class="secondary" onclick="addSchoolManualQuestion()">+ Add Question Manually</button></div>
+  <div class="actions" style="margin-top:15px"><button onclick="showImportedSchoolQuestions()">Preview / Continue</button><button class="secondary" onclick="schoolAssessmentsManagement()">Cancel</button></div>
+ </div></div>`);
+ refreshSchoolAssessmentGroups();
+}
+
+async function refreshSchoolAssessmentGroups(){
+ const classId=document.getElementById("saClass")?.value,sel=document.getElementById("saGroup");
+ if(!classId||!sel)return;
+ const {data:g,error}=await sb.from("school_course_groups").select("id,name").eq("teacher_id",current.id).eq("class_id",classId).order("name");
+ if(error){sel.innerHTML='<option value="">Entire class</option>';return}
+ sel.innerHTML='<option value="">Entire class</option>'+((g||[]).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join(""));
+}
+
+function addSchoolManualQuestion(){
+ schoolQuestions.push({page:schoolQuestions.length+1,question_text:"",marks:"",hint:"",image_mode:false,manual:true});
+ renderSchoolManualRows();
+}
+function renderSchoolManualRows(){
+ const box=document.getElementById("saManualRows");if(!box)return;
+ box.innerHTML=schoolQuestions.map((q,idx)=>q.manual?idx:null).filter(idx=>idx!==null).map((idx,i)=>{
+  const q=schoolQuestions[idx];
+  return `<div class="card" style="background:#f8fafc"><label>Question ${i+1}</label><textarea rows="3" oninput="schoolQuestions[${idx}].question_text=this.value">${esc(q.question_text)}</textarea><div class="grid"><div><label>Marks</label><input type="number" min="0" step="0.5" value="${esc(q.marks)}" oninput="schoolQuestions[${idx}].marks=this.value"></div><div><label>Hint (optional)</label><input value="${esc(q.hint)}" oninput="schoolQuestions[${idx}].hint=this.value"></div></div><button type="button" class="danger" onclick="removeSchoolManualQuestion(${idx})">Remove</button></div>`;
+ }).join("")||"<p class='muted small'>No manually added questions.</p>";
+}
+function removeSchoolManualQuestion(idx){schoolQuestions.splice(idx,1);renderSchoolManualRows()}
+
+function readSchoolQuestionExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const status=document.getElementById("saImportStatus");
+ const r=new FileReader();
+ r.onload=e=>{
+  try{
+   const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+   const norm=v=>String(v??"").trim(),find=(row,names)=>{for(const n of names){if(row[n]!==undefined)return norm(row[n])}return ""};
+   const parsed=rows.map((x,i)=>({page:i+1,question_text:find(x,["Question","Question Text","question_text"]),marks:Number(find(x,["Marks","marks"]))||0,hint:find(x,["Hint","hint"]),image_mode:false})).filter(q=>q.question_text);
+   if(!parsed.length)throw new Error("No question rows found. Check the column headers.");
+   schoolQuestions=schoolQuestions.filter(q=>q.manual).concat(parsed);
+   status.innerHTML=message(`Loaded ${parsed.length} question(s) from Excel (with marks and hints included).`,true);
+  }catch(err){status.innerHTML=message("Could not read Questions Excel: "+err.message)}
+ };
+ r.readAsArrayBuffer(file);
+}
+
+function readSchoolMarksExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const status=document.getElementById("saImportStatus");
+ const r=new FileReader();
+ r.onload=e=>{
+  try{
+   const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+   const norm=v=>String(v??"").trim(),find=(row,names)=>{for(const n of names){if(row[n]!==undefined)return norm(row[n])}return ""};
+   schoolMarksMap={};
+   rows.forEach(x=>{
+    const n=Number(find(x,["Question No","Question Number","No"]));
+    const marks=Number(find(x,["Marks","marks"]));
+    const hint=find(x,["Hint","hint"]);
+    if(Number.isInteger(n)&&n>0)schoolMarksMap[n]={marks:Number.isFinite(marks)?marks:0,hint};
+   });
+   status.innerHTML=message(`Loaded marks/hints for ${Object.keys(schoolMarksMap).length} question(s).`,true);
+  }catch(err){status.innerHTML=message("Could not read Marks Excel: "+err.message)}
+ };
+ r.readAsArrayBuffer(file);
+}
+
+async function readSchoolQuestionPdf(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const status=document.getElementById("saImportStatus");
+ status.innerHTML=message("Converting PDF pages to images…",true);
+ try{
+  const buf=await file.arrayBuffer(),pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise,arr=[];
+  for(let p=1;p<=pdf.numPages;p++){
+   const page=await pdf.getPage(p);
+   const base=page.getViewport({scale:1});
+   const maxWidth=1600;
+   const scale=Math.min(2.2,Math.max(1.4,maxWidth/base.width));
+   const viewport=page.getViewport({scale});
+   const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{alpha:false});
+   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+   await page.render({canvasContext:ctx,viewport}).promise;
+   const cropped=cropWhiteMargins(canvas);
+   arr.push({page:p,image_data:cropped.toDataURL("image/jpeg",0.92),question_text:"",marks:0,hint:"",image_mode:true});
+  }
+  schoolQuestions=schoolQuestions.filter(q=>q.manual).concat(arr);
+  status.innerHTML=message(`Converted ${arr.length} PDF page(s) to question images. Now load the Marks Excel to fill in marks (and optional hints).`,true);
+ }catch(e){status.innerHTML=message("PDF image conversion failed: "+(e.message||e))}
+}
+
+function showImportedSchoolQuestions(){
+ // Apply marks/hints from the separate Marks Excel to image-mode (PDF) questions,
+ // matching by page number = question number.
+ schoolQuestions.forEach(q=>{
+  if(q.image_mode){
+   const m=schoolMarksMap[q.page];
+   if(m){q.marks=m.marks;q.hint=m.hint||q.hint}
+  }
+ });
+ if(!schoolQuestions.length)return alert("Add at least one question (bulk upload or manual) first.");
+ const missingMarks=schoolQuestions.filter(q=>!q.marks||Number(q.marks)<=0);
+ render(`<div class="wrap">${header("Review Questions")}<div class="card">
+  <div class="${missingMarks.length?"notice":"success"}">${schoolQuestions.length} question(s) ready.${missingMarks.length?` ${missingMarks.length} question(s) are missing marks — fill them in below.`:""}</div>
+  <div id="saReview">${schoolQuestions.map((q,i)=>`<div class="assignment"><h3>Question ${i+1}</h3>${q.image_mode?`<div class="question-image-wrap"><img class="question-image" src="${q.image_data}" alt="Question ${i+1}"></div>`:`<div style="white-space:pre-wrap">${esc(q.question_text)}</div>`}<div class="grid" style="margin-top:8px"><div><label>Marks</label><input type="number" min="0" step="0.5" value="${esc(q.marks)}" oninput="schoolQuestions[${i}].marks=this.value"></div><div><label>Hint (optional)</label><input value="${esc(q.hint||"")}" oninput="schoolQuestions[${i}].hint=this.value"></div></div></div>`).join("")}</div>
+  <div class="actions" style="margin-top:15px"><button onclick="saveSchoolAssessment()">Save Assessment</button><button class="secondary" onclick="newSchoolAssessment()">← Edit / Add More</button></div>
+ </div></div>`);
+}
+
+async function uploadSchoolQuestionImage(dataUrl,path){
+ const blob=await (await fetch(dataUrl)).blob();
+ const {error}=await sb.storage.from("school-question-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});
+ if(error)throw error;
+ const {data}=sb.storage.from("school-question-images").getPublicUrl(path);
+ return data.publicUrl;
+}
+
+async function saveSchoolAssessment(){
+ const classId=document.getElementById("saClass")?.value;
+ const title=document.getElementById("saTitle")?.value.trim();
+ if(!classId)return alert("Select a class.");
+ if(!title)return alert("Enter a title.");
+ if(!schoolQuestions.length)return alert("Add at least one question.");
+ const missing=schoolQuestions.filter(q=>!q.marks||Number(q.marks)<=0);
+ if(missing.length)return alert("Every question needs marks greater than 0. Please fill in the missing marks and try again.");
+ const subject=document.getElementById("saSubject")?.value.trim()||null;
+ const groupId=document.getElementById("saGroup")?.value||null;
+ const deadlineRaw=document.getElementById("saDeadline")?.value;
+ const deadline=deadlineRaw?new Date(deadlineRaw).toISOString():null;
+ try{
+  const {data:assessment,error:ie}=await sb.from("school_assessments").insert({
+   teacher_id:current.id,class_id:classId,school_group_id:groupId,title,subject,deadline
+  }).select().single();
+  if(ie)throw ie;
+  for(let i=0;i<schoolQuestions.length;i++){
+   const q=schoolQuestions[i];
+   let imageUrl=null;
+   if(q.image_mode){
+    imageUrl=await uploadSchoolQuestionImage(q.image_data,`${current.id}/${assessment.id}/q${i+1}-${crypto.randomUUID()}.jpg`);
+   }
+   const {error:qe}=await sb.from("school_questions").insert({
+    assessment_id:assessment.id,
+    question_order:i+1,
+    question_text:q.image_mode?null:(q.question_text||null),
+    question_image_url:imageUrl,
+    marks:Number(q.marks)||0,
+    hint:(q.hint||"").trim()||null
+   });
+   if(qe)throw qe;
+  }
+  alert("School Assessment created successfully.");
+  schoolQuestions=[];schoolMarksMap={};
+  schoolAssessmentsManagement();
+ }catch(e){alert("Could not save School Assessment: "+(e.message||e))}
+}
+
 async function teacherHome(){
  const [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
@@ -495,7 +709,7 @@ async function teacherHome(){
  const normalAssignments=(allAssignments||[]).filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock").filter(a=>schoolTeacherMode ? classIds.has(a.class_id) : !classIds.has(a.class_id));
  render(`<div class="wrap">${header(schoolTeacherMode?"School Course Teacher Dashboard":"Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes.length}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button>${schoolTeacherMode?'<button onclick="schoolAssessmentsManagement()">📝 School Assessments</button>':''}<button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.roll_no?` • Roll No: ${esc(st.roll_no)}`:""}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${classes.map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
  <div class="card"><h2>Assignments</h2>
