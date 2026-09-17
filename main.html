@@ -68,6 +68,7 @@ const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co";
 const SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP";
 const CREATE_STUDENT_FN="create-students";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let schoolTeacherMode=false;
 let current=null,profile=null,active=null,answers=[],videoDone=false;
 let studentRefreshTimer=null, studentDashboardSnapshot=null;
 let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={}, importedSingleExcel=false, importedForNewAssignment=false;
@@ -176,7 +177,26 @@ async function init(){
     return login();
   }
   profile=p;
-  if(p.role==="teacher") return teacherHome();
+  if(p.role==="teacher"){
+    const selectedPortal=portal==="SCHOOL"?"SCHOOL":"JNVST";
+    schoolTeacherMode=selectedPortal==="SCHOOL";
+    const action=new URLSearchParams(location.search).get("action");
+
+    if(schoolTeacherMode){
+      if(action==="newAssignment") return newAssignment();
+      if(action==="mockTestManagement") return mockTestManagement();
+      if(action==="teacherResultsDashboard") return teacherResultsDashboard();
+      if(action==="manageStudentAccounts") return manageStudentAccounts();
+      if(action==="bulkImportStudents") return bulkImportStudents();
+      if(action==="addStudent") return addStudent();
+      if(action==="newClass") return newClass();
+      if(action==="downloadAllResultsExcel") return downloadAllResultsExcel();
+      // Keep the School Course dashboard separate.
+      if(!action) return window.location.replace("/teacher-dashboard.html");
+    }
+
+    return teacherHome();
+  }
 
   await sb.auth.signOut();
   return window.location.replace("/index.html");
@@ -466,25 +486,49 @@ async function viewMockResult(attemptId){const {data:a,error:ae}=await sb.from('
 async function mockTeacherResults(){const {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});if(error)return alert(error.message);const ids=(tests||[]).map(x=>x.id);const {data:ats,error:ae}=await sb.from('mock_test_attempts').select('*').in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});if(ae)return alert(ae.message);const pids=[...new Set((ats||[]).map(x=>x.student_id))];const {data:ps}=pids.length?await sb.from('profiles').select('id,full_name,roll_no').in('id',pids):{data:[]};const pm=new Map((ps||[]).map(x=>[x.id,x]));render(`<div class="wrap">${header('Mock Test Results')}<div class="card"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th></tr></thead><tbody>${(ats||[]).map(a=>`<tr><td>${esc((tests||[]).find(t=>t.id===a.mock_test_id)?.title||'')}</td><td>${esc(pm.get(a.student_id)?.full_name||'')}</td><td>${esc(pm.get(a.student_id)?.roll_no||'')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td></tr>`).join('')||'<tr><td colspan="7">No attempts yet.</td></tr>'}</tbody></table><div class="actions" style="margin-top:15px"><button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div></div></div>`)}
 
 async function teacherHome(){
- const [{data:classes,error:ce},{data:assignments,error:ae},{data:students,error:se}]=await Promise.all([
+ const [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
    sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
    sb.from("profiles").select("*").eq("role","student").order("full_name")
  ]);
- const normalAssignments=(assignments||[]).filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock");
- if(ce||ae||se)return render(`<div class="wrap">${header("Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
- render(`<div class="wrap">${header("Teacher Dashboard")}
- <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes?.length||0}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students?.length||0}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
- <div class="card"><h2>Students</h2>${(students||[]).map(s=>`<div class="assignment"><b>${esc(s.full_name)}</b><div class="muted small">${esc(s.username||"")}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
- <div class="card"><h2>Classes</h2>${(classes||[]).map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
- <div class="card"><h2>Assignments</h2>
+ const classes=(allClasses||[]).filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL");
+ const classIds=new Set(classes.map(c=>c.id));
+ const students=(allStudents||[]).filter(st=>["JNVST-6","JNVST-9"].includes(String(st.course||"").trim().toUpperCase()));
+ const assignments=(allAssignments||[]).filter(a=>classIds.has(a.class_id));
+ const normalAssignments=assignments.filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock");
+
+ if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
+
+ render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}
+  <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
+   <h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2>
+   <p class="muted" style="margin:6px 0 0">Class VI • Class IX • JNVST-6 / JNVST-9</p>
+  </div>
+  <div class="grid">
+   <div class="card"><div class="muted">JNVST Classes</div><div class="stat">${classes.length}</div></div>
+   <div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div>
+   <div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div>
+  </div>
+  <div class="card"><div class="actions">
+   <button onclick="newClass()">+ New Class</button>
+   <button onclick="addStudent()">+ Add Student</button>
+   <button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button>
+   <button onclick="newAssignment()">+ New Assignment</button>
+   <button onclick="teacherResultsDashboard()">📊 Assignment Results</button>
+   <button onclick="mockTestManagement()">🎯 Mock Test Management</button>
+   <button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button>
+   <button onclick="manageStudentAccounts()">👥 Student Accounts</button>
+  </div></div>
+  <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.course?`• ${esc(st.course)}`:""}</div></div>`).join("")||"<p class='muted'>No JNVST students yet.</p>"}</div>
+  <div class="card"><h2>Classes</h2>${classes.map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p class="muted">${esc(c.course||"JNVST")} ${c.description?`• ${esc(c.description)}`:""}</p></div>`).join("")||"<p class='muted'>No JNVST classes yet.</p>"}</div>
+  <div class="card"><h2>Assignments</h2>
    <div class="grid" style="margin-bottom:12px">
-     <div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
-     <div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
+    <div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
+    <div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div>
    </div>
-   <div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments||[])}</div>
- </div></div>`);
+   <div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div>
+  </div>
+ </div>`);
 }
 function renderTeacherAssignmentCards(assignments){
  return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}${(a.assignment_type==="MOCK"||a.assignment_type==="mock")?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
@@ -823,12 +867,19 @@ async function uploadBulkStudents(){
 }
 
 async function newAssignment(){
- const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
- render(`<div class="wrap">${header("New Assignment")}<div class="card">
+ const {data:allClasses,error:classError}=await sb.from("classes").select("id,name,course").eq("teacher_id",current.id).order("name");
+ if(classError)return alert(classError.message);
+ const classes=(allClasses||[]).filter(c=>schoolTeacherMode?String(c.course||"").trim().toUpperCase()==="SCHOOL":String(c.course||"").trim().toUpperCase()!=="SCHOOL");
+ if(!classes.length){alert(schoolTeacherMode?"Create a School Course class first.":"Create a JNVST class first.");return newClass()}
+ const assignmentGroupHtml=schoolTeacherMode
+  ? `<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="aSubGroup"><option value="">No subdivision</option></select></div></div><div class="small muted">School Course uses Class as Main Group and the subdivision belonging to that class as Sub-Group.</div></div>`
+  : `<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Main Group</label><select id="aMainGroup">${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="aSubGroup">${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div></div><div class="small muted">JNVST uses JNV Eng / JNV Ass and EVS / Mental Ability / Arithmetic / Language.</div></div>`;
+
+ render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New Assignment")}<div class="card">
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
- <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Main Group</label><select id="aMainGroup">${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="aSubGroup">${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div></div><div class="small muted">Choose JNV Eng or JNV Ass, then EVS, Mental Ability, Arithmetic or Language.</div></div>
- <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To Multiple Classes</h3><p class="small muted">Select one or more classes. For each selected class, choose the entire class or specific students. You can mix both methods across classes.</p><div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="display:block;padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${c.id}" onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join("")}</div><div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div></div>
- <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea><div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="teacherHome()">Cancel</button></div></div></div>`);
+ ${assignmentGroupHtml}
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To Multiple Classes</h3><p class="small muted">Select one or more classes. For each selected class, choose the entire class or specific students. You can mix both methods across classes.</p><div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="display:block;padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${c.id}" onchange="loadNewAssignmentClassStudents();syncSchoolAssignmentGroup()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join("")}</div><div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div></div>
+ <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea><div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
  if(newAssignmentDraft){
    const d=newAssignmentDraft;
    const draftClasses=d.classIds||[d.classId].filter(Boolean);
@@ -841,6 +892,7 @@ async function newAssignment(){
    document.getElementById("qs").innerHTML="";const notice=document.createElement("div");notice.className="success";notice.innerHTML=`<b>${importedQuestions.length} question(s) imported.</b> They will be added when you click <b>Save & Assign</b>.`;document.getElementById("qs").appendChild(notice);
    loadNewAssignmentClassStudents().then(()=>{if(d.selectedStudentsByClass){Object.entries(d.selectedStudentsByClass).forEach(([cid,ids])=>ids.forEach(id=>{const cb=document.querySelector(`.newassign-student[data-class-id="${cid}"][value="${id}"]`);if(cb)cb.checked=true}))}else if(d.assignMode==="students"){(d.selectedStudents||[]).forEach(id=>{const cb=document.querySelector(`.newassign-student[value="${id}"]`);if(cb)cb.checked=true})}});
  }else{addQ();addQ();document.querySelector('.newassign-class')?.click()}
+ if(schoolTeacherMode)await refreshSchoolAssignmentSubgroups();
 }
 function toggleAssignmentVideoFields(){const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";const box=document.getElementById("assignmentVideoField");if(box)box.style.display=type==="video"?"block":"none"}
 async function loadNewAssignmentClassStudents(){
@@ -888,7 +940,10 @@ async function saveAssignment(){
  const shuffleQuestions=false;
  const shuffleOptions=false;
  const assignmentType=type==="video"?"VIDEO":"MCQ";
- const {data:a,error}=await sb.from("assignments").insert({class_id:recipientInfo.classIds[0],title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,assignment_type:assignmentType,time_limit:mockTime,shuffle_questions:shuffleQuestions,shuffle_options:shuffleOptions,main_group:document.getElementById("aMainGroup")?.value||"JNV Eng",sub_group:document.getElementById("aSubGroup")?.value||"EVS",created_by:current.id}).select().single();if(error)return alert(error.message);
+ const primaryClassId=schoolTeacherMode?(document.getElementById("aMainGroup")?.value||recipientInfo.classIds[0]):recipientInfo.classIds[0];
+ const primaryMainGroup=schoolTeacherMode?(document.getElementById("aMainGroup")?.selectedOptions?.[0]?.textContent||"School Class"):(document.getElementById("aMainGroup")?.value||"JNV Eng");
+ const primarySubGroup=schoolTeacherMode?(document.getElementById("aSubGroup")?.value||""):(document.getElementById("aSubGroup")?.value||"EVS");
+ const {data:a,error}=await sb.from("assignments").insert({class_id:primaryClassId,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,assignment_type:assignmentType,time_limit:mockTime,shuffle_questions:shuffleQuestions,shuffle_options:shuffleOptions,main_group:primaryMainGroup,sub_group:primarySubGroup,created_by:current.id}).select().single();if(error)return alert(error.message);
  let qs=[];
  if(importedForNewAssignment&&importedQuestions.length){
    const imageMode=importedQuestions.some(q=>q.image_mode);
@@ -1737,6 +1792,19 @@ async function studentHome(){
     attempts=at||[];
   }
 
+  let schoolStudentClassName="",schoolStudentSubName="";
+  if(String(profile?.course||"").trim().toUpperCase()==="SCHOOL"){
+    const [{data:cm},{data:sg}]=await Promise.all([
+      sb.from("class_students").select("class_id").eq("student_id",current.id).limit(1),
+      profile.school_group_id?sb.from("school_course_groups").select("name").eq("id",profile.school_group_id).maybeSingle():Promise.resolve({data:null})
+    ]);
+    const classId=cm?.[0]?.class_id||"";
+    if(classId){
+      const {data:crow}=await sb.from("classes").select("name").eq("id",classId).maybeSingle();
+      schoolStudentClassName=crow?.name||"";
+    }
+    schoolStudentSubName=sg?.name||"";
+  }
   const completedIds=new Set(attempts.map(t=>t.assignment_id));
   const pending=assignments.filter(a=>!completedIds.has(a.id));
   const completed=assignments.filter(a=>completedIds.has(a.id));
@@ -1749,7 +1817,7 @@ async function studentHome(){
     return `<div class="assignment student-assignment-row ${!isCompleted?"student-new-highlight":""}">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
         <div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p>
-          <div style="margin-top:6px">${!isCompleted?`<span class="student-new-badge">NEW</span> `:""}${isMock?`<span class="mock-badge">📝 MOCK TEST</span>`:groupBadge(a)}</div>
+          <div style="margin-top:6px">${!isCompleted?`<span class="student-new-badge">NEW</span> `:""}${isMock?`<span class="mock-badge">📝 MOCK TEST</span>`:(String(profile?.course||"").trim().toUpperCase()==="SCHOOL"?`<span class="tag">${esc(schoolStudentClassName||"School Class")}${schoolStudentSubName?` · ${esc(schoolStudentSubName)}`:""}</span>`:groupBadge(a))}</div>
         </div>
         <span class="tag">${isMock?`⏱ ${Number(a.time_limit||120)} min`:isVideo?"MCQ + Video":"MCQ"}</span>
       </div>
