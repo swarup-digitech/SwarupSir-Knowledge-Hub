@@ -4,6 +4,8 @@
 .question-image-wrap{margin:12px 0 16px;padding:10px;background:#f8fafc;border:1px solid #dbe3ee;border-radius:12px;text-align:center}
 .question-image{display:block;max-width:100%;width:auto;height:auto;max-height:900px;margin:0 auto;border-radius:8px;object-fit:contain}
 .question-image-error{padding:12px;color:#b91c1c;background:#fff7ed;border-radius:8px;font-size:13px}
+
+.assessment-stats{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}.assessment-stat{flex:1;min-width:145px;padding:10px 12px;border:1px solid #dbe3ee;border-radius:11px;background:#f8fafc}.assessment-stat b{display:block;font-size:16px;color:#172033}.assessment-stat span{display:block;margin-top:3px;font-size:12px;color:#64748b;font-weight:600}@media(max-width:600px){.assessment-stat{min-width:0}}
 </style></head><body><div id="app"></div><script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co",SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP",UPLOAD_FN="upload-school-answer";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let current=null,profile=null,schoolGroupName='';
@@ -44,67 +46,45 @@ async function schoolHome(){
  if(error)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(error.message)}</div></div>`);
  const allowed=(assessments||[]).filter(a=>a.class_id&&a.school_group_id?(a.school_group_id===profile.school_group_id):a.class_id&&studentClassIds.has(a.class_id));
 
-  // Get the actual number of questions in each assessment.
+  // Load assessment progress for this student.
   const assessmentIds=allowed.map(a=>a.id);
   const questionCountMap=new Map();
+  const submittedCountMap=new Map();
+  const reviewedCountMap=new Map();
+
   if(assessmentIds.length){
-    const {data:questionRows,error:questionCountError}=await sb
-      .from('school_questions')
-      .select('assessment_id')
-      .in('assessment_id',assessmentIds);
-    if(questionCountError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(questionCountError.message)}</div></div>`);
-    for(const row of (questionRows||[])){
-      questionCountMap.set(
-        row.assessment_id,
-        (questionCountMap.get(row.assessment_id)||0)+1
-      );
+    const [{data:questionRows,error:questionError},{data:submissionRows,error:submissionError}]=await Promise.all([
+      sb.from('school_questions').select('assessment_id').in('assessment_id',assessmentIds),
+      sb.from('school_answer_submissions').select('assessment_id,question_id,status').eq('student_id',current.id).eq('is_current',true).in('assessment_id',assessmentIds)
+    ]);
+    if(questionError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(questionError.message)}</div></div>`);
+    if(submissionError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(submissionError.message)}</div></div>`);
+
+    for(const row of (questionRows||[])) questionCountMap.set(row.assessment_id,(questionCountMap.get(row.assessment_id)||0)+1);
+    const seen=new Set();
+    for(const row of (submissionRows||[])){
+      const key=`${row.assessment_id}__${row.question_id}`;
+      if(seen.has(key))continue;
+      seen.add(key);
+      submittedCountMap.set(row.assessment_id,(submittedCountMap.get(row.assessment_id)||0)+1);
+      if(String(row.status||'').toLowerCase()==='reviewed') reviewedCountMap.set(row.assessment_id,(reviewedCountMap.get(row.assessment_id)||0)+1);
     }
   }
- const submissionCountMap=new Map();
- const reviewedCountMap=new Map();
- if(assessmentIds.length){
-   const {data:submissionRows,error:submissionCountError}=await sb
-     .from('school_answer_submissions')
-     .select('assessment_id,question_id,status')
-     .eq('student_id',current.id)
-     .eq('is_current',true)
-     .in('assessment_id',assessmentIds);
-   if(submissionCountError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(submissionCountError.message)}</div></div>`);
-   const seenSubmitted=new Set(),seenReviewed=new Set();
-   for(const row of (submissionRows||[])){
-     const key=`${row.assessment_id}__${row.question_id}`;
-     if(!seenSubmitted.has(key)){
-       seenSubmitted.add(key);
-       submissionCountMap.set(row.assessment_id,(submissionCountMap.get(row.assessment_id)||0)+1);
-     }
-     if(row.status==='reviewed'&&!seenReviewed.has(key)){
-       seenReviewed.add(key);
-       reviewedCountMap.set(row.assessment_id,(reviewedCountMap.get(row.assessment_id)||0)+1);
-     }
-   }
- }
 
  const cards=allowed.map(a=>{
-   const total=questionCountMap.get(a.id)||0;
-   const submitted=submissionCountMap.get(a.id)||0;
-   const reviewed=reviewedCountMap.get(a.id)||0;
+   const total=questionCountMap.get(a.id)||0, submitted=submittedCountMap.get(a.id)||0, reviewed=reviewedCountMap.get(a.id)||0;
    return `<div class="assignment">
-     <div class="question-head">
-       <div>
-         <h3 style="margin:0 0 7px">${esc(a.title)}</h3>
-         <div class="muted">${esc(a.subject||'')}</div>
-       </div>
-       <span class="tag">${a.school_group_id?'Sub-division':'Entire class'}</span>
-     </div>
-     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 12px">
-       <span class="tag" style="background:#eef2ff;color:#3730a3">📋 ${total} Questions</span>
-       <span class="tag" style="background:#ecfdf5;color:#166534">⬆ ${submitted} Submitted</span>
-       <span class="tag" style="background:#fef3c7;color:#92400e">✓ ${reviewed} Reviewed</span>
+     <div class="question-head"><div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')}</div></div><span class="tag">${a.school_group_id?'Sub-division':'Entire class'}</span></div>
+     <div class="assessment-stats">
+       <div class="assessment-stat"><b>📋 ${total}</b><span>Total Questions</span></div>
+       <div class="assessment-stat"><b>⬆ ${submitted}</b><span>Submitted</span></div>
+       <div class="assessment-stat"><b>✓ ${reviewed}</b><span>Reviewed</span></div>
      </div>
      ${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:''}
      <button onclick="openAssessment('${a.id}')">Open Assessment</button>
    </div>`;
  }).join('');
+
  if(assessmentOnly){
    render(`<div class="wrap">${header('📝 My Assessments')}
      <div class="card"><h2>Welcome, ${esc(profile.full_name||'Student')}</h2><p class="muted">Roll No: <b>${esc(profile.roll_no||'')}</b> &nbsp; | &nbsp; School Course</p></div>
