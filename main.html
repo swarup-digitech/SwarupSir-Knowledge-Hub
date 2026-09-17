@@ -490,8 +490,11 @@ async function mockTeacherResults(){const {data:tests,error}=await sb.from('mock
 function jnvstBaseKey(c){
  const n=String(c?.name||"").trim().toUpperCase().replace(/\s+/g," ");
  const course=String(c?.course||"").trim().toUpperCase();
- if(n==="JNVST-VI"||n==="JNVST-6"||n==="JNVST CLASS VI"||n==="JNVST CLASS 6"||n==="CLASS VI"||n==="CLASS 6"||course==="JNVST-6"&&/JNVST\s*(?:-|\s)?(?:CLASS\s*)?(?:VI|6)$/i.test(n))return "JNVST-VI";
- if(n==="JNVST-IX"||n==="JNVST-9"||n==="JNVST CLASS IX"||n==="JNVST CLASS 9"||n==="CLASS IX"||n==="CLASS 9"||course==="JNVST-9"&&/JNVST\s*(?:-|\s)?(?:CLASS\s*)?(?:IX|9)$/i.test(n))return "JNVST-IX";
+ // Treat the fixed Class VI label consistently even when older records use
+ // variants such as "JNVST-VI (Class-IV)", "JNVST-VI (Class VI)" or "JNVST-6".
+ if(/^JNVST\s*[- ]?(?:VI|6)(?:\s*\([^)]*\))?$/i.test(n) || n==="CLASS VI" || n==="CLASS 6" || course==="JNVST-6" && /^JNVST\s*[- ]?(?:VI|6)(?:\s*\([^)]*\))?$/i.test(n))return "JNVST-VI";
+ // Treat the fixed Class IX label consistently, including common parenthetical variants.
+ if(/^JNVST\s*[- ]?(?:IX|9)(?:\s*\([^)]*\))?$/i.test(n) || n==="CLASS IX" || n==="CLASS 9" || course==="JNVST-9" && /^JNVST\s*[- ]?(?:IX|9)(?:\s*\([^)]*\))?$/i.test(n))return "JNVST-IX";
  return "";
 }
 function jnvstSubgroupParent(c){
