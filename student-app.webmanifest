@@ -1,7 +1,7 @@
 {
   "name":"Swarup Sir's Knowledge Hub",
   "short_name":"SKH",
-  "start_url":"/index.html",
+  "start_url":"/student-login.html",
   "display":"standalone",
   "background_color":"#eef8ff",
   "theme_color":"#087ed7",

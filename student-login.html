@@ -143,6 +143,11 @@ button{
 .install-card.show{display:block}
 .install-btn{width:100%;height:52px;margin-top:10px;background:#07508d;color:#fff}
 .install-note{font-size:13px;line-height:1.45;margin:9px 0 0;color:#52718f}
+/* First-visit student setup prompt */
+.first-visit-backdrop{position:fixed;inset:0;background:rgba(5,35,60,.58);display:none;align-items:center;justify-content:center;padding:18px;z-index:50;backdrop-filter:blur(4px)}
+.first-visit-backdrop.show{display:flex}
+.first-visit-modal{width:min(470px,100%);background:#fff;border-radius:24px;padding:26px 22px 22px;box-shadow:0 22px 60px rgba(0,0,0,.25);text-align:center}
+.first-visit-icon{font-size:46px;margin-bottom:6px}.first-visit-modal h2{margin:0;color:#07508d;font-size:24px}.first-visit-modal p{color:#496b88;line-height:1.5;font-size:15px;margin:12px 0}.first-visit-actions{display:grid;gap:10px;margin-top:18px}.first-install-btn{height:52px;background:#087ed7;color:#fff}.first-skip-btn{height:46px;background:#eef5fa;color:#24516f;font-size:15px}.security-note{font-size:12px!important;color:#71889b!important;margin-top:12px!important}
 @media(max-width:600px){
   .login-page{padding:18px 16px 65px}
   .logo-wrap{height:190px;width:min(405px,92vw)}
@@ -210,6 +215,19 @@ button{
     </div>
   </div>
 
+  <div id="firstVisitPrompt" class="first-visit-backdrop" role="dialog" aria-modal="true" aria-labelledby="firstVisitTitle">
+    <div class="first-visit-modal">
+      <div class="first-visit-icon">📱</div>
+      <h2 id="firstVisitTitle">Set up Student Login</h2>
+      <p>For quicker access next time, add <strong>Swarup Sir's Knowledge Hub</strong> to your Home Screen.</p>
+      <p>After you log in, this device can remember your Roll No and Password so they are filled automatically next time.</p>
+      <div class="first-visit-actions">
+        <button type="button" id="firstInstallBtn" class="first-install-btn">📱 Add to Home Screen</button>
+        <button type="button" id="firstContinueBtn" class="first-skip-btn">Continue to Student Login</button>
+      </div>
+      <p class="security-note">Credentials are saved only in this browser on this device. Do not enable this on a shared/public device.</p>
+    </div>
+  </div>
   <div class="footer">
     🛡️ Your learning. Your progress. Your success.
     <small>© 2026 Swarup Sir's Knowledge Hub</small>
@@ -224,6 +242,34 @@ const msg=document.getElementById('msg'),btn=document.getElementById('loginBtn')
 let deferredInstallPrompt=null;
 const installCard=document.getElementById('installCard');
 const installBtn=document.getElementById('installBtn');
+const firstVisitPrompt=document.getElementById('firstVisitPrompt');
+const firstInstallBtn=document.getElementById('firstInstallBtn');
+const firstContinueBtn=document.getElementById('firstContinueBtn');
+
+function closeFirstVisitPrompt(){
+  firstVisitPrompt.classList.remove('show');
+  localStorage.setItem('skh_student_setup_prompt_seen','1');
+}
+firstContinueBtn.addEventListener('click',closeFirstVisitPrompt);
+firstInstallBtn.addEventListener('click',async()=>{
+  if(deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice.catch(()=>null);
+    deferredInstallPrompt=null;
+  }else{
+    installCard.classList.add('show');
+    document.querySelector('.install-note').textContent='Your browser controls installation. Use the browser menu and choose “Add to Home screen” or “Install app”.';
+  }
+  closeFirstVisitPrompt();
+});
+
+// Show the setup prompt only on the first visit to the student-only login page.
+function maybeShowFirstVisitPrompt(){
+  const standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+  if(!standalone && !localStorage.getItem('skh_student_setup_prompt_seen')){
+    setTimeout(()=>firstVisitPrompt.classList.add('show'),350);
+  }
+}
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('/student-sw.js').catch(()=>{}));
@@ -234,6 +280,7 @@ window.addEventListener('beforeinstallprompt',e=>{
   deferredInstallPrompt=e;
   if(!window.matchMedia('(display-mode: standalone)').matches){
     installCard.classList.add('show');
+    if(!localStorage.getItem('skh_student_setup_prompt_seen')) firstVisitPrompt.classList.add('show');
   }
 });
 
@@ -262,6 +309,8 @@ document.getElementById('togglePassword').addEventListener('click',()=>{
 });
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'">'+esc(t)+'</div>'}
+maybeShowFirstVisitPrompt();
+
 // Student-only entry point. Reuse a valid session only when its real course
 // matches the course selected on this page.
 (async()=>{
@@ -279,19 +328,24 @@ function show(t,ok=false){msg.innerHTML='<div class="'+(ok?'success':'notice')+'
   await sb.auth.signOut();
  }catch(_){}
 })();
-const selectedCourseOnPage=new URLSearchParams(location.search).get('course') || localStorage.getItem('skh_selected_course') || '';
+const requestedCourse=new URLSearchParams(location.search).get('course') || '';
+const savedCourse=localStorage.getItem('skh_selected_course') || '';
+const selectedCourseOnPage=requestedCourse || savedCourse;
 const courseNames={
   'JNVST-6':'JNVST-6 — Navodaya Selection Test for Class VI',
   'JNVST-9':'JNVST-9 — Navodaya Selection Test for Class IX',
   'SCHOOL':'School Course'
 };
-if(!courseNames[selectedCourseOnPage]){ location.replace('/index.html'); }
-else {
+if(!courseNames[selectedCourseOnPage]){
+  document.getElementById('selectedCourseName').textContent='Choose your student course';
+  document.querySelector('.change-course').textContent='← Select Course';
+} else {
   document.getElementById('selectedCourseName').textContent=courseNames[selectedCourseOnPage];
   localStorage.setItem('skh_selected_course',selectedCourseOnPage);
 }
 (function restoreSavedStudentLogin(){
-  const savedKey='skh_saved_student_login_'+selectedCourseOnPage;
+  const savedKey=selectedCourseOnPage ? 'skh_saved_student_login_'+selectedCourseOnPage : '';
+  if(!savedKey)return;
   try{
     const saved=JSON.parse(localStorage.getItem(savedKey)||'null');
     if(saved?.roll)document.getElementById('rollNo').value=saved.roll;
@@ -325,8 +379,11 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
       throw new Error(`This Roll No is registered for ${profile.course||'another course'}. Please choose the correct course.`);
    if(document.getElementById('rememberDevice')?.checked){
       localStorage.setItem('skh_saved_student_login_'+selectedCourse,JSON.stringify({roll:String(profile.roll_no||roll),password:pw,saved_at:new Date().toISOString()}));
+   }else{
+      localStorage.removeItem('skh_saved_student_login_'+selectedCourse);
    }
    localStorage.setItem('skh_student_device_seen','1');
+   localStorage.setItem('skh_student_setup_prompt_seen','1');
    show('Login successful. Opening Student Dashboard...',true);
    if(deferredInstallPrompt && !window.matchMedia('(display-mode: standalone)').matches){
       installCard.classList.add('show');
