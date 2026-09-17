@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#087ed7">
+<link rel="manifest" href="/student-app.webmanifest">
+<link rel="icon" href="/skh-icon-192.png" type="image/png">
+<title>Student Course Selection — Swarup Sir's Knowledge Hub</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(135deg,#eef8ff,#f8fbff);min-height:100vh;color:#12304d}.page{width:min(1050px,94vw);margin:auto;padding:28px 0 50px}.hero{text-align:center;margin-bottom:28px}.hero img{width:min(230px,55vw);height:120px;object-fit:contain}.hero h1{margin:8px 0;color:#07508d;font-size:32px}.hero p{color:#55718b;font-size:17px}.section{background:#fff;border-radius:22px;padding:24px;margin:20px 0;box-shadow:0 10px 30px rgba(20,70,110,.10);border:1px solid #dcecf8}.section h2{margin:0 0 18px;color:#07508d}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.course{display:flex;flex-direction:column;justify-content:space-between;min-height:190px;padding:20px;border:2px solid #d8e8f5;border-radius:18px;background:#fbfdff}.course h3{margin:0 0 8px;color:#174d78;font-size:20px}.course p{margin:0 0 18px;color:#647b91;line-height:1.45}.course button{border:0;border-radius:12px;padding:13px 16px;background:#087ed7;color:#fff;font-size:16px;font-weight:700;cursor:pointer}.back{text-align:center;margin-top:22px}.back button{border:1px solid #c9ddec;background:#fff;color:#24516f;border-radius:12px;padding:11px 18px;font-weight:700;cursor:pointer}.note{text-align:center;color:#647b91;font-size:14px;margin-top:18px}
+@media(max-width:600px){.page{padding:20px 0 35px}.hero h1{font-size:28px}.hero p{font-size:16px}.section{padding:20px}.course{min-height:165px}}
+</style>
+</head>
+<body>
+<main class="page">
+<div class="hero">
+<img src="/swarup-sir-logo.png" alt="Swarup Sir's Knowledge Hub logo">
+<h1>Welcome Students!</h1>
+<p>Select your course to continue to the Student Login.</p>
+</div>
+<section class="section">
+<h2>🎓 Student Courses</h2>
+<div class="cards">
+<div class="course"><div><h3>JNVST Class VI</h3><p>Navodaya Selection Test preparation for Class VI.</p></div><button onclick="student('JNVST-6')">Continue to Login →</button></div>
+<div class="course"><div><h3>JNVST Class IX</h3><p>Navodaya Selection Test preparation for Class IX.</p></div><button onclick="student('JNVST-9')">Continue to Login →</button></div>
+<div class="course"><div><h3>School Course</h3><p>School assignments, assessments and learning materials.</p></div><button onclick="student('SCHOOL')">Continue to Login →</button></div>
+</div>
+</section>
+<div class="back"><button onclick="location.replace('/student-login.html')">← Back to Student Login</button></div>
+<div class="note">🔒 This page is for students only. Teacher Login is not shown here.</div>
+</main>
+<script>
+function student(course){localStorage.setItem('skh_selected_course',course);location.replace('/student-login.html?course='+encodeURIComponent(course));}
+</script>
+</body>
+</html>

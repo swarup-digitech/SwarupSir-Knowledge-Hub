@@ -183,7 +183,7 @@ button{
       <div class="selected-course-box">
         <div class="selected-course-label">Selected Course</div>
         <div id="selectedCourseName" class="selected-course-name">JNVST</div>
-        <button type="button" class="change-course" onclick="location.href='/index.html'">← Change Course</button>
+        <button type="button" class="change-course" onclick="location.href='/student-course-selection.html'">← Change Course</button>
       </div>
 
       <div class="form-group">
@@ -359,7 +359,7 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
  const validJnv=['JNVST-6','JNVST-9'].includes(selectedCourse);
  const validSchool=String(selectedCourse).toUpperCase()==='SCHOOL';
  if(!validJnv && !validSchool){
-   location.replace('/index.html');
+   location.replace('/student-course-selection.html');
    return;
  }
  if(!roll||!pw)return show('Enter Roll No and Password.');
