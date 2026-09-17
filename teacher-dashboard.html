@@ -71,8 +71,8 @@ async function bulkQuestionUpload(preselectId=''){
 
       <div class="card" style="border:2px solid #16a34a;background:#f7fff9;margin:0">
         <span class="tag" style="background:#dcfce7;color:#166534">METHOD 2</span>
-        <h3>PDF + Excel Marks</h3>
-        <p class="small muted">PDF should contain <b>one question per page</b>. Excel columns: <b>Question No, Marks, Hint</b>.</p>
+        <h3>PDF → Question Images + Excel</h3>
+        <p class="small muted"><b>For Assamese / scanned questions:</b> one complete question per PDF page. The PDF is rendered directly as an image — <b>NO OCR and NO text extraction</b>. Large white margins are automatically trimmed. Excel columns: <b>Question No, Marks, Hint</b>.</p>
         <label>Questions PDF</label>
         <input id="bqPdf" type="file" accept=".pdf" onchange="readBulkAssessmentPdf(event)">
         <label>Marks / Hint Excel</label>
@@ -172,10 +172,40 @@ function readBulkAssessmentKey(ev){
   r.readAsArrayBuffer(f);
 }
 
+function cropSchoolQuestionWhiteMargins(sourceCanvas){
+  const ctx=sourceCanvas.getContext('2d',{willReadFrequently:true});
+  const w=sourceCanvas.width, h=sourceCanvas.height;
+  const data=ctx.getImageData(0,0,w,h).data;
+  const threshold=248;
+  let minX=w,minY=h,maxX=-1,maxY=-1;
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+      if(a>10 && (r<threshold || g<threshold || b<threshold)){
+        if(x<minX)minX=x;
+        if(x>maxX)maxX=x;
+        if(y<minY)minY=y;
+        if(y>maxY)maxY=y;
+      }
+    }
+  }
+  if(maxX<0)return sourceCanvas;
+  const pad=Math.max(12,Math.round(Math.min(w,h)*0.018));
+  minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
+  maxX=Math.min(w-1,maxX+pad); maxY=Math.min(h-1,maxY+pad);
+  const out=document.createElement('canvas');
+  out.width=maxX-minX+1; out.height=maxY-minY+1;
+  out.getContext('2d').drawImage(
+    sourceCanvas,minX,minY,out.width,out.height,0,0,out.width,out.height
+  );
+  return out;
+}
+
 async function readBulkAssessmentPdf(ev){
   const f=ev.target.files?.[0]; if(!f)return;
   const box=document.getElementById('bqPdfPreview');
-  box.innerHTML=msg('Reading PDF pages…',true);
+  box.innerHTML=msg('Rendering PDF pages as images — OCR is not used…',true);
   try{
     const mod=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
     mod.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
@@ -183,17 +213,45 @@ async function readBulkAssessmentPdf(ev){
     const pages=[];
     for(let p=1;p<=pdf.numPages;p++){
       const page=await pdf.getPage(p);
-      const content=await page.getTextContent();
-      const txt=content.items.map(i=>i.str).join(' ').trim();
-      pages.push({no:String(p),question:txt});
+      const base=page.getViewport({scale:1});
+      const maxWidth=1800;
+      const scale=Math.min(2.5,Math.max(1.6,maxWidth/base.width));
+      const viewport=page.getViewport({scale});
+      const canvas=document.createElement('canvas');
+      const ctx=canvas.getContext('2d',{alpha:false});
+      canvas.width=Math.ceil(viewport.width);
+      canvas.height=Math.ceil(viewport.height);
+      ctx.fillStyle='#fff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      await page.render({canvasContext:ctx,viewport}).promise;
+
+      // IMPORTANT: use rendered pixels only. Do not call getTextContent().
+      const cropped=cropSchoolQuestionWhiteMargins(canvas);
+      pages.push({
+        no:String(p),
+        image_data:cropped.toDataURL('image/jpeg',0.93),
+        question:''
+      });
     }
     bulkAssessmentPdfPages=pages;
-    box.innerHTML=`<div class="success">Read ${pages.length} PDF page(s).</div>
-      <div class="small muted">Each PDF page will become one question. If a page has no extractable text, the import will stop rather than silently create a blank question.</div>`;
-    showBulkStatus(`${pages.length} PDF question page(s) ready.`,true);
+
+    box.innerHTML=`<div class="success">
+      Prepared <b>${pages.length}</b> PDF page(s) as question images. No OCR was performed.
+      </div>
+      <div class="small muted" style="margin-top:8px">
+        Each page is stored as an image. Large white margins are trimmed automatically, while the Assamese text, fonts, symbols and page layout are preserved visually.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px">
+        ${pages.slice(0,12).map(x=>`<div style="border:1px solid #dbe3ee;border-radius:10px;padding:6px;background:#fff">
+          <img src="${x.image_data}" style="width:100%;display:block;border-radius:7px" alt="PDF page ${x.no}">
+          <div class="small muted" style="margin-top:4px;text-align:center">Question ${x.no}</div>
+        </div>`).join('')}
+      </div>
+      ${pages.length>12?`<div class="small muted" style="margin-top:8px">Showing first 12 previews.</div>`:''}`;
+    showBulkStatus(`${pages.length} PDF page(s) converted to cropped question images. No OCR used.`,true);
   }catch(e){
     bulkAssessmentPdfPages=[];
-    box.innerHTML=msg('Could not read PDF: '+e.message);
+    box.innerHTML=msg('Could not convert PDF to images: '+e.message);
   }
 }
 
@@ -212,11 +270,16 @@ async function saveBulkAssessmentQuestions(){
     if(!Object.keys(bulkAssessmentPdfMeta).length)return alert('Upload the Marks / Hint Excel for the PDF first.');
     const missing=bulkAssessmentPdfPages.filter(x=>!bulkAssessmentPdfMeta[x.no]||!Number.isFinite(bulkAssessmentPdfMeta[x.no].marks));
     if(missing.length)return alert('Marks are missing for PDF question/page: '+missing.map(x=>x.no).join(', '));
-    const blank=bulkAssessmentPdfPages.filter(x=>!x.question.trim());
-    if(blank.length)return alert('No extractable text found on PDF page(s): '+blank.map(x=>x.no).join(', '));
     rows=bulkAssessmentPdfPages.map(x=>{
       const meta=bulkAssessmentPdfMeta[x.no];
-      return {assessment_id:aid,question_order:0,question_text:meta.hint?`${x.question}\n\nHint: ${meta.hint}`:x.question,marks:meta.marks};
+      return {
+        assessment_id:aid,
+        question_order:0,
+        question_text:null,
+        question_image_data:x.image_data,
+        marks:meta.marks,
+        hint:meta.hint||''
+      };
     });
   }else{
     return alert('Upload an Excel file or a PDF + Marks Excel file first.');
@@ -229,9 +292,33 @@ async function saveBulkAssessmentQuestions(){
     if(le)throw le;
     let next=(last?.[0]?.question_order||0)+1;
     rows.forEach(x=>x.question_order=next++);
-    const {error}=await sb.from('school_questions').insert(rows);
+    // PDF questions are stored as real images in Supabase Storage.
+    // Text is deliberately kept NULL so Assamese/scanned content is never OCR'd.
+    const dbRows=[];
+    for(const x of rows){
+      let imageUrl=null;
+      if(x.question_image_data){
+        const path=`${teacher.id}/${aid}/q${x.question_order}-${crypto.randomUUID()}.jpg`;
+        const blob=await (await fetch(x.question_image_data)).blob();
+        const {error:ue}=await sb.storage.from('school-question-images').upload(
+          path,blob,{contentType:'image/jpeg',upsert:false}
+        );
+        if(ue)throw ue;
+        const {data:pu}=sb.storage.from('school-question-images').getPublicUrl(path);
+        imageUrl=pu.publicUrl;
+      }
+      dbRows.push({
+        assessment_id:aid,
+        question_order:x.question_order,
+        question_text:x.question_text||null,
+        question_image_url:imageUrl,
+        marks:Number(x.marks)||0,
+        hint:(x.hint||'').trim()||null
+      });
+    }
+    const {error}=await sb.from('school_questions').insert(dbRows);
     if(error)throw error;
-    alert(`${rows.length} question(s) added successfully.`);
+    alert(`${dbRows.length} question(s) added successfully.`);
     bulkAssessmentRows=[];bulkAssessmentPdfPages=[];bulkAssessmentPdfMeta={};
     await load(); editQuestions(aid);
   }catch(e){
@@ -277,14 +364,34 @@ async function saveAssessmentAndBulk(){
  await load();
  bulkQuestionUpload(data.id);
 }
-async function editQuestions(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const group=groups.find(g=>g.id===a.school_group_id);const total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);document.getElementById('app').innerHTML=`${header('Questions — '+esc(a.title))}<div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div><div id="qbox">${(q||[]).map(x=>`<div class="student-card"><label>Question ${x.question_order}</label><textarea id="qt_${x.id}">${esc(x.question_text)}</textarea><label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${x.marks}"><div class="actions"><button onclick="saveQ('${x.id}','${id}')">Save</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div></div>`).join('')}</div><div class="actions">
+async function editQuestions(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const group=groups.find(g=>g.id===a.school_group_id);const total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);document.getElementById('app').innerHTML=`${header('Questions — '+esc(a.title))}<div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div><div id="qbox">${(q||[]).map(x=>`<div class="student-card">
+  <label>Question ${x.question_order}</label>
+  ${x.question_image_url
+    ? `<div class="question-image-wrap" style="margin:8px 0 12px"><img class="question-image" src="${esc(x.question_image_url)}" alt="Question ${x.question_order}"></div><div class="small muted">Image question — Assamese/PDF content is stored as an image.</div>`
+    : `<textarea id="qt_${x.id}">${esc(x.question_text||'')}</textarea>`}
+  <label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${x.marks}">
+  ${x.hint?`<div class="notice small"><b>Hint:</b> ${esc(x.hint)}</div>`:''}
+  <div class="actions"><button onclick="saveQ('${x.id}','${id}')">Save</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div>
+</div>`).join('')}</div><div class="actions">
   <button onclick="addQ('${id}')">+ Add Question</button>
   <button onclick="bulkQuestionUpload('${id}')" style="background:#16a34a">📥 Bulk Questions Upload</button>
   <button onclick="reviewAssessment('${id}')">📊 Review Submissions</button>
   <button class="secondary" onclick="home()">Back</button>
 </div></div>`}
 async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return alert(error.message);editQuestions(id)}
-async function saveQ(qid,aid){const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid);const value=Number(m.value);if(!t?.value.trim())return alert('Question text is required.');if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');const {error}=await sb.from('school_questions').update({question_text:t.value.trim(),marks:value}).eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
+async function saveQ(qid,aid){
+  const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid);
+  const value=Number(m.value);
+  if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');
+  const payload={marks:value};
+  if(t){
+    if(!t.value.trim())return alert('Question text is required.');
+    payload.question_text=t.value.trim();
+  }
+  const {error}=await sb.from('school_questions').update(payload).eq('id',qid);
+  if(error)return alert(error.message);
+  editQuestions(aid);
+}
 async function delQ(qid,aid){if(!confirm('Delete question?'))return;const {error}=await sb.from('school_questions').delete().eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
 async function reviewAssessment(id){
  const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
