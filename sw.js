@@ -1,4 +1,4 @@
-const CACHE_NAME = 'swarup-sir-knowledge-hub-v5';
+const CACHE_NAME = 'swarup-sir-knowledge-hub-v6';
 const APP_SHELL = [
   '/',
   '/index.html',

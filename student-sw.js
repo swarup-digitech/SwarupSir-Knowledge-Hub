@@ -1,4 +1,4 @@
-const CACHE='skh-pwa-v5-student-only';
+const CACHE='skh-pwa-v6-student-only';
 const APP_SHELL=['/index.html','/student-course-selection.html','/student-login.html','/school-login.html','/school-dashboard.html','/student-app.webmanifest','/skh-icon.png','/skh-icon-192.png','/skh-icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(APP_SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

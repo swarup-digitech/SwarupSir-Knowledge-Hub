@@ -111,7 +111,7 @@ function renderStudentDashboardLoading(){
   </div>`);
 }
 
-const MAIN_GROUPS=["JNV Eng","JNV Ass"];
+const MAIN_GROUPS=["JNVST-VI (Class-IV)","JNVST-IX (Class IX)"];
 const SUB_GROUPS=["EVS","Mental Ability","Arithmetic","Language"];
 const groupLabel=a=>a?.main_group&&a?.sub_group?`${esc(a.main_group)} · ${esc(a.sub_group)}`:"Not grouped";
 const groupBadge=a=>a?.main_group&&a?.sub_group?`<span class="tag">${groupLabel(a)}</span>`:`<span class="tag" style="background:#f1f5f9;color:#64748b">Not grouped</span>`;
@@ -502,15 +502,83 @@ function jnvstSubgroupParent(c){
 async function ensureJnvstBaseClasses(allClasses){
  const existing=allClasses||[];
  const created=[];
- for(const base of [{key:"JNVST-VI",name:"JNVST-VI",course:"JNVST-6",description:"Fixed JNVST Class VI group. Create sub-groups under this group."},{key:"JNVST-IX",name:"JNVST-IX",course:"JNVST-9",description:"Fixed JNVST Class IX group. Create sub-groups under this group."}]){
+ for(const base of [{key:"JNVST-VI",name:"JNVST-VI (Class-IV)",course:"JNVST-6",description:"Fixed JNVST Class VI group for Class IV students preparing for JNVST VI. Create sub-groups under this group."},{key:"JNVST-IX",name:"JNVST-IX (Class IX)",course:"JNVST-9",description:"Fixed JNVST Class IX group. Create sub-groups under this group."}]){
   let found=existing.find(c=>jnvstBaseKey(c)===base.key);
   if(!found){
    const {data,error}=await sb.from("classes").insert({name:base.name,description:base.description,teacher_id:current.id,course:base.course}).select("*").single();
    if(error)throw error;
    found=data; created.push(data);
+  } else if(base.key==="JNVST-VI" && String(found.name||"").trim().toUpperCase()==="JNVST-VI"){
+   const {data,error}=await sb.from("classes").update({name:base.name,description:base.description,course:base.course}).eq("id",found.id).eq("teacher_id",current.id).select("*").single();
+   if(error)throw error;
+   found=data;
+   const idx=existing.findIndex(c=>c.id===found.id); if(idx>=0)existing[idx]=found;
   }
  }
  return existing.concat(created);
+}
+
+// One-time, idempotent migration of the teacher's older Navodaya_Ass and Navodaya_Eng classes.
+// The old classes are converted into sub-groups under JNVST-VI (Class-IV), preserving
+// their class_students memberships and any existing assignments. If a same-named subgroup
+// already exists, memberships are moved to that subgroup instead.
+async function migrateLegacyNavodayaGroups(allClasses){
+ const classes=allClasses||[];
+ const normalize=n=>String(n||"").trim().toLowerCase().replace(/\s+/g,"_");
+ const sources=classes.filter(c=>{
+   if(String(c.course||"").trim().toUpperCase()!=="JNVST-6")return false;
+   const n=normalize(c.name);
+   return (n==="navodaya_ass"||n==="navodaya_eng") && jnvstSubgroupParent(c)!=="JNVST-VI";
+ });
+ if(!sources.length)return {classes,studentsMoved:0,groupsMigrated:[]};
+ const result=classes.slice();
+ let studentsMoved=0; const groupsMigrated=[];
+ for(const source of sources){
+   const target=result.find(c=>String(c.name||"").trim().toLowerCase()===String(source.name||"").trim().toLowerCase() && jnvstSubgroupParent(c)==="JNVST-VI" && c.id!==source.id);
+   if(!target){
+     const oldDesc=String(source.description||"").trim();
+     const cleanDesc=oldDesc.replace(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?\s*/i,"").trim();
+     const fullDesc=`JNVST_SUBGROUP_PARENT:JNVST-VI| ${cleanDesc||"Migrated from previous Navodaya class."}`.trim();
+     const {data,error}=await sb.from("classes").update({description:fullDesc,course:"JNVST-6",name:source.name}).eq("id",source.id).eq("teacher_id",current.id).select("*").single();
+     if(error)throw error;
+     const idx=result.findIndex(c=>c.id===source.id); if(idx>=0)result[idx]=data;
+     const {count}=await sb.from("class_students").select("student_id",{count:"exact",head:true}).eq("class_id",source.id);
+     studentsMoved+=Number(count||0);
+     groupsMigrated.push(`${source.name} (${Number(count||0)} students)`);
+   }else{
+     const {data:members,error:me}=await sb.from("class_students").select("student_id").eq("class_id",source.id);
+     if(me)throw me;
+     const ids=(members||[]).map(x=>x.student_id).filter(Boolean);
+     if(ids.length){
+       const {data:targetMembers,error:te}=await sb.from("class_students").select("student_id").eq("class_id",target.id);
+       if(te)throw te;
+       const existingTarget=new Set((targetMembers||[]).map(x=>x.student_id));
+       const newIds=ids.filter(id=>!existingTarget.has(id));
+       if(newIds.length){
+         const {error:ie}=await sb.from("class_students").insert(newIds.map(student_id=>({class_id:target.id,student_id})));
+         if(ie)throw ie;
+       }
+       const {error:de}=await sb.from("class_students").delete().eq("class_id",source.id);
+       if(de)throw de;
+       studentsMoved+=ids.length;
+     }
+     const {data:sourceAssignments,error:ae}=await sb.from("assignments").select("id").eq("class_id",source.id);
+     if(ae)throw ae;
+     if(!(sourceAssignments||[]).length){
+       const {error:ce}=await sb.from("classes").delete().eq("id",source.id).eq("teacher_id",current.id);
+       if(ce)throw ce;
+       const idx=result.findIndex(c=>c.id===source.id); if(idx>=0)result.splice(idx,1);
+     }else{
+       const oldDesc=String(source.description||"").trim();
+       const fullDesc=`JNVST_LEGACY_MIGRATED: target=${target.id}| ${oldDesc}`.trim();
+       const {data:errorData,error:ue}=await sb.from("classes").update({description:fullDesc}).eq("id",source.id).eq("teacher_id",current.id).select("*").single();
+       if(ue)throw ue;
+       const idx=result.findIndex(c=>c.id===source.id); if(idx>=0)result[idx]=errorData;
+     }
+     groupsMigrated.push(`${source.name} (${ids.length} students)`);
+   }
+ }
+ return {classes:result,studentsMoved,groupsMigrated};
 }
 function renderJnvstClassManager(classes,students,assignments){
  const bases=["JNVST-VI","JNVST-IX"];
@@ -520,7 +588,7 @@ function renderJnvstClassManager(classes,students,assignments){
   const directStudents=base?students.filter(s=>s.class_id===base.id).length:0;
   return `<div class="student-card" style="border:2px solid #dbeafe;background:#f8fbff">
    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
-    <div><h3 style="margin:0">${key==="JNVST-VI"?"📘 JNVST-VI (Class VI)":"📗 JNVST-IX (Class IX)"}</h3><div class="muted small">Fixed class — cannot be deleted.</div></div>
+    <div><h3 style="margin:0">${key==="JNVST-VI"?"📘 JNVST-VI (Class-IV)":"📗 JNVST-IX (Class IX)"}</h3><div class="muted small">Fixed class — cannot be deleted.</div></div>
     <span class="tag">${subs.length} Sub-group${subs.length===1?"":"s"}</span>
    </div>
    <div class="small" style="margin-top:7px">${directStudents} student(s) directly in this fixed class.</div>
@@ -531,6 +599,21 @@ function renderJnvstClassManager(classes,students,assignments){
  const legacy=classes.filter(c=>!jnvstBaseKey(c)&&!jnvstSubgroupParent(c));
  return `${baseCards}${legacy.length?`<div class="student-card"><h3>Other JNVST Classes</h3><p class="muted small">Older/custom JNVST classes are kept here. They can be deleted when they have no students or assignments.</p>${legacy.map(c=>`<div class="student-card"><div style="display:flex;justify-content:space-between;gap:8px"><div><b>${esc(c.name)}</b><div class="small muted">${students.filter(s=>s.class_id===c.id).length} student(s) • ${assignments.filter(a=>a.class_id===c.id).length} assignment(s)</div></div><button class="danger" onclick="deleteJnvstClass('${c.id}')">Delete</button></div></div>`).join("")}</div>`:""}`;
 }
+async function normalizeJnvstAssignmentGroups(classes,assignments){
+ const list=assignments||[];const cmap=new Map((classes||[]).map(c=>[c.id,c]));
+ for(const a of list){
+   const c=cmap.get(a.class_id);if(!c)continue;
+   const parent=jnvstSubgroupParent(c);const baseKey=parent||jnvstBaseKey(c);if(!baseKey)continue;
+   const base=(classes||[]).find(x=>jnvstBaseKey(x)===baseKey);if(!base)continue;
+   const desiredMain=base.name;const desiredSub=parent?c.name:"";
+   if(String(a.main_group||"")!==desiredMain||String(a.sub_group||"")!==desiredSub){
+     const {data,error}=await sb.from("assignments").update({main_group:desiredMain,sub_group:desiredSub}).eq("id",a.id).eq("created_by",current.id).select("*").single();
+     if(!error&&data)Object.assign(a,data);
+   }
+ }
+ return list;
+}
+
 async function teacherHome(){
  let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
@@ -538,7 +621,13 @@ async function teacherHome(){
    sb.from("profiles").select("*").eq("role","student").order("full_name")
  ]);
  if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
- try{allClasses=await ensureJnvstBaseClasses(allClasses||[])}catch(e){return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message("Could not prepare the fixed JNVST classes: "+(e.message||e))}</div></div>`)}
+ try{
+  allClasses=await ensureJnvstBaseClasses(allClasses||[]);
+  const migration=await migrateLegacyNavodayaGroups(allClasses);
+  allClasses=migration.classes;
+  allAssignments=await normalizeJnvstAssignmentGroups(allClasses,allAssignments||[]);
+  window._jnvstMigration=migration;
+ }catch(e){return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message("Could not prepare the fixed JNVST classes or migrate the previous Navodaya groups: "+(e.message||e))}</div></div>`)}
  const classes=(allClasses||[]).filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL");
  const classIds=new Set(classes.map(c=>c.id));
  const students=(allStudents||[]).filter(st=>["JNVST-6","JNVST-9"].includes(String(st.course||"").trim().toUpperCase()));
@@ -548,7 +637,7 @@ async function teacherHome(){
  const normalAssignments=assignments.filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock");
  window._jnvstClasses=classes;window._jnvstStudents=students;window._jnvstAssignments=assignments;
  render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}
-  <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">Class VI • Class IX • JNVST-VI / JNVST-IX</p></div>
+  <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">JNVST-VI (Class-IV) • JNVST-IX (Class IX)</p>${window._jnvstMigration?.groupsMigrated?.length?`<div class="success" style="margin-top:10px"><b>Previous Navodaya groups migrated:</b> ${esc(window._jnvstMigration.groupsMigrated.join(" • "))}. Students are now under the JNVST-VI (Class-IV) sub-groups.</div>`:""}</div>
   <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
   <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage JNVST Classes</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
   <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.course?`• ${esc(st.course)}`:""} ${st.class_id?`• ${esc(classes.find(c=>c.id===st.class_id)?.name||"")}`:""}</div></div>`).join("")||"<p class='muted'>No JNVST students yet.</p>"}</div>
@@ -587,20 +676,29 @@ async function editAssignmentDetails(assignmentId){
  await teacherHome();
 }
 async function editAssignmentGroup(assignmentId){
- const {data:a,error}=await sb.from("assignments").select("id,title,main_group,sub_group").eq("id",assignmentId).eq("created_by",current.id).single();
+ const {data:a,error}=await sb.from("assignments").select("id,title,main_group,sub_group,class_id").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
- const main=prompt(`Main Group for "${a.title}":\n\n1. JNV Eng\n2. JNV Ass`,a.main_group||"JNV Eng");
+ if(schoolTeacherMode){
+   return alert("School Course assignment groups are based on the selected School Course class/sub-division. Edit the assignment's class/group from the assignment details.");
+ }
+ const {data:classes,error:ce}=await sb.from("classes").select("id,name,description,course").eq("teacher_id",current.id);
+ if(ce)return alert(ce.message);
+ const bases=(classes||[]).filter(c=>!!jnvstBaseKey(c));
+ if(!bases.length)return alert("JNVST fixed classes are not available.");
+ const currentClass=(classes||[]).find(c=>c.id===a.class_id);const currentParent=currentClass?jnvstSubgroupParent(currentClass):"";
+ const currentBase=currentParent||jnvstBaseKey(currentClass)||"JNVST-VI";
+ const base=currentBase?bases.find(c=>jnvstBaseKey(c)===currentBase):bases[0];
+ const main=prompt(`Main Group for "${a.title}":\n\n1. JNVST-VI (Class-IV)\n2. JNVST-IX (Class IX)`,base?.name||a.main_group||MAIN_GROUPS[0]);
  if(main===null)return;
- const mainTrim=main.trim();
- if(!MAIN_GROUPS.includes(mainTrim))return alert("Please enter exactly: JNV Eng or JNV Ass.");
- const sub=prompt(`Sub-Group for "${a.title}":\n\n1. EVS\n2. Mental Ability\n3. Arithmetic\n4. Language`,a.sub_group||"EVS");
+ const mainTrim=main.trim();if(!bases.some(c=>c.name===mainTrim)||!MAIN_GROUPS.includes(mainTrim))return alert("Please select one of the two fixed JNVST main groups.");
+ const mainKey=jnvstBaseKey(bases.find(c=>c.name===mainTrim));const subs=(classes||[]).filter(c=>jnvstSubgroupParent(c)===mainKey);
+ const choices=subs.length?subs.map((c,i)=>`${i+1}. ${c.name}`).join("\n"):"(No sub-groups created yet)";
+ const sub=prompt(`Sub-Group under ${mainTrim}:\n\n${choices}\n\nEnter a sub-group name, or leave blank for the fixed main group.`,currentParent&&mainKey===currentBase?currentParent:a.sub_group||"");
  if(sub===null)return;
- const subTrim=sub.trim();
- if(!SUB_GROUPS.includes(subTrim))return alert("Please enter one of: EVS, Mental Ability, Arithmetic, Language.");
+ const subTrim=sub.trim();if(subTrim&&!subs.some(c=>c.name===subTrim))return alert("Please select an existing sub-group under the selected main group.");
  const {error:upError}=await sb.from("assignments").update({main_group:mainTrim,sub_group:subTrim}).eq("id",assignmentId).eq("created_by",current.id);
  if(upError)return alert("Could not update assignment group.\n\n"+(upError.message||upError));
- alert("Assignment group updated successfully.");
- await teacherHome();
+ alert("Assignment group updated successfully.");await teacherHome();
 }
 async function teacherResultsDashboard(){
   try{
@@ -642,7 +740,7 @@ function updateTeacherResultsSubGroupOptions(){
   const sub=document.getElementById("trSubGroup");if(!sub)return;
   const available=[...new Set(d.assignments.filter(a=>main==="all"||a.main_group===main).map(a=>a.sub_group).filter(Boolean))];
   const current=sub.value;
-  sub.innerHTML=`<option value="all">All Sub-Groups</option>${SUB_GROUPS.filter(g=>available.includes(g)).map(g=>`<option value="${g}">${g}</option>`).join("")}`;
+  sub.innerHTML=`<option value="all">All Sub-Groups</option>${available.sort((a,b)=>String(a).localeCompare(String(b))).map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}`;
   sub.value=available.includes(current)?current:"all";
   updateTeacherResultsAssignmentOptions();
 }
@@ -696,7 +794,7 @@ function renderTeacherResultsDashboard(){
     <div class="card">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadFilteredTeacherResultsExcel()">⬇ Download Filtered Excel</button><button class="secondary" onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
       <div class="grid" style="margin-top:15px">
-        <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${MAIN_GROUPS.map(g=>`<option value="${g}" ${f.mainGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option>${SUB_GROUPS.map(g=>`<option value="${g}" ${f.subGroup===g?"selected":""}>${g}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
+        <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${(schoolTeacherMode?[...new Set(d.assignments.map(a=>a.main_group).filter(Boolean))]:MAIN_GROUPS).map(g=>`<option value="${esc(g)}" ${f.mainGroup===g?"selected":""}>${esc(g)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option>${[...new Set(d.assignments.filter(a=>f.mainGroup==="all"||a.main_group===f.mainGroup).map(a=>a.sub_group).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b))).map(g=>`<option value="${esc(g)}" ${f.subGroup===g?"selected":""}>${esc(g)}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
         <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
         <div><label>Student</label><select id="trStudent"><option value="all">All Students</option>${d.students.map(s=>`<option value="${s.id}" ${f.student===s.id?"selected":""}>${esc(s.full_name)}${s.roll_no?` — Roll ${esc(s.roll_no)}`:""}</option>`).join("")}</select></div>
         <div><label>Status</label><select id="trStatus"><option value="all" ${f.status==="all"?"selected":""}>Submitted Results</option><option value="pending" ${f.status==="pending"?"selected":""}>Not Submitted / Pending</option></select></div>
@@ -1001,33 +1099,78 @@ async function uploadBulkStudents(){
 }
 
 async function newAssignment(){
- const {data:allClasses,error:classError}=await sb.from("classes").select("id,name,course").eq("teacher_id",current.id).order("name");
+ let {data:allClasses,error:classError}=await sb.from("classes").select("id,name,description,course").eq("teacher_id",current.id).order("name");
  if(classError)return alert(classError.message);
- const classes=(allClasses||[]).filter(c=>schoolTeacherMode?String(c.course||"").trim().toUpperCase()==="SCHOOL":String(c.course||"").trim().toUpperCase()!=="SCHOOL");
- if(!classes.length){alert(schoolTeacherMode?"Create a School Course class first.":"Create a JNVST class first.");return newClass()}
- const assignmentGroupHtml=schoolTeacherMode
-  ? `<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="aSubGroup"><option value="">No subdivision</option></select></div></div><div class="small muted">School Course uses Class as Main Group and the subdivision belonging to that class as Sub-Group.</div></div>`
-  : `<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Main Group</label><select id="aMainGroup">${MAIN_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="aSubGroup">${SUB_GROUPS.map(g=>`<option value="${g}">${g}</option>`).join("")}</select></div></div><div class="small muted">JNVST uses JNV Eng / JNV Ass and EVS / Mental Ability / Arithmetic / Language.</div></div>`;
+ if(!schoolTeacherMode){
+   try{
+     allClasses=await ensureJnvstBaseClasses(allClasses||[]);
+     const migration=await migrateLegacyNavodayaGroups(allClasses);
+     allClasses=migration.classes;
+   }catch(e){return alert("Could not prepare JNVST classes: "+(e.message||e))}
+ }
+ const classes=(allClasses||[]).filter(c=>schoolTeacherMode
+   ?String(c.course||"").trim().toUpperCase()==="SCHOOL"
+   :String(c.course||"").trim().toUpperCase()!=="SCHOOL");
+ if(!classes.length){alert(schoolTeacherMode?"Create a School Course class first.":"JNVST classes are not available.");return schoolTeacherMode?newClass():teacherHome()}
 
- render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New Assignment")}<div class="card">
+ const jnvstBases=classes.filter(c=>!!jnvstBaseKey(c));
+ const firstBase=jnvstBases.find(c=>jnvstBaseKey(c)==="JNVST-VI")||jnvstBases[0];
+ const firstBaseKey=firstBase?jnvstBaseKey(firstBase):"JNVST-VI";
+ const jnvstSubgroupsFor=key=>classes.filter(c=>jnvstSubgroupParent(c)===key).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ const jnvstGroupHtml=`<div class="card" style="background:#f8fafc;border:1px solid #dbeafe">
+   <h3 style="margin-top:0">Assignment Group</h3>
+   <div class="grid">
+    <div><label>Main Group</label><select id="aMainGroup" onchange="refreshJnvstAssignmentGroups()">${jnvstBases.map(c=>{const k=jnvstBaseKey(c);return `<option value="${esc(k)}" data-class-id="${esc(c.id)}" ${k===firstBaseKey?"selected":""}>${esc(c.name)}</option>`}).join("")}</select></div>
+    <div><label>Sub-Group</label><select id="aSubGroup"><option value="">All / Multiple Sub-groups</option>${jnvstSubgroupsFor(firstBaseKey).map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("")}</select></div>
+   </div>
+   <div class="small muted">JNVST assignments use the two fixed main groups: JNVST-VI (Class-IV) and JNVST-IX (Class IX). Sub-groups are created by the teacher under each main group.</div>
+ </div>`;
+ const schoolGroupHtml=`<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="aSubGroup"><option value="">No subdivision</option></select></div></div><div class="small muted">School Course uses Class as Main Group and the subdivision belonging to that class as Sub-Group.</div></div>`;
+ const assignmentGroupHtml=schoolTeacherMode?schoolGroupHtml:jnvstGroupHtml;
+
+ render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New JNVST Assignment")}<div class="card">
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
  ${assignmentGroupHtml}
- <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To Multiple Classes</h3><p class="small muted">Select one or more classes. For each selected class, choose the entire class or specific students. You can mix both methods across classes.</p><div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="display:block;padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${c.id}" onchange="loadNewAssignmentClassStudents();syncSchoolAssignmentGroup()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join("")}</div><div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div></div>
- <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea><div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To</h3><p class="small muted">${schoolTeacherMode?"Select one or more School Course classes.":"Select students/classes under the selected JNVST main group. The fixed main group and its teacher-created sub-groups are shown below."}</p>
+  <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all shown</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div>
+  <div id="newAssignmentClassList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px"></div>
+  <div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div>
+ </div>
+ <label>Title</label><input id="at"><label>Subject</label><input id="asub"><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea>
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
+ window._newAssignmentClasses=classes;
  if(newAssignmentDraft){
    const d=newAssignmentDraft;
-   const draftClasses=d.classIds||[d.classId].filter(Boolean);
-   document.querySelectorAll('.newassign-class').forEach(x=>x.checked=draftClasses.includes(x.value));
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
-   const modeRadio=document.querySelector(`input[name="assignMode"][value="${d.assignMode}"]`);if(modeRadio)modeRadio.checked=true;
-   document.getElementById("at").value=d.title;document.getElementById("asub").value=d.subject;
-   if(document.getElementById("aMainGroup"))document.getElementById("aMainGroup").value=d.mainGroup||"JNV Eng";
-   if(document.getElementById("aSubGroup"))document.getElementById("aSubGroup").value=d.subGroup||"EVS";document.getElementById("av").value=d.video;document.getElementById("adesc").value=d.description;
+   document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";
+   if(!schoolTeacherMode){
+     const main=String(d.mainGroup||firstBaseKey).toUpperCase();if([...document.querySelectorAll("#aMainGroup option")].some(o=>o.value===main))document.getElementById("aMainGroup").value=main;
+     await refreshJnvstAssignmentGroups(d.subGroup||"");
+   }else{
+     document.getElementById("aMainGroup").value=d.mainGroup||document.getElementById("aMainGroup").value;
+     await refreshSchoolAssignmentSubgroups();if(document.getElementById("aSubGroup"))document.getElementById("aSubGroup").value=d.subGroup||"";
+   }
    document.getElementById("qs").innerHTML="";const notice=document.createElement("div");notice.className="success";notice.innerHTML=`<b>${importedQuestions.length} question(s) imported.</b> They will be added when you click <b>Save & Assign</b>.`;document.getElementById("qs").appendChild(notice);
-   loadNewAssignmentClassStudents().then(()=>{if(d.selectedStudentsByClass){Object.entries(d.selectedStudentsByClass).forEach(([cid,ids])=>ids.forEach(id=>{const cb=document.querySelector(`.newassign-student[data-class-id="${cid}"][value="${id}"]`);if(cb)cb.checked=true}))}else if(d.assignMode==="students"){(d.selectedStudents||[]).forEach(id=>{const cb=document.querySelector(`.newassign-student[value="${id}"]`);if(cb)cb.checked=true})}});
- }else{addQ();addQ();document.querySelector('.newassign-class')?.click()}
- if(schoolTeacherMode)await refreshSchoolAssignmentSubgroups();
+   await loadNewAssignmentClassStudents();
+   if(d.selectedStudentsByClass){Object.entries(d.selectedStudentsByClass).forEach(([cid,ids])=>ids.forEach(id=>{const cb=document.querySelector(`.newassign-student[data-class-id="${cid}"][value="${id}"]`);if(cb)cb.checked=true}))}
+   else if(d.assignMode==="students"){(d.selectedStudents||[]).forEach(id=>{const cb=document.querySelector(`.newassign-student[value="${id}"]`);if(cb)cb.checked=true})}
+ }else{
+   addQ();addQ();
+   await (schoolTeacherMode?refreshSchoolAssignmentSubgroups():refreshJnvstAssignmentGroups());
+   document.querySelector('.newassign-class')?.click();
+ }
 }
+
+async function refreshJnvstAssignmentGroups(preferredSub){
+ const main=document.getElementById("aMainGroup");const list=document.getElementById("newAssignmentClassList");const sub=document.getElementById("aSubGroup");if(!main||!list)return;
+ const key=String(main.value||"JNVST-VI").toUpperCase();const classes=(window._newAssignmentClasses||[]);const base=classes.find(c=>jnvstBaseKey(c)===key);const subs=classes.filter(c=>jnvstSubgroupParent(c)===key).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ if(sub){sub.innerHTML=`<option value="">All / Multiple Sub-groups</option>${subs.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("")}`;if(preferredSub&&[...sub.options].some(o=>o.value===preferredSub))sub.value=preferredSub}
+ const cards=[];
+ if(base)cards.push(`<label style="display:block;padding:10px;border:1px solid #bfdbfe;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${esc(base.id)}" onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>Entire ${esc(base.name)}</b><div class="small muted" style="margin-left:25px">Fixed main group</div></label>`);
+ subs.forEach(c=>cards.push(`<label style="display:block;padding:10px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${esc(c.id)}" onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b><div class="small muted" style="margin-left:25px">Sub-group under ${esc(base?.name||key)}</div></label>`));
+ list.innerHTML=cards.join("")||'<div class="notice">No sub-groups have been created under this main group yet.</div>';
+}
+
 function toggleAssignmentVideoFields(){const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";const box=document.getElementById("assignmentVideoField");if(box)box.style.display=type==="video"?"block":"none"}
 async function loadNewAssignmentClassStudents(){
  const box=document.getElementById("newAssignmentStudentPicker");if(!box)return;
@@ -1043,7 +1186,12 @@ async function loadNewAssignmentClassStudents(){
 }
 function selectNewAssignmentStudents(classId,value){document.querySelectorAll(`.newassign-student[data-class-id="${classId}"]`).forEach(x=>x.checked=value)}
 async function getNewAssignmentRecipients(){
- const classIds=[...document.querySelectorAll('.newassign-class:checked')].map(x=>x.value);if(!classIds.length)throw new Error('Select at least one class.');
+ const classIds=[...document.querySelectorAll('.newassign-class:checked')].map(x=>x.value);if(!classIds.length)throw new Error('Select at least one class or sub-group.');
+ if(!schoolTeacherMode){
+   const selectedMain=String(document.getElementById("aMainGroup")?.value||"JNVST-VI").toUpperCase();
+   const valid=new Set((window._newAssignmentClasses||[]).filter(c=>jnvstBaseKey(c)===selectedMain||jnvstSubgroupParent(c)===selectedMain).map(c=>c.id));
+   if(classIds.some(id=>!valid.has(id)))throw new Error('Please select classes/sub-groups only from the selected JNVST main group.');
+ }
  const recipients=[];
  for(const cid of classIds){const mode=document.querySelector(`input[name="newassignMode_${cid}"]:checked`)?.value||'class';let ids=[];if(mode==='class'){const {data,error}=await sb.from('class_students').select('student_id').eq('class_id',cid);if(error)throw error;ids=(data||[]).map(x=>x.student_id)}else ids=[...document.querySelectorAll(`.newassign-student[data-class-id="${cid}"]:checked`)].map(x=>x.value);if(!ids.length)throw new Error(`No students selected in class ${document.querySelector(`.newassign-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid}.`);ids.forEach(student_id=>recipients.push({class_id:cid,student_id}))}
  const unique=[];const seen=new Set();recipients.forEach(r=>{if(!seen.has(r.student_id)){seen.add(r.student_id);unique.push(r)}});return {classIds,recipients:unique,studentIds:unique.map(x=>x.student_id)};
@@ -1075,8 +1223,13 @@ async function saveAssignment(){
  const shuffleOptions=false;
  const assignmentType=type==="video"?"VIDEO":"MCQ";
  const primaryClassId=schoolTeacherMode?(document.getElementById("aMainGroup")?.value||recipientInfo.classIds[0]):recipientInfo.classIds[0];
- const primaryMainGroup=schoolTeacherMode?(document.getElementById("aMainGroup")?.selectedOptions?.[0]?.textContent||"School Class"):(document.getElementById("aMainGroup")?.value||"JNV Eng");
- const primarySubGroup=schoolTeacherMode?(document.getElementById("aSubGroup")?.value||""):(document.getElementById("aSubGroup")?.value||"EVS");
+ const jnvstMainKey=String(document.getElementById("aMainGroup")?.value||"JNVST-VI").toUpperCase();
+ const jnvstMainClass=(window._newAssignmentClasses||[]).find(c=>jnvstBaseKey(c)===jnvstMainKey);
+ const selectedSub=String(document.getElementById("aSubGroup")?.value||"").trim();
+ const selectedRecipientClasses=(recipientInfo.classIds||[]).map(id=>(window._newAssignmentClasses||[]).find(c=>c.id===id)).filter(Boolean);
+ const recipientSubNames=[...new Set(selectedRecipientClasses.map(c=>jnvstSubgroupParent(c)?c.name:"" ).filter(Boolean))];
+ const primaryMainGroup=schoolTeacherMode?(document.getElementById("aMainGroup")?.selectedOptions?.[0]?.textContent||"School Class"):(jnvstMainClass?.name||jnvstMainKey);
+ const primarySubGroup=schoolTeacherMode?selectedSub:(selectedSub|| (recipientSubNames.length===1?recipientSubNames[0]:recipientSubNames.length>1?"Multiple Sub-groups":""));
  const {data:a,error}=await sb.from("assignments").insert({class_id:primaryClassId,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,assignment_type:assignmentType,time_limit:mockTime,shuffle_questions:shuffleQuestions,shuffle_options:shuffleOptions,main_group:primaryMainGroup,sub_group:primarySubGroup,created_by:current.id}).select().single();if(error)return alert(error.message);
  let qs=[];
  if(importedForNewAssignment&&importedQuestions.length){
@@ -1100,8 +1253,8 @@ function startBulkImportFromNewAssignment(){
   classId:document.querySelector('.newassign-class:checked')?.value||"",
   assignMode:document.querySelector('input[name="assignMode"]:checked')?.value||"class",
   selectedStudents:[...document.querySelectorAll(".newassign-student:checked")].map(x=>x.value),
-  mainGroup:document.getElementById("aMainGroup")?.value||"JNV Eng",
-  subGroup:document.getElementById("aSubGroup")?.value||"EVS",
+  mainGroup:document.getElementById("aMainGroup")?.value||(schoolTeacherMode?"":"JNVST-VI"),
+  subGroup:document.getElementById("aSubGroup")?.value||"",
   title:document.getElementById("at")?.value||"",
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
