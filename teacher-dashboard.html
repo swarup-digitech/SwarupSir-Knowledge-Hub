@@ -7,7 +7,22 @@ async function fn(body){const {data:{session}}=await sb.auth.getSession();if(!se
 async function init(){const {data:{session}}=await sb.auth.getSession();if(!session)return location.replace('teacher-login.html');const {data:p,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(error||p?.role!=='teacher'){await sb.auth.signOut();return location.replace('teacher-login.html')}teacher=p;await load();home()}
 async function load(){const [{data:s},{data:c},{data:g},{data:a}]=await Promise.all([sb.from('profiles').select('id,full_name,roll_no,username,course,school_group_id').eq('role','student').eq('course','SCHOOL').order('full_name'),sb.from('classes').select('id,name,description,course').eq('teacher_id',teacher.id).eq('course','SCHOOL').order('name'),sb.from('school_course_groups').select('*').eq('teacher_id',teacher.id).order('name'),sb.from('school_assessments').select('*').eq('created_by',teacher.id).order('created_at',{ascending:false})]);students=s||[];classes=c||[];groups=g||[];assessments=a||[];const ids=students.map(x=>x.id);if(ids.length){const {data:m}=await sb.from('class_students').select('student_id,class_id').in('student_id',ids);const cm=new Map((m||[]).map(x=>[x.student_id,x.class_id]));students.forEach(s=>s.class_id=cm.get(s.id)||'')}students.forEach(s=>s.className=classes.find(c=>c.id===s.class_id)?.name||'—')}
 function header(title){return `<div class="top"><div><div class="tag">🏫 SCHOOL COURSE</div><h1 style="margin:7px 0">${title}</h1><div class="muted">Teacher: ${esc(teacher.full_name||'Teacher')}</div></div><div class="actions"><button class="secondary" onclick="location.href='main.html'">JNVST Dashboard</button><button class="secondary" onclick="location.href='index.html'">Course Home</button><button onclick="logout()">Logout</button></div></div>`}
-function home(){document.getElementById('app').innerHTML=`${header('School Teacher Dashboard')}<div class="grid"><div class="card"><div class="muted">School Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">School Classes</div><div class="stat">${classes.filter(c=>students.some(s=>s.class_id===c.id)).length}</div></div><div class="card"><div class="muted">Sub-divisions</div><div class="stat">${groups.length}</div></div><div class="card"><div class="muted">Assessments</div><div class="stat">${assessments.length}</div></div></div><div class="card"><h2>👨‍🏫 Teacher Tools</h2><div class="actions"><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ Create Assignment</button><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=mockTestManagement'">🎯 Create / Manage Mock Test</button><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=teacherResultsDashboard'">📊 Assignment Results</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImport()">↑ Bulk Students (Excel)</button><button onclick="manageStudents()">👥 Edit / Manage Students</button><button onclick="manageClasses()">🏫 Manage Classes</button><button onclick="manageGroups()">▣ School Course Sub-divisions</button><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=downloadAllResultsExcel'">⬇ All Results (Excel)</button></div></div><div class="card"><h2>📝 School Assessments</h2>${assessments.length?assessments.map(a=>`<div class="student-card"><h3>${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')} ${a.total_marks?`• ${a.total_marks} marks`:''}</div><div class="actions" style="margin-top:9px"><button onclick="editQuestions('${a.id}')">✎ Questions</button><button onclick="reviewAssessment('${a.id}')">📊 Review Submissions</button><button onclick="reassignSchoolAssessment('${a.id}')">↻ Reassign</button><button class="secondary" onclick="deleteAssessment('${a.id}')">Delete</button></div></div>`).join(''):'<p class="muted">No School assessments yet.</p>'}<div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button></div></div>`}
+function home(){document.getElementById('app').innerHTML=`${header('School Teacher Dashboard')}<div class="grid"><div class="card"><div class="muted">School Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">School Classes</div><div class="stat">${classes.filter(c=>students.some(s=>s.class_id===c.id)).length}</div></div><div class="card"><div class="muted">Sub-divisions</div><div class="stat">${groups.length}</div></div><div class="card"><div class="muted">Assessments</div><div class="stat">${assessments.length}</div></div></div><div class="card">
+<h2>👨‍🏫 Teacher Tools</h2>
+<div class="actions">
+<button onclick="newAssessment()">📝 New School Assessment</button>
+<button onclick="bulkQuestionUpload()">📥 Bulk Questions Upload</button>
+<button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ Create Assignment</button>
+<button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=mockTestManagement'">🎯 Create / Manage Mock Test</button>
+<button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=teacherResultsDashboard'">📊 Assignment Results</button>
+<button onclick="addStudent()">+ Add Student</button>
+<button onclick="bulkImport()">↑ Bulk Students (Excel)</button>
+<button onclick="manageStudents()">👥 Edit / Manage Students</button>
+<button onclick="manageClasses()">🏫 Manage Classes</button>
+<button onclick="manageGroups()">▣ School Course Sub-divisions</button>
+<button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=downloadAllResultsExcel'">⬇ All Results (Excel)</button>
+</div>
+</div><div class="card" style="border:2px solid #2563eb;background:#fbfdff"><h2>📝 School Assessments</h2><p class="muted">Create assessments, add questions individually, or upload many questions at once.</p>${assessments.length?assessments.map(a=>`<div class="student-card"><h3>${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')} ${a.total_marks?`• ${a.total_marks} marks`:''}</div><div class="actions" style="margin-top:9px"><button onclick="editQuestions('${a.id}')">✎ Questions</button><button onclick="reviewAssessment('${a.id}')">📊 Review Submissions</button><button onclick="reassignSchoolAssessment('${a.id}')">↻ Reassign</button><button class="secondary" onclick="deleteAssessment('${a.id}')">Delete</button></div></div>`).join(''):'<p class="muted">No School assessments yet.</p>'}<div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button></div></div>`}
 function addStudent(){if(!classes.length)return alert('Create a School class first.');document.getElementById('app').innerHTML=`${header('Add School Student')}<div class="card"><label>Student Name</label><input id="sn"><label>Roll No</label><input id="sr"><label>Password</label><input id="sp" type="text" placeholder="At least 6 characters"><label>Class</label><select id="sc" onchange="refreshSchoolStudentGroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>School Course Sub-division</label><select id="sg"></select><div id="sm"></div><div class="actions" style="margin-top:12px"><button onclick="saveStudent()">Create Student</button><button class="secondary" onclick="home()">Cancel</button></div></div>`;refreshSchoolStudentGroups()}
 function refreshSchoolStudentGroups(){const classId=document.getElementById('sc')?.value,sel=document.getElementById('sg');if(!sel)return;const opts=groups.filter(g=>g.class_id===classId).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');sel.innerHTML='<option value="">No subdivision</option>'+opts}
 async function saveStudent(){try{const j=await fn({action:'createStudents',students:[{name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value,course:'SCHOOL',school_group_id:sg.value||null}]});const r=j.results?.[0];if(!r?.success)throw Error(r?.error||'Could not create student');alert('Student created successfully.');await load();home()}catch(e){sm.innerHTML=msg(e.message)}}
@@ -26,6 +41,204 @@ function manageGroups(){document.getElementById('app').innerHTML=`${header('Scho
 async function saveGroup(){if(!gn.value.trim())return alert('Enter subdivision name.');if(!gclass.value)return alert('Select a Class.');const {error}=await sb.from('school_course_groups').insert({name:gn.value.trim(),description:gd.value.trim(),teacher_id:teacher.id,class_id:gclass.value});if(error)return alert(error.message);await load();manageGroups()}
 async function renameGroup(id){const g=groups.find(x=>x.id===id);const n=prompt('Subdivision name:',g.name);if(n===null||!n.trim())return;const {error}=await sb.from('school_course_groups').update({name:n.trim()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);await load();manageGroups()}
 async function deleteGroup(id){if(students.some(s=>s.school_group_id===id))return alert('Move students out of this subdivision before deleting it.');if(!confirm('Delete this subdivision?'))return;const {error}=await sb.from('school_course_groups').delete().eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);await load();manageGroups()}
+
+let bulkAssessmentRows=[], bulkAssessmentPdfPages=[];
+
+async function bulkQuestionUpload(){
+  if(!assessments.length){
+    return alert('Create a School Assessment first, then upload questions to it.');
+  }
+  bulkAssessmentRows=[]; bulkAssessmentPdfPages=[];
+  document.getElementById('app').innerHTML=`${header('Bulk Questions Upload')}<div class="card">
+    <div class="notice"><b>School Assessment Question Uploader</b><br>
+    Select an existing assessment, then upload questions either from Excel or from a PDF with a separate Excel marks/hints file.
+    Existing questions are not deleted; uploaded questions are added after the current last question.</div>
+
+    <label>Assessment</label>
+    <select id="bqaAssessment">
+      ${assessments.map(a=>`<option value="${a.id}">${esc(a.title)} — ${esc(a.subject||'')}</option>`).join('')}
+    </select>
+
+    <div class="grid" style="margin-top:14px">
+      <div class="card" style="border:2px solid #2563eb;background:#f8fbff;margin:0">
+        <span class="tag">METHOD 1</span>
+        <h3>Excel — Complete Questions</h3>
+        <p class="small muted">Columns: <b>Question No, Question, Marks, Hint</b>. Hint is optional.</p>
+        <label>Excel file</label>
+        <input id="bqExcel" type="file" accept=".xlsx,.xls" onchange="readBulkAssessmentExcel(event)">
+        <div id="bqExcelPreview"></div>
+      </div>
+
+      <div class="card" style="border:2px solid #16a34a;background:#f7fff9;margin:0">
+        <span class="tag" style="background:#dcfce7;color:#166534">METHOD 2</span>
+        <h3>PDF + Excel Marks</h3>
+        <p class="small muted">PDF should contain <b>one question per page</b>. Excel columns: <b>Question No, Marks, Hint</b>.</p>
+        <label>Questions PDF</label>
+        <input id="bqPdf" type="file" accept=".pdf" onchange="readBulkAssessmentPdf(event)">
+        <label>Marks / Hint Excel</label>
+        <input id="bqPdfKey" type="file" accept=".xlsx,.xls" onchange="readBulkAssessmentKey(event)">
+        <div id="bqPdfPreview"></div>
+      </div>
+    </div>
+
+    <div id="bqStatus" style="margin-top:14px"></div>
+    <div class="actions" style="margin-top:14px">
+      <button onclick="saveBulkAssessmentQuestions()">➕ Add Questions to Assessment</button>
+      <button class="secondary" onclick="home()">← Dashboard</button>
+    </div>
+  </div>`;
+}
+
+function normalizeBulkHeader(v){
+  return String(v??'').trim().toLowerCase().replace(/[_\s]+/g,' ');
+}
+function bulkCol(headers,...names){
+  for(const n of names){
+    const i=headers.indexOf(normalizeBulkHeader(n));
+    if(i>=0)return i;
+  }
+  return -1;
+}
+function showBulkStatus(t,ok=false){
+  const el=document.getElementById('bqStatus');
+  if(el)el.innerHTML=msg(t,ok);
+}
+function readBulkAssessmentExcel(ev){
+  const f=ev.target.files?.[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!raw.length)throw Error('The Excel file is empty.');
+      const h=raw[0].map(normalizeBulkHeader);
+      const ni=bulkCol(h,'question no','question number','no','#');
+      const qi=bulkCol(h,'question','question text');
+      const mi=bulkCol(h,'marks','mark');
+      const hi=bulkCol(h,'hint','hints');
+      if(qi<0||mi<0)throw Error('Required columns: Question and Marks. Question No and Hint are optional.');
+      bulkAssessmentRows=raw.slice(1).map((row,i)=>({
+        row:i+2,
+        no:ni>=0?String(row[ni]||i+1).trim():String(i+1),
+        question:String(row[qi]||'').trim(),
+        marks:Number(row[mi]),
+        hint:hi>=0?String(row[hi]||'').trim():''
+      })).filter(x=>x.question);
+      const bad=bulkAssessmentRows.filter(x=>!Number.isFinite(x.marks)||x.marks<0);
+      if(bad.length)throw Error('Invalid marks in row(s): '+bad.map(x=>x.row).join(', '));
+      document.getElementById('bqExcelPreview').innerHTML=
+        `<div class="success">Loaded ${bulkAssessmentRows.length} question(s).</div>
+         <div style="overflow:auto;max-height:280px"><table><thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Hint</th></tr></thead>
+         <tbody>${bulkAssessmentRows.map(x=>`<tr><td>${esc(x.no)}</td><td style="white-space:pre-wrap">${esc(x.question)}</td><td>${esc(x.marks)}</td><td>${esc(x.hint||'—')}</td></tr>`).join('')}</tbody></table></div>`;
+      showBulkStatus(`${bulkAssessmentRows.length} Excel question(s) ready to import.`,true);
+    }catch(e){
+      bulkAssessmentRows=[];
+      document.getElementById('bqExcelPreview').innerHTML=msg('Could not read Excel: '+e.message);
+    }
+  };
+  r.readAsArrayBuffer(f);
+}
+
+let bulkAssessmentPdfMeta={};
+function readBulkAssessmentKey(ev){
+  const f=ev.target.files?.[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(!raw.length)throw Error('The Excel file is empty.');
+      const h=raw[0].map(normalizeBulkHeader);
+      const ni=bulkCol(h,'question no','question number','no','#');
+      const mi=bulkCol(h,'marks','mark');
+      const hi=bulkCol(h,'hint','hints');
+      if(mi<0)throw Error('Required column: Marks.');
+      bulkAssessmentPdfMeta={};
+      raw.slice(1).forEach((row,i)=>{
+        const no=ni>=0?String(row[ni]||i+1).trim():String(i+1);
+        const marks=Number(row[mi]);
+        if(Number.isFinite(marks))bulkAssessmentPdfMeta[no]={marks,hint:hi>=0?String(row[hi]||'').trim():''};
+      });
+      const count=Object.keys(bulkAssessmentPdfMeta).length;
+      document.getElementById('bqPdfPreview').innerHTML=`<div class="success">${count} marks row(s) loaded.</div>`;
+      showBulkStatus('PDF marks/hints are ready. Now upload the PDF if you have not already done so.',true);
+    }catch(e){
+      bulkAssessmentPdfMeta={};
+      document.getElementById('bqPdfPreview').innerHTML=msg('Could not read marks Excel: '+e.message);
+    }
+  };
+  r.readAsArrayBuffer(f);
+}
+
+async function readBulkAssessmentPdf(ev){
+  const f=ev.target.files?.[0]; if(!f)return;
+  const box=document.getElementById('bqPdfPreview');
+  box.innerHTML=msg('Reading PDF pages…',true);
+  try{
+    const mod=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
+    mod.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+    const pdf=await mod.getDocument({data:await f.arrayBuffer()}).promise;
+    const pages=[];
+    for(let p=1;p<=pdf.numPages;p++){
+      const page=await pdf.getPage(p);
+      const content=await page.getTextContent();
+      const txt=content.items.map(i=>i.str).join(' ').trim();
+      pages.push({no:String(p),question:txt});
+    }
+    bulkAssessmentPdfPages=pages;
+    box.innerHTML=`<div class="success">Read ${pages.length} PDF page(s).</div>
+      <div class="small muted">Each PDF page will become one question. If a page has no extractable text, the import will stop rather than silently create a blank question.</div>`;
+    showBulkStatus(`${pages.length} PDF question page(s) ready.`,true);
+  }catch(e){
+    bulkAssessmentPdfPages=[];
+    box.innerHTML=msg('Could not read PDF: '+e.message);
+  }
+}
+
+async function saveBulkAssessmentQuestions(){
+  const aid=document.getElementById('bqaAssessment')?.value;
+  if(!aid)return alert('Select an assessment.');
+  let rows=[];
+  if(bulkAssessmentRows.length){
+    rows=bulkAssessmentRows.map(x=>({
+      assessment_id:aid,
+      question_order:0,
+      question_text:x.hint?`${x.question}\n\nHint: ${x.hint}`:x.question,
+      marks:x.marks
+    }));
+  }else if(bulkAssessmentPdfPages.length){
+    if(!Object.keys(bulkAssessmentPdfMeta).length)return alert('Upload the Marks / Hint Excel for the PDF first.');
+    const missing=bulkAssessmentPdfPages.filter(x=>!bulkAssessmentPdfMeta[x.no]||!Number.isFinite(bulkAssessmentPdfMeta[x.no].marks));
+    if(missing.length)return alert('Marks are missing for PDF question/page: '+missing.map(x=>x.no).join(', '));
+    const blank=bulkAssessmentPdfPages.filter(x=>!x.question.trim());
+    if(blank.length)return alert('No extractable text found on PDF page(s): '+blank.map(x=>x.no).join(', '));
+    rows=bulkAssessmentPdfPages.map(x=>{
+      const meta=bulkAssessmentPdfMeta[x.no];
+      return {assessment_id:aid,question_order:0,question_text:meta.hint?`${x.question}\n\nHint: ${meta.hint}`:x.question,marks:meta.marks};
+    });
+  }else{
+    return alert('Upload an Excel file or a PDF + Marks Excel file first.');
+  }
+
+  try{
+    const {data:last,error:le}=await sb.from('school_questions')
+      .select('question_order').eq('assessment_id',aid)
+      .order('question_order',{ascending:false}).limit(1);
+    if(le)throw le;
+    let next=(last?.[0]?.question_order||0)+1;
+    rows.forEach(x=>x.question_order=next++);
+    const {error}=await sb.from('school_questions').insert(rows);
+    if(error)throw error;
+    alert(`${rows.length} question(s) added successfully.`);
+    bulkAssessmentRows=[];bulkAssessmentPdfPages=[];bulkAssessmentPdfMeta={};
+    await load(); editQuestions(aid);
+  }catch(e){
+    alert('Could not add questions: '+e.message);
+  }
+}
+
 async function newAssessment(){
  document.getElementById('app').innerHTML=`${header('New School Assessment')}<div class="card">
  <label>Assessment Name</label><input id="at" placeholder="Mathematics Unit Test 1">
@@ -34,7 +247,8 @@ async function newAssessment(){
  <label>Sub-division (optional)</label><select id="ag"><option value="">Entire class</option></select>
  <div class="notice small">If a sub-division is selected, only students in that sub-division can see the assessment. Otherwise all students in the selected class can see it.</div>
  <label>Deadline</label><input id="ad" type="datetime-local">
- <div class="actions"><button onclick="saveAssessment()">Save & Add Questions</button><button class="secondary" onclick="home()">Cancel</button></div>
+ <div class="actions"><button onclick="saveAssessment()">Save & Add Questions</button><button type="button" class="secondary" onclick="home()">Cancel</button></div>
+  <div class="notice small" style="margin-top:12px">After saving the assessment, you can use <b>Bulk Questions Upload</b> from the dashboard to add many questions from Excel or PDF + Excel.</div>
  </div></div>`;
  refreshAssessmentGroups();
 }
