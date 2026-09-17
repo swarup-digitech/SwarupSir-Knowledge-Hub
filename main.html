@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js"></script>
+<script type="text/javascript" src="https://ff.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=BOdmmUS5ROiyQoOnBSSLejfH6Vc8XjTYg5mGcuFvqNXPj2cLCsFQvW26lBvocT3RH7BcoY-jKwP-ptEtdAcY1ZCmEynK5uVZDsleOZIkGFcIyLiq4z_rIsh8eYwV6LAUiQ9Jgidhp5U8E5lpa_iFK-u5qjv4SGA4MS8pCASetA9yAlHhL-D7f9k34pAZWwXPR2FD5jiJWI8x2RBOWcu99elGy01uWUStWOTC6L4dNw7V6_ZYTLj8-OEET6EQtAQaIIrl5wnwz7Dv-pfYbffcBGQsq3g_EwY2qIdl2Dpj42Ny_-WUz2mmJIVS5b-qKPey4OTlgKXIJWXuArVrrzFzfw" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}
@@ -493,7 +493,7 @@ async function schoolAssessmentsManagement(){
  if(ae)return render(`<div class="wrap">${header("School Assessments")}<div class="card">${message(ae.message)}</div><div class="actions"><button class="secondary" onclick="teacherHome()">← Back</button></div></div>`);
  const classMap=new Map(schoolAssessmentClasses.map(c=>[c.id,c.name]));
  render(`<div class="wrap">${header("School Assessments")}
-  <div class="card"><div class="actions"><button onclick="newSchoolAssessment()">+ New School Assessment</button><button class="secondary" onclick="teacherHome()">← Back</button></div></div>
+  <div class="card"><div class="actions"><button onclick="newSchoolAssessment()">+ New School Assessment</button><button onclick="newSchoolAssessment(true)">📥 Bulk Questions Upload</button><button class="secondary" onclick="teacherHome()">← Back</button></div></div>
   <div class="card"><h2>Your Assessments</h2>
    ${(assessments||[]).map(a=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><p class="muted" style="margin:0">${esc(a.subject||"")} · ${esc(classMap.get(a.class_id)||"Unknown class")}</p></div>${a.deadline?`<span class="tag">Deadline: ${new Date(a.deadline).toLocaleDateString()}</span>`:""}</div><div class="actions" style="margin-top:10px"><button onclick="viewSchoolAssessmentQuestions('${a.id}')">View Questions</button><button class="danger" onclick="deleteSchoolAssessment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No School Assessments yet.</p>"}
   </div></div>`);
@@ -517,10 +517,10 @@ async function deleteSchoolAssessment(id){
  schoolAssessmentsManagement();
 }
 
-function newSchoolAssessment(){
+function newSchoolAssessment(bulkOnly=false){
  schoolQuestions=[];schoolMarksMap={};
  if(!schoolAssessmentClasses.length){alert("Create a School Course class first.");return newClass()}
- render(`<div class="wrap">${header("New School Assessment")}<div class="card">
+ render(`<div class="wrap">${header(bulkOnly?"Bulk Questions Upload":"New School Assessment")}<div class="card">${bulkOnly?`<div class="success"><b>Bulk Questions Upload</b><br>Upload your Excel or PDF questions below. Then click <b>Preview / Continue</b> to complete and save the assessment.</div>`:""}
   <label>Class</label><select id="saClass" onchange="refreshSchoolAssessmentGroups()">${schoolAssessmentClasses.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
   <label>Sub-division (optional)</label><select id="saGroup"><option value="">Entire class</option></select>
   <label>Title</label><input id="saTitle" placeholder="e.g. Unit 3 Written Test">
@@ -709,7 +709,7 @@ async function teacherHome(){
  const normalAssignments=(allAssignments||[]).filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock").filter(a=>schoolTeacherMode ? classIds.has(a.class_id) : !classIds.has(a.class_id));
  render(`<div class="wrap">${header(schoolTeacherMode?"School Course Teacher Dashboard":"Teacher Dashboard")}
  <div class="grid"><div class="card"><div class="muted">Classes</div><div class="stat">${classes.length}</div></div><div class="card"><div class="muted">Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
- <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button>${schoolTeacherMode?'<button onclick="schoolAssessmentsManagement()">📝 School Assessments</button>':''}<button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
+ <div class="card"><div class="actions"><button onclick="newClass()">+ New Class</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button>${schoolTeacherMode?'<button onclick="newSchoolAssessment()">📝 New Assessment</button><button onclick="schoolAssessmentsManagement()">📋 Manage Assessments</button><button onclick="newSchoolAssessment(true)">📥 Bulk Questions Upload</button>':''}<button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
  <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.roll_no?` • Roll No: ${esc(st.roll_no)}`:""}</div></div>`).join("")||"<p class='muted'>No students yet.</p>"}</div>
  <div class="card"><h2>Classes</h2>${classes.map(c=>`<div class="assignment"><h3>${esc(c.name)}</h3><p>${esc(c.description||"")}</p></div>`).join("")||"<p class='muted'>No classes yet.</p>"}</div>
  <div class="card"><h2>Assignments</h2>
