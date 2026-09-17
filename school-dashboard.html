@@ -4,9 +4,7 @@
 .question-image-wrap{margin:12px 0 16px;padding:10px;background:#f8fafc;border:1px solid #dbe3ee;border-radius:12px;text-align:center}
 .question-image{display:block;max-width:100%;width:auto;height:auto;max-height:900px;margin:0 auto;border-radius:8px;object-fit:contain}
 .question-image-error{padding:12px;color:#b91c1c;background:#fff7ed;border-radius:8px;font-size:13px}
-
-.assessment-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 16px}.assessment-stat{padding:11px 12px;border:1px solid #cbd5e1;border-radius:11px;background:#f8fafc;text-align:center}.assessment-stat b{display:block;font-size:18px;color:#172033}.assessment-stat span{display:block;margin-top:4px;font-size:12px;color:#475569;font-weight:700}.assessment-stat.total{background:#eff6ff;border-color:#bfdbfe}.assessment-stat.submitted{background:#f0fdf4;border-color:#bbf7d0}.assessment-stat.reviewed{background:#fefce8;border-color:#fde68a}@media(max-width:600px){.assessment-stats{grid-template-columns:1fr 1fr}.assessment-stat.total{grid-column:1/-1}}
-</style></head><body><div id="app"></div><!-- ASSESSMENT PROGRESS FIX v2 --><script>
+</style></head><body><div id="app"></div><script>
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co",SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP",UPLOAD_FN="upload-school-answer";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let current=null,profile=null,schoolGroupName='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const render=x=>document.getElementById('app').innerHTML=x;
@@ -46,44 +44,23 @@ async function schoolHome(){
  if(error)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(error.message)}</div></div>`);
  const allowed=(assessments||[]).filter(a=>a.class_id&&a.school_group_id?(a.school_group_id===profile.school_group_id):a.class_id&&studentClassIds.has(a.class_id));
 
-  // Load assessment progress for this student.
+  // Get the actual number of questions in each assessment.
   const assessmentIds=allowed.map(a=>a.id);
   const questionCountMap=new Map();
-  const submittedCountMap=new Map();
-  const reviewedCountMap=new Map();
-
   if(assessmentIds.length){
-    const [{data:questionRows,error:questionError},{data:submissionRows,error:submissionError}]=await Promise.all([
-      sb.from('school_questions').select('assessment_id').in('assessment_id',assessmentIds),
-      sb.from('school_answer_submissions').select('assessment_id,question_id,status').eq('student_id',current.id).eq('is_current',true).in('assessment_id',assessmentIds)
-    ]);
-    if(questionError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(questionError.message)}</div></div>`);
-    if(submissionError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(submissionError.message)}</div></div>`);
-
-    for(const row of (questionRows||[])) questionCountMap.set(row.assessment_id,(questionCountMap.get(row.assessment_id)||0)+1);
-    const seen=new Set();
-    for(const row of (submissionRows||[])){
-      const key=`${row.assessment_id}__${row.question_id}`;
-      if(seen.has(key))continue;
-      seen.add(key);
-      submittedCountMap.set(row.assessment_id,(submittedCountMap.get(row.assessment_id)||0)+1);
-      if(String(row.status||'').toLowerCase()==='reviewed') reviewedCountMap.set(row.assessment_id,(reviewedCountMap.get(row.assessment_id)||0)+1);
+    const {data:questionRows,error:questionCountError}=await sb
+      .from('school_questions')
+      .select('assessment_id')
+      .in('assessment_id',assessmentIds);
+    if(questionCountError)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(questionCountError.message)}</div></div>`);
+    for(const row of (questionRows||[])){
+      questionCountMap.set(
+        row.assessment_id,
+        (questionCountMap.get(row.assessment_id)||0)+1
+      );
     }
   }
-
- const cards=allowed.map(a=>{
-   const total=questionCountMap.get(a.id)||0, submitted=submittedCountMap.get(a.id)||0, reviewed=reviewedCountMap.get(a.id)||0;
-   return `<div class="assignment">
-     <div class="question-head"><div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')}</div></div><span class="tag">${a.school_group_id?'Sub-division':'Entire class'}</span></div>
-     <div class="assessment-stats">
-       <div class="assessment-stat total"><b>📋 ${total}</b><span>Total Questions</span></div>
-       <div class="assessment-stat submitted"><b>⬆ ${submitted}</b><span>Answers Submitted</span></div>
-       <div class="assessment-stat reviewed"><b>✓ ${reviewed}</b><span>Answers Reviewed</span></div>
-     </div>
-     ${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:''}
-     <button onclick="openAssessment('${a.id}')">Open Assessment</button>
-   </div>`;
- }).join('');
+ const cards=allowed.map(a=>`<div class="assignment"><div class="question-head"><div><h3 style="margin:0 0 5px">${esc(a.title)} <span class="tag" style="margin-left:7px;background:#ecfdf5;color:#166534">${questionCountMap.get(a.id)||0} Questions</span></h3><div class="muted">${esc(a.subject||'')}</div></div><span class="tag">${a.school_group_id?'Sub-division':'Entire class'}</span></div>${a.deadline?`<p class="small"><b>Deadline:</b> ${new Date(a.deadline).toLocaleString()}</p>`:''}<button onclick="openAssessment('${a.id}')">Open Assessment</button></div>`).join('');
 
  if(assessmentOnly){
    render(`<div class="wrap">${header('📝 My Assessments')}
@@ -171,18 +148,20 @@ function renderQuestion(q,sub,files,assessmentReviewed=false){
       ${sub?.teacher_comment?`<div class="success small" style="margin-top:9px"><b>Teacher comment:</b> ${esc(sub.teacher_comment)}${sub.awarded_marks!==null?`<br><b>Marks:</b> ${sub.awarded_marks}/${q.marks}`:''}</div>`:''}
 
       ${reviewed
-        ? `<div class="notice small" style="margin-top:10px"><b>🔒 Upload locked.</b> Your teacher must reassign the assessment before you can upload again.</div>`
-        : `<input id="${key}_camera" class="hidden" type="file" accept="image/*" capture="environment" onchange="addCameraPhoto('${q.id}',event)">
+        ? `<div class="notice small" style="margin-top:10px"><b>🔒 Assessment reviewed.</b> Your answer cannot be changed or removed after teacher review.</div>`
+        : `<div class="notice small" style="margin-top:10px"><b>✏️ Before teacher review:</b> You can replace/re-upload your answer or remove your current submission.</div>
+           <input id="${key}_camera" class="hidden" type="file" accept="image/*" capture="environment" onchange="addCameraPhoto('${q.id}',event)">
            <input id="${key}_images" class="hidden" type="file" accept="image/*" multiple onchange="addGalleryImages('${q.id}',event)">
            <input id="${key}_pdf" class="hidden" type="file" accept="application/pdf,.pdf" onchange="addPdf('${q.id}',event)">
            <div class="actions" style="margin-top:10px">
-             <button onclick="document.getElementById('${key}_camera').click()">📷 Take Photo</button>
-             <button class="secondary" onclick="document.getElementById('${key}_images').click()">🖼️ Choose Images</button>
-             <button class="secondary" onclick="document.getElementById('${key}_pdf').click()">📄 Upload PDF</button>
+             <button onclick="prepareReplace('${q.id}');document.getElementById('${key}_camera').click()">📷 ${sub?'Replace':'Take'} Photo</button>
+             <button class="secondary" onclick="prepareReplace('${q.id}');document.getElementById('${key}_images').click()">🖼️ ${sub?'Replace':'Choose'} Images</button>
+             <button class="secondary" onclick="prepareReplace('${q.id}');document.getElementById('${key}_pdf').click()">📄 ${sub?'Replace':'Upload'} PDF</button>
+             ${sub?`<button class="danger" type="button" onclick="removeSubmission('${q.id}','${sub.id}')">🗑️ Remove Submission</button>`:''}
            </div>
            <div id="${key}_queue" class="upload-list"></div>
            <div class="actions" style="margin-top:9px">
-             <button id="${key}_upload" onclick="uploadQueued('${q.id}','${esc(q.question_order)}',${Number(q.marks)||0})" disabled>⬆ Upload All</button>
+             <button id="${key}_upload" onclick="uploadQueued('${q.id}','${esc(q.question_order)}',${Number(q.marks)||0})" disabled>⬆ ${sub?'Save Replacement':'Upload Answer'}</button>
              <button class="secondary" onclick="clearQueue('${q.id}')">Clear</button>
            </div>
            <div id="${key}_status" class="small muted" style="margin-top:7px"></div>
@@ -192,7 +171,9 @@ function renderQuestion(q,sub,files,assessmentReviewed=false){
 }
 function formatBytes(n){n=Number(n||0);if(!n)return'0 B';if(n<1024)return n+' B';if(n<1024*1024)return(n/1024).toFixed(0)+' KB';return(n/1024/1024).toFixed(2)+' MB'}
 const queues={};
+const replaceModes={};
 function qstate(id){return queues[id]||(queues[id]=[])}
+function prepareReplace(id){replaceModes[id]=true;}
 
 async function fileToCompressedJpeg(file){
  const bmp=await createImageBitmap(file,{imageOrientation:'from-image'}).catch(()=>null);
@@ -221,9 +202,34 @@ async function addGalleryImages(id,e){const fs=[...(e.target.files||[])];e.targe
 function addPdf(id,e){const f=e.target.files?.[0];e.target.value='';if(!f)return;if(f.size>10*1024*1024)return alert('PDF is larger than 10 MB. Please reduce the PDF size and try again.');qstate(id).push(f);renderQueue(id)}
 function renderQueue(id){const box=document.getElementById('q_'+id+'_queue'),btn=document.getElementById('q_'+id+'_upload');const arr=qstate(id);box.innerHTML=arr.map((f,i)=>`<span class="upload-item">${f.type==='application/pdf'?'📄':'📷'} ${esc(f.name)} · ${formatBytes(f.size)} <button type="button" style="padding:2px 6px;margin-left:4px;background:#e8eef8;color:#172033" onclick="removeQueued('${id}',${i})">×</button></span>`).join('');btn.disabled=!arr.length}
 function removeQueued(id,i){qstate(id).splice(i,1);renderQueue(id)}function clearQueue(id){queues[id]=[];renderQueue(id)}
+async function retireCurrentSubmission(questionId,submissionId=null){
+ const {data:rows,error:se}=await sb.from('school_answer_submissions').select('id,status').eq('assessment_id',currentAssessmentId).eq('student_id',current.id).eq('is_current',true).eq('question_id',questionId);
+ if(se)throw se;
+ const target=submissionId?(rows||[]).find(x=>x.id===submissionId):(rows||[])[0];
+ if(!target)return null;
+ if(String(target.status||'').toLowerCase()==='reviewed')throw Error('This answer has already been reviewed and cannot be changed.');
+ const {error}=await sb.from('school_answer_submissions').update({is_current:false}).eq('id',target.id).eq('student_id',current.id).eq('is_current',true);
+ if(error)throw error;
+ return target.id;
+}
+async function removeSubmission(questionId,submissionId){
+ if(!confirm('Remove your current submission for this question? You can upload a new answer before the teacher reviews it.'))return;
+ try{
+  await retireCurrentSubmission(questionId,submissionId);
+  queues[questionId]=[];delete replaceModes[questionId];
+  await openAssessment(currentAssessmentId);
+ }catch(e){alert('Could not remove submission: '+(e.message||e))}
+}
 async function uploadQueued(questionId,questionOrder,maxMarks){const arr=qstate(questionId).slice();if(!arr.length)return;
  const {data:lockCheck}=await sb.from('school_answer_submissions').select('status').eq('assessment_id',currentAssessmentId).eq('student_id',current.id).eq('is_current',true);
- if((lockCheck||[]).some(x=>x.status==='reviewed')){alert('This assessment has been reviewed. Uploading is locked until your teacher reassigns it.');return;}const status=document.getElementById('q_'+questionId+'_status'),bar=document.getElementById('q_'+questionId+'_progress'),inner=bar.querySelector('div'),btn=document.getElementById('q_'+questionId+'_upload');status.textContent='Uploading…';btn.disabled=true;bar.classList.remove('hidden');inner.style.width='0%';try{for(let i=0;i<arr.length;i++){const f=arr[i];const b64=await fileToBase64(f);const nameBase=`${profile.roll_no}_${sanitizeFilePart(currentAssessmentTitle)}_Q${questionOrder}`;const ext=f.type==='application/pdf'?'.pdf':'.jpg';const fileName=arr.length===1&&ext==='.pdf'?nameBase+ext:nameBase+`_${String(i+1).padStart(2,'0')}`+ext;await callUpload({action:'uploadSchoolAnswer',assessment_id:currentAssessmentId,question_id:questionId,file_name:fileName,mime_type:f.type,base64:b64,page_no:i+1});inner.style.width=Math.round((i+1)*100/arr.length)+'%'}status.innerHTML='<span style="color:#166534"><b>Uploaded successfully.</b></span>';queues[questionId]=[];setTimeout(()=>openAssessment(currentAssessmentId),700)}catch(e){status.textContent='Upload failed: '+(e.message||String(e));btn.disabled=false}}
+ if((lockCheck||[]).some(x=>String(x.status||'').toLowerCase()==='reviewed')){alert('This assessment has been reviewed. Your answers are locked.');return;}
+ const status=document.getElementById('q_'+questionId+'_status'),bar=document.getElementById('q_'+questionId+'_progress'),inner=bar.querySelector('div'),btn=document.getElementById('q_'+questionId+'_upload');status.textContent=replaceModes[questionId]?'Replacing answer…':'Uploading…';btn.disabled=true;bar.classList.remove('hidden');inner.style.width='0%';
+ try{
+  if(replaceModes[questionId])await retireCurrentSubmission(questionId);
+  for(let i=0;i<arr.length;i++){const f=arr[i],b64=await fileToBase64(f),nameBase=`${profile.roll_no}_${sanitizeFilePart(currentAssessmentTitle)}_Q${questionOrder}`,ext=f.type==='application/pdf'?'.pdf':'.jpg',fileName=arr.length===1&&ext==='.pdf'?nameBase+ext:nameBase+`_${String(i+1).padStart(2,'0')}`+ext;await callUpload({action:'uploadSchoolAnswer',assessment_id:currentAssessmentId,question_id:questionId,file_name:fileName,mime_type:f.type,base64:b64,page_no:i+1});inner.style.width=Math.round((i+1)*100/arr.length)+'%';}
+  status.innerHTML='<span style="color:#166534"><b>Uploaded successfully.</b></span>';queues[questionId]=[];delete replaceModes[questionId];setTimeout(()=>openAssessment(currentAssessmentId),700)
+ }catch(e){status.textContent='Upload failed: '+(e.message||String(e));btn.disabled=false}
+}
 let currentAssessmentId='',currentAssessmentTitle='';
 async function callUpload(body){const {data:{session}}=await sb.auth.getSession();if(!session)throw Error('Please login again.');const r=await fetch(`${SUPABASE_URL}/functions/v1/${UPLOAD_FN}`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`,'apikey':SUPABASE_KEY},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok||j.error)throw Error(j.error||'Upload failed');return j}
 async function fileToBase64(file){return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>{const s=String(r.result||'');resolve(s.includes(',')?s.split(',')[1]:s)};r.onerror=reject;r.readAsDataURL(file)})}
