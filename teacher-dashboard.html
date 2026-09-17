@@ -44,7 +44,7 @@ async function deleteGroup(id){if(students.some(s=>s.school_group_id===id))retur
 
 let bulkAssessmentRows=[], bulkAssessmentPdfPages=[];
 
-async function bulkQuestionUpload(){
+async function bulkQuestionUpload(preselectId=''){
   if(!assessments.length){
     return alert('Create a School Assessment first, then upload questions to it.');
   }
@@ -56,7 +56,7 @@ async function bulkQuestionUpload(){
 
     <label>Assessment</label>
     <select id="bqaAssessment">
-      ${assessments.map(a=>`<option value="${a.id}">${esc(a.title)} — ${esc(a.subject||'')}</option>`).join('')}
+      ${assessments.map(a=>`<option value="${a.id}" ${preselectId===a.id?'selected':''}>${esc(a.title)} — ${esc(a.subject||'')}</option>`).join('')}
     </select>
 
     <div class="grid" style="margin-top:14px">
@@ -247,14 +247,42 @@ async function newAssessment(){
  <label>Sub-division (optional)</label><select id="ag"><option value="">Entire class</option></select>
  <div class="notice small">If a sub-division is selected, only students in that sub-division can see the assessment. Otherwise all students in the selected class can see it.</div>
  <label>Deadline</label><input id="ad" type="datetime-local">
- <div class="actions"><button onclick="saveAssessment()">Save & Add Questions</button><button type="button" class="secondary" onclick="home()">Cancel</button></div>
-  <div class="notice small" style="margin-top:12px">After saving the assessment, you can use <b>Bulk Questions Upload</b> from the dashboard to add many questions from Excel or PDF + Excel.</div>
+ <div class="actions">
+  <button onclick="saveAssessment()">Save & Add Questions</button>
+  <button onclick="saveAssessmentAndBulk()" style="background:#16a34a">📥 Save & Bulk Questions Upload</button>
+  <button type="button" class="secondary" onclick="home()">Cancel</button>
+</div>
+  <div class="notice small" style="margin-top:12px">
+    <b>Bulk Questions Upload</b> is available here too. Use <b>Save & Bulk Questions Upload</b> to save this assessment and immediately upload many questions from Excel or PDF + Excel.
+  </div>
  </div></div>`;
  refreshAssessmentGroups();
 }
 function refreshAssessmentGroups(){const classId=document.getElementById('ac')?.value||'',sel=document.getElementById('ag');if(!sel)return;const gs=groups.filter(g=>g.class_id===classId);sel.innerHTML='<option value="">Entire class</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}
-async function saveAssessment(){if(!at.value.trim())return alert('Enter assessment name.');if(!ac.value)return alert('Select a class.');const payload={title:at.value.trim(),subject:as.value.trim(),class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id};const {data,error}=await sb.from('school_assessments').insert(payload).select().single();if(error)return alert(error.message);editQuestions(data.id)}
-async function editQuestions(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const group=groups.find(g=>g.id===a.school_group_id);const total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);document.getElementById('app').innerHTML=`${header('Questions — '+esc(a.title))}<div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div><div id="qbox">${(q||[]).map(x=>`<div class="student-card"><label>Question ${x.question_order}</label><textarea id="qt_${x.id}">${esc(x.question_text)}</textarea><label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${x.marks}"><div class="actions"><button onclick="saveQ('${x.id}','${id}')">Save</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div></div>`).join('')}</div><div class="actions"><button onclick="addQ('${id}')">+ Add Question</button><button onclick="reviewAssessment('${id}')">📊 Review Submissions</button><button class="secondary" onclick="home()">Back</button></div></div>`}
+async function saveAssessment(){
+ if(!at.value.trim())return alert('Enter assessment name.');
+ if(!ac.value)return alert('Select a class.');
+ const payload={title:at.value.trim(),subject:as.value.trim(),class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id};
+ const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
+ if(error)return alert(error.message);
+ await load();
+ editQuestions(data.id);
+}
+async function saveAssessmentAndBulk(){
+ if(!at.value.trim())return alert('Enter assessment name.');
+ if(!ac.value)return alert('Select a class.');
+ const payload={title:at.value.trim(),subject:as.value.trim(),class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id};
+ const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
+ if(error)return alert(error.message);
+ await load();
+ bulkQuestionUpload(data.id);
+}
+async function editQuestions(id){const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');if(qe)return alert(qe.message);const group=groups.find(g=>g.id===a.school_group_id);const total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);document.getElementById('app').innerHTML=`${header('Questions — '+esc(a.title))}<div class="card"><div class="notice">Class: <b>${esc(classes.find(c=>c.id===a.class_id)?.name||'—')}</b> &nbsp; | &nbsp; Sub-division: <b>${esc(group?.name||'Entire class')}</b> &nbsp; | &nbsp; Total Marks: <b>${total}</b></div><div id="qbox">${(q||[]).map(x=>`<div class="student-card"><label>Question ${x.question_order}</label><textarea id="qt_${x.id}">${esc(x.question_text)}</textarea><label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${x.marks}"><div class="actions"><button onclick="saveQ('${x.id}','${id}')">Save</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div></div>`).join('')}</div><div class="actions">
+  <button onclick="addQ('${id}')">+ Add Question</button>
+  <button onclick="bulkQuestionUpload('${id}')" style="background:#16a34a">📥 Bulk Questions Upload</button>
+  <button onclick="reviewAssessment('${id}')">📊 Review Submissions</button>
+  <button class="secondary" onclick="home()">Back</button>
+</div></div>`}
 async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return alert(error.message);editQuestions(id)}
 async function saveQ(qid,aid){const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid);const value=Number(m.value);if(!t?.value.trim())return alert('Question text is required.');if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');const {error}=await sb.from('school_questions').update({question_text:t.value.trim(),marks:value}).eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
 async function delQ(qid,aid){if(!confirm('Delete question?'))return;const {error}=await sb.from('school_questions').delete().eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
