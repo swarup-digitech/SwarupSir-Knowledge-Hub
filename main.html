@@ -84,17 +84,7 @@ setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>document.getElementById("app").innerHTML=x;
-const homeUrl=()=>{
-  if(profile?.role==="student"){
-    const c=String(profile?.course||"").trim().toUpperCase();
-    if(c==="SCHOOL") return "/main.html?mode=student&portal=SCHOOL";
-    if(c==="JNVST-6"||c==="JNVST-9") return "/main.html?mode=student";
-  }
-  if(profile?.role==="teacher") return schoolTeacherMode ? "/teacher-dashboard.html" : "/main.html?mode=teacher&portal=JNVST";
-  return "/index.html";
-};
-const goHome=()=>window.location.replace(homeUrl());
-const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="history.length>1?history.back():location.replace('/index.html')">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="goHome()">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
+function getHomeHref(){if(profile?.role==="student"){return String(profile.course||"").toUpperCase()==="SCHOOL"?"/main.html?mode=student&portal=SCHOOL":"/main.html?mode=student"}if(profile?.role==="teacher"){return schoolTeacherMode?"/teacher-dashboard.html":"/main.html?mode=teacher&portal=JNVST"}return "/index.html"} const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="history.length>1?history.back():location.replace(getHomeHref())">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
 const STUDENT_PROFILE_CACHE_PREFIX="skh_student_profile_v1_";
 function getCachedStudentProfile(userId){
@@ -211,37 +201,10 @@ async function init(){
   await sb.auth.signOut();
   return window.location.replace("/index.html");
 }
-function selectStudentCourse(course){
-  const c=String(course||"").trim().toUpperCase();
-  if(!["JNVST-6","JNVST-9","SCHOOL"].includes(c))return;
-  localStorage.setItem("skh_selected_course",c);
-  if(c==="SCHOOL") window.location.replace("/school-login.html");
-  else window.location.replace("/student-login.html?course="+encodeURIComponent(c));
-}
-function courseSelection(){
+function login(){
   window.loginMode="chooser";
-  render(`<div class="wrap">
-    <div class="card" style="text-align:center;max-width:900px;margin:6vh auto 18px">
-      <h1 style="margin-bottom:6px">Swarup Sir's Knowledge Hub</h1>
-      <p class="muted" style="margin-top:0">Select your course to continue</p>
-      <div class="grid" style="margin-top:22px">
-        <div class="card" style="border:2px solid #2563eb;background:#eff6ff;margin:0;cursor:pointer" onclick="selectStudentCourse('JNVST-6')">
-          <div style="font-size:38px">🎓</div><h2>JNVST Class VI</h2><p class="muted">Navodaya Selection Test • Class VI</p><button>Student Login</button>
-        </div>
-        <div class="card" style="border:2px solid #7c3aed;background:#f5f3ff;margin:0;cursor:pointer" onclick="selectStudentCourse('JNVST-9')">
-          <div style="font-size:38px">🎓</div><h2>JNVST Class IX</h2><p class="muted">Navodaya Selection Test • Class IX</p><button>Student Login</button>
-        </div>
-        <div class="card" style="border:2px solid #0891b2;background:#ecfeff;margin:0;cursor:pointer" onclick="selectStudentCourse('SCHOOL')">
-          <div style="font-size:38px">🏫</div><h2>School Course</h2><p class="muted">School assignments and assessments</p><button>Student Login</button>
-        </div>
-      </div>
-      <div style="margin-top:22px;padding-top:18px;border-top:1px solid #e5e7eb">
-        <button class="secondary" onclick="teacherLoginPage()">👨‍🏫 Teacher Login</button>
-      </div>
-    </div>
-  </div>`);
+  render(`<div class="wrap"><div class="card login" style="text-align:center"><h1>Swarup Sir's Knowledge Hub</h1><p class="muted">Choose your login</p><div class="actions" style="display:grid;gap:12px"><button onclick="studentLoginPage()" style="width:100%;font-size:17px;padding:14px">🎓 Student Login</button><button class="secondary" onclick="teacherLoginPage()" style="width:100%;font-size:17px;padding:14px">👨‍🏫 Teacher Login</button></div></div></div>`);
 }
-function login(){ return courseSelection(); }
 function studentLoginPage(){
   window.loginMode="student";
   render(`<div class="wrap"><div class="card login"><h1>🎓 Student Login</h1><p class="muted">Login using your Roll No and Password.</p><label>Roll No</label><input id="rollNo" type="text" inputmode="numeric" autocomplete="username" placeholder="Enter Roll No"><label>Password</label><input id="studentPassword" type="password" autocomplete="current-password" placeholder="Enter Password"><button onclick="doStudentLogin()">Login</button><div id="msg"></div></div></div>`);
@@ -290,31 +253,30 @@ async function logout(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const wasStudent = profile?.role === "student" || window.loginMode === "student";
   const wasTeacher = profile?.role === "teacher" || window.loginMode === "teacher";
-  const course=String(profile?.course||localStorage.getItem("skh_selected_course")||"").trim().toUpperCase();
-  const teacherPortal=schoolTeacherMode ? "SCHOOL" : "JNVST";
+  const studentCourseBeforeLogout = String(profile?.course||localStorage.getItem("skh_selected_course")||"").toUpperCase();
 
   await sb.auth.signOut();
-  current=null; profile=null; active=null; answers=[]; videoDone=false;
 
-  if(wasStudent){
-    if(course==="SCHOOL"){
-      localStorage.setItem("skh_selected_course","SCHOOL");
-      window.location.replace("/school-login.html");
-      return;
-    }
-    if(course==="JNVST-6"||course==="JNVST-9"){
-      localStorage.setItem("skh_selected_course",course);
-      window.location.replace("/student-login.html?course="+encodeURIComponent(course));
-      return;
-    }
-    window.location.replace("/index.html");
+  current = null;
+  profile = null;
+  active = null;
+  answers = [];
+  videoDone = false;
+
+  // Students always return to the standalone student login page.
+  if (wasStudent) {
+    if(studentCourseBeforeLogout) localStorage.setItem("skh_selected_course",studentCourseBeforeLogout);
+    window.location.replace(studentCourseBeforeLogout ? "/student-login.html?course="+encodeURIComponent(studentCourseBeforeLogout) : "/index.html");
     return;
   }
-  if(wasTeacher){
-    window.location.replace("/teacher-login.html?portal="+encodeURIComponent(teacherPortal));
+
+  // Teachers return to the teacher login page.
+  if (wasTeacher) {
+    window.location.replace("/teacher-login.html");
     return;
   }
-  window.location.replace("/index.html");
+
+  window.location.replace("/teacher-login.html");
 }
 
 

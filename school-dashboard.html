@@ -8,7 +8,7 @@
 const SUPABASE_URL="https://jupefjdquakqsizapzbv.supabase.co",SUPABASE_KEY="sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP",UPLOAD_FN="upload-school-answer";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let current=null,profile=null,schoolGroupName='';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const render=x=>document.getElementById('app').innerHTML=x;
-const header=title=>`<div class="top"><div><h1>${title}</h1><div class="muted small">Swarup Sir's Knowledge Hub</div></div><div class="actions"><button class="secondary" onclick="schoolHome()">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
+const header=title=>`<div class="top"><div><h1>${title}</h1><div class="muted small">Swarup Sir's Knowledge Hub</div></div><button class="secondary" onclick="logout()">Logout</button></div>`;
 async function init(){
   try{
     if(localStorage.getItem('skh_selected_course')!=='SCHOOL'){
@@ -243,6 +243,6 @@ async function callUpload(body){const {data:{session}}=await sb.auth.getSession(
 async function fileToBase64(file){return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>{const s=String(r.result||'');resolve(s.includes(',')?s.split(',')[1]:s)};r.onerror=reject;r.readAsDataURL(file)})}
 function sanitizeFilePart(s){return String(s||'Assessment').replace(/[\\/:*?"<>|#%{}~&]/g,'_').replace(/\s+/g,' ').trim().slice(0,90)||'Assessment'}
 
-async function logout(){await sb.auth.signOut();localStorage.setItem('skh_selected_course','SCHOOL');localStorage.removeItem('skh_school_student');localStorage.removeItem('skh_school_roll');location.replace('/school-login.html')}
+async function logout(){await sb.auth.signOut();localStorage.removeItem('skh_school_student');localStorage.removeItem('skh_school_roll');location.replace('/school-login.html')}
 init();
 </script></body></html>
