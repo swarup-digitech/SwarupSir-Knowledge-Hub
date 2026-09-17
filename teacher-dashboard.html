@@ -275,7 +275,7 @@ async function saveBulkAssessmentQuestions(){
       return {
         assessment_id:aid,
         question_order:0,
-        question_text:null,
+        question_text:'',
         question_image_data:x.image_data,
         marks:meta.marks,
         hint:meta.hint||''
@@ -293,7 +293,7 @@ async function saveBulkAssessmentQuestions(){
     let next=(last?.[0]?.question_order||0)+1;
     rows.forEach(x=>x.question_order=next++);
     // PDF questions are stored as real images in Supabase Storage.
-    // Text is deliberately kept NULL so Assamese/scanned content is never OCR'd.
+    // Keep text as an empty string because school_questions.question_text is NOT NULL.\n    // The PDF/Assamese content itself remains an image; no OCR is used.
     const dbRows=[];
     for(const x of rows){
       let imageUrl=null;
@@ -310,7 +310,7 @@ async function saveBulkAssessmentQuestions(){
       dbRows.push({
         assessment_id:aid,
         question_order:x.question_order,
-        question_text:x.question_text||null,
+        question_text:x.question_text||'',
         question_image_url:imageUrl,
         marks:Number(x.marks)||0,
         hint:(x.hint||'').trim()||null
