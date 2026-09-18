@@ -79,36 +79,185 @@ Deno.serve(async (req) => {
     // Teacher: list student credentials for students in own classes
     // ------------------------------------------------------------
     if (body.action === "listCredentials") {
-      const { data: memberships, error: me } = await admin
-        .from("class_students")
-        .select("student_id, classes!inner(id, name, teacher_id)")
-        .eq("classes.teacher_id", caller.user.id);
-      if (me) return json({error:me.message},400);
+      // Load the teacher's JNVST class tree first. This lets the dashboard
+      // display Main Group -> Sub-group and gives the teacher safe target IDs
+      // for moving students.
+      const { data: classes, error: classErr } = await admin
+        .from("classes")
+        .select("id,name,course,description,jnvst_group_type,jnvst_parent_id,teacher_id")
+        .eq("teacher_id", caller.user.id);
+      if (classErr) return json({error:classErr.message},400);
 
-      const map = new Map<string, {classes:string[]}>();
-      for (const row of memberships ?? []) {
-        const sid = row.student_id as string;
-        const cls = row.classes as any;
-        if (!map.has(sid)) map.set(sid,{classes:[]});
-        if (cls?.name && !map.get(sid)!.classes.includes(cls.name)) map.get(sid)!.classes.push(cls.name);
+      const classRows = classes ?? [];
+      const classMap = new Map<string, any>(classRows.map((c:any)=>[c.id,c]));
+      const isSub = (c:any) =>
+        String(c?.jnvst_group_type||"").toUpperCase()==="SUB" ||
+        /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(c?.description||""));
+
+      const isJnvst = (c:any) =>
+        String(c?.course||"").toUpperCase()!=="SCHOOL" &&
+        (String(c?.course||"").toUpperCase().startsWith("JNVST") || isSub(c) ||
+         String(c?.jnvst_group_type||"").toUpperCase()==="MAIN");
+
+      const mainFor = (c:any) => {
+        if (!c) return null;
+        if (c.jnvst_parent_id && classMap.get(c.jnvst_parent_id))
+          return classMap.get(c.jnvst_parent_id);
+        const desc = String(c.description||"");
+        const m = desc.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)/i);
+        if (m) {
+          const key = m[1].toUpperCase();
+          return classRows.find((x:any) =>
+            String(x.jnvst_group_type||"").toUpperCase()==="MAIN" &&
+            (
+              key==="JNVST-VI"
+                ? String(x.course||"").toUpperCase()==="JNVST-6"
+                : String(x.course||"").toUpperCase()==="JNVST-9"
+            )
+          ) || null;
+        }
+        return c;
+      };
+
+      const membershipsByStudent = new Map<string, any[]>();
+      const jnvstClassIds = classRows.filter(isJnvst).map((c:any)=>c.id);
+      if (jnvstClassIds.length) {
+        const { data: memberships, error: me } = await admin
+          .from("class_students")
+          .select("student_id,class_id")
+          .in("class_id",jnvstClassIds);
+        if (me) return json({error:me.message},400);
+
+        for (const row of memberships ?? []) {
+          const c = classMap.get(row.class_id);
+          if (!c) continue;
+          const parent = mainFor(c);
+          const item = {
+            class_id:c.id,
+            class_name:c.name || "",
+            main_group_id:parent?.id || "",
+            main_group_name:parent?.name || c.name || "",
+            is_subgroup:isSub(c)
+          };
+          if (!membershipsByStudent.has(row.student_id)) membershipsByStudent.set(row.student_id,[]);
+          membershipsByStudent.get(row.student_id)!.push(item);
+        }
       }
-      const ids = [...map.keys()];
+
+      const ids = [...membershipsByStudent.keys()];
       if (!ids.length) return json({success:true,students:[]});
 
       const { data: profiles, error: pe } = await admin
         .from("profiles").select("id, full_name, username, roll_no").in("id", ids).order("full_name");
       if (pe) return json({error:pe.message},400);
+
       const { data: creds, error: ce } = await admin
         .from("student_credentials").select("student_id, email, password_plaintext, updated_at").in("student_id", ids);
       if (ce) return json({error:ce.message},400);
-      const cm = new Map((creds??[]).map(c=>[c.student_id,c]));
-      return json({success:true,students:(profiles??[]).map(p=>({
-        id:p.id, full_name:p.full_name, username:p.username, roll_no:p.roll_no || "",
-        email:cm.get(p.id)?.email || p.username || "",
-        password:cm.get(p.id)?.password_plaintext || "",
-        updated_at:cm.get(p.id)?.updated_at || null,
-        classes:map.get(p.id)?.classes || []
-      }))});
+
+      const cm = new Map((creds??[]).map((c:any)=>[c.student_id,c]));
+      return json({
+        success:true,
+        students:(profiles??[]).map((p:any)=>({
+          id:p.id, full_name:p.full_name, username:p.username, roll_no:p.roll_no || "",
+          email:cm.get(p.id)?.email || p.username || "",
+          password:cm.get(p.id)?.password_plaintext || "",
+          updated_at:cm.get(p.id)?.updated_at || null,
+          memberships:membershipsByStudent.get(p.id) || [],
+          available_subgroups:[...(new Set(
+            (membershipsByStudent.get(p.id) || []).flatMap((m:any) =>
+              classRows
+                .filter((c:any) => isSub(c) && c.jnvst_parent_id === m.main_group_id)
+                .map((c:any) => JSON.stringify({
+                  class_id:c.id,
+                  class_name:c.name || "",
+                  main_group_id:m.main_group_id,
+                  main_group_name:m.main_group_name || "",
+                  is_subgroup:true
+                }))
+            )
+          ))].map((x:string)=>JSON.parse(x))
+        }))
+      });
+    }
+
+    // ------------------------------------------------------------
+    // Teacher: move a JNVST student between sub-groups belonging to
+    // the same main group.
+    // ------------------------------------------------------------
+    if (body.action === "setStudentJnvstSubgroup") {
+      const studentId = String(body.student_id ?? "").trim();
+      const sourceClassId = String(body.source_class_id ?? "").trim();
+      const targetClassId = String(body.target_class_id ?? "").trim();
+      if (!studentId || !targetClassId)
+        return json({error:"Student and target sub-group are required."},400);
+
+      const { data: groups, error: ge } = await admin
+        .from("classes")
+        .select("id,name,course,description,jnvst_group_type,jnvst_parent_id,teacher_id")
+        .eq("teacher_id", caller.user.id)
+        .in("id", [...new Set([sourceClassId,targetClassId].filter(Boolean))]);
+      if (ge) return json({error:ge.message},400);
+
+      const byId = new Map<string,any>((groups??[]).map((g:any)=>[g.id,g]));
+      const source = sourceClassId ? byId.get(sourceClassId) : null;
+      const target = byId.get(targetClassId);
+      if (!target) return json({error:"Target sub-group is not available to this teacher."},403);
+
+      const isSub = (g:any) =>
+        String(g?.jnvst_group_type||"").toUpperCase()==="SUB" ||
+        /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(g?.description||""));
+      if (!isSub(target) || (source && !isSub(source)))
+        return json({error:"Students can only be moved between JNVST sub-groups."},400);
+
+      const sourceParent = source?.jnvst_parent_id || "";
+      const targetParent = target?.jnvst_parent_id || "";
+      if (!sourceParent || !targetParent || sourceParent !== targetParent)
+        return json({error:"The source and target sub-groups must belong to the same main group."},400);
+
+      // Confirm the student is actually in the source subgroup. If the UI
+      // omitted the source, locate the student's JNVST subgroup automatically.
+      let actualSourceId = sourceClassId;
+      if (!actualSourceId) {
+        const { data: currentMemberships, error: cme } = await admin
+          .from("class_students")
+          .select("class_id, classes!inner(id,teacher_id,jnvst_group_type,jnvst_parent_id,description)")
+          .eq("student_id",studentId)
+          .eq("classes.teacher_id",caller.user.id);
+        if (cme) return json({error:cme.message},400);
+        const found=(currentMemberships??[]).find((x:any)=>isSub(x.classes) && x.classes.jnvst_parent_id===targetParent);
+        actualSourceId=found?.class_id||"";
+      }
+
+      if (actualSourceId && actualSourceId !== targetClassId) {
+        const { data: currentSource, error: sme } = await admin
+          .from("class_students").select("student_id,class_id")
+          .eq("student_id",studentId).eq("class_id",actualSourceId).maybeSingle();
+        if (sme) return json({error:sme.message},400);
+        if (!currentSource) return json({error:"The student is not currently in the selected source sub-group."},400);
+      }
+
+      // Make sure the student is not being added to a teacher-owned class
+      // from outside the teacher's JNVST tree.
+      const { data: existingTarget, error: ete } = await admin
+        .from("class_students").select("student_id,class_id")
+        .eq("student_id",studentId).eq("class_id",targetClassId).maybeSingle();
+      if (ete) return json({error:ete.message},400);
+
+      if (!existingTarget) {
+        const { error: ie } = await admin.from("class_students").insert({
+          student_id:studentId,class_id:targetClassId
+        });
+        if (ie) return json({error:ie.message},400);
+      }
+
+      if (actualSourceId && actualSourceId !== targetClassId) {
+        const { error: de } = await admin.from("class_students")
+          .delete().eq("student_id",studentId).eq("class_id",actualSourceId);
+        if (de) return json({error:de.message},400);
+      }
+
+      return json({success:true,student_id:studentId,target_class_id:targetClassId});
     }
 
     // ------------------------------------------------------------
@@ -173,21 +322,13 @@ Deno.serve(async (req) => {
     for (const item of items) {
       const name = String(item.name ?? "").trim();
       const rollNo = String(item.roll_no ?? item.rollNo ?? "").trim();
-      let email = String(item.email ?? "").trim().toLowerCase();
+      const email = String(item.email ?? "").trim().toLowerCase();
       const password = String(item.password ?? "");
       const classId = String(item.class_id ?? "").trim();
 
-      if (!name || !rollNo || !password || !classId) {
-        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, password and class are required."});
+      if (!name || !rollNo || !email || !password || !classId) {
+        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, email, password and class are required."});
         continue;
-      }
-
-      // Classroom login uses Roll No + Password, so teachers do not need
-      // to supply a real email address. Create a private internal email
-      // only for Supabase Auth.
-      if (!email) {
-        const safeRoll = rollNo.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "student";
-        email = `student-${safeRoll}-${crypto.randomUUID().slice(0,8)}@students.swarupsir.local`;
       }
       if (password.length < 6) {
         results.push({success:false,name,email,error:"Password must contain at least 6 characters."});

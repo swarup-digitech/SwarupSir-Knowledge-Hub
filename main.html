@@ -84,7 +84,15 @@ setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>document.getElementById("app").innerHTML=x;
-function getHomeHref(){if(profile?.role==="student"){return String(profile.course||"").toUpperCase()==="SCHOOL"?"/main.html?mode=student&portal=SCHOOL":"/main.html?mode=student"}if(profile?.role==="teacher"){return schoolTeacherMode?"/teacher-dashboard.html":"/main.html?mode=teacher&portal=JNVST"}return "/index.html"} const header=t=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="secondary" onclick="history.length>1?history.back():location.replace(getHomeHref())">← Back</button><h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
+function getHomeHref(){if(profile?.role==="student"){return String(profile.course||"").toUpperCase()==="SCHOOL"?"/main.html?mode=student&portal=SCHOOL":"/main.html?mode=student"}if(profile?.role==="teacher"){return schoolTeacherMode?"/teacher-dashboard.html":"/main.html?mode=teacher&portal=JNVST"}return "/index.html"}
+function goBack(){
+  try{
+    const ref=document.referrer;
+    if(ref && new URL(ref,location.href).origin===location.origin && history.length>1){history.back();return;}
+  }catch{}
+  location.replace(getHomeHref());
+}
+const header=(t,showBack=true)=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${showBack?`<button class="secondary" onclick="goBack()">← Back</button>`:""}<h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button><button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
 const STUDENT_PROFILE_CACHE_PREFIX="skh_student_profile_v1_";
 function getCachedStudentProfile(userId){
@@ -102,7 +110,7 @@ function cacheStudentProfile(p){
   }catch{}
 }
 function renderStudentDashboardLoading(){
-  render(`<div class="wrap">${header("Student Dashboard")}
+  render(`<div class="wrap">${header("Student Dashboard",false)}
     <div class="card">
       <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
       <p class="muted">Loading your assignments and results…</p>
@@ -690,7 +698,7 @@ async function teacherHome(){
    sb.from("profiles").select("*").eq("role","student").order("full_name"),
    sb.from("jnvst_subjects").select("*").eq("teacher_id",current.id).order("name")
  ]);
- if(sje) return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message("Please run JNVST_GROUP_SUBJECT_MANAGEMENT.sql in Supabase first. "+sje.message)}</div></div>`);
+ if(sje) return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard",false)}<div class="card">${message("Please run JNVST_GROUP_SUBJECT_MANAGEMENT.sql in Supabase first. "+sje.message)}</div></div>`);
  jnvstSubjects=subjectRows||[];
  if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
  try{
@@ -868,7 +876,7 @@ async function teacherResultsDashboard(){
   try{
     const [{data:allAssignments,error:ae},{data:allClasses,error:ce},{data:allStudents,error:se}]=await Promise.all([
       sb.from("assignments").select("id,title,subject,class_id,video_url,created_at,main_group,sub_group").eq("created_by",current.id).order("created_at",{ascending:false}),
-      sb.from("classes").select("id,name,course").eq("teacher_id",current.id).order("name"),
+      sb.from("classes").select("id,name,course,description,jnvst_group_type,jnvst_parent_id").eq("teacher_id",current.id).order("name"),
       sb.from("profiles").select("id,full_name,roll_no,course").eq("role","student").order("full_name")
     ]);
     if(ae)throw ae;if(ce)throw ce;if(se)throw se;
@@ -898,11 +906,37 @@ async function teacherResultsDashboard(){
   }catch(e){alert("Could not load assignment results: "+(e.message||e));}
 }
 
+function resultAssignmentGroup(a, classMap){
+  const c=classMap.get(a?.class_id);
+  let main=String(a?.main_group||"").trim();
+  let sub=String(a?.sub_group||"").trim();
+  if(c){
+    const parentId=c.jnvst_parent_id||"";
+    const parent=parentId?classMap.get(parentId):null;
+    if(!main) main=(parent?.name||c.name||"").trim();
+    if(!sub && parentId) sub=String(c.name||"").trim();
+  }
+  return {main:main||"Unclassified",sub:sub||"Whole Main Group"};
+}
+function teacherResultsMainNames(d){
+  const classMap=new Map((d.classes||[]).map(c=>[c.id,c]));
+  const names=new Set();
+  (d.assignments||[]).forEach(a=>names.add(resultAssignmentGroup(a,classMap).main));
+  return [...names].sort((a,b)=>{
+    const rank=x=>x==="JNVST-VI (Class-IV)"?0:x==="JNVST-IX (Class IX)"?1:2;
+    return rank(a)-rank(b)||String(a).localeCompare(String(b));
+  });
+}
 function updateTeacherResultsSubGroupOptions(){
   const d=window._teacherResults;if(!d)return;
   const main=document.getElementById("trMainGroup")?.value||"all";
   const sub=document.getElementById("trSubGroup");if(!sub)return;
-  const available=[...new Set(d.assignments.filter(a=>main==="all"||a.main_group===main).map(a=>a.sub_group).filter(Boolean))];
+  const classMap=new Map((d.classes||[]).map(c=>[c.id,c]));
+  const available=[...new Set((d.assignments||[])
+    .map(a=>resultAssignmentGroup(a,classMap))
+    .filter(g=>main==="all"||g.main===main)
+    .map(g=>g.sub)
+    .filter(Boolean))];
   const current=sub.value;
   sub.innerHTML=`<option value="all">All Sub-Groups</option>${available.sort((a,b)=>String(a).localeCompare(String(b))).map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}`;
   sub.value=available.includes(current)?current:"all";
@@ -913,35 +947,38 @@ function updateTeacherResultsAssignmentOptions(){
   const main=document.getElementById("trMainGroup")?.value||"all";
   const sub=document.getElementById("trSubGroup")?.value||"all";
   const sel=document.getElementById("trAssignment");if(!sel)return;
+  const classMap=new Map((d.classes||[]).map(c=>[c.id,c]));
+  const filtered=(d.assignments||[]).filter(a=>{
+    const g=resultAssignmentGroup(a,classMap);
+    return (main==="all"||g.main===main)&&(sub==="all"||g.sub===sub);
+  });
   const current=sel.value;
-  const filtered=d.assignments.filter(a=>
-    (main==="all"||a.main_group===main) &&
-    (sub==="all"||a.sub_group===sub)
-  );
   sel.innerHTML=`<option value="all">All Assignments</option>${filtered.map(a=>`<option value="${a.id}">${esc(a.title)}</option>`).join("")}`;
   sel.value=filtered.some(a=>a.id===current)?current:"all";
 }
-function teacherResultsMainGroupChanged(){
-  updateTeacherResultsSubGroupOptions();
-}
-function teacherResultsSubGroupChanged(){
-  updateTeacherResultsAssignmentOptions();
-}
+function teacherResultsMainGroupChanged(){updateTeacherResultsSubGroupOptions();}
+function teacherResultsSubGroupChanged(){updateTeacherResultsAssignmentOptions();}
 
 function renderTeacherResultsDashboard(){
   const d=window._teacherResults;if(!d)return;
   const f=d.filters||{assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};d.filters=f;
-  const classMap=new Map(d.classes.map(c=>[c.id,c.name])),studentMap=new Map(d.students.map(s=>[s.id,s]));
-  const assignmentMap=new Map(d.assignments.map(a=>[a.id,a]));
-  const assignedKey=new Set(d.links.map(x=>`${x.assignment_id}:${x.student_id}`));
-  let rows=d.attempts.map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{},className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)||""}));
+  const classMap=new Map((d.classes||[]).map(c=>[c.id,c])), studentMap=new Map((d.students||[]).map(s=>[s.id,s]));
+  const assignmentMap=new Map((d.assignments||[]).map(a=>[a.id,a]));
+  const submittedKey=new Set((d.attempts||[]).map(x=>`${x.assignment_id}:${x.student_id}`));
+  let rows=(d.attempts||[]).map(at=>({type:"submitted",at,a:assignmentMap.get(at.assignment_id),p:studentMap.get(at.student_id)||{},className:classMap.get(assignmentMap.get(at.assignment_id)?.class_id)?.name||""}));
   if(f.status==="pending"){
-    const submitted=new Set(d.attempts.map(x=>`${x.assignment_id}:${x.student_id}`));
-    rows=d.links.filter(x=>!submitted.has(`${x.assignment_id}:${x.student_id}`)).map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{},className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)||""}));
-  }else if(f.status==="all"){
-    /* Keep submitted rows only in the main results table; pending assignments are summarized separately. */
+    rows=(d.links||[]).filter(x=>!submittedKey.has(`${x.assignment_id}:${x.student_id}`))
+      .map(x=>({type:"pending",at:null,a:assignmentMap.get(x.assignment_id),p:studentMap.get(x.student_id)||{},className:classMap.get(assignmentMap.get(x.assignment_id)?.class_id)?.name||""}));
   }
-  rows=rows.filter(r=>r.a&&(!f.assignment||f.assignment==="all"||r.a.id===f.assignment)&&(!f.mainGroup||f.mainGroup==="all"||r.a.main_group===f.mainGroup)&&(!f.subGroup||f.subGroup==="all"||r.a.sub_group===f.subGroup)&&(!f.classId||f.classId==="all"||r.a.class_id===f.classId)&&(!f.student||f.student==="all"||r.p.id===f.student));
+  rows=rows.filter(r=>{
+    if(!r.a)return false;
+    const g=resultAssignmentGroup(r.a,classMap);
+    return (f.assignment==="all"||r.a.id===f.assignment) &&
+      (f.mainGroup==="all"||g.main===f.mainGroup) &&
+      (f.subGroup==="all"||g.sub===f.subGroup) &&
+      (f.classId==="all"||r.a.class_id===f.classId) &&
+      (f.student==="all"||r.p.id===f.student);
+  });
   if(f.minScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))>=Number(f.minScore));
   if(f.maxScore!=="")rows=rows.filter(r=>r.type==="pending"||Number(r.at.score)*100/Math.max(1,Number(r.at.total_questions))<=Number(f.maxScore));
   rows.sort((x,y)=>{
@@ -952,24 +989,87 @@ function renderTeacherResultsDashboard(){
     else {a=x.at?.submitted_at?new Date(x.at.submitted_at).getTime():0;b=y.at?.submitted_at?new Date(y.at.submitted_at).getTime():0}
     const dir=f.sort.endsWith("_asc")?1:-1;return a===b?0:a<b?-1*dir:1*dir;
   });
-  const submitted=d.attempts.length,avg=submitted?Math.round(d.attempts.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||1)),0)/submitted):0;
-  const pendingCount=d.links.filter(x=>!d.attempts.some(a=>a.assignment_id===x.assignment_id&&a.student_id===x.student_id)).length;
+
+  // Build the requested hierarchy: Main Group → Sub-group → Assignment → Students.
+  const tree=new Map();
+  for(const r of rows){
+    const g=resultAssignmentGroup(r.a,classMap);
+    if(!tree.has(g.main))tree.set(g.main,new Map());
+    const sm=tree.get(g.main);
+    if(!sm.has(g.sub))sm.set(g.sub,new Map());
+    const am=sm.get(g.sub);
+    if(!am.has(r.a.id))am.set(r.a.id,{a:r.a,rows:[]});
+    am.get(r.a.id).rows.push(r);
+  }
+
+  const escAttr=v=>esc(v);
+  const assignmentBlock=(item)=>{
+    const a=item.a, rr=item.rows;
+    const submitted=rr.filter(x=>x.type==="submitted").length;
+    const avg=submitted?Math.round(rr.filter(x=>x.type==="submitted").reduce((n,x)=>n+Number(x.at.score||0)*100/Math.max(1,Number(x.at.total_questions||1)),0)/submitted):0;
+    return `<details open style="margin:8px 0 12px;border:1px solid #dbeafe;border-radius:12px;background:#fff">
+      <summary style="cursor:pointer;padding:12px 14px;font-weight:700;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <span>📝 ${esc(a.title||"Untitled Assignment")}</span>
+        <span class="tag">${submitted} submitted</span>
+        ${submitted?`<span class="small muted">Average ${avg}%</span>`:""}
+      </summary>
+      <div style="overflow:auto;padding:0 10px 10px"><table>
+        <thead><tr><th>Student</th><th>Roll No</th><th>Class</th><th>Score</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead>
+        <tbody>${rr.length?rr.map(r=>r.type==="pending"
+          ?`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.className||"—")}</td><td>—</td><td><span class="tag" style="background:#fff7ed;color:#c2410c">Not Submitted</span></td><td>—</td><td><button class="secondary" onclick="viewAssignment('${escAttr(r.a.id)}')">View Assignment</button></td></tr>`
+          :`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.className||"—")}</td><td><b>${r.at.score}/${r.at.total_questions}</b> <span class="small">(${Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)))}%)</span></td><td><span class="tag" style="background:#ecfdf5;color:#166534">Submitted</span></td><td>${r.at.submitted_at?new Date(r.at.submitted_at).toLocaleString():"—"}</td><td><button onclick="results('${escAttr(r.a.id)}')">View Result</button></td></tr>`
+        ).join(""):`<tr><td colspan="7"><div class="success"><b>No results match the selected filters.</b></div></td></tr>`}</tbody>
+      </table></div>
+    </details>`;
+  };
+
+  const hierarchy=[...tree.entries()].map(([main,subs])=>{
+    const subHtml=[...subs.entries()].map(([sub,ams])=>{
+      const assignmentHtml=[...ams.values()].map(assignmentBlock).join("");
+      const total=Array.from(ams.values()).reduce((n,x)=>n+x.rows.length,0);
+      return `<details open style="margin:8px 12px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc">
+        <summary style="cursor:pointer;padding:11px 13px;font-weight:700;color:#1e3a8a">▸ ${esc(sub)} <span class="small muted">(${total} result${total===1?"":"s"})</span></summary>
+        <div style="padding:0 10px 4px">${assignmentHtml}</div>
+      </details>`;
+    }).join("");
+    const total=[...subs.values()].reduce((n,ams)=>n+[...ams.values()].reduce((m,x)=>m+x.rows.length,0),0);
+    return `<details open style="margin:0 0 14px;border:2px solid #dbeafe;border-radius:14px;background:#eff6ff">
+      <summary style="cursor:pointer;padding:14px;font-size:17px;font-weight:800;color:#1d4ed8">📚 ${esc(main)} <span class="small muted">(${total} result${total===1?"":"s"})</span></summary>
+      <div style="padding:0 10px 4px">${subHtml}</div>
+    </details>`;
+  }).join("");
+
+  const submitted=d.attempts?.length||0;
+  const avg=submitted?Math.round(d.attempts.reduce((n,x)=>n+Number(x.score||0)*100/Math.max(1,Number(x.total_questions||1)),0)/submitted):0;
+  const pendingCount=(d.links||[]).filter(x=>!submittedKey.has(`${x.assignment_id}:${x.student_id}`)).length;
+  const mainNames=teacherResultsMainNames(d);
+
   render(`<div class="wrap">${header("Assignment Results")}
     <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Filter, sort and review student submissions across all assignments.</p></div><div class="actions"><button onclick="downloadFilteredTeacherResultsExcel()">⬇ Download Filtered Excel</button><button class="secondary" onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+        <div><h2 style="margin-bottom:4px">📊 Assignment Results</h2><p class="muted">Results are organised as <b>Main Group → Sub-Group → Assignment</b>. Student-wise status and scores remain available below each assignment.</p></div>
+        <div class="actions"><button onclick="downloadFilteredTeacherResultsExcel()">⬇ Download Filtered Excel</button><button class="secondary" onclick="downloadAllResultsExcel()">⬇ Download All Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
+      </div>
       <div class="grid" style="margin-top:15px">
-        <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${(schoolTeacherMode?[...new Set(d.assignments.map(a=>a.main_group).filter(Boolean))]:MAIN_GROUPS).map(g=>`<option value="${esc(g)}" ${f.mainGroup===g?"selected":""}>${esc(g)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option>${[...new Set(d.assignments.filter(a=>f.mainGroup==="all"||a.main_group===f.mainGroup).map(a=>a.sub_group).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b))).map(g=>`<option value="${esc(g)}" ${f.subGroup===g?"selected":""}>${esc(g)}</option>`).join("")}</select></div><div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option>${d.assignments.map(a=>`<option value="${a.id}" ${f.assignment===a.id?"selected":""}>${esc(a.title)}</option>`).join("")}</select></div>
-        <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${c.id}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
-        <div><label>Student</label><select id="trStudent"><option value="all">All Students</option>${d.students.map(s=>`<option value="${s.id}" ${f.student===s.id?"selected":""}>${esc(s.full_name)}${s.roll_no?` — Roll ${esc(s.roll_no)}`:""}</option>`).join("")}</select></div>
+        <div><label>Main Group</label><select id="trMainGroup" onchange="teacherResultsMainGroupChanged()"><option value="all">All Main Groups</option>${mainNames.map(g=>`<option value="${esc(g)}" ${f.mainGroup===g?"selected":""}>${esc(g)}</option>`).join("")}</select></div>
+        <div><label>Sub-Group</label><select id="trSubGroup" onchange="teacherResultsSubGroupChanged()"><option value="all">All Sub-Groups</option></select></div>
+        <div><label>Assignment</label><select id="trAssignment"><option value="all">All Assignments</option></select></div>
+        <div><label>Class</label><select id="trClass"><option value="all">All Classes</option>${d.classes.map(c=>`<option value="${esc(c.id)}" ${f.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>
+        <div><label>Student</label><select id="trStudent"><option value="all">All Students</option>${d.students.map(s=>`<option value="${esc(s.id)}" ${f.student===s.id?"selected":""}>${esc(s.full_name)}${s.roll_no?` — Roll ${esc(s.roll_no)}`:""}</option>`).join("")}</select></div>
         <div><label>Status</label><select id="trStatus"><option value="all" ${f.status==="all"?"selected":""}>Submitted Results</option><option value="pending" ${f.status==="pending"?"selected":""}>Not Submitted / Pending</option></select></div>
         <div><label>Minimum Score %</label><input id="trMin" type="number" min="0" max="100" placeholder="0" value="${esc(f.minScore)}"></div>
         <div><label>Maximum Score %</label><input id="trMax" type="number" min="0" max="100" placeholder="100" value="${esc(f.maxScore)}"></div>
       </div>
       <div class="result-controls actions"><b>Sort:</b><select id="trSort"><option value="submitted_desc">Latest submission</option><option value="submitted_asc">Oldest submission</option><option value="student_asc">Student A–Z</option><option value="student_desc">Student Z–A</option><option value="assignment_asc">Assignment A–Z</option><option value="assignment_desc">Assignment Z–A</option><option value="score_desc">Highest score</option><option value="score_asc">Lowest score</option></select><button onclick="applyTeacherResultsFilters()">Apply Filters</button><button class="secondary" onclick="clearTeacherResultsFilters()">Clear Filters</button></div>
       <div class="result-summary"><span>Submitted: <b>${submitted}</b></span><span>Average: <b>${avg}%</b></span><span>Pending: <b>${pendingCount}</b></span><span>Showing: <b>${rows.length}</b></span></div>
-      <div style="overflow:auto;margin-top:15px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Assignment</th><th>Class</th><th>Score</th><th>Status</th><th>Submitted</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(r=>r.type==="pending"?`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.a.title)}</td><td>${esc(r.className||"—")}</td><td>—</td><td><span class="tag" style="background:#fff7ed;color:#c2410c">Not Submitted</span></td><td>—</td><td><button class="secondary" onclick="viewAssignment('${r.a.id}')">View Assignment</button></td></tr>`:`<tr><td><b>${esc(r.p.full_name||"Student")}</b></td><td>${esc(r.p.roll_no||"—")}</td><td>${esc(r.a.title)}</td><td>${esc(r.className||"—")}</td><td><b>${r.at.score}/${r.at.total_questions}</b> <span class="small">(${Math.round(Number(r.at.score||0)*100/Math.max(1,Number(r.at.total_questions||1)))}%)</span></td><td><span class="tag" style="background:#ecfdf5;color:#166534">Submitted</span></td><td>${r.at.submitted_at?new Date(r.at.submitted_at).toLocaleString():"—"}</td><td><button onclick="results('${r.a.id}')">View Result</button></td></tr>`).join(""):`<tr><td colspan="8"><div class="success"><b>No results match the selected filters.</b></div></td></tr>`}</tbody></table></div>
+      <div style="margin-top:15px">${hierarchy||`<div class="success"><b>No results match the selected filters.</b></div>`}</div>
     </div></div>`);
-  const sort=document.getElementById("trSort");if(sort)sort.value=f.sort;updateTeacherResultsSubGroupOptions();const sub=document.getElementById("trSubGroup");if(sub&&f.subGroup&&sub.querySelector(`option[value="${CSS.escape(f.subGroup)}"]`))sub.value=f.subGroup;updateTeacherResultsAssignmentOptions();const as=document.getElementById("trAssignment");if(as&&f.assignment&&as.querySelector(`option[value="${CSS.escape(f.assignment)}"]`))as.value=f.assignment;
+
+  const sort=document.getElementById("trSort");if(sort)sort.value=f.sort;
+  updateTeacherResultsSubGroupOptions();
+  const sub=document.getElementById("trSubGroup");if(sub&&f.subGroup&&sub.querySelector(`option[value="${CSS.escape(f.subGroup)}"]`))sub.value=f.subGroup;
+  updateTeacherResultsAssignmentOptions();
+  const as=document.getElementById("trAssignment");if(as&&f.assignment&&as.querySelector(`option[value="${CSS.escape(f.assignment)}"]`))as.value=f.assignment;
 }
 function applyTeacherResultsFilters(){const d=window._teacherResults;if(!d)return;d.filters={assignment:document.getElementById("trAssignment")?.value||"all",mainGroup:document.getElementById("trMainGroup")?.value||"all",subGroup:document.getElementById("trSubGroup")?.value||"all",classId:document.getElementById("trClass")?.value||"all",student:document.getElementById("trStudent")?.value||"all",status:document.getElementById("trStatus")?.value||"all",minScore:document.getElementById("trMin")?.value||"",maxScore:document.getElementById("trMax")?.value||"",sort:document.getElementById("trSort")?.value||"submitted_desc"};renderTeacherResultsDashboard()}
 function clearTeacherResultsFilters(){if(!window._teacherResults)return;window._teacherResults.filters={assignment:"all",mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};renderTeacherResultsDashboard()}
@@ -1032,8 +1132,8 @@ async function downloadFilteredTeacherResultsExcel(){
         "Course":schoolTeacherMode?"School Course":(String(p.course||"").toUpperCase()==="JNVST-9"?"JNVST Class IX":"JNVST Class VI"),
         "Class":r.className||"",
         "Assignment Name":a.title||"",
-        "Main Group":a.main_group||"",
-        "Sub-Group":a.sub_group||"",
+        "Main Group":resultAssignmentGroup(a,new Map((window._teacherResults.classes||[]).map(c=>[c.id,c]))).main,
+        "Sub-Group":resultAssignmentGroup(a,new Map((window._teacherResults.classes||[]).map(c=>[c.id,c]))).sub,
         "Status":r.type==="pending"?"Not Submitted":"Submitted",
         "Score":at?at.score:"",
         "Total Questions":at?at.total_questions:"",
@@ -1171,16 +1271,71 @@ async function manageStudentAccounts(){
  try{
   const j=await callTeacherFn({action:"listCredentials"});
   const students=j.students||[];
+  const mains=new Map();
+  for(const s of students){
+    const memberships=s.memberships||[];
+    // JNVST students should normally have one subgroup membership.
+    // Keep a fallback for legacy/direct main-group memberships.
+    const groups=memberships.length?memberships:[{class_id:"",class_name:"Unassigned",main_group_id:"",main_group_name:"Unassigned",is_subgroup:false}];
+    for(const m of groups){
+      const mainName=m.main_group_name||m.class_name||"Unassigned";
+      if(!mains.has(mainName))mains.set(mainName,new Map());
+      const subs=mains.get(mainName);
+      const subName=m.is_subgroup?(m.class_name||"Unassigned Sub-group"):"Whole Main Group";
+      if(!subs.has(subName))subs.set(subName,[]);
+      if(!subs.get(subName).some(x=>x.id===s.id))subs.get(subName).push({...s,currentMembership:m});
+    }
+  }
+  const mainEntries=[...mains.entries()].sort((a,b)=>{
+    const rank=x=>x==="JNVST-VI (Class-IV)"?0:x==="JNVST-IX (Class IX)"?1:2;
+    return rank(a[0])-rank(b[0])||a[0].localeCompare(b[0]);
+  });
+  const studentRow=s=>{
+    const m=s.currentMembership||{};
+    const targetOptions=(s.available_subgroups||[]).filter(x=>x.is_subgroup && x.main_group_id===m.main_group_id);
+    return `<tr>
+      <td><b>${esc(s.full_name||"Student")}</b></td><td><b>${esc(s.roll_no||"—")}</b></td><td>${esc(s.password||"—")}</td><td>${esc(m.class_name||"—")}</td>
+      <td><div class="actions">
+        ${targetOptions.length?`<select style="min-width:190px" onchange="moveStudentSubgroup('${esc(s.id)}','${esc(m.class_id||"")}','${esc(s.full_name||"Student")}',this.value)"><option value="">Change Sub-Group…</option>${targetOptions.filter(x=>x.class_id!==m.class_id).map(x=>`<option value="${esc(x.class_id)}">${esc(x.class_name)}</option>`).join("")}</select>`:`<span class="small muted">No sub-groups</span>`}
+        <button onclick="changeStudentPassword('${esc(s.id)}','${esc(s.full_name||"Student")}')">Password</button>
+        <button style="background:#dc2626" onclick="deleteStudentAccount('${esc(s.id)}','${esc(s.full_name||"Student")}')">Delete</button>
+      </div></td>
+    </tr>`;
+  };
+  const hierarchy=mainEntries.map(([main,subs])=>{
+    const subHtml=[...subs.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([sub,ss])=>
+      `<details open style="margin:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc">
+        <summary style="cursor:pointer;padding:11px 13px;font-weight:700;color:#1e3a8a">▸ ${esc(sub)} <span class="small muted">(${ss.length} student${ss.length===1?"":"s"})</span></summary>
+        <div style="overflow:auto;padding:0 10px 10px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Current Sub-Group</th><th>Action</th></tr></thead><tbody>${ss.sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||"")).map(studentRow).join("")}</tbody></table></div>
+      </details>`
+    ).join("");
+    const count=[...subs.values()].reduce((n,x)=>n+x.length,0);
+    return `<details open style="margin:0 0 14px;border:2px solid #dbeafe;border-radius:14px;background:#eff6ff">
+      <summary style="cursor:pointer;padding:14px;font-size:17px;font-weight:800;color:#1d4ed8">📚 ${esc(main)} <span class="small muted">(${count} student${count===1?"":"s"})</span></summary>
+      <div style="padding:0 8px 4px">${subHtml}</div>
+    </details>`;
+  }).join("");
+
   render(`<div class="wrap">${header("Student Accounts")}
   <div class="card">
-    <div class="notice">Roll No is fixed after assignment. Teachers can change the Password, but cannot change the Roll No.</div>
-    <div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr></thead><tbody>
-    ${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td><b>${esc(s.roll_no||"—")}</b></td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td>
-    <td><div class="actions"><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}
-    </tbody></table></div>
-    <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
-  </div></div>`)
+    <div class="notice"><b>Student Accounts:</b> organised as <b>Main Group → Sub-Group → Students</b>. Roll No is fixed after assignment. Teachers can change the Password and move a student to another sub-group under the same main group.</div>
+    <div style="margin-top:15px">${hierarchy||`<div class="success">No students found.</div>`}</div>
+    <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
+  </div></div>`);
  }catch(e){alert(e.message||String(e))}
+}
+async function moveStudentSubgroup(studentId,sourceClassId,name,targetClassId){
+  if(!targetClassId)return;
+  const select=document.activeElement;
+  if(!confirm(`Move ${name} to this sub-group?`)){if(select?.tagName==="SELECT")select.value="";return;}
+  try{
+    await callTeacherFn({action:"setStudentJnvstSubgroup",student_id:studentId,source_class_id:sourceClassId,target_class_id:targetClassId});
+    alert(`${name} was moved successfully.`);
+    await manageStudentAccounts();
+  }catch(e){
+    alert("Could not move student.\\n\\n"+(e.message||String(e)));
+    await manageStudentAccounts();
+  }
 }
 async function changeStudentRollNo(){alert("Roll No is fixed and cannot be changed after the student is assigned.");}
 
@@ -1214,7 +1369,7 @@ async function addStudent(){
  <label>Roll No</label><input id="sr" type="text" inputmode="numeric" placeholder="e.g. 1">
  <label>Password</label><input id="sp" type="text" placeholder="At least 6 characters">
  <label>Class</label><select id="sc">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
- <div id="sm"></div><div class="actions"><button onclick="createStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+ <div id="sm"></div><div class="actions"><button onclick="createStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="goBack()">← Back</button></div>
  </div></div>`)
 }
 async function createStudent(){
@@ -1236,7 +1391,7 @@ function bulkImportStudents(){
  <p><b>Upload an Excel file with these columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div>
  <p class="muted small">Email is not required. The system creates the internal login account automatically.</p>
  <label>Excel file</label><input id="studentExcel" type="file" accept=".xlsx,.xls" onchange="readStudentExcel(event)">
- <div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+ <div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="goBack()">← Back</button></div>
  </div></div>`)
 }
 function readStudentExcel(ev){
@@ -1465,7 +1620,7 @@ async function bulkImportMCQs(){
   </div>
  </div>
  <div id="mcqPreview"></div>
- <div class="actions"><button onclick="showImportedMCQs()">Preview / Continue</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
+ <div class="actions"><button onclick="showImportedMCQs()">Preview / Continue</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="goBack()">← Back</button></div>
  </div></div>`)
 }
 async function getPdfJs(){
@@ -2088,7 +2243,7 @@ async function schoolStudentHome(){
   const assessmentOnly=schoolPortal==="SCHOOL_ASSESSMENTS";
 
   // Render the landing shell immediately.
-  render(`<div class="wrap">${header("Student Dashboard")}
+  render(`<div class="wrap">${header("Student Dashboard",false)}
     <div class="card">
       <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
       <p class="muted">Roll No: <b>${esc(profile?.roll_no||"")}</b> &nbsp; | &nbsp; School Course</p>
@@ -2254,7 +2409,7 @@ async function studentHome(){
 
   // Render a small shell immediately so navigation never looks blank.
   if(!document.getElementById("student-dash-panel-new")){
-    render(`<div class="wrap">${header("My Assignments")}
+    render(`<div class="wrap">${header("My Assignments",false)}
       <div class="card"><h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
       <p class="muted">Loading your latest assignments…</p></div>
     </div>`);
