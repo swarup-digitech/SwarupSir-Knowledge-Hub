@@ -514,31 +514,79 @@ function jnvstMainGroups(classes){
  return (classes||[]).filter(c=>isJnvstMainGroup(c) || !!jnvstBaseKey(c));
 }
 function jnvstSubgroupsForMain(classes,main){
+ const rows=classes||[];
+ const byParent=main?.id ? rows.filter(c=>jnvstParentId(c)===main.id && isJnvstSubGroup(c)) : [];
+ if(byParent.length) return byParent;
  const key=jnvstBaseKey(main);
- return (classes||[]).filter(c=>{
-   if(jnvstParentId(c) && jnvstParentId(c)===main?.id) return true;
-   return key && jnvstSubgroupParent(c)===key;
- });
+ // Legacy rows may not have jnvst_parent_id yet. Only use the textual
+ // marker as a fallback when no explicit child rows exist.
+ return key ? rows.filter(c=>!jnvstParentId(c) && jnvstSubgroupParent(c)===key) : [];
 }
 async function ensureJnvstBaseClasses(allClasses){
- const existing=allClasses||[];
+ const existing=Array.isArray(allClasses)?allClasses.slice():[];
  const created=[];
- for(const base of [{key:"JNVST-VI",name:"JNVST-VI (Class-IV)",course:"JNVST-6",description:"Fixed JNVST Class VI group for Class IV students preparing for JNVST VI. Create sub-groups under this group."},{key:"JNVST-IX",name:"JNVST-IX (Class IX)",course:"JNVST-9",description:"Fixed JNVST Class IX group. Create sub-groups under this group."}]){
-  let found=existing.find(c=>jnvstBaseKey(c)===base.key);
+ const bases=[
+  {key:"JNVST-VI",name:"JNVST-VI (Class-IV)",course:"JNVST-6",description:"Fixed JNVST Class VI group for Class IV students preparing for JNVST VI. Create sub-groups under this group."},
+  {key:"JNVST-IX",name:"JNVST-IX (Class IX)",course:"JNVST-9",description:"Fixed JNVST Class IX group. Create sub-groups under this group."}
+ ];
+ for(const base of bases){
+  let candidates=existing.filter(c=>jnvstBaseKey(c)===base.key);
+  let found=candidates
+   .filter(c=>String(c.jnvst_group_type||"").toUpperCase()==="MAIN")
+   .sort((a,b)=>String(a.created_at||"").localeCompare(String(b.created_at||"")))[0]
+   || candidates.slice().sort((a,b)=>String(a.created_at||"").localeCompare(String(b.created_at||"")))[0];
+
   if(!found){
    const {data,error}=await sb.from("classes").insert({name:base.name,description:base.description,teacher_id:current.id,course:base.course,jnvst_group_type:"MAIN",jnvst_parent_id:null}).select("*").single();
    if(error)throw error;
-   found=data; created.push(data);
-  } else if(base.key==="JNVST-VI" && String(found.name||"").trim().toUpperCase()==="JNVST-VI"){
+   found=data; created.push(data); existing.push(data);
+  }else{
    const {data,error}=await sb.from("classes").update({name:base.name,description:base.description,course:base.course,jnvst_group_type:"MAIN",jnvst_parent_id:null}).eq("id",found.id).eq("teacher_id",current.id).select("*").single();
    if(error)throw error;
    found=data;
-   const idx=existing.findIndex(c=>c.id===found.id); if(idx>=0)existing[idx]=found;
+   const idx=existing.findIndex(c=>c.id===found.id);if(idx>=0)existing[idx]=found;
+  }
+
+  const duplicates=candidates.filter(c=>c.id!==found.id);
+  for(const dup of duplicates){
+   // Only rows explicitly attached to this duplicate are its children.
+   // This prevents legacy textual parent markers from making every subgroup
+   // appear under every duplicate main group.
+   const {data:children,error:che}=await sb.from("classes").select("*").eq("teacher_id",current.id).eq("jnvst_parent_id",dup.id);
+   if(che)throw che;
+   for(const child of children||[]){
+    const same=(existing||[]).find(c=>c.id!==child.id && jnvstParentId(c)===found.id && String(c.name||"").trim().toLowerCase()===String(child.name||"").trim().toLowerCase());
+    if(same){
+     const {data:members,error:me}=await sb.from("class_students").select("student_id").eq("class_id",child.id);if(me)throw me;
+     const {data:targetMembers,error:tme}=await sb.from("class_students").select("student_id").eq("class_id",same.id);if(tme)throw tme;
+     const have=new Set((targetMembers||[]).map(x=>x.student_id));
+     const add=(members||[]).map(x=>x.student_id).filter(Boolean).filter(id=>!have.has(id));
+     if(add.length){const {error:ie}=await sb.from("class_students").insert(add.map(student_id=>({class_id:same.id,student_id})));if(ie)throw ie;}
+     const {error:ae}=await sb.from("assignments").update({class_id:same.id,main_group:base.name}).eq("class_id",child.id).eq("created_by",current.id);if(ae)throw ae;
+     const {error:de}=await sb.from("class_students").delete().eq("class_id",child.id);if(de)throw de;
+     const {error:ce}=await sb.from("classes").delete().eq("id",child.id).eq("teacher_id",current.id);if(ce)throw ce;
+     const ix=existing.findIndex(x=>x.id===child.id);if(ix>=0)existing.splice(ix,1);
+    }else{
+     const clean=String(child.description||"").replace(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?\s*/i,"").trim();
+     const {data:updated,error:ue}=await sb.from("classes").update({jnvst_parent_id:found.id,jnvst_group_type:"SUB",course:base.course,description:`JNVST_SUBGROUP_PARENT:${base.key}| ${clean}`.trim()}).eq("id",child.id).eq("teacher_id",current.id).select("*").single();if(ue)throw ue;
+     const ix=existing.findIndex(x=>x.id===child.id);if(ix>=0)existing[ix]=updated;
+    }
+   }
+
+   // Merge any students directly attached to the duplicate main.
+   const {data:direct,error:dme}=await sb.from("class_students").select("student_id").eq("class_id",dup.id);if(dme)throw dme;
+   const {data:mainMembers,error:fme}=await sb.from("class_students").select("student_id").eq("class_id",found.id);if(fme)throw fme;
+   const have=new Set((mainMembers||[]).map(x=>x.student_id));
+   const add=(direct||[]).map(x=>x.student_id).filter(Boolean).filter(id=>!have.has(id));
+   if(add.length){const {error:ie}=await sb.from("class_students").insert(add.map(student_id=>({class_id:found.id,student_id})));if(ie)throw ie;}
+   const {error:aae}=await sb.from("assignments").update({class_id:found.id,main_group:base.name}).eq("class_id",dup.id).eq("created_by",current.id);if(aae)throw aae;
+   const {error:ade}=await sb.from("class_students").delete().eq("class_id",dup.id);if(ade)throw ade;
+   const {error:ce}=await sb.from("classes").delete().eq("id",dup.id).eq("teacher_id",current.id);if(ce)throw ce;
+   const ix=existing.findIndex(x=>x.id===dup.id);if(ix>=0)existing.splice(ix,1);
   }
  }
- return existing.concat(created);
+ return existing.concat(created.filter(x=>!existing.some(y=>y.id===x.id)));
 }
-
 // One-time, idempotent migration of the teacher's older Navodaya_Ass and Navodaya_Eng classes.
 // The old classes are converted into sub-groups under JNVST-VI (Class-IV), preserving
 // their class_students memberships and any existing assignments. If a same-named subgroup
