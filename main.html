@@ -1169,19 +1169,106 @@ async function callTeacherFn(body){
 }
 async function manageStudentAccounts(){
  try{
-  const j=await callTeacherFn({action:"listCredentials"});
-  const students=j.students||[];
+  const [{data:classes,error:classErr},j]=await Promise.all([
+   sb.from("classes").select("id,name,description,course,jnvst_group_type,jnvst_parent_id,created_at").eq("teacher_id",current.id).order("created_at",{ascending:true}),
+   callTeacherFn({action:"listCredentials"})
+  ]);
+  if(classErr)throw classErr;
+  const allClasses=classes||[];
+  const jnvstClasses=allClasses.filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL" && (jnvstBaseKey(c)||isJnvstMainGroup(c)||isJnvstSubGroup(c)));
+  const students=(j.students||[]).filter(s=>Array.isArray(s.class_ids)?s.class_ids.some(id=>jnvstClasses.some(c=>c.id===id)):true);
+  window._teacherStudentClasses=jnvstClasses;
+  window._jnvstCredentialStudents=students;
+
+  const cmap=new Map(jnvstClasses.map(c=>[c.id,c]));
+  const mainForClass=(c)=>{
+   if(!c)return null;
+   if(jnvstSubgroupParent(c) || jnvstParentId(c)) return cmap.get(jnvstParentId(c)) || jnvstMainGroups(jnvstClasses).find(m=>jnvstBaseKey(m)===jnvstSubgroupParent(c)) || null;
+   return c;
+  };
+  const membershipsFor=(s)=>{
+   const ids=Array.isArray(s.class_ids)?s.class_ids:[];
+   return ids.map(id=>cmap.get(id)).filter(Boolean);
+  };
+  const primaryMembership=(s)=>{
+   const ms=membershipsFor(s);
+   return ms.find(c=>isJnvstSubGroup(c)) || ms.find(c=>jnvstBaseKey(c)) || ms[0] || null;
+  };
+  const mainOrder=(m)=>{const k=jnvstBaseKey(m);if(k==="JNVST-VI")return 0;if(k==="JNVST-IX")return 1;return 10+String(m?.name||"").toLowerCase().charCodeAt(0)/100000};
+  const sorted=students.slice().sort((a,b)=>{
+   const ac=primaryMembership(a),bc=primaryMembership(b),am=mainForClass(ac),bm=mainForClass(bc);
+   const ak=mainOrder(am),bk=mainOrder(bm); if(ak!==bk)return ak-bk;
+   const an=String(am?.name||"").toLowerCase(),bn=String(bm?.name||"").toLowerCase(); if(an!==bn)return an.localeCompare(bn);
+   const as=ac&&isJnvstSubGroup(ac)?String(ac.name||"").toLowerCase():"";
+   const bs=bc&&isJnvstSubGroup(bc)?String(bc.name||"").toLowerCase():""; if(as!==bs)return as.localeCompare(bs);
+   return String(a.full_name||"").localeCompare(String(b.full_name||""));
+  });
+
+  const mainLabel=(m)=>m?.name||"Not grouped";
+  const subgroupLabel=(c)=>c?(isJnvstSubGroup(c)?c.name:(jnvstBaseKey(c)?"No sub-group (directly in main group)":c.name)):"Not grouped";
+  const grouped={};
+  for(const st of sorted){
+   const c=primaryMembership(st),m=mainForClass(c),mk=m?.id||"none",sk=c?.id||"none";
+   grouped[mk] ||= {main:m,subs:{}};
+   grouped[mk].subs[sk] ||= {class:c,students:[]};
+   grouped[mk].subs[sk].students.push(st);
+  }
+  const mainGroups=Object.values(grouped).sort((a,b)=>mainOrder(a.main)-mainOrder(b.main)||String(a.main?.name||"").localeCompare(String(b.main?.name||"")));
+
+  const groupTargetOptions=(student)=>{
+   const current=primaryMembership(student),main=mainForClass(current);
+   if(!main)return [];
+   return jnvstSubgroupsForMain(jnvstClasses,main).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  };
+  const renderGroup=(g)=>{
+   const subgroups=Object.values(g.subs).sort((a,b)=>{
+    const ad=a.class&&isJnvstSubGroup(a.class)?String(a.class.name||""):"";
+    const bd=b.class&&isJnvstSubGroup(b.class)?String(b.class.name||""):"";
+    if(!ad&&!bd)return 0;if(!ad)return -1;if(!bd)return 1;return ad.localeCompare(bd);
+   });
+   const total=g.main?Object.values(g.subs).reduce((n,x)=>n+x.students.length,0):0;
+   return `<div class="student-card" style="border:2px solid #dbeafe;background:#f8fbff;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">📁 ${esc(mainLabel(g.main))}</h3><span class="tag">${total} student${total===1?"":"s"}</span></div>
+    ${subgroups.map(sg=>`<div style="margin-top:10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;overflow:hidden">
+      <div style="padding:9px 11px;background:#f8fafc;border-bottom:1px solid #e2e8f0"><b>${esc(subgroupLabel(sg.class))}</b><span class="muted small"> — ${sg.students.length} student${sg.students.length===1?"":"s"}</span></div>
+      <div style="overflow:auto"><table style="margin:0"><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Action</th></tr></thead><tbody>
+      ${sg.students.map(st=>`<tr><td><b>${esc(st.full_name)}</b></td><td><b>${esc(st.roll_no||"—")}</b></td><td>${esc(st.password||"—")}</td><td><div class="actions"><button onclick="changeStudentPassword('${st.id}','${esc(st.full_name)}')">Password</button>${groupTargetOptions(st).length>1?`<button class="secondary" onclick="changeStudentJnvstSubgroup('${st.id}','${esc(st.full_name)}','${sg.class?.id||""}')">Change Sub-group</button>`:""}<button style="background:#dc2626" onclick="deleteStudentAccount('${st.id}','${esc(st.full_name)}')">Delete</button></div></td></tr>`).join("")}
+      </tbody></table></div></div>`).join("")}
+   </div>`;
+  };
+
   render(`<div class="wrap">${header("Student Accounts")}
-  <div class="card">
-    <div class="notice">Roll No is fixed after assignment. Teachers can change the Password, but cannot change the Roll No.</div>
-    <div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Action</th></tr></thead><tbody>
-    ${students.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td><b>${esc(s.roll_no||"—")}</b></td><td>${esc(s.password||"—")}</td><td>${esc((s.classes||[]).join(", ")||"—")}</td>
-    <td><div class="actions"><button onclick="changeStudentPassword('${s.id}','${esc(s.full_name)}')">Password</button><button style="background:#dc2626" onclick="deleteStudentAccount('${s.id}','${esc(s.full_name)}')">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="5">No students found.</td></tr>`}
-    </tbody></table></div>
+   <div class="card">
+    <div class="notice"><b>Students are arranged by Main Group → Sub-group.</b> Teachers can move a student from one sub-group to another within the same main group. Roll No remains fixed; Password can still be changed.</div>
+    <div style="margin-top:12px">${mainGroups.map(renderGroup).join("")||`<div class="notice">No JNVST students found.</div>`}</div>
     <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="history.back()">← Back</button></div>
-  </div></div>`)
+   </div></div>`);
  }catch(e){alert(e.message||String(e))}
 }
+
+async function changeStudentJnvstSubgroup(studentId,name,currentClassId){
+ try{
+  const classes=window._teacherStudentClasses||[];
+  const currentClass=classes.find(c=>c.id===currentClassId);
+  if(!currentClass)return alert("Current sub-group was not found.");
+  const parent=jnvstSubgroupParent(currentClass)?(classes.find(c=>c.id===jnvstParentId(currentClass))||jnvstMainGroups(classes).find(m=>jnvstBaseKey(m)===jnvstSubgroupParent(currentClass))):currentClass;
+  if(!parent)return alert("The parent main group could not be found.");
+  const subs=jnvstSubgroupsForMain(classes,parent).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  if(!subs.length)return alert(`No sub-groups are available under ${parent.name}.`);
+  const choices=subs.map((c,i)=>`${i+1}. ${c.name}${c.id===currentClassId?" (Current)":""}`).join("\n");
+  const v=prompt(`Change sub-group for ${name}.\n\nMain Group: ${parent.name}\n\n${choices}\n\nEnter the number of the new sub-group:` ,String(Math.max(1,subs.findIndex(c=>c.id===currentClassId)+1)));
+  if(v===null)return;
+  const n=Number(String(v).trim());
+  if(!Number.isInteger(n)||n<1||n>subs.length)return alert("Please enter a valid sub-group number.");
+  const target=subs[n-1];
+  if(target.id===currentClassId)return alert(`${name} is already in ${target.name}.`);
+  if(!confirm(`Move ${name} from "${currentClass.name}" to "${target.name}" under ${parent.name}?\n\nThe student's group membership will be changed.`))return;
+  await callTeacherFn({action:"setStudentJnvstSubgroup",student_id:studentId,from_class_id:currentClassId,to_class_id:target.id});
+  alert(`${name} was moved to ${target.name}.`);
+  await manageStudentAccounts();
+ }catch(e){alert(e.message||String(e))}
+}
+
 async function changeStudentRollNo(){alert("Roll No is fixed and cannot be changed after the student is assigned.");}
 
 async function changeStudentPassword(studentId,name){

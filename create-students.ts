@@ -85,11 +85,12 @@ Deno.serve(async (req) => {
         .eq("classes.teacher_id", caller.user.id);
       if (me) return json({error:me.message},400);
 
-      const map = new Map<string, {classes:string[]}>();
+      const map = new Map<string, {classes:string[],class_ids:string[]}>();
       for (const row of memberships ?? []) {
         const sid = row.student_id as string;
         const cls = row.classes as any;
-        if (!map.has(sid)) map.set(sid,{classes:[]});
+        if (!map.has(sid)) map.set(sid,{classes:[],class_ids:[]});
+        if (cls?.id && !map.get(sid)!.class_ids.includes(cls.id)) map.get(sid)!.class_ids.push(cls.id);
         if (cls?.name && !map.get(sid)!.classes.includes(cls.name)) map.get(sid)!.classes.push(cls.name);
       }
       const ids = [...map.keys()];
@@ -107,7 +108,8 @@ Deno.serve(async (req) => {
         email:cm.get(p.id)?.email || p.username || "",
         password:cm.get(p.id)?.password_plaintext || "",
         updated_at:cm.get(p.id)?.updated_at || null,
-        classes:map.get(p.id)?.classes || []
+        classes:map.get(p.id)?.classes || [],
+        class_ids:map.get(p.id)?.class_ids || []
       }))});
     }
 
@@ -130,6 +132,44 @@ Deno.serve(async (req) => {
       const { error: upErr } = await admin.from("profiles").update({roll_no:rollNo}).eq("id",studentId);
       if (upErr) return json({error:upErr.message},400);
       return json({success:true,roll_no:rollNo});
+    }
+
+    // ------------------------------------------------------------
+    // Teacher: move a JNVST student between sub-groups
+    // ------------------------------------------------------------
+    if (body.action === "setStudentJnvstSubgroup") {
+      const studentId = String(body.student_id ?? "").trim();
+      const fromClassId = String(body.from_class_id ?? "").trim();
+      const toClassId = String(body.to_class_id ?? "").trim();
+      if (!studentId || !fromClassId || !toClassId) return json({error:"Student, current sub-group and target sub-group are required."},400);
+      if (fromClassId === toClassId) return json({success:true});
+
+      const { data: fromClass, error: fe } = await admin.from("classes")
+        .select("id,name,teacher_id,course,jnvst_group_type,jnvst_parent_id,description")
+        .eq("id", fromClassId).single();
+      const { data: toClass, error: te } = await admin.from("classes")
+        .select("id,name,teacher_id,course,jnvst_group_type,jnvst_parent_id,description")
+        .eq("id", toClassId).single();
+      if (fe || !fromClass || fromClass.teacher_id !== caller.user.id) return json({error:"The current sub-group is not available to this teacher."},403);
+      if (te || !toClass || toClass.teacher_id !== caller.user.id) return json({error:"The target sub-group is not available to this teacher."},403);
+      const isSub = (c:any) => String(c.jnvst_group_type||"").toUpperCase()==="SUB" || /^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\b/i.test(String(c.description||""));
+      if (!isSub(fromClass) || !isSub(toClass)) return json({error:"Students can only be moved between JNVST sub-groups."},400);
+      if (String(fromClass.course||"").toUpperCase()==="SCHOOL" || String(toClass.course||"").toUpperCase()==="SCHOOL") return json({error:"This action is only for JNVST groups."},400);
+      if (!fromClass.jnvst_parent_id || !toClass.jnvst_parent_id || fromClass.jnvst_parent_id !== toClass.jnvst_parent_id) return json({error:"The target sub-group must be under the same main group."},400);
+
+      const { data: membership, error: me } = await admin.from("class_students")
+        .select("student_id,class_id,classes!inner(teacher_id)")
+        .eq("student_id",studentId).eq("class_id",fromClassId).eq("classes.teacher_id",caller.user.id).limit(1);
+      if (me || !membership?.length) return json({error:"This student is not currently in the selected sub-group."},403);
+
+      const { data: existingTarget } = await admin.from("class_students").select("student_id").eq("student_id",studentId).eq("class_id",toClassId).maybeSingle();
+      if (!existingTarget) {
+        const { error: insErr } = await admin.from("class_students").insert({class_id:toClassId,student_id:studentId});
+        if (insErr) return json({error:insErr.message},400);
+      }
+      const { error: delErr } = await admin.from("class_students").delete().eq("class_id",fromClassId).eq("student_id",studentId);
+      if (delErr) return json({error:delErr.message},400);
+      return json({success:true,from_class_id:fromClassId,to_class_id:toClassId});
     }
 
     // ------------------------------------------------------------
