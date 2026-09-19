@@ -322,44 +322,78 @@ Deno.serve(async (req) => {
     for (const item of items) {
       const name = String(item.name ?? "").trim();
       const rollNo = String(item.roll_no ?? item.rollNo ?? "").trim();
-      const email = String(item.email ?? "").trim().toLowerCase();
+      const suppliedEmail = String(item.email ?? "").trim().toLowerCase();
       const password = String(item.password ?? "");
       const classId = String(item.class_id ?? "").trim();
+      const requestedCourse = String(item.course ?? "").trim().toUpperCase();
+      const schoolGroupId = String(item.school_group_id ?? "").trim() || null;
 
-      if (!name || !rollNo || !email || !password || !classId) {
-        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, email, password and class are required."});
+      // Email is intentionally optional for classroom/student accounts.
+      // Supabase Auth still needs an email identifier, so when the teacher
+      // does not supply one we create a private internal address. Students
+      // never see or use this address; they log in with Roll No + Password.
+      if (!name || !rollNo || !password || !classId) {
+        results.push({success:false,name,email:suppliedEmail,roll_no:rollNo,error:"Name, roll no, password and class are required."});
         continue;
       }
       if (password.length < 6) {
-        results.push({success:false,name,email,error:"Password must contain at least 6 characters."});
+        results.push({success:false,name,email:suppliedEmail,error:"Password must contain at least 6 characters."});
         continue;
       }
 
       const { data: cls, error: classErr } = await admin.from("classes")
-        .select("id, teacher_id").eq("id", classId).single();
+        .select("id, teacher_id, course").eq("id", classId).single();
       if (classErr || !cls || cls.teacher_id !== caller.user.id) {
-        results.push({success:false,name,email,error:"Invalid class for this teacher."});
+        results.push({success:false,name,email:suppliedEmail,error:"Invalid class for this teacher."});
         continue;
+      }
+
+      const course = String(cls.course || requestedCourse || "").trim().toUpperCase();
+      if (!course) {
+        results.push({success:false,name,email:suppliedEmail,error:"The selected class has no course configured."});
+        continue;
+      }
+      if (requestedCourse && requestedCourse !== course) {
+        results.push({success:false,name,email:suppliedEmail,error:"The selected class does not belong to the requested course."});
+        continue;
+      }
+
+      // School subdivisions are optional, but when supplied they must belong
+      // to the selected School class and the same teacher.
+      if (schoolGroupId) {
+        if (course !== "SCHOOL") {
+          results.push({success:false,name,email:suppliedEmail,error:"Subdivision is available only for School Course students."});
+          continue;
+        }
+        const { data: sg, error: sgErr } = await admin.from("school_course_groups")
+          .select("id, teacher_id, class_id").eq("id", schoolGroupId).maybeSingle();
+        if (sgErr || !sg || sg.teacher_id !== caller.user.id || sg.class_id !== classId) {
+          results.push({success:false,name,email:suppliedEmail,error:"Invalid subdivision for the selected School class."});
+          continue;
+        }
       }
 
       const { data: duplicateRoll } = await admin.from("profiles").select("id").eq("roll_no", rollNo).maybeSingle();
       if (duplicateRoll) {
-        results.push({success:false,name,email,roll_no:rollNo,error:"This Roll No is already in use."});
+        results.push({success:false,name,email:suppliedEmail,roll_no:rollNo,error:"This Roll No is already in use."});
         continue;
       }
 
+      const safeRoll = rollNo.replace(/[^a-z0-9_-]/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "student";
+      const email = suppliedEmail || `student-${safeRoll}-${crypto.randomUUID().slice(0,8)}@internal.swarupsir.local`;
+
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email, password, email_confirm:true,
-        user_metadata:{full_name:name, role:"student"}
+        user_metadata:{full_name:name, role:"student", course}
       });
       if (createErr || !created.user) {
-        results.push({success:false,name,email,error:createErr?.message ?? "Could not create user."});
+        results.push({success:false,name,email:suppliedEmail,roll_no:rollNo,error:createErr?.message ?? "Could not create user."});
         continue;
       }
 
       const studentId = created.user.id;
       const { error: profileErr } = await admin.from("profiles").insert({
-        id:studentId, full_name:name, username:email, roll_no:rollNo, role:"student"
+        id:studentId, full_name:name, username:email, roll_no:rollNo, role:"student", course, school_group_id:course === "SCHOOL" ? schoolGroupId : null
       });
       if (profileErr) {
         await admin.auth.admin.deleteUser(studentId);
@@ -388,7 +422,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      results.push({success:true,name,email,roll_no:rollNo,class_id:classId});
+      results.push({success:true,name,email,roll_no:rollNo,class_id:classId,course});
     }
 
     return json({success:true, results});
