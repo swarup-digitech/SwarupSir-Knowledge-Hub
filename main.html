@@ -1778,58 +1778,203 @@ async function finishImportedAssignment(){
  const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:a.id,student_id}));const {error:ae}=await sb.from("assignment_students").insert(rows);if(ae){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment created, but student assignment failed: "+ae.message)}
  alert(`Assignment created and assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome()
 }
+async function uploadAssignmentQuestionImage(file, assignmentId){
+  if(!file) return null;
+  if(!file.type.startsWith('image/')) throw new Error('Please select an image file.');
+  const maxBytes=10*1024*1024;
+  if(file.size>maxBytes) throw new Error('Image size must be 10 MB or less.');
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+  const path=`${current.id}/${assignmentId}/${crypto.randomUUID()}.${ext}`;
+  const {error}=await sb.storage.from('assignment-question-images').upload(path,file,{contentType:file.type,upsert:false});
+  if(error)throw error;
+  const {data}=sb.storage.from('assignment-question-images').getPublicUrl(path);
+  return data.publicUrl;
+}
+function assignmentQuestionCardHtml(q,i){
+  const imageMode=!!q.image_url;
+  return `<div class="edit-q-card" data-qid="${esc(q.id)}" data-order="${q.question_order||i+1}">
+    <div class="edit-q-head"><h3>Question <span class="edit-q-number">${q.question_order||i+1}</span></h3><span class="save-state" id="save-state-${q.id}"></span></div>
+    <div class="editor-pane editor-pane-questions">
+      <label>Question Type</label>
+      <select class="edit-question-type" onchange="toggleEditedQuestionType(this)">
+        <option value="text" ${!imageMode?'selected':''}>Text Question</option>
+        <option value="image" ${imageMode?'selected':''}>Image Question</option>
+      </select>
+      <div class="edit-text-question" style="display:${imageMode?'none':'block'}">
+        <label>Question Text</label>
+        <textarea class="edit-question-text" placeholder="Enter question text...">${esc(q.question_text&&q.question_text!=='[IMAGE QUESTION]'?q.question_text:'')}</textarea>
+      </div>
+      <div class="edit-image-question" style="display:${imageMode?'block':'none'}">
+        <label>Question Image</label>
+        <div class="question-image-editor-preview" style="margin:8px 0 10px">${q.image_url?`<img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:520px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px;background:#fff">`:'<div class="notice">No image attached.</div>'}</div>
+        <input class="edit-question-image" type="file" accept="image/*" onchange="previewAssignmentQuestionImage(this)">
+        <div class="small muted">Choose a new image to replace the current image. Maximum 10 MB.</div>
+        <label style="margin-top:10px"><input class="remove-question-image" type="checkbox" style="width:auto;margin-right:7px"> Remove current image</label>
+      </div>
+      <div class="option-grid">
+        ${['A','B','C','D'].map(o=>`<div><label>Option ${o}</label><input class="edit-option" data-option="${o}" value="${esc(q['option_'+o.toLowerCase()]||'')}" placeholder="Option ${o}"></div>`).join('')}
+      </div>
+      <label>Correct Answer</label>
+      <select class="edit-correct-option"><option value="A" ${q.correct_option==='A'?'selected':''}>A</option><option value="B" ${q.correct_option==='B'?'selected':''}>B</option><option value="C" ${q.correct_option==='C'?'selected':''}>C</option><option value="D" ${q.correct_option==='D'?'selected':''}>D</option></select>
+    </div>
+    <div class="editor-pane editor-pane-support" style="display:none">
+      <label class="hint-label">Hint (optional)</label>
+      <textarea class="question-hint" placeholder="Enter a helpful hint for this question...">${esc(q.hint||'')}</textarea>
+      <label class="solution-video-label">Solution Video — YouTube link (optional)</label>
+      <input class="question-video-url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${esc(q.solution_video_url||'')}">
+      <label style="font-weight:700;color:#334155">Explanation (optional)</label>
+      <textarea class="question-explanation" placeholder="Explain why the answer is correct...">${esc(q.explanation||'')}</textarea>
+    </div>
+    <div class="question-save-row">
+      <button type="button" onclick="saveSingleEditedQuestion('${esc(q.assignment_id||'')}','${esc(q.id)}')">💾 Save This Question</button>
+      <button type="button" class="danger" onclick="deleteAssignmentQuestion('${esc(q.assignment_id||'')}','${esc(q.id)}')">🗑 Delete Question</button>
+      <span class="small muted">Replace the image, convert to text, or edit the options and answer.</span>
+    </div>
+  </div>`;
+}
 async function editAssignmentQuestions(id){
   try{
-    const {data:a,error:ae}=await sb.from("assignments").select("id,title,subject").eq("id",id).eq("created_by",current.id).single();
-    if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
-    const {data:qs,error:qe}=await sb.from("questions").select("*").eq("assignment_id",id).order("question_order");
+    const {data:a,error:ae}=await sb.from('assignments').select('id,title,subject').eq('id',id).eq('created_by',current.id).single();
+    if(ae||!a)throw new Error(ae?.message||'Assignment not found.');
+    const {data:qs,error:qe}=await sb.from('questions').select('*').eq('assignment_id',id).order('question_order');
     if(qe)throw qe;
-    if(!qs?.length)return alert("No questions are available in this assignment.");
-    render(`<div class="wrap">${header("Edit Assignment")}
+    render(`<div class="wrap">${header('Edit Assignment Questions')}
       <div class="card">
         <h2>${esc(a.title)}</h2>
-        <p class="muted">Use the two tabs below. <b>Edit Questions</b> changes the question, options and answer key. <b>Hints / Solution Videos</b> adds optional help that students can see only at the appropriate stage.</p>
-        <div class="editor-tabs" role="tablist">
-          <button type="button" id="editTabQuestions" class="editor-tab active" onclick="switchQuestionEditorTab('questions')">✎ Edit Questions</button>
-          <button type="button" id="editTabSupport" class="editor-tab" onclick="switchQuestionEditorTab('support')">💡 Hints / Solution Videos</button>
-        </div>
+        <p class="muted">You can replace question images, convert image questions to text, add new text or image questions, delete questions, edit options/answers, and add hints, explanations and solution videos.</p>
         <div class="editor-toolbar">
-          <span id="editorTabHelp" class="small muted">Edit question text, options and correct answer.</span>
+          <div class="actions" style="margin:0">
+            <button type="button" onclick="addAssignmentQuestionEditor('${id}','text')">＋ Add Text Question</button>
+            <button type="button" class="secondary" onclick="addAssignmentQuestionEditor('${id}','image')">🖼 Add Image Question</button>
+          </div>
           <button type="button" onclick="saveAllEditedQuestions('${id}', event)">💾 Save All Changes</button>
         </div>
-        <div id="editQuestionList">${qs.map((q,i)=>`<div class="edit-q-card" data-qid="${q.id}">
-          <div class="edit-q-head"><h3>Question ${q.question_order||i+1}</h3><span class="save-state" id="save-state-${q.id}"></span></div>
-          <div class="editor-pane editor-pane-questions">
-            ${q.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${i+1}"></div><div class="small muted">This is an image-based question. You can still edit its options and answer key below.</div>`:`<label>Question Text</label><textarea class="edit-question-text" placeholder="Enter question text...">${esc(q.question_text||"")}</textarea>`}
-            <div class="option-grid">
-              ${["A","B","C","D"].map(o=>`<div><label>Option ${o}</label><input class="edit-option" data-option="${o}" value="${esc(q["option_"+o.toLowerCase()]||"")}" placeholder="Option ${o}"></div>`).join("")}
-            </div>
-            <label>Correct Answer</label>
-            <select class="edit-correct-option"><option value="A" ${q.correct_option==="A"?"selected":""}>A</option><option value="B" ${q.correct_option==="B"?"selected":""}>B</option><option value="C" ${q.correct_option==="C"?"selected":""}>C</option><option value="D" ${q.correct_option==="D"?"selected":""}>D</option></select>
-          </div>
-          <div class="editor-pane editor-pane-support" style="display:none">
-            <label class="hint-label">Hint (optional)</label>
-            <textarea class="question-hint" placeholder="Enter a helpful hint for this question...">${esc(q.hint||"")}</textarea>
-            <div class="small muted">Leave empty if this question does not need a hint. Students will not see a Hints button when empty.</div>
-            <label class="solution-video-label">Solution Video — YouTube link (optional)</label>
-            <input class="question-video-url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${esc(q.solution_video_url||"")}">
-            <div class="small muted">Students can view this video with the answer key after submitting their assignment.</div>
-            <label style="font-weight:700;color:#334155">Explanation (optional)</label>
-            <textarea class="question-explanation" placeholder="Explain why the answer is correct...">${esc(q.explanation||"")}</textarea>
-            <div class="small muted">Shown to students only after they submit, near the answer key and solution video.</div>
-          </div>
-          <div class="question-save-row"><button type="button" class="secondary" onclick="saveSingleEditedQuestion('${id}','${q.id}')">💾 Save This Question</button><span class="small muted">Saves only this question.</span></div>
-        </div>`).join("")}</div>
-        <div class="editor-toolbar bottom"><span class="small muted">You can edit several questions and save them together.</span><button type="button" onclick="saveAllEditedQuestions('${id}', event)">💾 Save All Changes</button></div>
-        <div class="actions"><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="viewAssignment('${id}')">Cancel</button></div>
+        <div class="editor-tabs" role="tablist">
+          <button type="button" id="editTabQuestions" class="editor-tab active" onclick="switchQuestionEditorTab('questions')">✎ Questions</button>
+          <button type="button" id="editTabSupport" class="editor-tab" onclick="switchQuestionEditorTab('support')">💡 Hints / Solutions</button>
+        </div>
+        <div id="editorTabHelp" class="small muted" style="padding:10px 0">Edit question text/images, options and correct answer.</div>
+        <div id="editQuestionList">${(qs||[]).map((q,i)=>assignmentQuestionCardHtml(q,i)).join('')||'<div class="notice">No questions yet. Use Add Text Question or Add Image Question.</div>'}</div>
+        <div class="editor-toolbar bottom"><span class="small muted">Question numbers are automatically re-ordered after adding or deleting questions.</span><button type="button" onclick="saveAllEditedQuestions('${id}', event)">💾 Save All Changes</button></div>
+        <div class="actions"><button class="secondary" onclick="schoolTeacherMode?schoolAssignmentManagement():teacherHome()">← Back</button><button class="secondary" onclick="viewAssignment('${id}')">View Assignment</button></div>
       </div></div>`);
-  }catch(e){alert("Could not open question editor: "+(e.message||e));}
+  }catch(e){alert('Could not open question editor: '+(e.message||e));}
+}
+function toggleEditedQuestionType(select){
+  const card=select.closest('.edit-q-card');if(!card)return;
+  const image=select.value==='image';
+  const t=card.querySelector('.edit-text-question'),im=card.querySelector('.edit-image-question');
+  if(t)t.style.display=image?'none':'block';if(im)im.style.display=image?'block':'none';
+}
+function previewAssignmentQuestionImage(input){
+  const card=input.closest('.edit-q-card');const box=card?.querySelector('.question-image-editor-preview');const file=input.files?.[0];
+  if(!box||!file)return;
+  if(!file.type.startsWith('image/')){input.value='';return alert('Please select an image file.');}
+  if(file.size>10*1024*1024){input.value='';return alert('Image size must be 10 MB or less.');}
+  const url=URL.createObjectURL(file);box.innerHTML=`<img src="${url}" alt="New question image" style="display:block;width:100%;max-height:520px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px;background:#fff">`;
+  const rm=card.querySelector('.remove-question-image');if(rm)rm.checked=false;
+}
+function getEditedQuestion(card){
+  const type=card.querySelector('.edit-question-type')?.value||'text';
+  return {
+    question_text:type==='image'?'[IMAGE QUESTION]':(card.querySelector('.edit-question-text')?.value?.trim()||''),
+    option_a:card.querySelector('.edit-option[data-option="A"]')?.value?.trim()||'Option A',
+    option_b:card.querySelector('.edit-option[data-option="B"]')?.value?.trim()||'Option B',
+    option_c:card.querySelector('.edit-option[data-option="C"]')?.value?.trim()||'Option C',
+    option_d:card.querySelector('.edit-option[data-option="D"]')?.value?.trim()||'Option D',
+    correct_option:card.querySelector('.edit-correct-option')?.value||'A',
+    hint:card.querySelector('.question-hint')?.value?.trim()||null,
+    solution_video_url:card.querySelector('.question-video-url')?.value?.trim()||null,
+    explanation:card.querySelector('.question-explanation')?.value?.trim()||null,
+    image_mode:type==='image'
+  };
+}
+async function persistEditedQuestion(assignmentId,questionId,card){
+  const payload=getEditedQuestion(card);
+  let imageUrl=null;
+  const {data:old,error:oe}=await sb.from('questions').select('image_url').eq('id',questionId).eq('assignment_id',assignmentId).single();
+  if(oe)throw oe;
+  imageUrl=old?.image_url||null;
+  const type=payload.image_mode?'image':'text';
+  const file=card.querySelector('.edit-question-image')?.files?.[0];
+  const remove=card.querySelector('.remove-question-image')?.checked;
+  if(type==='image'){
+    if(file)imageUrl=await uploadAssignmentQuestionImage(file,assignmentId);
+    else if(remove)imageUrl=null;
+    if(!imageUrl)throw new Error('An image question must have an image. Select an image file.');
+  }else{
+    imageUrl=null;
+    if(!payload.question_text.trim())throw new Error('Text question cannot be empty.');
+  }
+  delete payload.image_mode;
+  payload.image_url=imageUrl;
+  const {error}=await sb.from('questions').update(payload).eq('id',questionId).eq('assignment_id',assignmentId);
+  if(error)throw error;
+}
+async function saveSingleEditedQuestion(assignmentId,questionId){
+  const card=document.querySelector(`.edit-q-card[data-qid="${questionId}"]`);if(!card)return;
+  const state=document.getElementById(`save-state-${questionId}`);
+  try{
+    await persistEditedQuestion(assignmentId,questionId,card);
+    if(state){state.textContent='✓ Saved';state.className='save-state saved';setTimeout(()=>{if(state)state.textContent=''},2500)}
+  }catch(e){if(state){state.textContent='✗ Not saved';state.className='save-state error'}alert('Could not save this question.\n\n'+(e.message||e));}
+}
+async function saveAllEditedQuestions(assignmentId,ev){
+  const cards=[...document.querySelectorAll('.edit-q-card')];if(!cards.length)return;
+  const button=ev?.currentTarget;const original=button?.textContent;
+  if(button){button.disabled=true;button.textContent='Saving...'}
+  try{
+    for(const card of cards){
+      await persistEditedQuestion(assignmentId,card.dataset.qid,card);
+      const state=document.getElementById(`save-state-${card.dataset.qid}`);if(state){state.textContent='✓ Saved';state.className='save-state saved'}
+    }
+    await renumberAssignmentQuestions(assignmentId);
+    alert('All question changes have been saved successfully.');
+  }catch(e){alert('Could not save all changes.\n\n'+(e.message||e));}
+  finally{if(button){button.disabled=false;button.textContent=original||'💾 Save All Changes'}}
+}
+async function addAssignmentQuestionEditor(assignmentId,type='text'){
+  try{
+    const {data:qs,error:qe}=await sb.from('questions').select('id,question_order').eq('assignment_id',assignmentId).order('question_order',{ascending:false}).limit(1);
+    if(qe)throw qe;
+    const next=(qs?.[0]?.question_order||0)+1;
+    const payload={assignment_id:assignmentId,question_text:type==='image'?'[IMAGE QUESTION]':'',option_a:'Option A',option_b:'Option B',option_c:'Option C',option_d:'Option D',correct_option:'A',question_order:next};
+    if(type==='image')payload.image_url=null;
+    const {data:q,error}=await sb.from('questions').insert(payload).select('*').single();
+    if(error)throw error;
+    const list=document.getElementById('editQuestionList');
+    if(list?.querySelector('.notice'))list.innerHTML='';
+    list?.insertAdjacentHTML('beforeend',assignmentQuestionCardHtml(q,list.querySelectorAll('.edit-q-card').length));
+    const card=list?.lastElementChild;card?.scrollIntoView({behavior:'smooth',block:'center'});
+    if(type==='image')card?.querySelector('.edit-question-type')?.dispatchEvent(new Event('change'));
+  }catch(e){alert('Could not add question.\n\n'+(e.message||e));}
+}
+async function deleteAssignmentQuestion(assignmentId,questionId){
+  if(!confirm('Delete this question? This cannot be undone.'))return;
+  try{
+    const {data:ats,error:ae}=await sb.from('attempts').select('id').eq('assignment_id',assignmentId).limit(1);
+    if(ae)throw ae;
+    if((ats||[]).length){
+      if(!confirm('Students have already submitted this assignment. Deleting this question may change historical results. Continue?'))return;
+    }
+    const {error}=await sb.from('questions').delete().eq('id',questionId).eq('assignment_id',assignmentId);
+    if(error)throw error;
+    await renumberAssignmentQuestions(assignmentId);
+    alert('Question deleted.');
+    await editAssignmentQuestions(assignmentId);
+  }catch(e){alert('Could not delete question.\n\n'+(e.message||e));}
+}
+async function renumberAssignmentQuestions(assignmentId){
+  const {data:qs,error}=await sb.from('questions').select('id,question_order').eq('assignment_id',assignmentId).order('question_order').order('created_at',{ascending:true});
+  if(error)throw error;
+  for(let i=0;i<(qs||[]).length;i++){
+    if(qs[i].question_order!==i+1){const {error:e}=await sb.from('questions').update({question_order:i+1}).eq('id',qs[i].id).eq('assignment_id',assignmentId);if(e)throw e;}
+  }
 }
 function editAssignmentSupport(id,type){
   editAssignmentQuestions(id);
   setTimeout(()=>switchQuestionEditorTab('support'),80);
   setTimeout(()=>{
-    const first=document.querySelector('.question-hint, .question-video-url, .question-explanation');
     let target=null;
     if(type==='hint')target=document.querySelector('.question-hint');
     if(type==='video')target=document.querySelector('.question-video-url');
@@ -1838,51 +1983,13 @@ function editAssignmentSupport(id,type){
   },140);
 }
 function switchQuestionEditorTab(tab){
-  const isQuestions=tab!=="support";
-  document.querySelectorAll(".editor-pane-questions").forEach(x=>x.style.display=isQuestions?"block":"none");
-  document.querySelectorAll(".editor-pane-support").forEach(x=>x.style.display=isQuestions?"none":"block");
-  document.getElementById("editTabQuestions")?.classList.toggle("active",isQuestions);
-  document.getElementById("editTabSupport")?.classList.toggle("active",!isQuestions);
-  const h=document.getElementById("editorTabHelp");
-  if(h)h.textContent=isQuestions?"Edit question text, options and correct answer.":"Add optional hints, explanations and YouTube solution videos for selected questions.";
-}
-function getEditedQuestion(card){
-  return {
-    question_text:card.querySelector(".edit-question-text")?.value?.trim()||"[IMAGE QUESTION]",
-    option_a:card.querySelector('.edit-option[data-option="A"]')?.value?.trim()||"Option A",
-    option_b:card.querySelector('.edit-option[data-option="B"]')?.value?.trim()||"Option B",
-    option_c:card.querySelector('.edit-option[data-option="C"]')?.value?.trim()||"Option C",
-    option_d:card.querySelector('.edit-option[data-option="D"]')?.value?.trim()||"Option D",
-    correct_option:card.querySelector(".edit-correct-option")?.value||"A",
-    hint:card.querySelector(".question-hint")?.value?.trim()||null,
-    solution_video_url:card.querySelector(".question-video-url")?.value?.trim()||null,
-    explanation:card.querySelector(".question-explanation")?.value?.trim()||null
-  };
-}
-async function saveSingleEditedQuestion(assignmentId,questionId){
-  const card=document.querySelector(`.edit-q-card[data-qid="${questionId}"]`);if(!card)return;
-  const state=document.getElementById(`save-state-${questionId}`);
-  try{
-    const payload=getEditedQuestion(card);
-    const {error}=await sb.from("questions").update(payload).eq("id",questionId).eq("assignment_id",assignmentId);
-    if(error)throw error;
-    if(state){state.textContent="✓ Saved";state.className="save-state saved";setTimeout(()=>{if(state)state.textContent=""},2500)}
-  }catch(e){if(state){state.textContent="✗ Not saved";state.className="save-state error"}alert("Could not save this question.\n\n"+(e.message||e));}
-}
-async function saveAllEditedQuestions(assignmentId,ev){
-  const cards=[...document.querySelectorAll(".edit-q-card")];if(!cards.length)return;
-  const button=ev?.currentTarget;const original=button?.textContent;
-  if(button){button.disabled=true;button.textContent="Saving..."}
-  try{
-    for(const card of cards){
-      const payload=getEditedQuestion(card),id=card.dataset.qid;
-      const {error}=await sb.from("questions").update(payload).eq("id",id).eq("assignment_id",assignmentId);
-      if(error)throw error;
-      const state=document.getElementById(`save-state-${id}`);if(state){state.textContent="✓ Saved";state.className="save-state saved"}
-    }
-    alert("All question changes have been saved successfully.");
-  }catch(e){alert("Could not save all changes.\n\n"+(e.message||e));}
-  finally{if(button){button.disabled=false;button.textContent=original||"💾 Save All Changes"}}
+  const isQuestions=tab!=='support';
+  document.querySelectorAll('.editor-pane-questions').forEach(x=>x.style.display=isQuestions?'block':'none');
+  document.querySelectorAll('.editor-pane-support').forEach(x=>x.style.display=isQuestions?'none':'block');
+  document.getElementById('editTabQuestions')?.classList.toggle('active',isQuestions);
+  document.getElementById('editTabSupport')?.classList.toggle('active',!isQuestions);
+  const h=document.getElementById('editorTabHelp');
+  if(h)h.textContent=isQuestions?'Edit question text/images, options and correct answer.':'Add optional hints, explanations and YouTube solution videos for selected questions.';
 }
 
 async function viewAssignment(id){
