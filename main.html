@@ -193,6 +193,7 @@ async function init(){
 
     if(schoolTeacherMode){
       if(action==="newAssignment") return newAssignment();
+      if(action==="manageAssignments") return schoolAssignmentManagement();
       if(action==="mockTestManagement") return mockTestManagement();
       if(action==="teacherResultsDashboard") return teacherResultsDashboard();
       if(action==="manageStudentAccounts") return manageStudentAccounts();
@@ -692,6 +693,7 @@ async function normalizeJnvstAssignmentGroups(classes,assignments){
 }
 
 async function teacherHome(){
+ if(schoolTeacherMode){ location.replace("teacher-dashboard.html"); return; }
  let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
    sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
@@ -732,6 +734,72 @@ async function teacherHome(){
   <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${jnvstMainGroups(classes).map(g=>`<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${[...new Set(classes.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))].sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div></div>
  </div>`);
 }
+async function schoolAssignmentManagement(){
+  schoolTeacherMode=true;
+  try{
+    const [{data:assignments,error:ae},{data:classes,error:ce},{data:groups,error:ge}]=await Promise.all([
+      sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
+      sb.from("classes").select("id,name,description,course").eq("teacher_id",current.id).eq("course","SCHOOL").order("name"),
+      sb.from("school_course_groups").select("id,name,class_id,description").eq("teacher_id",current.id).order("name")
+    ]);
+    if(ae)throw ae;if(ce)throw ce;if(ge)throw ge;
+    const schoolClasses=classes||[], classIds=new Set(schoolClasses.map(c=>c.id));
+    const list=(assignments||[]).filter(a=>classIds.has(a.class_id) && a.assignment_type!=="MOCK" && a.assignment_type!=="mock");
+    window._schoolAssignmentClasses=schoolClasses;window._schoolAssignmentGroups=groups||[];window._schoolAssignments=list;
+    const qCounts=new Map();
+    if(list.length){
+      const {data:q,error:qe}=await sb.from("questions").select("assignment_id").in("assignment_id",list.map(a=>a.id));
+      if(qe)throw qe;(q||[]).forEach(x=>qCounts.set(x.assignment_id,(qCounts.get(x.assignment_id)||0)+1));
+    }
+    const cards=list.map(a=>{
+      const c=schoolClasses.find(x=>x.id===a.class_id),g=(groups||[]).find(x=>x.id===a.school_group_id || (x.class_id===a.class_id && x.name===a.sub_group));
+      const sub=a.sub_group||g?.name||"Entire class";
+      return `<div class="assignment" style="border:1px solid #dbe3ee;margin:10px 0">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||"No subject")} • ${qCounts.get(a.id)||0} question(s)</div></div>
+          <div class="actions"><span class="tag">${esc(c?.name||"Class")}</span><span class="tag">${esc(sub)}</span><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>
+        </div>
+        <div class="small muted" style="margin-top:8px">Created: ${a.created_at?new Date(a.created_at).toLocaleString():"—"}</div>
+        <div class="actions" style="margin-top:10px">
+          <button onclick="viewAssignment('${a.id}')">View</button>
+          <button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button>
+          <button onclick="editAssignmentGroup('${a.id}')">▣ Edit Class / Subdivision</button>
+          <button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button>
+          <button onclick="editAssignmentSupport('${a.id}','hint')">💡 Hints</button>
+          <button onclick="editAssignmentSupport('${a.id}','video')">🎥 Solution Video</button>
+          <button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Explanation</button>
+          <button onclick="reassignAssignment('${a.id}')">↻ Re-assign Missing</button>
+          <button onclick="reassignFresh('${a.id}')">↻ Fresh Assign</button>
+          <button class="secondary" onclick="results('${a.id}')">Results</button>
+          <button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button>
+        </div>
+      </div>`;
+    }).join("");
+    render(`<div class="wrap">${header("School Course — Manage Assignments")}
+      <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
+        <h2 style="margin:0">📚 Assignment Management</h2>
+        <p class="muted" style="margin:7px 0 0">Edit existing assignments, change their class/subdivision, update questions, add solutions, re-assign only to students who do not already have the assignment, or make a fresh assignment.</p>
+      </div>
+      <div class="card">
+        <div class="grid"><div><label>Class</label><select id="schoolAssignmentClassFilter" onchange="filterSchoolAssignments()"><option value="all">All Classes</option>${schoolClasses.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="schoolAssignmentGroupFilter" onchange="filterSchoolAssignments()"><option value="all">All Sub-divisions</option>${[...new Set((groups||[]).map(g=>g.name))].sort().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select></div></div>
+      </div>
+      <div class="card"><h2>Existing Assignments</h2><div id="schoolAssignmentsList">${cards||'<p class="muted">No School Course assignments yet.</p>'}</div></div>
+      <div class="actions"><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ New Assignment</button><button class="secondary" onclick="location.href='teacher-dashboard.html'">← Dashboard</button></div>
+    </div>`);
+  }catch(e){render(`<div class="wrap">${header("School Course — Manage Assignments")}<div class="card">${message("Could not load School assignments: "+(e.message||e))}</div></div>`)}
+}
+function filterSchoolAssignments(){
+  const cls=document.getElementById("schoolAssignmentClassFilter")?.value||"all",grp=document.getElementById("schoolAssignmentGroupFilter")?.value||"all";
+  const classes=window._schoolAssignmentClasses||[],groups=window._schoolAssignmentGroups||[];
+  document.querySelectorAll("#schoolAssignmentsList .assignment").forEach(row=>{
+    const classTag=row.querySelector(".actions .tag")?.textContent||"";
+    const tags=[...row.querySelectorAll(".actions .tag")].map(x=>x.textContent||"");
+    const okClass=cls==="all" || tags.includes(classes.find(c=>c.id===cls)?.name||"");
+    const okGroup=grp==="all" || tags.includes(grp);
+    row.style.display=okClass&&okGroup?"block":"none";
+  });
+}
+
 function manageJnvstClasses(){
  const classes=(window._jnvstClasses||[]),students=(window._jnvstStudents||[]),assignments=(window._jnvstAssignments||[]);
  const mains=jnvstMainGroups(classes);
@@ -834,19 +902,29 @@ function filterTeacherAssignments(){
  document.querySelectorAll(".teacher-assignment-row").forEach(row=>{const ok=(main==="all"||row.dataset.mainGroup===main)&&(sub==="all"||row.dataset.subGroup===sub);row.style.display=ok?"block":"none";});
 }
 async function editAssignmentDetails(assignmentId){
- const {data:a,error}=await sb.from("assignments").select("id,title,description").eq("id",assignmentId).eq("created_by",current.id).single();
+ const {data:a,error}=await sb.from("assignments").select("*").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
- const title=prompt("Edit assignment name:",a.title||"");
- if(title===null)return;
- const trimmedTitle=title.trim();
- if(!trimmedTitle)return alert("Assignment name cannot be empty.");
- const description=prompt("Edit assignment description:\n\n(Leave blank if you do not want a description.)",a.description||"");
- if(description===null)return;
- const {error:upError}=await sb.from("assignments").update({title:trimmedTitle,description:description.trim()||null}).eq("id",assignmentId).eq("created_by",current.id);
- if(upError)return alert("Could not update assignment details.\n\n"+(upError.message||upError));
- alert("Assignment name and description updated successfully.");
- await teacherHome();
+ const isVideo=String(a.assignment_type||"").toUpperCase()==="VIDEO" || !!a.video_url;
+ render(`<div class="wrap">${header("Edit Assignment Details")}<div class="card">
+   <h2>${esc(a.title||"")}</h2>
+   <label>Assignment Title</label><input id="editAtTitle" value="${esc(a.title||"")}">
+   <label>Subject</label><input id="editAtSubject" value="${esc(a.subject||"")}">
+   <label>Assignment Type</label><select id="editAtType"><option value="MCQ" ${!isVideo?"selected":""}>MCQ — No Video</option><option value="VIDEO" ${isVideo?"selected":""}>Video + MCQ</option></select>
+   <label>YouTube Video URL</label><input id="editAtVideo" value="${esc(a.video_url||"")}" placeholder="Leave blank for MCQ-only assignment">
+   <label>Description</label><textarea id="editAtDescription">${esc(a.description||"")}</textarea>
+   <div class="actions"><button onclick="saveAssignmentDetails('${assignmentId}')">💾 Save Changes</button><button class="secondary" onclick="schoolTeacherMode?schoolAssignmentManagement():teacherHome()">Cancel</button></div>
+ </div></div>`);
 }
+async function saveAssignmentDetails(assignmentId){
+ const title=document.getElementById("editAtTitle")?.value.trim(),subject=document.getElementById("editAtSubject")?.value.trim()||"",type=document.getElementById("editAtType")?.value||"MCQ",video=document.getElementById("editAtVideo")?.value.trim()||"",description=document.getElementById("editAtDescription")?.value.trim()||"";
+ if(!title)return alert("Assignment title cannot be empty.");
+ if(type==="VIDEO"&&!video)return alert("Enter a YouTube video URL for a Video assignment, or choose MCQ.");
+ const {error}=await sb.from("assignments").update({title,subject,description,video_url:video||null,assignment_type:type}).eq("id",assignmentId).eq("created_by",current.id);
+ if(error)return alert("Could not update assignment: "+error.message);
+ alert("Assignment details updated successfully.");
+ return schoolTeacherMode?schoolAssignmentManagement():teacherHome();
+}
+
 async function editAssignmentGroup(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title,main_group,sub_group,class_id").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
@@ -854,6 +932,27 @@ async function editAssignmentGroup(assignmentId){
  const {data:classes,error:ce}=await sb.from("classes").select("*").eq("teacher_id",current.id);
  if(ce)return alert(ce.message);
  const mains=jnvstMainGroups(classes||[]);if(!mains.length)return alert("No JNVST main groups are available.");
+ if(schoolTeacherMode){
+   const schoolClasses=(classes||[]).filter(c=>String(c.course||"").toUpperCase()==="SCHOOL");
+   const {data:groups,error:ge}=await sb.from("school_course_groups").select("id,name,class_id").eq("teacher_id",current.id).order("name");
+   if(ge)return alert(ge.message);
+   const classChoices=schoolClasses.map((c,i)=>`${i+1}. ${c.name}`).join("\n");
+   const currentClass=schoolClasses.find(c=>c.id===a.class_id)||schoolClasses[0];
+   const className=prompt(`Class for "${a.title}":\n\n${classChoices}\n\nEnter the exact class name.`,currentClass?.name||"");
+   if(className===null)return;
+   const targetClass=schoolClasses.find(c=>c.name===className.trim());
+   if(!targetClass)return alert("Please enter an existing School class.");
+   const subs=(groups||[]).filter(g=>g.class_id===targetClass.id);
+   const choices=subs.length?subs.map((g,i)=>`${i+1}. ${g.name}`).join("\n"):"(No subdivisions)";
+   const subName=prompt(`Subdivision under ${targetClass.name}:\n\n${choices}\n\nLeave blank for the entire class.`,a.sub_group||"");
+   if(subName===null)return;
+   const trimmed=subName.trim(),group=subs.find(g=>g.name===trimmed);
+   if(trimmed&&!group)return alert("Please enter an existing subdivision under the selected class.");
+   const {error:up}=await sb.from("assignments").update({class_id:targetClass.id,main_group:targetClass.name,sub_group:group?.name||""}).eq("id",assignmentId).eq("created_by",current.id);
+   if(up)return alert("Could not update assignment group: "+up.message);
+   alert("Assignment class/subdivision updated successfully.");
+   return schoolAssignmentManagement();
+ }
  const currentClass=(classes||[]).find(c=>c.id===a.class_id);
  const currentMain=currentClass?(jnvstParentId(currentClass)?(classes||[]).find(c=>c.id===jnvstParentId(currentClass)):currentClass):null;
  const mainChoices=mains.map((m,i)=>`${i+1}. ${m.name}`).join("\n");
@@ -1209,240 +1308,74 @@ async function deleteAssignment(assignmentId){
 async function reassignFresh(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
- if(!confirm(`Reassign "${a.title}" as a FRESH assignment?\\n\\nPrevious attempts and answers will be deleted, and students can take it again as a new attempt.`))return;
+ if(!confirm(`Fresh assign "${a.title}"?\n\nAll existing student links, previous attempts and submitted answers for this assignment will be removed. The assignment and its questions will remain.`))return;
  try{
    const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
    const ids=(ats||[]).map(x=>x.id);
-   if(ids.length){
-     const {error:e}=await sb.from("answers").delete().in("attempt_id",ids);if(e)throw e;
-     const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
-   }
-   alert("Previous attempts cleared. Now choose the class/students for the fresh assignment.");
-   reassignAssignment(assignmentId);
- }catch(e){alert("Could not clear previous attempts.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
+   if(ids.length){const {error:e}=await sb.from("answers").delete().in("attempt_id",ids);if(e)throw e;}
+   const {error:e2}=await sb.from("attempts").delete().eq("assignment_id",assignmentId);if(e2)throw e2;
+   const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(e3)throw e3;
+   return reassignAssignment(assignmentId,{fresh:true});
+ }catch(e){alert("Could not prepare fresh assignment.\n\n"+(e.message||e));}
 }
-
-async function reassignAssignment(assignmentId){
+async function reassignAssignment(assignmentId,options={}){
+ const fresh=!!options.fresh;
  const [{data:a,error:ae},{data:classes,error:ce}]=await Promise.all([
    sb.from("assignments").select("*").eq("id",assignmentId).eq("created_by",current.id).single(),
-   sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name")
+   sb.from("classes").select("id,name,course").eq("teacher_id",current.id).order("name")
  ]);
- if(ae)return alert(ae.message); if(ce)return alert(ce.message);
- if(!classes?.length)return alert("Create a class first.");
- const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId);
- if(ee)return alert(ee.message);
- const existingIds=new Set((existing||[]).map(x=>x.student_id));
- const initialClass=a.class_id && classes.some(c=>c.id===a.class_id)?a.class_id:classes[0].id;
- render(`<div class="wrap">${header("Assign / Reassign Assignment")}<div class="card">
-   <h2>${esc(a.title)}</h2><p class="muted">Assign an existing video/MCQ assignment to a whole class or selected students. Existing recipients will be replaced.</p>
-   <label>Class / Group</label><select id="rac" onchange="loadReassignStudents('${assignmentId}',this.value)">${classes.map(c=>`<option value="${c.id}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}</select>
-   <div class="card" style="background:#f8fafc"><h3>Assign To</h3>
-    <label><input type="radio" name="reassignMode" value="class" checked onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire class</label>
-    <label><input type="radio" name="reassignMode" value="students" onchange="toggleReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label>
-    <div id="reassignStudentPicker" class="small muted">All students in the selected class will receive this assignment.</div>
-   </div>
-   <div class="actions"><button onclick="saveReassignment('${assignmentId}')">Save Assignment</button><button class="secondary" onclick="teacherHome()">Cancel</button></div>
+ if(ae)return alert(ae.message);if(ce)return alert(ce.message);
+ const allowed=(classes||[]).filter(c=>schoolTeacherMode?String(c.course||"").toUpperCase()==="SCHOOL":String(c.course||"").toUpperCase()!=="SCHOOL");
+ if(!allowed.length)return alert("No classes are available.");
+ const {data:groups,error:ge}=schoolTeacherMode?await sb.from("school_course_groups").select("id,name,class_id").eq("teacher_id",current.id).order("name"):({data:[],error:null});
+ if(ge)return alert(ge.message);
+ const initialClass=a.class_id&&allowed.some(c=>c.id===a.class_id)?a.class_id:allowed[0].id;
+ const currentGroup=(groups||[]).find(g=>g.class_id===initialClass && g.name===a.sub_group);
+ render(`<div class="wrap">${header(fresh?"Fresh Assign Assignment":"Re-assign Assignment")}<div class="card">
+   <h2>${esc(a.title)}</h2><div class="${fresh?'notice':'success'}">${fresh?"Fresh mode: previous recipient links and attempts have already been cleared. Choose the new recipients.":"Re-assign mode: existing recipients are kept. Only students who do not already have this assignment will be added."}</div>
+   <label>Class</label><select id="rac" onchange="loadReassignStudents('${assignmentId}')">${allowed.map(c=>`<option value="${esc(c.id)}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}</select>
+   ${schoolTeacherMode?`<label>Subdivision</label><select id="rasg" onchange="loadReassignStudents('${assignmentId}')"><option value="">Entire class</option>${(groups||[]).filter(g=>g.class_id===initialClass).map(g=>`<option value="${esc(g.id)}" ${currentGroup?.id===g.id?'selected':''}>${esc(g.name)}</option>`).join("")}</select>`:""}
+   <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="reassignMode" value="class" checked onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire selected ${schoolTeacherMode?"class/subdivision":"group"}</label><label><input type="radio" name="reassignMode" value="students" onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label><div id="reassignStudentPicker" class="small muted">Loading students...</div></div>
+   <div class="actions"><button onclick="saveReassignment('${assignmentId}',${fresh})">💾 ${fresh?"Save Fresh Assignment":"Add Missing Recipients"}</button><button class="secondary" onclick="schoolTeacherMode?schoolAssignmentManagement():teacherHome()">Cancel</button></div>
  </div></div>`);
- window._reassignExistingIds=existingIds;
+ window._reassignFresh=fresh;window._reassignExistingIds=new Set();
+ await loadReassignStudents(assignmentId);
 }
-async function loadReassignStudents(assignmentId,classId){
- const box=document.getElementById("reassignStudentPicker"); if(!box)return;
- if(document.querySelector('input[name="reassignMode"]:checked')?.value!=="students"){
-   box.innerHTML='<div class="small muted">All students in the selected class will receive this assignment.</div>'; return;
- }
- box.innerHTML='<div class="small muted">Loading students...</div>';
- const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);
- if(error){box.innerHTML=message(error.message);return;}
- const ids=(members||[]).map(x=>x.student_id); if(!ids.length){box.innerHTML='<div class="notice">No students are in this class.</div>';return;}
- const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");
- if(e){box.innerHTML=message(e.message);return;}
- const oldIds=window._reassignExistingIds||new Set();
- box.innerHTML=`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+
- (students||[]).map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${s.id}" ${oldIds.has(s.id)?'checked':''} style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.username||'')}</span></label>`).join("");
+async function loadReassignStudents(assignmentId){
+ const box=document.getElementById("reassignStudentPicker");if(!box)return;
+ const classId=document.getElementById("rac")?.value,groupId=document.getElementById("rasg")?.value||"";
+ if(!classId){box.innerHTML='<div class="notice">Select a class.</div>';return;}
+ const {data:members,error}=await sb.from("class_students").select("student_id,class_id").eq("class_id",classId);if(error){box.innerHTML=message(error.message);return;}
+ let ids=(members||[]).map(x=>x.student_id);
+ if(groupId){const {data:grpStudents,error:ge}=await sb.from("profiles").select("id").eq("school_group_id",groupId).in("id",ids);if(ge){box.innerHTML=message(ge.message);return;}ids=(grpStudents||[]).map(x=>x.id);}
+ if(!ids.length){box.innerHTML='<div class="notice">No students are in the selected class/subdivision.</div>';return;}
+ const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username,roll_no").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return;}
+ let existing=new Set();
+ if(!window._reassignFresh){const {data:links,error:le}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId).in("student_id",ids);if(le){box.innerHTML=message(le.message);return;}existing=new Set((links||[]).map(x=>x.student_id));}
+ window._reassignExistingIds=existing;
+ const available=(students||[]).filter(s=>!existing.has(s.id));
+ const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
+ box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${available.length} student(s) eligible. ${existing.size?existing.size+" already have this assignment and will not be duplicated.":""}</div>`+
+   (mode==="class"?'<div class="success">The selected class/subdivision will be assigned as a whole.</div>':`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+(available.length?available.map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${esc(s.id)}" style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.roll_no||s.username||"")}</span></label>`).join(""):'<div class="notice">No new students are available.</div>'));
 }
-async function toggleReassignStudents(assignmentId){loadReassignStudents(assignmentId,document.getElementById("rac")?.value);}
-async function saveReassignment(assignmentId){
+async function saveReassignment(assignmentId,fresh=false){
  const classId=document.getElementById("rac")?.value;if(!classId)return alert("Select a class.");
- try{
-   const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
-   let studentIds=[];
-   if(mode==="class"){
-     const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;
-     studentIds=(members||[]).map(x=>x.student_id);
-   }else{
-     studentIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
-   }
-   studentIds=[...new Set(studentIds)];if(!studentIds.length)return alert("Select at least one student or choose Entire class.");
-   const {error:de}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(de)throw de;
-   const rows=studentIds.map(student_id=>({assignment_id:assignmentId,student_id}));
-   const {error:ins}=await sb.from("assignment_students").insert(rows);if(ins)throw ins;
-   const {error:up}=await sb.from("assignments").update({class_id:classId}).eq("id",assignmentId).eq("created_by",current.id);if(up)throw up;
-   alert(`Assignment assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome();
- }catch(e){alert("Could not update assignment: "+(e.message||e))}
-}
-
-
-async function callTeacherFn(body){
- const {data:{session}}=await sb.auth.getSession();
- if(!session) throw new Error("Teacher session expired. Please log in again.");
- const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
- const j=await res.json().catch(()=>({}));
- if(!res.ok) throw new Error(j.error||"Request failed");
- return j;
-}
-async function callTeacherFn(body){
- const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error("Please log in again.");
- const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify(body)});
- const j=await res.json().catch(()=>({}));if(!res.ok||j.error)throw new Error(j.error||"Request failed.");return j;
-}
-async function manageStudentAccounts(){
- try{
-  const j=await callTeacherFn({action:"listCredentials"});
-  const students=j.students||[];
-  const mains=new Map();
-  for(const s of students){
-    const memberships=s.memberships||[];
-    // JNVST students should normally have one subgroup membership.
-    // Keep a fallback for legacy/direct main-group memberships.
-    const groups=memberships.length?memberships:[{class_id:"",class_name:"Unassigned",main_group_id:"",main_group_name:"Unassigned",is_subgroup:false}];
-    for(const m of groups){
-      const mainName=m.main_group_name||m.class_name||"Unassigned";
-      if(!mains.has(mainName))mains.set(mainName,new Map());
-      const subs=mains.get(mainName);
-      const subName=m.is_subgroup?(m.class_name||"Unassigned Sub-group"):"Whole Main Group";
-      if(!subs.has(subName))subs.set(subName,[]);
-      if(!subs.get(subName).some(x=>x.id===s.id))subs.get(subName).push({...s,currentMembership:m});
-    }
-  }
-  const mainEntries=[...mains.entries()].sort((a,b)=>{
-    const rank=x=>x==="JNVST-VI (Class-IV)"?0:x==="JNVST-IX (Class IX)"?1:2;
-    return rank(a[0])-rank(b[0])||a[0].localeCompare(b[0]);
-  });
-  const studentRow=s=>{
-    const m=s.currentMembership||{};
-    const targetOptions=(s.available_subgroups||[]).filter(x=>x.is_subgroup && x.main_group_id===m.main_group_id);
-    return `<tr>
-      <td><b>${esc(s.full_name||"Student")}</b></td><td><b>${esc(s.roll_no||"—")}</b></td><td>${esc(s.password||"—")}</td><td>${esc(m.class_name||"—")}</td>
-      <td><div class="actions">
-        ${targetOptions.length?`<select style="min-width:190px" onchange="moveStudentSubgroup('${esc(s.id)}','${esc(m.class_id||"")}','${esc(s.full_name||"Student")}',this.value)"><option value="">Change Sub-Group…</option>${targetOptions.filter(x=>x.class_id!==m.class_id).map(x=>`<option value="${esc(x.class_id)}">${esc(x.class_name)}</option>`).join("")}</select>`:`<span class="small muted">No sub-groups</span>`}
-        <button onclick="changeStudentPassword('${esc(s.id)}','${esc(s.full_name||"Student")}')">Password</button>
-        <button style="background:#dc2626" onclick="deleteStudentAccount('${esc(s.id)}','${esc(s.full_name||"Student")}')">Delete</button>
-      </div></td>
-    </tr>`;
-  };
-  const hierarchy=mainEntries.map(([main,subs])=>{
-    const subHtml=[...subs.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([sub,ss])=>
-      `<details open style="margin:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc">
-        <summary style="cursor:pointer;padding:11px 13px;font-weight:700;color:#1e3a8a">▸ ${esc(sub)} <span class="small muted">(${ss.length} student${ss.length===1?"":"s"})</span></summary>
-        <div style="overflow:auto;padding:0 10px 10px"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Current Sub-Group</th><th>Action</th></tr></thead><tbody>${ss.sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||"")).map(studentRow).join("")}</tbody></table></div>
-      </details>`
-    ).join("");
-    const count=[...subs.values()].reduce((n,x)=>n+x.length,0);
-    return `<details open style="margin:0 0 14px;border:2px solid #dbeafe;border-radius:14px;background:#eff6ff">
-      <summary style="cursor:pointer;padding:14px;font-size:17px;font-weight:800;color:#1d4ed8">📚 ${esc(main)} <span class="small muted">(${count} student${count===1?"":"s"})</span></summary>
-      <div style="padding:0 8px 4px">${subHtml}</div>
-    </details>`;
-  }).join("");
-
-  render(`<div class="wrap">${header("Student Accounts")}
-  <div class="card">
-    <div class="notice"><b>Student Accounts:</b> organised as <b>Main Group → Sub-Group → Students</b>. Roll No is fixed after assignment. Teachers can change the Password and move a student to another sub-group under the same main group.</div>
-    <div style="margin-top:15px">${hierarchy||`<div class="success">No students found.</div>`}</div>
-    <div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
-  </div></div>`);
- }catch(e){alert(e.message||String(e))}
-}
-async function moveStudentSubgroup(studentId,sourceClassId,name,targetClassId){
-  if(!targetClassId)return;
-  const select=document.activeElement;
-  if(!confirm(`Move ${name} to this sub-group?`)){if(select?.tagName==="SELECT")select.value="";return;}
-  try{
-    await callTeacherFn({action:"setStudentJnvstSubgroup",student_id:studentId,source_class_id:sourceClassId,target_class_id:targetClassId});
-    alert(`${name} was moved successfully.`);
-    await manageStudentAccounts();
-  }catch(e){
-    alert("Could not move student.\\n\\n"+(e.message||String(e)));
-    await manageStudentAccounts();
-  }
-}
-async function changeStudentRollNo(){alert("Roll No is fixed and cannot be changed after the student is assigned.");}
-
-async function changeStudentPassword(studentId,name){
-  const v=prompt(`New password for ${name}:`);
-  if(v===null)return;
-  if(v.length<6)return alert("Password must contain at least 6 characters.");
-  try{
-    await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});
-    alert("Password updated successfully.");
-    await manageStudentAccounts();
-  }catch(e){alert(e.message||String(e));}
-}
-async function deleteStudentAccount(studentId,name){
-  if(!confirm(`Delete ${name}'s student account?\n\nThis removes the login account and related application records.`))return;
-  try{
-    await callTeacherFn({action:"deleteStudent",student_id:studentId});
-    alert(`${name} was deleted successfully.`);
-    await manageStudentAccounts();
-  }catch(e){alert("Could not delete student.\n\n"+(e.message||String(e)));}
-}
-
-async function newClass(){return manageJnvstClasses()}
-async function saveClass(){return alert("For JNVST, use Manage JNVST Classes to create a sub-group under Class VI or Class IX.")}
-
-async function addStudent(){
- const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");
- if(error)return alert(error.message); if(!classes?.length){alert("Create a class first.");return newClass()}
- render(`<div class="wrap">${header("Add Student")}<div class="card">
- <label>Student Name</label><input id="sn" placeholder="Student name">
- <label>Roll No</label><input id="sr" type="text" inputmode="numeric" placeholder="e.g. 1">
- <label>Password</label><input id="sp" type="text" placeholder="At least 6 characters">
- <label>Class</label><select id="sc">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
- <div id="sm"></div><div class="actions"><button onclick="createStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="goBack()">← Back</button></div>
- </div></div>`)
-}
-async function createStudent(){
- const {data:{session}}=await sb.auth.getSession(); if(!session)return login();
- const body={name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value};
- if(!body.name||!body.roll_no||!body.password||!body.class_id)return alert("Fill all fields");
- if(body.password.length<6)return alert("Password must contain at least 6 characters.");
- try{
-  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify({action:"createStudents",students:[body]})});
-  const j=await res.json().catch(()=>({})); if(!res.ok||j.error)throw new Error(j.error||"Could not create student.");
-  const r=j.results?.[0]; if(!r?.success)throw new Error(r?.error||"Could not create student.");
-  sm.innerHTML=message(`Student created successfully. Roll No: ${r.roll_no}`,true); setTimeout(teacherHome,900);
- }catch(e){sm.innerHTML=message(e.message||String(e))}
-}
-
-function bulkImportStudents(){
- bulkStudents=[];
- render(`<div class="wrap">${header("Bulk Students — Excel")}<div class="card">
- <p><b>Upload an Excel file with these columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div>
- <p class="muted small">Email is not required. The system creates the internal login account automatically.</p>
- <label>Excel file</label><input id="studentExcel" type="file" accept=".xlsx,.xls" onchange="readStudentExcel(event)">
- <div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Home</button><button class="secondary" onclick="goBack()">← Back</button></div>
- </div></div>`)
-}
-function readStudentExcel(ev){
- const file=ev.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{
-  const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
-  if(!raw.length)throw new Error("The Excel file is empty."); const norm=v=>String(v??"").trim();
-  const headers=raw[0].map(v=>norm(v).toLowerCase().replace(/[_\s]+/g," ")); const col=(...names)=>{for(const x of names){const i=headers.indexOf(x);if(i>=0)return i}return -1};
-  const ni=col("name","student name"),ri=col("roll no","roll number"),ci=col("class","class name"),pi=col("password");
-  if([ni,ri,ci,pi].some(x=>x<0))throw new Error("Required columns: Name, Roll No, Class, Password.");
-  bulkStudents=raw.slice(1).map((row,i)=>({row:i+2,name:norm(row[ni]),roll_no:norm(row[ri]),className:norm(row[ci]),password:norm(row[pi])})).filter(x=>x.name||x.roll_no||x.className||x.password);
-  if(!bulkStudents.length)throw new Error("No student rows found."); const errors=[],seen=new Set();
-  bulkStudents.forEach(x=>{const k=x.className.toLowerCase()+"|"+x.roll_no.toLowerCase();if(!x.name)errors.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errors.push(`Row ${x.row}: Roll No missing`);if(!x.className)errors.push(`Row ${x.row}: Class missing`);if(!x.password)errors.push(`Row ${x.row}: Password missing`);if(x.password&&x.password.length<6)errors.push(`Row ${x.row}: Password must be at least 6 characters`);if(seen.has(k))errors.push(`Row ${x.row}: duplicate Roll No ${x.roll_no} in ${x.className}`);seen.add(k)});
-  if(errors.length){document.getElementById("bulkPreview").innerHTML=message(errors.join(" | "));return;}
-  document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows.</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Class</th><th>Password</th></tr></thead><tbody>${bulkStudents.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td></tr>`).join("")}</tbody></table></div>`;
- }catch(err){document.getElementById("bulkPreview").innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file)
-}
-async function uploadBulkStudents(){
- if(!bulkStudents.length)return alert("Upload an Excel file first."); const {data:classes,error}=await sb.from("classes").select("id,name").eq("teacher_id",current.id);if(error)return alert(error.message);
- const cmap=new Map((classes||[]).map(c=>[c.name.trim().toLowerCase(),c.id]));const missing=[...new Set(bulkStudents.filter(x=>!cmap.has(x.className.toLowerCase())).map(x=>x.className))];if(missing.length)return alert("Class not found: "+missing.join(", "));
- const {data:{session}}=await sb.auth.getSession();const payload=bulkStudents.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase())}));
- const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},body:JSON.stringify({action:"createStudents",students:payload})});
- const j=await res.json().catch(()=>({}));if(!res.ok||j.error)return alert(j.error||"Bulk creation failed");const results=j.results||[],ok=results.filter(x=>x.success),bad=results.filter(x=>!x.success);
- render(`<div class="wrap">${header("Bulk Import Result")}<div class="card"><div class="success">${ok.length} student(s) created successfully.</div>${bad.length?`<div class="notice">${bad.length} row(s) failed.</div><pre>${esc(bad.map(x=>`${x.name||""} — Roll ${x.roll_no||""}: ${x.error}`).join("\n"))}</pre>`:""}<div class="actions"><button onclick="teacherHome()">Back to Dashboard</button><button class="secondary" onclick="bulkImportStudents()">Add More</button></div></div></div>`)
+ const groupId=document.getElementById("rasg")?.value||"";
+ let candidateIds=[];
+ const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
+ const {data:members,error:me}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(me)return alert(me.message);
+ candidateIds=(members||[]).map(x=>x.student_id);
+ if(groupId){const {data:grp,error:ge}=await sb.from("profiles").select("id").eq("school_group_id",groupId).in("id",candidateIds);if(ge)return alert(ge.message);candidateIds=(grp||[]).map(x=>x.id);}
+ if(mode==="students")candidateIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
+ if(!candidateIds.length)return alert("No students selected or available.");
+ const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId).in("student_id",candidateIds);if(ee)return alert(ee.message);
+ const already=new Set((existing||[]).map(x=>x.student_id));
+ const ids=[...new Set(candidateIds)].filter(id=>fresh||!already.has(id));
+ if(!ids.length)return alert("All selected students already have this assignment. Nothing was added.");
+ const rows=ids.map(student_id=>({assignment_id:assignmentId,student_id}));
+ const {error:ie}=await sb.from("assignment_students").insert(rows);if(ie)return alert("Could not assign students: "+ie.message);
+ alert(`${fresh?"Fresh assignment":"Re-assignment"} saved for ${rows.length} student${rows.length===1?"":"s"}.`);
+ return schoolTeacherMode?schoolAssignmentManagement():teacherHome();
 }
 
 async function newAssignment(){
@@ -1471,7 +1404,7 @@ async function newAssignment(){
    </div>
    <div class="small muted">Choose a main group, then assign to the entire main group, one or more sub-groups, or selected individual students.</div>
  </div>`;
- const schoolGroupHtml=`<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="aSubGroup"><option value="">No subdivision</option></select></div></div><div class="small muted">School Course uses Class as Main Group and the subdivision belonging to that class as Sub-Group.</div></div>`;
+ const schoolGroupHtml=`<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="aSubGroup" onchange="loadNewAssignmentClassStudents()"><option value="">No subdivision</option></select></div></div><div class="small muted">School Course uses Class as Main Group and the subdivision belonging to that class as Sub-Group.</div></div>`;
  const assignmentGroupHtml=schoolTeacherMode?schoolGroupHtml:jnvstGroupHtml;
 
  render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New JNVST Assignment")}<div class="card">
@@ -1517,6 +1450,25 @@ async function refreshJnvstAssignmentGroups(preferredSub){
  subs.forEach(c=>cards.push(`<label style="display:block;padding:10px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${esc(c.id)}" onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b><div class="small muted" style="margin-left:25px">Sub-group under ${esc(base?.name||"")}</div></label>`));
  list.innerHTML=cards.join("")||'<div class="notice">No sub-groups have been created under this main group yet. You can still assign the main group.</div>';
 }
+async function refreshSchoolAssignmentSubgroups(preferredSub=""){
+ const main=document.getElementById("aMainGroup"),sub=document.getElementById("aSubGroup"),list=document.getElementById("newAssignmentClassList");
+ if(!main)return;
+ const classId=main.value;
+ let groups=(window._schoolAssignmentGroups||[]).filter(g=>g.class_id===classId);
+ if(!groups.length){
+   const {data,error}=await sb.from("school_course_groups").select("id,name,class_id,description").eq("teacher_id",current.id).eq("class_id",classId).order("name");
+   if(error){if(sub)sub.innerHTML='<option value="">No subdivision</option>';return;}
+   groups=data||[];
+   window._schoolAssignmentGroups=[...(window._schoolAssignmentGroups||[]).filter(g=>g.class_id!==classId),...groups];
+ }
+ if(sub){
+   sub.innerHTML='<option value="">No subdivision</option>'+groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("");
+   if(preferredSub){const byId=[...sub.options].some(o=>o.value===preferredSub),byName=groups.find(g=>g.name===preferredSub);sub.value=byId?preferredSub:(byName?byName.id:"");}
+ }
+ if(list){
+   list.innerHTML=`<label style="display:block;padding:10px;border:1px solid #bfdbfe;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${esc(classId)}" onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>Entire ${esc(main.selectedOptions[0]?.textContent||"class")}</b><div class="small muted" style="margin-left:25px">Class</div></label>`;
+ }
+}
 function toggleAssignmentVideoFields(){const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";const box=document.getElementById("assignmentVideoField");if(box)box.style.display=type==="video"?"block":"none"}
 async function loadNewAssignmentClassStudents(){
  const box=document.getElementById("newAssignmentStudentPicker");if(!box)return;
@@ -1525,8 +1477,13 @@ async function loadNewAssignmentClassStudents(){
  box.innerHTML='<div class="small muted">Loading students...</div>';
  const {data:members,error}=await sb.from("class_students").select("class_id,student_id").in("class_id",classIds);
  if(error){box.innerHTML=message(error.message);return}
- const ids=[...new Set((members||[]).map(x=>x.student_id))];let students=[];
- if(ids.length){const {data:p,error:e}=await sb.from("profiles").select("id,full_name,username").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return}students=p||[]}
+ let ids=[...new Set((members||[]).map(x=>x.student_id))];let students=[];
+ if(ids.length){const {data:p,error:e}=await sb.from("profiles").select("id,full_name,username,roll_no,school_group_id").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return}students=p||[]}
+ if(schoolTeacherMode){
+   const selectedGroup=document.getElementById("aSubGroup")?.value||"";
+   if(selectedGroup)students=students.filter(s=>s.school_group_id===selectedGroup);
+   ids=students.map(s=>s.id);
+ }
  const byClass=new Map();(members||[]).forEach(m=>{if(!byClass.has(m.class_id))byClass.set(m.class_id,[]);byClass.get(m.class_id).push(m.student_id)});
  box.innerHTML=classIds.map(cid=>{const cname=document.querySelector(`.newassign-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid;const list=(byClass.get(cid)||[]).map(id=>students.find(x=>x.id===id)).filter(Boolean);return `<div class="assignment" style="margin:8px 0"><h3 style="margin-bottom:8px">${esc(cname)}</h3><label><input type="radio" name="newassignMode_${cid}" value="class" checked onchange="document.getElementById('newassignStudents_${cid}').style.display='none'" style="width:auto;margin-right:6px">Entire class</label> <label><input type="radio" name="newassignMode_${cid}" value="students" onchange="document.getElementById('newassignStudents_${cid}').style.display='block'" style="width:auto;margin-right:6px">Selected students</label><div id="newassignStudents_${cid}" style="display:none;margin-top:8px">${list.length?`<div class="actions" style="margin-bottom:6px"><button type="button" class="secondary" onclick="selectNewAssignmentStudents('${cid}',true)">Select all</button><button type="button" class="secondary" onclick="selectNewAssignmentStudents('${cid}',false)">Clear all</button></div>${list.map(st=>`<label style="display:block;padding:5px"><input class="newassign-student" data-class-id="${cid}" type="checkbox" value="${st.id}" style="width:auto;margin-right:6px">${esc(st.full_name)} <span class="muted small">${esc(st.username||'')}</span></label>`).join('')}`:'<span class="muted">No students in this class.</span>'}</div></div>`}).join('');
 }
@@ -1573,7 +1530,9 @@ async function saveAssignment(){
  const jnvstMainId=document.getElementById("aMainGroup")?.value||"";
  const jnvstMainClass=(window._newAssignmentClasses||[]).find(c=>c.id===jnvstMainId);
  const selectedSubId=String(document.getElementById("aSubGroup")?.value||"").trim();
- const selectedSubClass=(window._newAssignmentClasses||[]).find(c=>c.id===selectedSubId);
+ const selectedSubClass=schoolTeacherMode
+   ? (window._schoolAssignmentGroups||[]).find(g=>g.id===selectedSubId)
+   : (window._newAssignmentClasses||[]).find(c=>c.id===selectedSubId);
  const selectedRecipientClasses=(recipientInfo.classIds||[]).map(id=>(window._newAssignmentClasses||[]).find(c=>c.id===id)).filter(Boolean);
  const recipientSubNames=[...new Set(selectedRecipientClasses.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))];
  const primaryMainGroup=schoolTeacherMode?(document.getElementById("aMainGroup")?.selectedOptions?.[0]?.textContent||"School Class"):(jnvstMainClass?.name||"JNVST Main Group");
