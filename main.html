@@ -928,49 +928,51 @@ async function saveAssignmentDetails(assignmentId){
 async function editAssignmentGroup(assignmentId){
  const {data:a,error}=await sb.from("assignments").select("id,title,main_group,sub_group,class_id").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
- if(schoolTeacherMode)return alert("School Course assignment groups are managed separately.");
- const {data:classes,error:ce}=await sb.from("classes").select("*").eq("teacher_id",current.id);
+ const {data:classes,error:ce}=await sb.from("classes").select("*").eq("teacher_id",current.id).order("name");
  if(ce)return alert(ce.message);
- const mains=jnvstMainGroups(classes||[]);if(!mains.length)return alert("No JNVST main groups are available.");
  if(schoolTeacherMode){
    const schoolClasses=(classes||[]).filter(c=>String(c.course||"").toUpperCase()==="SCHOOL");
    const {data:groups,error:ge}=await sb.from("school_course_groups").select("id,name,class_id").eq("teacher_id",current.id).order("name");
    if(ge)return alert(ge.message);
-   const classChoices=schoolClasses.map((c,i)=>`${i+1}. ${c.name}`).join("\n");
    const currentClass=schoolClasses.find(c=>c.id===a.class_id)||schoolClasses[0];
-   const className=prompt(`Class for "${a.title}":\n\n${classChoices}\n\nEnter the exact class name.`,currentClass?.name||"");
-   if(className===null)return;
-   const targetClass=schoolClasses.find(c=>c.name===className.trim());
-   if(!targetClass)return alert("Please enter an existing School class.");
-   const subs=(groups||[]).filter(g=>g.class_id===targetClass.id);
-   const choices=subs.length?subs.map((g,i)=>`${i+1}. ${g.name}`).join("\n"):"(No subdivisions)";
-   const subName=prompt(`Subdivision under ${targetClass.name}:\n\n${choices}\n\nLeave blank for the entire class.`,a.sub_group||"");
-   if(subName===null)return;
-   const trimmed=subName.trim(),group=subs.find(g=>g.name===trimmed);
-   if(trimmed&&!group)return alert("Please enter an existing subdivision under the selected class.");
-   const {error:up}=await sb.from("assignments").update({class_id:targetClass.id,main_group:targetClass.name,sub_group:group?.name||""}).eq("id",assignmentId).eq("created_by",current.id);
-   if(up)return alert("Could not update assignment group: "+up.message);
-   alert("Assignment class/subdivision updated successfully.");
-   return schoolAssignmentManagement();
+   if(!currentClass)return alert("No School classes are available.");
+   const names=String(a.sub_group||"").split(/\s*,\s*/).filter(Boolean);
+   render(`<div class="wrap">${header("Edit Assignment Class / Sub-divisions")}<div class="card"><h2>${esc(a.title)}</h2><label>Class / Main Group</label><select id="editSchoolAssignClass" onchange="renderSchoolAssignmentEditGroups()">${schoolClasses.map(c=>`<option value="${esc(c.id)}" ${c.id===currentClass.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select><div id="editSchoolAssignGroups" style="margin-top:12px"></div><div class="actions" style="margin-top:15px"><button onclick="saveSchoolAssignmentGroupEdit('${assignmentId}')">💾 Save Group & Recipients</button><button class="secondary" onclick="schoolAssignmentManagement()">Cancel</button></div></div></div>`);
+   window._editSchoolAssignmentGroups=groups||[];window._editSchoolAssignmentInitialNames=names;window._editSchoolAssignmentInitialClass=currentClass.id;renderSchoolAssignmentEditGroups();
+   return;
  }
- const currentClass=(classes||[]).find(c=>c.id===a.class_id);
- const currentMain=currentClass?(jnvstParentId(currentClass)?(classes||[]).find(c=>c.id===jnvstParentId(currentClass)):currentClass):null;
+ const mains=jnvstMainGroups(classes||[]);if(!mains.length)return alert("No JNVST main groups are available.");
+ const currentClass=(classes||[]).find(c=>c.id===a.class_id);const currentMain=currentClass?(jnvstParentId(currentClass)?(classes||[]).find(c=>c.id===jnvstParentId(currentClass)):currentClass):null;
  const mainChoices=mains.map((m,i)=>`${i+1}. ${m.name}`).join("\n");
- const main=prompt(`Main Group for "${a.title}":\n\n${mainChoices}\n\nEnter the exact main group name.`,currentMain?.name||a.main_group||mains[0].name);
- if(main===null)return;
- const mainTrim=main.trim(),base=mains.find(c=>c.name===mainTrim);
- if(!base)return alert("Please enter an existing main group.");
- const subs=jnvstSubgroupsForMain(classes,base);
- const choices=subs.length?subs.map((c,i)=>`${i+1}. ${c.name}`).join("\n"):"(No sub-groups created yet)";
- const sub=prompt(`Sub-Group under ${base.name}:\n\n${choices}\n\nLeave blank to use the entire main group.`,a.sub_group||"");
- if(sub===null)return;
- const subTrim=sub.trim(),subClass=subs.find(c=>c.name===subTrim);
- if(subTrim&&!subClass)return alert("Please enter an existing sub-group under the selected main group.");
- const targetClass=subClass||base;
- const {error:upError}=await sb.from("assignments").update({class_id:targetClass.id,main_group:base.name,sub_group:subTrim}).eq("id",assignmentId).eq("created_by",current.id);
- if(upError)return alert("Could not update assignment group.\n\n"+(upError.message||upError));
+ const main=prompt(`Main Group for "${a.title}":\n\n${mainChoices}\n\nEnter the exact main group name.`,currentMain?.name||a.main_group||mains[0].name);if(main===null)return;
+ const base=mains.find(c=>c.name===main.trim());if(!base)return alert("Please enter an existing main group.");
+ const subs=jnvstSubgroupsForMain(classes,base);const choices=subs.length?subs.map((c,i)=>`${i+1}. ${c.name}`).join("\n"):"(No sub-groups created yet)";
+ const sub=prompt(`Sub-Group under ${base.name}:\n\n${choices}\n\nLeave blank to use the entire main group.`,a.sub_group||"");if(sub===null)return;
+ const subTrim=sub.trim(),subClass=subs.find(c=>c.name===subTrim);if(subTrim&&!subClass)return alert("Please enter an existing sub-group under the selected main group.");
+ const targetClass=subClass||base;const {error:upError}=await sb.from("assignments").update({class_id:targetClass.id,main_group:base.name,sub_group:subTrim}).eq("id",assignmentId).eq("created_by",current.id);if(upError)return alert("Could not update assignment group.\n\n"+(upError.message||upError));
  alert("Assignment group updated successfully.");await teacherHome();
 }
+function renderSchoolAssignmentEditGroups(){
+ const box=document.getElementById("editSchoolAssignGroups"),classId=document.getElementById("editSchoolAssignClass")?.value;if(!box)return;
+ const groups=(window._editSchoolAssignmentGroups||[]).filter(g=>g.class_id===classId),names=classId===((window._editSchoolAssignmentInitialClass)||classId)?(window._editSchoolAssignmentInitialNames||[]):[];
+ box.innerHTML=`<div class="card" style="background:#f8fafc"><label><input id="editSchoolAssignEntire" type="checkbox" onchange="toggleEditSchoolAssignEntire()" style="width:auto;margin-right:7px"> <b>Entire class</b></label>${groups.map(g=>`<label style="display:block;padding:6px 0"><input class="edit-school-assign-group" type="checkbox" value="${esc(g.id)}" data-name="${esc(g.name)}" ${names.includes(g.name)?"checked":""} onchange="document.getElementById('editSchoolAssignEntire').checked=false" style="width:auto;margin-right:7px">${esc(g.name)}</label>`).join("")}${!groups.length?'<div class="muted">No subdivisions under this class.</div>':''}</div>`;
+}
+function toggleEditSchoolAssignEntire(){if(document.getElementById("editSchoolAssignEntire")?.checked)document.querySelectorAll(".edit-school-assign-group").forEach(x=>x.checked=false)}
+async function saveSchoolAssignmentGroupEdit(assignmentId){
+ const classId=document.getElementById("editSchoolAssignClass")?.value;if(!classId)return alert("Select a class.");
+ const entire=document.getElementById("editSchoolAssignEntire")?.checked||false;
+ const selected=[...document.querySelectorAll(".edit-school-assign-group:checked")].map(x=>({id:x.value,name:x.dataset.name||""}));
+ if(!entire&&!selected.length)return alert("Select Entire class or at least one subdivision.");
+ const {data:members,error:me}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(me)return alert(me.message);
+ let ids=(members||[]).map(x=>x.student_id);
+ if(!entire){const gids=new Set(selected.map(g=>g.id));const {data:profiles,error:pe}=await sb.from("profiles").select("id,school_group_id").in("id",ids);if(pe)return alert(pe.message);ids=(profiles||[]).filter(p=>gids.has(p.school_group_id)).map(p=>p.id)}
+ const subNames=entire?[]:selected.map(g=>g.name);
+ const {error:up}=await sb.from("assignments").update({class_id:classId,main_group:(document.getElementById("editSchoolAssignClass")?.selectedOptions?.[0]?.textContent||""),sub_group:subNames.join(", ")}).eq("id",assignmentId).eq("created_by",current.id);if(up)return alert("Could not update assignment group: "+up.message);
+ const {error:del}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(del)return alert("Group changed, but recipients could not be refreshed: "+del.message);
+ if(ids.length){const {error:ins}=await sb.from("assignment_students").insert([...new Set(ids)].map(student_id=>({assignment_id:assignmentId,student_id})));if(ins)return alert("Group updated, but recipients could not be saved: "+ins.message)}
+ alert(`Assignment group updated. ${ids.length} student${ids.length===1?"":"s"} are now assigned.`);await schoolAssignmentManagement();
+}
+
 async function teacherResultsDashboard(){
   try{
     const [{data:allAssignments,error:ae},{data:allClasses,error:ce},{data:allStudents,error:se}]=await Promise.all([
@@ -1404,13 +1406,13 @@ async function newAssignment(){
    </div>
    <div class="small muted">Choose a main group, then assign to the entire main group, one or more sub-groups, or selected individual students.</div>
  </div>`;
- const schoolGroupHtml=`<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="aSubGroup" onchange="loadNewAssignmentClassStudents()"><option value="">No subdivision</option></select></div></div><div class="small muted">School Course uses Class as Main Group and the subdivision belonging to that class as Sub-Group.</div></div>`;
+ const schoolGroupHtml=`<div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3 style="margin-top:0">Assignment Group</h3><div class="grid"><div><label>Class / Main Group</label><select id="aMainGroup" onchange="refreshSchoolAssignmentSubgroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-divisions / Sub-groups</label><div id="aSubGroups" class="small" style="border:1px solid #cbd5e1;border-radius:10px;padding:8px;background:#fff;max-height:180px;overflow:auto"><span class="muted">Loading subdivisions...</span></div></div></div><div class="small muted" style="margin-top:8px">Select the whole class, one subdivision, or <b>multiple subdivisions</b> under the selected class. You can also select individual students below.</div></div>`;
  const assignmentGroupHtml=schoolTeacherMode?schoolGroupHtml:jnvstGroupHtml;
 
  render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New JNVST Assignment")}<div class="card">
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
  ${assignmentGroupHtml}
- <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To</h3><p class="small muted">${schoolTeacherMode?"Select one or more School Course classes.":"Select students/classes under the selected JNVST main group. The fixed main group and its teacher-created sub-groups are shown below."}</p>
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To</h3><p class="small muted">${schoolTeacherMode?"Select the School Course class, then choose the entire class or one/multiple subdivisions.":"Select students/classes under the selected JNVST main group. The fixed main group and its teacher-created sub-groups are shown below."}</p>
   <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all shown</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div>
   <div id="newAssignmentClassList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px"></div>
   <div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div>
@@ -1427,7 +1429,7 @@ async function newAssignment(){
      await refreshJnvstAssignmentGroups(d.subGroup||"");
    }else{
      document.getElementById("aMainGroup").value=d.mainGroup||document.getElementById("aMainGroup").value;
-     await refreshSchoolAssignmentSubgroups();if(document.getElementById("aSubGroup"))document.getElementById("aSubGroup").value=d.subGroup||"";
+     await refreshSchoolAssignmentSubgroups(d.subGroup||"");
    }
    document.getElementById("qs").innerHTML="";const notice=document.createElement("div");notice.className="success";notice.innerHTML=`<b>${importedQuestions.length} question(s) imported.</b> They will be added when you click <b>Save & Assign</b>.`;document.getElementById("qs").appendChild(notice);
    await loadNewAssignmentClassStudents();
@@ -1436,7 +1438,7 @@ async function newAssignment(){
  }else{
    addQ();addQ();
    await (schoolTeacherMode?refreshSchoolAssignmentSubgroups():refreshJnvstAssignmentGroups());
-   document.querySelector('.newassign-class')?.click();
+   if(!schoolTeacherMode)document.querySelector('.newassign-class')?.click();
  }
 }
 
@@ -1451,55 +1453,80 @@ async function refreshJnvstAssignmentGroups(preferredSub){
  list.innerHTML=cards.join("")||'<div class="notice">No sub-groups have been created under this main group yet. You can still assign the main group.</div>';
 }
 async function refreshSchoolAssignmentSubgroups(preferredSub=""){
- const main=document.getElementById("aMainGroup"),sub=document.getElementById("aSubGroup"),list=document.getElementById("newAssignmentClassList");
+ const main=document.getElementById("aMainGroup"),subBox=document.getElementById("aSubGroups"),list=document.getElementById("newAssignmentClassList");
  if(!main)return;
  const classId=main.value;
  let groups=(window._schoolAssignmentGroups||[]).filter(g=>g.class_id===classId);
  if(!groups.length){
    const {data,error}=await sb.from("school_course_groups").select("id,name,class_id,description").eq("teacher_id",current.id).eq("class_id",classId).order("name");
-   if(error){if(sub)sub.innerHTML='<option value="">No subdivision</option>';return;}
+   if(error){if(subBox)subBox.innerHTML='<span class="muted">Could not load subdivisions.</span>';return;}
    groups=data||[];
    window._schoolAssignmentGroups=[...(window._schoolAssignmentGroups||[]).filter(g=>g.class_id!==classId),...groups];
  }
- if(sub){
-   sub.innerHTML='<option value="">No subdivision</option>'+groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("");
-   if(preferredSub){const byId=[...sub.options].some(o=>o.value===preferredSub),byName=groups.find(g=>g.name===preferredSub);sub.value=byId?preferredSub:(byName?byName.id:"");}
+ const preferred=preferredSub?String(preferredSub).split(/\s*,\s*/).filter(Boolean):[];
+ if(subBox){
+   subBox.innerHTML=`<label style="display:block;padding:6px 4px;border-bottom:1px solid #e2e8f0"><input id="aEntireClass" type="checkbox" value="" onchange="toggleSchoolAssignmentEntireClass()" style="width:auto;margin-right:7px"><b>Entire class</b><span class="muted small"> — all students in ${esc(main.selectedOptions[0]?.textContent||"class")}</span></label>`+
+     (groups.length?groups.map(g=>`<label style="display:block;padding:6px 4px"><input class="schoolassign-subgroup" type="checkbox" value="${esc(g.id)}" data-name="${esc(g.name)}" onchange="loadNewAssignmentClassStudents()" ${preferred.includes(g.id)||preferred.includes(g.name)?"checked":""} style="width:auto;margin-right:7px">${esc(g.name)}</label>`).join(""):'<div class="muted" style="padding:6px">No subdivisions have been created under this class.</div>');
  }
  if(list){
-   list.innerHTML=`<label style="display:block;padding:10px;border:1px solid #bfdbfe;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${esc(classId)}" onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>Entire ${esc(main.selectedOptions[0]?.textContent||"class")}</b><div class="small muted" style="margin-left:25px">Class</div></label>`;
+   list.innerHTML=`<label style="display:block;padding:10px;border:1px solid #bfdbfe;border-radius:10px;background:#fff"><input class="newassign-class" type="checkbox" value="${esc(classId)}" checked onchange="loadNewAssignmentClassStudents()" style="width:auto;margin-right:8px"><b>${esc(main.selectedOptions[0]?.textContent||"class")}</b><div class="small muted" style="margin-left:25px">School main group</div></label>`;
  }
+ await loadNewAssignmentClassStudents();
 }
+function toggleSchoolAssignmentEntireClass(){
+ const all=document.getElementById("aEntireClass");
+ const boxes=[...document.querySelectorAll(".schoolassign-subgroup")];
+ if(all?.checked)boxes.forEach(x=>x.checked=false);
+ loadNewAssignmentClassStudents();
+}
+function getSelectedSchoolAssignmentSubgroups(){
+ return [...document.querySelectorAll(".schoolassign-subgroup:checked")].map(x=>({id:x.value,name:x.dataset.name||""}));
+}
+
 function toggleAssignmentVideoFields(){const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";const box=document.getElementById("assignmentVideoField");if(box)box.style.display=type==="video"?"block":"none"}
 async function loadNewAssignmentClassStudents(){
  const box=document.getElementById("newAssignmentStudentPicker");if(!box)return;
  const classIds=[...document.querySelectorAll('.newassign-class:checked')].map(x=>x.value);
- if(!classIds.length){box.innerHTML='<div class="notice">No classes selected. Select one or more classes above.</div>';return}
+ if(!classIds.length){box.innerHTML='<div class="notice">Select a class above.</div>';return}
  box.innerHTML='<div class="small muted">Loading students...</div>';
  const {data:members,error}=await sb.from("class_students").select("class_id,student_id").in("class_id",classIds);
  if(error){box.innerHTML=message(error.message);return}
- let ids=[...new Set((members||[]).map(x=>x.student_id))];let students=[];
+ let ids=[...new Set((members||[]).map(x=>x.student_id))],students=[];
  if(ids.length){const {data:p,error:e}=await sb.from("profiles").select("id,full_name,username,roll_no,school_group_id").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return}students=p||[]}
  if(schoolTeacherMode){
-   const selectedGroup=document.getElementById("aSubGroup")?.value||"";
-   if(selectedGroup)students=students.filter(s=>s.school_group_id===selectedGroup);
+   const selectedGroups=getSelectedSchoolAssignmentSubgroups();
+   const entire=document.getElementById("aEntireClass")?.checked||false;
+   if(selectedGroups.length&&!entire){const gid=new Set(selectedGroups.map(g=>g.id));students=students.filter(s=>gid.has(s.school_group_id));}
    ids=students.map(s=>s.id);
  }
  const byClass=new Map();(members||[]).forEach(m=>{if(!byClass.has(m.class_id))byClass.set(m.class_id,[]);byClass.get(m.class_id).push(m.student_id)});
- box.innerHTML=classIds.map(cid=>{const cname=document.querySelector(`.newassign-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid;const list=(byClass.get(cid)||[]).map(id=>students.find(x=>x.id===id)).filter(Boolean);return `<div class="assignment" style="margin:8px 0"><h3 style="margin-bottom:8px">${esc(cname)}</h3><label><input type="radio" name="newassignMode_${cid}" value="class" checked onchange="document.getElementById('newassignStudents_${cid}').style.display='none'" style="width:auto;margin-right:6px">Entire class</label> <label><input type="radio" name="newassignMode_${cid}" value="students" onchange="document.getElementById('newassignStudents_${cid}').style.display='block'" style="width:auto;margin-right:6px">Selected students</label><div id="newassignStudents_${cid}" style="display:none;margin-top:8px">${list.length?`<div class="actions" style="margin-bottom:6px"><button type="button" class="secondary" onclick="selectNewAssignmentStudents('${cid}',true)">Select all</button><button type="button" class="secondary" onclick="selectNewAssignmentStudents('${cid}',false)">Clear all</button></div>${list.map(st=>`<label style="display:block;padding:5px"><input class="newassign-student" data-class-id="${cid}" type="checkbox" value="${st.id}" style="width:auto;margin-right:6px">${esc(st.full_name)} <span class="muted small">${esc(st.username||'')}</span></label>`).join('')}`:'<span class="muted">No students in this class.</span>'}</div></div>`}).join('');
+ box.innerHTML=classIds.map(cid=>{const cname=document.querySelector(`.newassign-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid;const list=(byClass.get(cid)||[]).map(id=>students.find(x=>x.id===id)).filter(Boolean);return `<div class="assignment" style="margin:8px 0"><h3 style="margin-bottom:8px">${esc(cname)}</h3><div class="small muted" style="margin-bottom:8px">${schoolTeacherMode?((document.getElementById("aEntireClass")?.checked)?"Entire class":(getSelectedSchoolAssignmentSubgroups().length?`Selected subdivisions: ${getSelectedSchoolAssignmentSubgroups().map(g=>esc(g.name)).join(", ")}`:"Entire class")):"Choose recipients"}</div><label><input type="radio" name="newassignMode_${cid}" value="class" checked onchange="document.getElementById('newassignStudents_${cid}').style.display='none'" style="width:auto;margin-right:6px">Entire selected group</label> <label><input type="radio" name="newassignMode_${cid}" value="students" onchange="document.getElementById('newassignStudents_${cid}').style.display='block'" style="width:auto;margin-right:6px">Selected students</label><div id="newassignStudents_${cid}" style="display:none;margin-top:8px">${list.length?`<div class="actions" style="margin-bottom:6px"><button type="button" class="secondary" onclick="selectNewAssignmentStudents('${cid}',true)">Select all</button><button type="button" class="secondary" onclick="selectNewAssignmentStudents('${cid}',false)">Clear all</button></div>${list.map(st=>`<label style="display:block;padding:5px"><input class="newassign-student" data-class-id="${cid}" type="checkbox" value="${st.id}" style="width:auto;margin-right:6px">${esc(st.full_name)} <span class="muted small">${esc(st.roll_no||st.username||'')}</span></label>`).join('')}`:'<span class="muted">No students in the selected group.</span>'}</div></div>`}).join('');
 }
+
 function selectNewAssignmentStudents(classId,value){document.querySelectorAll(`.newassign-student[data-class-id="${classId}"]`).forEach(x=>x.checked=value)}
 async function getNewAssignmentRecipients(){
  const classIds=[...document.querySelectorAll('.newassign-class:checked')].map(x=>x.value);if(!classIds.length)throw new Error('Select at least one class or sub-group.');
- if(!schoolTeacherMode){
-   const selectedMainId=document.getElementById("aMainGroup")?.value||"";
-   const selectedMain=(window._newAssignmentClasses||[]).find(c=>c.id===selectedMainId);
-   const valid=new Set([selectedMain?.id,...jnvstSubgroupsForMain(window._newAssignmentClasses||[],selectedMain).map(c=>c.id)].filter(Boolean));
-   if(classIds.some(id=>!valid.has(id)))throw new Error('Please select groups/sub-groups only from the selected main group.');
+ if(schoolTeacherMode){
+   const classId=document.getElementById("aMainGroup")?.value||classIds[0];
+   const selectedGroups=getSelectedSchoolAssignmentSubgroups();
+   const entire=document.getElementById("aEntireClass")?.checked||false;
+   const {data:members,error:me}=await sb.from('class_students').select('student_id').eq('class_id',classId);if(me)throw me;
+   let candidateIds=[...(members||[])].map(x=>x.student_id);
+   if(selectedGroups.length&&!entire){const gids=new Set(selectedGroups.map(g=>g.id));const {data:p,error:pe}=await sb.from('profiles').select('id').in('id',candidateIds);if(pe)throw pe;candidateIds=(p||[]).filter(x=>gids.has(x.school_group_id)).map(x=>x.id)}
+   const mode=document.querySelector(`input[name="newassignMode_${classId}"]:checked`)?.value||'class';
+   if(mode==='students')candidateIds=[...document.querySelectorAll(`.newassign-student[data-class-id="${classId}"]:checked`)].map(x=>x.value);
+   if(!candidateIds.length)throw new Error('No students are available in the selected class/subdivision(s).');
+   return {classIds:[classId],recipients:candidateIds.map(student_id=>({class_id:classId,student_id})),studentIds:[...new Set(candidateIds)],schoolGroupIds:selectedGroups.map(g=>g.id),schoolGroupNames:selectedGroups.map(g=>g.name)};
  }
+ const selectedMainId=document.getElementById("aMainGroup")?.value||"";
+ const selectedMain=(window._newAssignmentClasses||[]).find(c=>c.id===selectedMainId);
+ const valid=new Set([selectedMain?.id,...jnvstSubgroupsForMain(window._newAssignmentClasses||[],selectedMain).map(c=>c.id)].filter(Boolean));
+ if(classIds.some(id=>!valid.has(id)))throw new Error('Please select groups/sub-groups only from the selected main group.');
  const recipients=[];
  for(const cid of classIds){const mode=document.querySelector(`input[name="newassignMode_${cid}"]:checked`)?.value||'class';let ids=[];if(mode==='class'){const {data,error}=await sb.from('class_students').select('student_id').eq('class_id',cid);if(error)throw error;ids=(data||[]).map(x=>x.student_id)}else ids=[...document.querySelectorAll(`.newassign-student[data-class-id="${cid}"]:checked`)].map(x=>x.value);if(!ids.length)throw new Error(`No students selected in class ${document.querySelector(`.newassign-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid}.`);ids.forEach(student_id=>recipients.push({class_id:cid,student_id}))}
  const unique=[];const seen=new Set();recipients.forEach(r=>{if(!seen.has(r.student_id)){seen.add(r.student_id);unique.push(r)}});return {classIds,recipients:unique,studentIds:unique.map(x=>x.student_id)};
 }
+
 // Legacy single-class helpers retained for imported-question workflows.
 async function loadAssignmentStudents(classId){
  const box=document.getElementById("studentPicker");if(!box)return;
@@ -1531,12 +1558,14 @@ async function saveAssignment(){
  const jnvstMainClass=(window._newAssignmentClasses||[]).find(c=>c.id===jnvstMainId);
  const selectedSubId=String(document.getElementById("aSubGroup")?.value||"").trim();
  const selectedSubClass=schoolTeacherMode
-   ? (window._schoolAssignmentGroups||[]).find(g=>g.id===selectedSubId)
+   ? null
    : (window._newAssignmentClasses||[]).find(c=>c.id===selectedSubId);
  const selectedRecipientClasses=(recipientInfo.classIds||[]).map(id=>(window._newAssignmentClasses||[]).find(c=>c.id===id)).filter(Boolean);
  const recipientSubNames=[...new Set(selectedRecipientClasses.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))];
  const primaryMainGroup=schoolTeacherMode?(document.getElementById("aMainGroup")?.selectedOptions?.[0]?.textContent||"School Class"):(jnvstMainClass?.name||"JNVST Main Group");
- const primarySubGroup=schoolTeacherMode?selectedSubClass?.name||"":(selectedSubClass?.name|| (recipientSubNames.length===1?recipientSubNames[0]:recipientSubNames.length>1?"Multiple Sub-groups":""));
+ const primarySubGroup=schoolTeacherMode
+   ? (recipientInfo.schoolGroupNames?.length?recipientInfo.schoolGroupNames.join(", "):"")
+   : (selectedSubClass?.name|| (recipientSubNames.length===1?recipientSubNames[0]:recipientSubNames.length>1?"Multiple Sub-groups":""));
  const {data:a,error}=await sb.from("assignments").insert({class_id:primaryClassId,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,assignment_type:assignmentType,time_limit:mockTime,shuffle_questions:shuffleQuestions,shuffle_options:shuffleOptions,main_group:primaryMainGroup,sub_group:primarySubGroup,created_by:current.id}).select().single();if(error)return alert(error.message);
  let qs=[];
  if(importedForNewAssignment&&importedQuestions.length){
@@ -1561,7 +1590,7 @@ function startBulkImportFromNewAssignment(){
   assignMode:document.querySelector('input[name="assignMode"]:checked')?.value||"class",
   selectedStudents:[...document.querySelectorAll(".newassign-student:checked")].map(x=>x.value),
   mainGroup:document.getElementById("aMainGroup")?.value||(schoolTeacherMode?"":"JNVST-VI"),
-  subGroup:document.getElementById("aSubGroup")?.value||"",
+  subGroup:([...(document.querySelectorAll(".schoolassign-subgroup:checked")||[])].map(x=>x.value)).join(","),
   title:document.getElementById("at")?.value||"",
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
@@ -2111,21 +2140,17 @@ async function schoolStudentAssessments(){
   </div>`);
 
   try{
-    // Load the student's class memberships and assessments in parallel.
-    const [{data:members,error:me},{data:assessments,error:ae}]=await Promise.all([
-      sb.from("class_students").select("class_id").eq("student_id",current.id),
+    // School assessments are now explicitly assigned through school_assessment_students.
+    const [{data:links,error:le},{data:assessments,error:ae}]=await Promise.all([
+      sb.from("school_assessment_students").select("assessment_id").eq("student_id",current.id),
       sb.from("school_assessments")
         .select("id,title,subject,deadline,school_group_id,class_id,created_at")
         .order("created_at",{ascending:false})
     ]);
-    if(me)throw me;
+    if(le)throw le;
     if(ae)throw ae;
-
-    const classIds=new Set((members||[]).map(x=>x.class_id));
-    const allowed=(assessments||[]).filter(a=>{
-      if(!a.class_id || !classIds.has(a.class_id))return false;
-      return !a.school_group_id || a.school_group_id===profile.school_group_id;
-    });
+    const assignedIds=new Set((links||[]).map(x=>x.assessment_id));
+    const allowed=(assessments||[]).filter(a=>assignedIds.has(a.id));
 
     const aidList=allowed.map(a=>a.id);
     let submissions=[];

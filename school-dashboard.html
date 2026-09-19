@@ -40,9 +40,14 @@ async function init(){
 }
 async function schoolHome(){
  const assessmentOnly=new URLSearchParams(location.search).get('view')==='assessments';
- const {data:assessments,error}=await sb.from('school_assessments').select('*').order('created_at',{ascending:false});
- if(error)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(error.message)}</div></div>`);
- const allowed=(assessments||[]).filter(a=>a.class_id&&a.school_group_id?(a.school_group_id===profile.school_group_id):a.class_id&&studentClassIds.has(a.class_id));
+ const [{data:links,error:le},{data:assessments,error:ae}]=await Promise.all([
+   sb.from('school_assessment_students').select('assessment_id').eq('student_id',current.id),
+   sb.from('school_assessments').select('*').order('created_at',{ascending:false})
+ ]);
+ if(le)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(le.message)}</div></div>`);
+ if(ae)return render(`${header('School Dashboard')}<div class="card"><div class="notice">${esc(ae.message)}</div></div>`);
+ const assignedIds=new Set((links||[]).map(x=>x.assessment_id));
+ const allowed=(assessments||[]).filter(a=>assignedIds.has(a.id));
 
   // Get the actual number of questions in each assessment.
   const assessmentIds=allowed.map(a=>a.id);
@@ -89,8 +94,9 @@ async function loadStudentClasses(){
 async function openAssessment(id){
  const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).single();
  if(ae||!a)return alert(ae?.message||'Assessment not found.');
- if(a.school_group_id&&a.school_group_id!==profile.school_group_id)return alert('This assessment is assigned to another subdivision.');
- if(!studentClassIds.has(a.class_id))return alert('This assessment is not assigned to your class.');
+ const {data:recipient,error:re}=await sb.from('school_assessment_students').select('id').eq('assessment_id',id).eq('student_id',current.id).maybeSingle();
+ if(re)return alert(re.message);
+ if(!recipient)return alert('This assessment is not assigned to you.');
  currentAssessmentId=id;currentAssessmentTitle=a.title;
  const [{data:q,error:qe},{data:subs,error:se}]=await Promise.all([
    sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order'),

@@ -14,6 +14,7 @@ function home(){document.getElementById('app').innerHTML=`${header('School Teach
 <button onclick="bulkQuestionUpload()">📥 Bulk Questions Upload</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ Create Assignment</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=manageAssignments'">✎ Manage Assignments</button>
+<button onclick="manageSchoolAssessments()">📝 Manage School Assessments</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=mockTestManagement'">🎯 Create / Manage Mock Test</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=teacherResultsDashboard'">📊 Assignment Results</button>
 <button onclick="addStudent()">+ Add Student</button>
@@ -23,7 +24,7 @@ function home(){document.getElementById('app').innerHTML=`${header('School Teach
 <button onclick="manageGroups()">▣ School Course Sub-divisions</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=downloadAllResultsExcel'">⬇ All Results (Excel)</button>
 </div>
-</div><div class="card" style="border:2px solid #2563eb;background:#fbfdff"><h2>📝 School Assessments</h2><p class="muted">Create assessments, add questions individually, or upload many questions at once.</p>${assessments.length?assessments.map(a=>`<div class="student-card"><h3>${esc(a.title)}</h3><div class="muted">${esc(a.subject||'')} ${a.total_marks?`• ${a.total_marks} marks`:''}</div><div class="actions" style="margin-top:9px"><button onclick="editQuestions('${a.id}')">✎ Questions & Solutions</button><button onclick="editAssessmentDetails('${a.id}')">⚙ Edit</button><button onclick="reviewAssessment('${a.id}')">📊 Review Submissions</button><button onclick="reassignSchoolAssessment('${a.id}')">↻ Reassign</button><button class="secondary" onclick="deleteAssessment('${a.id}')">Delete</button></div></div>`).join(''):'<p class="muted">No School assessments yet.</p>'}<div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button></div></div>`}
+</div><div class="card" style="border:2px solid #2563eb;background:#fbfdff"><h2>📝 School Assessments</h2><p class="muted">Create assessments, add questions, upload questions, review submissions, and manage recipients.</p><div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button><button onclick="manageSchoolAssessments()">📝 Manage School Assessments</button></div></div>`}
 function addStudent(){if(!classes.length)return alert('Create a School class first.');document.getElementById('app').innerHTML=`${header('Add School Student')}<div class="card"><label>Student Name</label><input id="sn"><label>Roll No</label><input id="sr"><label>Password</label><input id="sp" type="text" placeholder="At least 6 characters"><label>Class</label><select id="sc" onchange="refreshSchoolStudentGroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>School Course Sub-division</label><select id="sg"></select><div id="sm"></div><div class="actions" style="margin-top:12px"><button onclick="saveStudent()">Create Student</button><button class="secondary" onclick="home()">Cancel</button></div></div>`;refreshSchoolStudentGroups()}
 function refreshSchoolStudentGroups(){const classId=document.getElementById('sc')?.value,sel=document.getElementById('sg');if(!sel)return;const opts=groups.filter(g=>g.class_id===classId).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');sel.innerHTML='<option value="">No subdivision</option>'+opts}
 async function saveStudent(){try{const j=await fn({action:'createStudents',students:[{name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value,course:'SCHOOL',school_group_id:sg.value||null}]});const r=j.results?.[0];if(!r?.success)throw Error(r?.error||'Could not create student');alert('Student created successfully.');await load();home()}catch(e){sm.innerHTML=msg(e.message)}}
@@ -332,6 +333,66 @@ async function saveBulkAssessmentQuestions(){
   }
 }
 
+async function manageSchoolAssessments(){
+ try{
+  const [{data:rows,error:ae},{data:cls,error:ce},{data:grps,error:ge}]=await Promise.all([
+   sb.from('school_assessments').select('*').eq('created_by',teacher.id).order('created_at',{ascending:false}),
+   sb.from('classes').select('id,name').eq('teacher_id',teacher.id).eq('course','SCHOOL').order('name'),
+   sb.from('school_course_groups').select('id,name,class_id').eq('teacher_id',teacher.id).order('name')
+  ]);
+  if(ae)throw ae;if(ce)throw ce;if(ge)throw ge;
+  const list=rows||[], classesLocal=cls||[], groupsLocal=grps||[];
+  const qCount=new Map(), rCount=new Map();
+  if(list.length){
+   const ids=list.map(x=>x.id);
+   const [{data:q,error:qe},{data:s,error:se}]=await Promise.all([
+    sb.from('school_questions').select('assessment_id').in('assessment_id',ids),
+    sb.from('school_assessment_students').select('assessment_id,student_id').in('assessment_id',ids)
+   ]);
+   if(qe)throw qe;if(se)throw se;
+   (q||[]).forEach(x=>qCount.set(x.assessment_id,(qCount.get(x.assessment_id)||0)+1));
+   (s||[]).forEach(x=>rCount.set(x.assessment_id,(rCount.get(x.assessment_id)||0)+1));
+  }
+  window._schoolAssessmentRows=list;window._schoolAssessmentClasses=classesLocal;window._schoolAssessmentGroups=groupsLocal;
+  const cards=list.map(a=>{
+   const c=classesLocal.find(x=>x.id===a.class_id),g=groupsLocal.find(x=>x.id===a.school_group_id);
+   return `<div class="student-card school-assessment-row" data-class="${esc(a.class_id||'')}" data-group="${esc(a.school_group_id||'')}" data-group-name="${esc(g?.name||'Entire class')}">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+      <div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||'No subject')} • ${qCount.get(a.id)||0} question(s) • ${rCount.get(a.id)||0} recipient(s)</div></div>
+      <div class="actions"><span class="tag">${esc(c?.name||'Class')}</span><span class="tag">${esc(g?.name||'Entire class')}</span></div>
+    </div>
+    <div class="small muted" style="margin-top:7px">${a.deadline?'Deadline: '+new Date(a.deadline).toLocaleString()+' • ':''}Created: ${a.created_at?new Date(a.created_at).toLocaleString():'—'}</div>
+    <div class="actions" style="margin-top:10px">
+      <button onclick="editAssessmentDetails('${a.id}')">⚙ Edit Details</button>
+      <button onclick="editQuestions('${a.id}')">✎ Questions & Solutions</button>
+      <button onclick="manageSchoolAssessmentRecipients('${a.id}')">👥 Manage Recipients</button>
+      <button onclick="reviewAssessment('${a.id}')">📊 Review Submissions</button>
+      <button onclick="reassignSchoolAssessment('${a.id}')">↻ Reopen / Reassign</button>
+      <button class="secondary" onclick="reassignSchoolAssessmentFresh('${a.id}')">↻ Fresh Assign</button>
+      <button class="danger" onclick="deleteAssessment('${a.id}')">Delete</button>
+    </div>
+   </div>`;
+  }).join('');
+  document.getElementById('app').innerHTML=`${header('Manage School Assessments')}
+   <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0">📝 School Assessment Management</h2><p class="muted" style="margin:7px 0 0">Edit assessments, questions and solutions; manage recipients; review submissions; reopen assessments or make a fresh assignment.</p></div>
+   <div class="card"><div class="grid"><div><label>Class</label><select id="saClassFilter" onchange="filterSchoolAssessments()"><option value="all">All Classes</option>${classesLocal.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></div><div><label>Sub-division</label><select id="saGroupFilter" onchange="filterSchoolAssessments()"><option value="all">All Sub-divisions</option>${groupsLocal.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('')}</select></div></div></div>
+   <div class="card"><h2>Existing School Assessments</h2><div id="schoolAssessmentsManageList">${cards||'<p class="muted">No School assessments yet.</p>'}</div></div>
+   <div class="actions"><button onclick="newAssessment()">+ New School Assessment</button><button class="secondary" onclick="home()">← Dashboard</button></div>`;
+ }catch(e){document.getElementById('app').innerHTML=`${header('Manage School Assessments')}<div class="card">${msg('Could not load School Assessments: '+(e.message||e))}</div>`}
+}
+function filterSchoolAssessments(){
+ const c=document.getElementById('saClassFilter')?.value||'all',g=document.getElementById('saGroupFilter')?.value||'all';
+ document.querySelectorAll('#schoolAssessmentsManageList .school-assessment-row').forEach(r=>{r.style.display=(c==='all'||r.dataset.class===c)&&(g==='all'||r.dataset.group===g)?'block':'none';});
+}
+async function manageSchoolAssessmentRecipients(id){
+ const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);
+ const {data:links,error:le}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id);if(le)return alert(le.message);
+ const ids=(links||[]).map(x=>x.student_id);
+ const {data:ps,error:pe}=ids.length?await sb.from('profiles').select('id,full_name,roll_no,school_group_id').in('id',ids).order('full_name'):{data:[],error:null};if(pe)return alert(pe.message);
+ const group=groups.find(g=>g.id===a.school_group_id),cls=classes.find(c=>c.id===a.class_id);
+ document.getElementById('app').innerHTML=`${header('Recipients — '+esc(a.title))}<div class="card"><div class="notice">Current target: <b>${esc(cls?.name||'Class')}</b> → <b>${esc(group?.name||'Entire class')}</b>. Use <b>Re-assign Missing</b> to add students who are not already recipients, or <b>Fresh Assign</b> to replace all previous recipients and reset their current submissions.</div><div class="actions"><button onclick="reassignSchoolAssessment('${id}')">↻ Re-assign Missing</button><button class="secondary" onclick="reassignSchoolAssessmentFresh('${id}')">↻ Fresh Assign</button><button class="secondary" onclick="manageSchoolAssessments()">← Manage Assessments</button></div></div><div class="card"><h2>Recipients (${ps?.length||0})</h2>${(ps||[]).map(s=>`<div class="student-card"><b>${esc(s.full_name)}</b><span class="muted"> — ${esc(s.roll_no||'')}</span></div>`).join('')||'<p class="muted">No recipients yet.</p>'}</div>`;
+}
+function reassignSchoolAssessmentFresh(id){ return reassignSchoolAssessment(id,{fresh:true}); }
 async function newAssessment(){
  document.getElementById('app').innerHTML=`${header('New School Assessment')}<div class="card">
  <label>Assessment Name</label><input id="at" placeholder="Mathematics Unit Test 1">
@@ -352,12 +413,19 @@ async function newAssessment(){
  refreshAssessmentGroups();
 }
 function refreshAssessmentGroups(){const classId=document.getElementById('ac')?.value||'',sel=document.getElementById('ag');if(!sel)return;const gs=groups.filter(g=>g.class_id===classId);sel.innerHTML='<option value="">Entire class</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}
+async function seedSchoolAssessmentRecipients(assessmentId,classId,groupId=null){
+ const {data:members,error:me}=await sb.from('class_students').select('student_id').eq('class_id',classId);if(me)throw me;
+ let ids=(members||[]).map(x=>x.student_id);
+ if(groupId){const {data:gp,error:ge}=await sb.from('profiles').select('id').eq('school_group_id',groupId).in('id',ids);if(ge)throw ge;ids=(gp||[]).map(x=>x.id);}
+ if(ids.length){const {error}=await sb.from('school_assessment_students').insert(ids.map(student_id=>({assessment_id:assessmentId,student_id})));if(error && !String(error.message||'').toLowerCase().includes('duplicate'))throw error;}
+}
 async function saveAssessment(){
  if(!at.value.trim())return alert('Enter assessment name.');
  if(!ac.value)return alert('Select a class.');
  const payload={title:at.value.trim(),subject:as.value.trim(),class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id};
  const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
  if(error)return alert(error.message);
+ try{await seedSchoolAssessmentRecipients(data.id,payload.class_id,payload.school_group_id);}catch(e){await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);return alert('Could not assign assessment recipients: '+(e.message||e));}
  await load();
  editQuestions(data.id);
 }
@@ -367,6 +435,7 @@ async function saveAssessmentAndBulk(){
  const payload={title:at.value.trim(),subject:as.value.trim(),class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id};
  const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
  if(error)return alert(error.message);
+ try{await seedSchoolAssessmentRecipients(data.id,payload.class_id,payload.school_group_id);}catch(e){await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);return alert('Could not assign assessment recipients: '+(e.message||e));}
  await load();
  bulkQuestionUpload(data.id);
 }
@@ -390,22 +459,25 @@ function solutionListHtml(qid,solutions){
 async function editAssessmentDetails(id){
  const {data:a,error}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
  if(error||!a)return alert(error?.message||'Assessment not found.');
- const cls=classes.find(c=>c.id===a.class_id),group=groups.find(g=>g.id===a.school_group_id);
  const localDeadline=a.deadline?new Date(a.deadline).toISOString().slice(0,16):'';
  document.getElementById('app').innerHTML=`${header('Edit Assessment — '+esc(a.title))}<div class="card">
  <label>Assessment Name</label><input id="ea_title" value="${esc(a.title||'')}">
  <label>Subject</label><input id="ea_subject" value="${esc(a.subject||'')}">
- <label>Class</label><select id="ea_class" disabled><option>${esc(cls?.name||'—')}</option></select>
- <label>Sub-division</label><input value="${esc(group?.name||'Entire class')}" disabled>
+ <label>Class</label><select id="ea_class" onchange="refreshEditAssessmentGroups()">${classes.map(c=>`<option value="${c.id}" ${c.id===a.class_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+ <label>Sub-division</label><select id="ea_group"><option value="">Entire class</option></select>
  <label>Deadline</label><input id="ea_deadline" type="datetime-local" value="${esc(localDeadline)}">
- <div class="notice small" style="margin-top:12px">Class and sub-division are kept fixed after creation so an existing assessment is not accidentally moved to another group.</div>
- <div class="actions" style="margin-top:12px"><button onclick="saveAssessmentDetails('${id}')">💾 Save Assessment</button><button class="secondary" onclick="editQuestions('${id}')">Questions & Solutions</button><button class="secondary" onclick="home()">Cancel</button></div>
+ <div class="notice small" style="margin-top:12px">Changing the class/sub-division changes the assessment target. Existing recipients are not automatically removed; use <b>Manage Recipients → Fresh Assign</b> if you want a completely new recipient set.</div>
+ <div class="actions" style="margin-top:12px"><button onclick="saveAssessmentDetails('${id}')">💾 Save Assessment</button><button class="secondary" onclick="editQuestions('${id}')">Questions & Solutions</button><button class="secondary" onclick="manageSchoolAssessments()">Cancel</button></div>
  </div>`;
+ window._editAssessmentGroupId=a.school_group_id||'';refreshEditAssessmentGroups();
 }
+function refreshEditAssessmentGroups(){const c=document.getElementById('ea_class')?.value,sel=document.getElementById('ea_group');if(!sel)return;sel.innerHTML='<option value="">Entire class</option>'+groups.filter(g=>g.class_id===c).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');if(window._editAssessmentGroupId)sel.value=window._editAssessmentGroupId;}
 async function saveAssessmentDetails(id){
  const title=document.getElementById('ea_title')?.value.trim(); if(!title)return alert('Assessment name is required.');
- const deadline=document.getElementById('ea_deadline')?.value; const payload={title,subject:document.getElementById('ea_subject')?.value.trim()||null,deadline:deadline?new Date(deadline).toISOString():null};
- const {error}=await sb.from('school_assessments').update(payload).eq('id',id).eq('created_by',teacher.id); if(error)return alert(error.message); await load(); alert('Assessment details saved.'); editQuestions(id);
+ const classId=document.getElementById('ea_class')?.value,groupId=document.getElementById('ea_group')?.value||null;if(!classId)return alert('Select a class.');
+ if(groupId && !groups.some(g=>g.id===groupId && g.class_id===classId))return alert('Selected subdivision does not belong to the selected class.');
+ const deadline=document.getElementById('ea_deadline')?.value; const payload={title,subject:document.getElementById('ea_subject')?.value.trim()||null,class_id:classId,school_group_id:groupId,deadline:deadline?new Date(deadline).toISOString():null};
+ const {error}=await sb.from('school_assessments').update(payload).eq('id',id).eq('created_by',teacher.id); if(error)return alert(error.message); await load(); alert('Assessment details saved.'); manageSchoolAssessments();
 }
 async function editQuestions(id){
  currentEditingAssessmentId=id;
@@ -534,20 +606,43 @@ async function reviewAssessment(id){
  document.getElementById('app').innerHTML=html;
 }
 async function saveReview(submissionId,maxMarks,assessmentId){const marks=Number(document.getElementById('rm_'+submissionId)?.value);const comment=document.getElementById('rc_'+submissionId)?.value||'';if(!Number.isFinite(marks)||marks<0||marks>Number(maxMarks))return alert('Marks must be between 0 and '+maxMarks+'.');const {error}=await sb.from('school_answer_submissions').update({awarded_marks:marks,teacher_comment:comment,status:'reviewed',reviewed_at:new Date().toISOString(),reviewed_by:teacher.id}).eq('id',submissionId);if(error)return alert(error.message);reviewAssessment(assessmentId)}
-async function reassignSchoolAssessment(id){
-  const {data:a,error}=await sb.from('school_assessments').select('id,title').eq('id',id).eq('created_by',teacher.id).single();
-  if(error||!a)return alert(error?.message||'Assessment not found.');
-  if(!confirm(`Reassign "${a.title}"?\n\nStudents will be allowed to submit again. Their previous reviewed/current submission will be closed for the new attempt; files already stored in Google Drive will remain.`))return;
-  const {data:subs,error:se}=await sb.from('school_answer_submissions').select('id').eq('assessment_id',id).eq('is_current',true);
-  if(se)return alert(se.message);
-  if((subs||[]).length){
-    const ids=subs.map(x=>x.id);
-    const {error:ue}=await sb.from('school_answer_submissions').update({is_current:false}).in('id',ids);
-    if(ue)return alert(ue.message);
-  }
-  alert('Assessment reassigned. Students can submit again.');
-  await load();
-  home();
+async function reassignSchoolAssessment(id,options={}){
+ const fresh=!!options.fresh;
+ const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae||!a)return alert(ae?.message||'Assessment not found.');
+ const {data:classRows,error:ce}=await sb.from('classes').select('id,name').eq('teacher_id',teacher.id).eq('course','SCHOOL').order('name');if(ce)return alert(ce.message);
+ const {data:groupRows,error:ge}=await sb.from('school_course_groups').select('id,name,class_id').eq('teacher_id',teacher.id).order('name');if(ge)return alert(ge.message);
+ const cls=(classRows||[]).find(c=>c.id===a.class_id)||(classRows||[])[0];if(!cls)return alert('No School class is available.');
+ window._saReassignGroups=groupRows||[];window._saReassignFresh=fresh;
+ document.getElementById('app').innerHTML=`${header(fresh?'Fresh Assign School Assessment':'Re-assign School Assessment')}<div class="card"><h2>${esc(a.title)}</h2><div class="${fresh?'notice':'success'}">${fresh?'Fresh mode removes all previous recipient links and current submissions. Choose the new class/subdivision/students.':'Re-assign Missing mode keeps existing recipients and adds only students who are not already assigned.'}</div><label>Class</label><select id="sar_class" onchange="loadSchoolAssessmentRecipientPicker('${id}')">${(classRows||[]).map(c=>`<option value="${c.id}" ${c.id===cls.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>Sub-division</label><select id="sar_group" onchange="loadSchoolAssessmentRecipientPicker('${id}')"><option value="">Entire class</option></select><div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="sar_mode" value="class" checked onchange="loadSchoolAssessmentRecipientPicker('${id}')" style="width:auto;margin-right:8px">Entire selected class/subdivision</label><label><input type="radio" name="sar_mode" value="students" onchange="loadSchoolAssessmentRecipientPicker('${id}')" style="width:auto;margin-right:8px">Selected students</label><div id="sar_picker" class="small muted">Loading students...</div></div><div class="actions"><button onclick="saveSchoolAssessmentRecipients('${id}',${fresh})">💾 ${fresh?'Save Fresh Assignment':'Add Missing Recipients'}</button><button class="secondary" onclick="manageSchoolAssessments()">Cancel</button></div></div>`;
+ refreshSchoolAssessmentReassignGroups();await loadSchoolAssessmentRecipientPicker(id);
+}
+function refreshSchoolAssessmentReassignGroups(){const c=document.getElementById('sar_class')?.value,s=document.getElementById('sar_group');if(!s)return;s.innerHTML='<option value="">Entire class</option>'+(window._saReassignGroups||[]).filter(g=>g.class_id===c).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');}
+async function loadSchoolAssessmentRecipientPicker(id){
+ refreshSchoolAssessmentReassignGroups();const box=document.getElementById('sar_picker');if(!box)return;const classId=document.getElementById('sar_class')?.value,groupId=document.getElementById('sar_group')?.value||'';if(!classId)return;
+ const {data:members,error:me}=await sb.from('class_students').select('student_id').eq('class_id',classId);if(me){box.innerHTML=msg(me.message);return;}let ids=(members||[]).map(x=>x.student_id);
+ if(groupId){const {data:gp,error:ge}=await sb.from('profiles').select('id').eq('school_group_id',groupId).in('id',ids);if(ge){box.innerHTML=msg(ge.message);return;}ids=(gp||[]).map(x=>x.id);}
+ if(!ids.length){box.innerHTML='<div class="notice">No students are available in this class/subdivision.</div>';return;}
+ const {data:students,error:se}=await sb.from('profiles').select('id,full_name,roll_no').in('id',ids).order('full_name');if(se){box.innerHTML=msg(se.message);return;}
+ const {data:links,error:le}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id).in('student_id',ids);if(le){box.innerHTML=msg(le.message);return;}const existing=new Set((links||[]).map(x=>x.student_id));
+ const fresh=window._saReassignFresh, available=fresh?students:(students||[]).filter(s=>!existing.has(s.id));const mode=document.querySelector('input[name="sar_mode"]:checked')?.value||'class';
+ box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${available.length} student(s) available. ${existing.size&&!fresh?existing.size+' already assigned and will not be duplicated.':''}</div>`+(mode==='class'?'<div class="success">The selected class/subdivision will be assigned as a whole.</div>':`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.sar-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.sar-student').forEach(x=>x.checked=false)">Clear all</button></div>`+(available.length?available.map(s=>`<label style="display:block;padding:6px 0"><input class="sar-student" type="checkbox" value="${esc(s.id)}" style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.roll_no||'')}</span></label>`).join(''):'<div class="notice">No new students are available.</div>'));
+}
+async function saveSchoolAssessmentRecipients(id,fresh=false){
+ const classId=document.getElementById('sar_class')?.value,groupId=document.getElementById('sar_group')?.value||null;if(!classId)return alert('Select a class.');
+ let ids=[];const {data:members,error:me}=await sb.from('class_students').select('student_id').eq('class_id',classId);if(me)return alert(me.message);ids=(members||[]).map(x=>x.student_id);
+ if(groupId){const {data:gp,error:ge}=await sb.from('profiles').select('id').eq('school_group_id',groupId).in('id',ids);if(ge)return alert(ge.message);ids=(gp||[]).map(x=>x.id);}
+ if(document.querySelector('input[name="sar_mode"]:checked')?.value==='students')ids=[...document.querySelectorAll('.sar-student:checked')].map(x=>x.value);
+ ids=[...new Set(ids)];if(!ids.length)return alert('No students selected.');
+ if(fresh){
+   const {error:de}=await sb.from('school_assessment_students').delete().eq('assessment_id',id);if(de)return alert(de.message);
+   const {error:se}=await sb.from('school_answer_submissions').delete().eq('assessment_id',id);if(se)return alert(se.message);
+ }else{
+   const {data:existing,error:ee}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id).in('student_id',ids);if(ee)return alert(ee.message);const ex=new Set((existing||[]).map(x=>x.student_id));ids=ids.filter(x=>!ex.has(x));
+ }
+ if(!ids.length)return alert('All selected students are already assigned. Nothing was added.');
+ const {error:ie}=await sb.from('school_assessment_students').insert(ids.map(student_id=>({assessment_id:id,student_id})));if(ie)return alert(ie.message);
+ const {error:ae}=await sb.from('school_assessments').update({class_id:classId,school_group_id:groupId}).eq('id',id).eq('created_by',teacher.id);if(ae)return alert(ae.message);
+ alert(`${fresh?'Fresh assignment':'Re-assignment'} saved for ${ids.length} student(s).`);await load();manageSchoolAssessments();
 }
 async function deleteAssessment(id){if(!confirm('Delete this assessment? All questions and answer submissions for it will also be removed.'))return;const {error}=await sb.from('school_assessments').delete().eq('id',id).eq('created_by',teacher.id);if(error)return alert(error.message);await load();home()}
 async function logout(){await sb.auth.signOut();location.replace('teacher-login.html')}
