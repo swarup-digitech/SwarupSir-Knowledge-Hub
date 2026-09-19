@@ -261,6 +261,190 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------
+    // Teacher: list School students with classroom credentials.
+    // Credentials are returned only through this teacher-authenticated
+    // Edge Function because student_credentials has no public SELECT policy.
+    // ------------------------------------------------------------
+    if (body.action === "listSchoolStudents") {
+      const { data: schoolClasses, error: classErr } = await admin
+        .from("classes")
+        .select("id,name,teacher_id,course")
+        .eq("teacher_id", caller.user.id)
+        .eq("course", "SCHOOL");
+      if (classErr) return json({error:classErr.message},400);
+
+      const classRows = schoolClasses ?? [];
+      const classMap = new Map<string, any>(classRows.map((c:any)=>[c.id,c]));
+      const classIds = classRows.map((c:any)=>c.id);
+      if (!classIds.length) return json({success:true,students:[]});
+
+      const { data: memberships, error: me } = await admin
+        .from("class_students")
+        .select("student_id,class_id")
+        .in("class_id",classIds);
+      if (me) return json({error:me.message},400);
+
+      const ids = [...new Set((memberships ?? []).map((x:any)=>x.student_id))];
+      if (!ids.length) return json({success:true,students:[]});
+
+      const { data: profiles, error: pe } = await admin
+        .from("profiles")
+        .select("id,full_name,username,roll_no,course,school_group_id")
+        .in("id",ids)
+        .eq("role","student");
+      if (pe) return json({error:pe.message},400);
+
+      const { data: creds, error: ce } = await admin
+        .from("student_credentials")
+        .select("student_id,email,password_plaintext,updated_at")
+        .in("student_id",ids);
+      if (ce) return json({error:ce.message},400);
+
+      const credMap = new Map<string,any>((creds ?? []).map((c:any)=>[c.student_id,c]));
+      const membershipMap = new Map<string,any[]>();
+      for (const m of memberships ?? []) {
+        if (!membershipMap.has(m.student_id)) membershipMap.set(m.student_id,[]);
+        membershipMap.get(m.student_id)!.push(m);
+      }
+
+      return json({success:true,students:(profiles ?? []).map((p:any)=>{
+        const membershipsForStudent = membershipMap.get(p.id) || [];
+        const current = membershipsForStudent[0];
+        const c = current ? classMap.get(current.class_id) : null;
+        const cred = credMap.get(p.id);
+        return {
+          id:p.id,
+          full_name:p.full_name || "",
+          username:p.username || "",
+          email:cred?.email || p.username || "",
+          password:cred?.password_plaintext || "",
+          roll_no:p.roll_no || "",
+          course:p.course || "SCHOOL",
+          school_group_id:p.school_group_id || null,
+          class_id:current?.class_id || "",
+          className:c?.name || "—",
+          updated_at:cred?.updated_at || null
+        };
+      })});
+    }
+
+    // ------------------------------------------------------------
+    // Teacher: School student management helpers
+    // These actions are intentionally teacher-scoped and only operate
+    // on SCHOOL students who belong to one of the teacher's School classes.
+    // ------------------------------------------------------------
+    if (body.action === "setStudentName") {
+      const studentId = String(body.student_id ?? "").trim();
+      const fullName = String(body.full_name ?? "").trim();
+      if (!studentId || !fullName) return json({error:"Student and Name are required."},400);
+
+      const { data: membership, error: me } = await admin
+        .from("class_students")
+        .select("student_id, class_id, classes!inner(id, teacher_id, course)")
+        .eq("student_id", studentId)
+        .eq("classes.teacher_id", caller.user.id)
+        .eq("classes.course", "SCHOOL")
+        .limit(1);
+      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+
+      const { error: pe } = await admin.from("profiles").update({full_name:fullName}).eq("id",studentId);
+      if (pe) return json({error:pe.message},400);
+      const { error: ae } = await admin.auth.admin.updateUserById(studentId,{user_metadata:{full_name:fullName}});
+      if (ae) return json({error:ae.message},400);
+      return json({success:true,full_name:fullName});
+    }
+
+    if (body.action === "setStudentClass") {
+      const studentId = String(body.student_id ?? "").trim();
+      const targetClassId = String(body.class_id ?? "").trim();
+      if (!studentId || !targetClassId) return json({error:"Student and Class are required."},400);
+
+      const { data: target, error: te } = await admin
+        .from("classes")
+        .select("id,name,teacher_id,course")
+        .eq("id",targetClassId).maybeSingle();
+      if (te) return json({error:te.message},400);
+      if (!target || target.teacher_id !== caller.user.id || String(target.course||"").toUpperCase() !== "SCHOOL")
+        return json({error:"The selected School class is not available to this teacher."},403);
+
+      const { data: current, error: ce } = await admin
+        .from("class_students")
+        .select("class_id, classes!inner(id,teacher_id,course)")
+        .eq("student_id",studentId)
+        .eq("classes.teacher_id",caller.user.id)
+        .eq("classes.course","SCHOOL");
+      if (ce) return json({error:ce.message},400);
+      if (!current?.length) return json({error:"This School student is not in one of your classes."},403);
+
+      const oldClassIds = [...new Set((current||[]).map((x:any)=>x.class_id))];
+      if (!oldClassIds.includes(targetClassId)) {
+        const { error: de } = await admin.from("class_students")
+          .delete().eq("student_id",studentId).in("class_id",oldClassIds);
+        if (de) return json({error:de.message},400);
+        const { error: ie } = await admin.from("class_students")
+          .insert({student_id:studentId,class_id:targetClassId});
+        if (ie) return json({error:ie.message},400);
+      }
+
+      // A subdivision belongs to a particular class. Clear it when the
+      // class changes; the teacher can assign a new one immediately after.
+      const { error: pe } = await admin.from("profiles")
+        .update({school_group_id:null}).eq("id",studentId);
+      if (pe) return json({error:pe.message},400);
+
+      return json({success:true,class_id:targetClassId,class_name:target.name});
+    }
+
+    if (body.action === "setStudentSchoolGroup") {
+      const studentId = String(body.student_id ?? "").trim();
+      const groupId = String(body.school_group_id ?? "").trim() || null;
+      if (!studentId) return json({error:"Student is required."},400);
+
+      const { data: membership, error: me } = await admin
+        .from("class_students")
+        .select("class_id, classes!inner(id,teacher_id,course)")
+        .eq("student_id",studentId)
+        .eq("classes.teacher_id",caller.user.id)
+        .eq("classes.course","SCHOOL")
+        .limit(1);
+      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+      const classId = membership[0].class_id;
+
+      if (groupId) {
+        const { data: group, error: ge } = await admin
+          .from("school_course_groups")
+          .select("id,name,teacher_id,class_id")
+          .eq("id",groupId).maybeSingle();
+        if (ge) return json({error:ge.message},400);
+        if (!group || group.teacher_id !== caller.user.id || group.class_id !== classId)
+          return json({error:"The selected subdivision does not belong to the student's current class."},400);
+      }
+
+      const { error: pe } = await admin.from("profiles")
+        .update({school_group_id:groupId}).eq("id",studentId);
+      if (pe) return json({error:pe.message},400);
+      return json({success:true,school_group_id:groupId});
+    }
+
+    if (body.action === "deleteStudent") {
+      const studentId = String(body.student_id ?? "").trim();
+      if (!studentId) return json({error:"Student is required."},400);
+
+      const { data: membership, error: me } = await admin
+        .from("class_students")
+        .select("student_id, class_id, classes!inner(id,teacher_id,course)")
+        .eq("student_id",studentId)
+        .eq("classes.teacher_id",caller.user.id)
+        .eq("classes.course","SCHOOL")
+        .limit(1);
+      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+
+      const { error: de } = await admin.auth.admin.deleteUser(studentId);
+      if (de) return json({error:de.message},400);
+      return json({success:true,student_id:studentId});
+    }
+
+    // ------------------------------------------------------------
     // Teacher: set/change a student's Roll No
     // ------------------------------------------------------------
     if (body.action === "setStudentRollNo") {
