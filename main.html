@@ -400,8 +400,11 @@ function mockTestManagement(){
       <div class="card" style="background:#f8fafc"><h3>Mock Test Blueprint</h3><div class="grid">${[['MAT','20 Questions'],['EVS','20 Questions'],['ARITHMETIC','20 Questions'],['LANGUAGE','20 Questions']].map(x=>`<div class="assignment"><b>${x[0]}</b><div class="muted small">${x[1]}</div></div>`).join('')}</div><p class="small muted" style="margin-top:12px">Total: <b>80 Questions • 100 Marks • 2 Hours</b>. Each question carries 1.25 marks.</p></div>
       <button class="secondary" onclick="teacherHome()">← Dashboard</button>
     </div>`);
+    // render() completes asynchronously because the management page first
+    // loads the question-bank counts. Load previous tests only after the
+    // #previousMockTests element has actually been rendered.
+    loadPreviousMockTests();
   });
-  loadPreviousMockTests();
 }
 function mockBulkUpload(){mockBankRows=[];mockPdfRows=[];mockAnswerKey={};render(`<div class="wrap">${header("Bulk Upload Mock Test Questions")}<div class="card">
  <div class="notice"><b>Flexible bulk-upload rule:</b> Upload any number of complete sets. For each question bank, the uploaded quantity must be a <b>multiple of the required questions per set</b>. For passage banks, one passage group is one set and all 5 linked questions must stay together.</div>
