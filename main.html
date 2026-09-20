@@ -571,7 +571,17 @@ async function createMockTest(){
    const selectedQs=selectedGroups.flatMap(g=>g.questions);
    const expected=plan.count;
    if(selectedQs.length!==expected)throw new Error(`${plan.label}: selected groups must contain exactly ${expected} questions.`);
-   qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})));
+   if(plan.unit==='passage'){
+    // Store the complete passage on every question in the passage group.
+    // This also repairs banks where only one question row contains the passage text.
+    for(const group of selectedGroups){
+     const groupQuestions=group.questions||[];
+     const passageText=groupQuestions.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'';
+     groupQuestions.forEach(q=>qrows.push({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:passageText||q.passage_text||null,image_url:q.image_url,marks:1.25}));
+    }
+   }else{
+    qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})));
+   }
   }
   qrows.forEach((q,i)=>q.question_number=i+1);
   const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
