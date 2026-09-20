@@ -1327,57 +1327,157 @@ async function reassignAssignment(assignmentId,options={}){
    sb.from("classes").select("id,name,course").eq("teacher_id",current.id).order("name")
  ]);
  if(ae)return alert(ae.message);if(ce)return alert(ce.message);
- const allowed=(classes||[]).filter(c=>schoolTeacherMode?String(c.course||"").toUpperCase()==="SCHOOL":String(c.course||"").toUpperCase()!=="SCHOOL");
+
+ const allowed=(classes||[]).filter(c=>schoolTeacherMode
+   ?String(c.course||"").toUpperCase()==="SCHOOL"
+   :String(c.course||"").toUpperCase()!=="SCHOOL");
  if(!allowed.length)return alert("No classes are available.");
- const {data:groups,error:ge}=schoolTeacherMode?await sb.from("school_course_groups").select("id,name,class_id").eq("teacher_id",current.id).order("name"):({data:[],error:null});
+
+ const {data:groups,error:ge}=schoolTeacherMode
+   ?await sb.from("school_course_groups").select("id,name,class_id").eq("teacher_id",current.id).order("name")
+   :({data:[],error:null});
  if(ge)return alert(ge.message);
+
  const initialClass=a.class_id&&allowed.some(c=>c.id===a.class_id)?a.class_id:allowed[0].id;
  const currentGroup=(groups||[]).find(g=>g.class_id===initialClass && g.name===a.sub_group);
+
  render(`<div class="wrap">${header(fresh?"Fresh Assign Assignment":"Re-assign Assignment")}<div class="card">
-   <h2>${esc(a.title)}</h2><div class="${fresh?'notice':'success'}">${fresh?"Fresh mode: previous recipient links and attempts have already been cleared. Choose the new recipients.":"Re-assign mode: existing recipients are kept. Only students who do not already have this assignment will be added."}</div>
-   <label>Class</label><select id="rac" onchange="loadReassignStudents('${assignmentId}')">${allowed.map(c=>`<option value="${esc(c.id)}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}</select>
+   <h2>${esc(a.title)}</h2>
+   <div class="${fresh?'notice':'success'}">
+     ${fresh
+       ?"Fresh mode: previous recipient links and attempts have already been cleared. Choose the new recipients."
+       :"Re-assign mode: students who have already submitted can be given one new attempt. Existing submitted attempts are kept in the result history. Students who have not submitted are not duplicated."}
+   </div>
+   <label>Class</label>
+   <select id="rac" onchange="loadReassignStudents('${assignmentId}')">
+     ${allowed.map(c=>`<option value="${esc(c.id)}" ${c.id===initialClass?'selected':''}>${esc(c.name)}</option>`).join("")}
+   </select>
    ${schoolTeacherMode?`<label>Subdivision</label><select id="rasg" onchange="loadReassignStudents('${assignmentId}')"><option value="">Entire class</option>${(groups||[]).filter(g=>g.class_id===initialClass).map(g=>`<option value="${esc(g.id)}" ${currentGroup?.id===g.id?'selected':''}>${esc(g.name)}</option>`).join("")}</select>`:""}
-   <div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="reassignMode" value="class" checked onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire selected ${schoolTeacherMode?"class/subdivision":"group"}</label><label><input type="radio" name="reassignMode" value="students" onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label><div id="reassignStudentPicker" class="small muted">Loading students...</div></div>
-   <div class="actions"><button onclick="saveReassignment('${assignmentId}',${fresh})">💾 ${fresh?"Save Fresh Assignment":"Add Missing Recipients"}</button><button class="secondary" onclick="schoolTeacherMode?schoolAssignmentManagement():teacherHome()">Cancel</button></div>
+   <div class="card" style="background:#f8fafc">
+     <h3>Assign / Re-assign To</h3>
+     <label><input type="radio" name="reassignMode" value="class" checked onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Entire selected ${schoolTeacherMode?"class/subdivision":"group"}</label>
+     <label><input type="radio" name="reassignMode" value="students" onchange="loadReassignStudents('${assignmentId}')" style="width:auto;margin-right:8px">Selected students</label>
+     <div id="reassignStudentPicker" class="small muted">Loading students...</div>
+   </div>
+   <div class="actions">
+     <button onclick="saveReassignment('${assignmentId}',${fresh})">💾 ${fresh?"Save Fresh Assignment":"Re-assign Selected Students"}</button>
+     <button class="secondary" onclick="schoolTeacherMode?schoolAssignmentManagement():teacherHome()">Cancel</button>
+   </div>
  </div></div>`);
- window._reassignFresh=fresh;window._reassignExistingIds=new Set();
+ window._reassignFresh=fresh;
  await loadReassignStudents(assignmentId);
 }
+
 async function loadReassignStudents(assignmentId){
  const box=document.getElementById("reassignStudentPicker");if(!box)return;
  const classId=document.getElementById("rac")?.value,groupId=document.getElementById("rasg")?.value||"";
  if(!classId){box.innerHTML='<div class="notice">Select a class.</div>';return;}
- const {data:members,error}=await sb.from("class_students").select("student_id,class_id").eq("class_id",classId);if(error){box.innerHTML=message(error.message);return;}
+
+ const {data:members,error}=await sb.from("class_students").select("student_id,class_id").eq("class_id",classId);
+ if(error){box.innerHTML=message(error.message);return;}
  let ids=(members||[]).map(x=>x.student_id);
- if(groupId){const {data:grpStudents,error:ge}=await sb.from("profiles").select("id").eq("school_group_id",groupId).in("id",ids);if(ge){box.innerHTML=message(ge.message);return;}ids=(grpStudents||[]).map(x=>x.id);}
+
+ if(groupId){
+   const {data:grpStudents,error:ge}=await sb.from("profiles").select("id").eq("school_group_id",groupId).in("id",ids);
+   if(ge){box.innerHTML=message(ge.message);return;}
+   ids=(grpStudents||[]).map(x=>x.id);
+ }
  if(!ids.length){box.innerHTML='<div class="notice">No students are in the selected class/subdivision.</div>';return;}
- const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username,roll_no").in("id",ids).order("full_name");if(e){box.innerHTML=message(e.message);return;}
- let existing=new Set();
- if(!window._reassignFresh){const {data:links,error:le}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId).in("student_id",ids);if(le){box.innerHTML=message(le.message);return;}existing=new Set((links||[]).map(x=>x.student_id));}
- window._reassignExistingIds=existing;
- const available=(students||[]).filter(s=>!existing.has(s.id));
+
+ const {data:students,error:e}=await sb.from("profiles").select("id,full_name,username,roll_no").in("id",ids).order("full_name");
+ if(e){box.innerHTML=message(e.message);return;}
+
+ if(window._reassignFresh){
+   const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
+   box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${students.length} student(s) available for the fresh assignment.</div>`+
+     (mode==="class"
+       ?'<div class="success">The selected class/subdivision will be assigned as a whole.</div>'
+       :`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+
+         (students.length?students.map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${esc(s.id)}" style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.roll_no||s.username||"")}</span></label>`).join(""):'<div class="notice">No students are available.</div>'));
+   return;
+ }
+
+ const [{data:links,error:le},{data:ats,error:ae}]=await Promise.all([
+   sb.from("assignment_students").select("student_id,current_attempt_number").eq("assignment_id",assignmentId).in("student_id",ids),
+   sb.from("attempts").select("student_id,attempt_number,submitted_at").eq("assignment_id",assignmentId).in("student_id",ids).order("submitted_at",{ascending:false})
+ ]);
+ if(le){box.innerHTML=message(le.message);return;}
+ if(ae){box.innerHTML=message(ae.message);return;}
+
+ const linkMap=new Map((links||[]).map(x=>[x.student_id,x]));
+ const attemptMap=new Map();
+ for(const at of (ats||[])){
+   const key=at.student_id;
+   const currentNo=Number(linkMap.get(key)?.current_attempt_number||1);
+   if(Number(at.attempt_number||1)===currentNo && !attemptMap.has(key))attemptMap.set(key,at);
+ }
+
  const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
- box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${available.length} student(s) eligible. ${existing.size?existing.size+" already have this assignment and will not be duplicated.":""}</div>`+
-   (mode==="class"?'<div class="success">The selected class/subdivision will be assigned as a whole.</div>':`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+(available.length?available.map(s=>`<label style="display:block;padding:6px 0"><input class="reassign-student" type="checkbox" value="${esc(s.id)}" style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.roll_no||s.username||"")}</span></label>`).join(""):'<div class="notice">No new students are available.</div>'));
+ const statusFor=(s)=>{
+   const link=linkMap.get(s.id);
+   if(!link)return {label:"New student — will be assigned",cls:"success"};
+   const n=Number(link.current_attempt_number||1);
+   if(attemptMap.has(s.id))return {label:`Submitted — Attempt ${n} → another attempt will be allowed`,cls:"notice"};
+   return {label:`Assigned — not submitted yet; no duplicate will be created`,cls:"small muted"};
+ };
+
+ const eligibleForSelection=students;
+ box.innerHTML=`<div class="small muted" style="margin-bottom:8px">
+   ${students.length} student(s) in the selected class/subdivision.
+   Re-assignment increments the attempt number only for students whose current attempt is already submitted.
+ </div>`+
+   (mode==="class"
+     ?'<div class="success">The selected class/subdivision will be processed as a whole. Submitted students will receive a new attempt; pending students will remain pending.</div>'
+     :`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.reassign-student').forEach(x=>x.checked=false)">Clear all</button></div>`+
+       (eligibleForSelection.length?eligibleForSelection.map(s=>{const st=statusFor(s);return `<label style="display:block;padding:8px 0;border-bottom:1px solid #e5e7eb"><input class="reassign-student" type="checkbox" value="${esc(s.id)}" style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.roll_no||s.username||"")}</span><div class="${st.cls}" style="margin:3px 0 0 24px">${st.label}</div></label>`}).join(""):'<div class="notice">No students are available.</div>'));
 }
+
 async function saveReassignment(assignmentId,fresh=false){
  const classId=document.getElementById("rac")?.value;if(!classId)return alert("Select a class.");
  const groupId=document.getElementById("rasg")?.value||"";
  let candidateIds=[];
+
  const mode=document.querySelector('input[name="reassignMode"]:checked')?.value||"class";
- const {data:members,error:me}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(me)return alert(me.message);
+ const {data:members,error:me}=await sb.from("class_students").select("student_id").eq("class_id",classId);
+ if(me)return alert(me.message);
  candidateIds=(members||[]).map(x=>x.student_id);
- if(groupId){const {data:grp,error:ge}=await sb.from("profiles").select("id").eq("school_group_id",groupId).in("id",candidateIds);if(ge)return alert(ge.message);candidateIds=(grp||[]).map(x=>x.id);}
+
+ if(groupId){
+   const {data:grp,error:ge}=await sb.from("profiles").select("id").eq("school_group_id",groupId).in("id",candidateIds);
+   if(ge)return alert(ge.message);
+   candidateIds=(grp||[]).map(x=>x.id);
+ }
+
  if(mode==="students")candidateIds=[...document.querySelectorAll(".reassign-student:checked")].map(x=>x.value);
+ candidateIds=[...new Set(candidateIds)];
  if(!candidateIds.length)return alert("No students selected or available.");
- const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId).in("student_id",candidateIds);if(ee)return alert(ee.message);
- const already=new Set((existing||[]).map(x=>x.student_id));
- const ids=[...new Set(candidateIds)].filter(id=>fresh||!already.has(id));
- if(!ids.length)return alert("All selected students already have this assignment. Nothing was added.");
- const rows=ids.map(student_id=>({assignment_id:assignmentId,student_id}));
- const {error:ie}=await sb.from("assignment_students").insert(rows);if(ie)return alert("Could not assign students: "+ie.message);
- alert(`${fresh?"Fresh assignment":"Re-assignment"} saved for ${rows.length} student${rows.length===1?"":"s"}.`);
- return schoolTeacherMode?schoolAssignmentManagement():teacherHome();
+
+ if(fresh){
+   const {data:existing,error:ee}=await sb.from("assignment_students").select("student_id").eq("assignment_id",assignmentId).in("student_id",candidateIds);
+   if(ee)return alert(ee.message);
+   const already=new Set((existing||[]).map(x=>x.student_id));
+   const ids=[...candidateIds].filter(id=>!already.has(id));
+   const rows=ids.map(student_id=>({assignment_id:assignmentId,student_id,current_attempt_number:1}));
+   if(rows.length){
+     const {error:ie}=await sb.from("assignment_students").insert(rows);
+     if(ie)return alert("Could not assign students: "+ie.message);
+   }
+   alert(`Fresh assignment saved for ${candidateIds.length} student${candidateIds.length===1?"":"s"}.`);
+   return schoolTeacherMode?schoolAssignmentManagement():teacherHome();
+ }
+
+ try{
+   const {data,result,error}=await sb.rpc("reassign_assignment_students",{
+     p_assignment_id:assignmentId,
+     p_student_ids:candidateIds
+   });
+   if(error)throw error;
+   const r=result||data||{};
+   alert(`Re-assignment completed. New students: ${Number(r.new_students||0)}. New attempts allowed: ${Number(r.reassigned_students||0)}. Pending students unchanged: ${Number(r.pending_students||0)}.`);
+   return schoolTeacherMode?schoolAssignmentManagement():teacherHome();
+ }catch(e){
+   alert("Could not re-assign students.\n\n"+(e.message||e));
+ }
 }
 
 async function newAssignment(){
@@ -2534,8 +2634,11 @@ async function studentHome(){
     </div>`);
   }
 
-  const {data:links,error:le}=await sb.from("assignment_students").select("assignment_id").eq("student_id",current.id);
+  const {data:links,error:le}=await sb.from("assignment_students")
+    .select("assignment_id,current_attempt_number")
+    .eq("student_id",current.id);
   if(le)throw le;
+  const linkMap=new Map((links||[]).map(x=>[x.assignment_id,x]));
 
   const ids=[...new Set((links||[]).map(x=>x.assignment_id).filter(Boolean))];
   let assignments=[],attempts=[];
@@ -2565,12 +2668,22 @@ async function studentHome(){
     }
     schoolStudentSubName=sg?.name||"";
   }
-  const completedIds=new Set(attempts.map(t=>t.assignment_id));
+  // A submission is final for the current assignment attempt number.
+  // Historical attempts remain available to the teacher, but do not block a
+  // newly reassigned attempt.
+  const currentAttempts=new Map();
+  for(const a of assignments){
+    const link=linkMap.get(a.id);
+    const n=Number(link?.current_attempt_number||1);
+    const at=attempts.find(x=>x.assignment_id===a.id && Number(x.attempt_number||1)===n);
+    if(at)currentAttempts.set(a.id,at);
+  }
+  const completedIds=new Set(currentAttempts.keys());
   const pending=assignments.filter(a=>!completedIds.has(a.id));
   const completed=assignments.filter(a=>completedIds.has(a.id));
 
   const assignmentCard=(a,isCompleted=false)=>{
-    const x=isCompleted?attempts.find(t=>t.assignment_id===a.id):null;
+    const x=isCompleted?currentAttempts.get(a.id):null;
     const pct=x&&Number(x.total_questions)?Math.round(Number(x.score||0)*100/Number(x.total_questions)):0;
     const isMock=(a.assignment_type==="MOCK"||a.assignment_type==="mock");
     const isVideo=!isMock&&(a.assignment_type==="VIDEO"||(!a.assignment_type&&!!a.video_url));
@@ -2584,7 +2697,7 @@ async function studentHome(){
       ${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}
       ${isCompleted?`
         <p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p>
-        ${pct<80?`<div class="notice small" style="margin-top:10px">⚠️ <b>Below 80%:</b> This attempt will reset after <b>3 hours</b> and the assignment will be available again. <b>80% or above:</b> Your submission remains final.</div>`:""}
+        <div class="success small" style="margin-top:10px">This submission is recorded. If your score is below 80%, this assignment will automatically become available again after 3 hours. Your teacher can also re-assign it for a new attempt.</div>
         <div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View My Answers</button></div>
         ${isVideo?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}
       `:`
@@ -2605,7 +2718,7 @@ async function studentHome(){
     </div>
     <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2>
       <p class="muted">New and not-submitted assignments are highlighted automatically.</p>
-      <div class="notice small"><b>Automatic re-attempt rule:</b> If you score below 80% on an assignment, your submission will be removed after 3 hours and the assignment will become available again. A score of 80% or above remains submitted.</div>
+      <div class="notice small"><b>Submission rule:</b> You can submit an assignment only once for the current attempt. If your score is below 80%, it automatically becomes available again after 3 hours. Your teacher can also re-assign it for a new attempt.</div>
     </div>
     <div class="card">
       <div class="result-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
@@ -2669,17 +2782,31 @@ async function startLesson(id){
   const {data:a,error}=await sb.from("assignments").select("*").eq("id",id).single();
   if(error)return alert(error.message);
 
-  const {data:existing,error:ae}=await sb.from("attempts")
-    .select("id").eq("assignment_id",id).eq("student_id",current.id).limit(1);
+  const {data:link,error:ae}=await sb.from("assignment_students")
+    .select("current_attempt_number")
+    .eq("assignment_id",id)
+    .eq("student_id",current.id)
+    .maybeSingle();
 
-  if(ae)return alert("Could not check submission status: "+ae.message);
+  if(ae)return alert("Could not check assignment status: "+ae.message);
+  if(!link)return alert("This assignment is no longer assigned to your account.");
+
+  const currentAttemptNumber=Number(link.current_attempt_number||1);
+  const {data:existing,error:xe}=await sb.from("attempts")
+    .select("id")
+    .eq("assignment_id",id)
+    .eq("student_id",current.id)
+    .eq("attempt_number",currentAttemptNumber)
+    .limit(1);
+
+  if(xe)return alert("Could not check submission status: "+xe.message);
 
   if(existing?.length){
-    alert("Already Submitted. You have already submitted this assignment.\n\nYour teacher can reassign it as a fresh assignment if you need to take it again.");
+    alert("Already Submitted. You have already submitted this assignment for the current attempt.\n\nIf your score is below 80%, it will become available again automatically after 3 hours. Your teacher can also re-assign it.");
     return studentHome();
   }
 
-  active=a;
+  active={...a,currentAttemptNumber};
   videoDone=!a.video_url;
   answers=[];
   window.quizIndex=0;
@@ -2722,45 +2849,68 @@ function quiz(){
  if(!active.questions?.length)return alert("No questions are available for this assignment.");
  const total=active.questions.length,currentIndex=window.quizIndex||0,q=active.questions[currentIndex],image=q.image_url;
    const optionRows=["A","B","C","D"].map(o=>`<button type="button" class="choice-item ${answers[currentIndex]===o?"selected":""}" aria-label="Select option ${o}: ${esc(q["option_"+o.toLowerCase()]||"")}" aria-pressed="${answers[currentIndex]===o}" onclick="choose(${currentIndex},'${o}')"><span class="option-letter">${o}.</span><span class="choice-text">${esc(q["option_"+o.toLowerCase()]||"Option "+o)}</span></button>`).join("");
-  render(`<div class="exam-shell">${(active.assignment_type==="MOCK"||active.assignment_type==="mock")?`<div id="mock-timer" class="mock-timer">⏱ Time Remaining: ${mockTimeText()}</div>`:""}<div class="exam-top"><button class="secondary" onclick="studentHome()">← Back</button><h2>Question ${currentIndex+1} of ${total}</h2><span class="tag">${answers.filter(Boolean).length}/${total} Answered</span></div><div class="exam-grid"><main class="exam-main"><div class="card question-card"><div class="question-number">Question ${currentIndex+1}</div>${image?`<div class="question-image-wrap"><img class="question-image" src="${esc(image)}" alt="Question ${currentIndex+1}"></div>`:`<div class="question-text">${esc(q.question_text)}</div>`}${q.hint?.trim()?`<div style="margin:0 0 10px"><button type="button" class="hint-btn" onclick="toggleHint(${currentIndex})">💡 Hints</button></div><div id="hint-${currentIndex}" class="hint-box" style="display:none"><b>Hint:</b> ${esc(q.hint)}</div>`:""}<div class="answer-heading">Choose Your Answer</div><div class="choice-list" role="radiogroup" aria-label="Choose your answer">${optionRows}</div></div><div class="exam-nav"><button class="secondary" ${currentIndex===0?"disabled":""} onclick="goQuestion(${currentIndex-1})">← Previous</button>${currentIndex<total-1?`<button onclick="goQuestion(${currentIndex+1})">Next →</button>`:`<button onclick="submitQuiz()">✓ Submit Test</button>`}</div></main><aside class="palette card"><h3>Question Palette</h3><div class="palette-grid">${active.questions.map((_,i)=>`<button class="palette-btn ${i===currentIndex?"current":""} ${answers[i]?"answered":""}" onclick="goQuestion(${i})">${i+1}</button>`).join("")}</div><div class="small muted" style="margin-top:16px"><div>🟩 Answered</div><div>🔵 Current</div><div>⬜ Not Answered</div></div></aside></div></div>`);
+  render(`<div class="exam-shell">${(active.assignment_type==="MOCK"||active.assignment_type==="mock")?`<div id="mock-timer" class="mock-timer">⏱ Time Remaining: ${mockTimeText()}</div>`:""}<div class="exam-top"><button class="secondary" onclick="studentHome()">← Back</button><h2>Question ${currentIndex+1} of ${total}</h2><span class="tag">${answers.filter(Boolean).length}/${total} Answered</span></div><div class="exam-grid"><main class="exam-main"><div class="card question-card"><div class="question-number">Question ${currentIndex+1}</div>${image?`<div class="question-image-wrap"><img class="question-image" src="${esc(image)}" alt="Question ${currentIndex+1}"></div>`:`<div class="question-text">${esc(q.question_text)}</div>`}${q.hint?.trim()?`<div style="margin:0 0 10px"><button type="button" class="hint-btn" onclick="toggleHint(${currentIndex})">💡 Hints</button></div><div id="hint-${currentIndex}" class="hint-box" style="display:none"><b>Hint:</b> ${esc(q.hint)}</div>`:""}<div class="answer-heading">Choose Your Answer</div><div class="choice-list" role="radiogroup" aria-label="Choose your answer">${optionRows}</div></div><div class="exam-nav"><button class="secondary" ${currentIndex===0?"disabled":""} onclick="goQuestion(${currentIndex-1})">← Previous</button>${currentIndex<total-1?`<button onclick="goQuestion(${currentIndex+1})">Next →</button>`:`<button id="submit-test-btn" onclick="submitQuiz()">✓ Submit Test</button>`}</div></main><aside class="palette card"><h3>Question Palette</h3><div class="palette-grid">${active.questions.map((_,i)=>`<button class="palette-btn ${i===currentIndex?"current":""} ${answers[i]?"answered":""}" onclick="goQuestion(${i})">${i+1}</button>`).join("")}</div><div class="small muted" style="margin-top:16px"><div>🟩 Answered</div><div>🔵 Current</div><div>⬜ Not Answered</div></div></aside></div></div>`);
 }
 function toggleHint(i){const box=document.getElementById(`hint-${i}`);if(!box)return;box.style.display=box.style.display==="none"?"block":"none";}
 function goQuestion(i){window.quizIndex=Math.max(0,Math.min(i,active.questions.length-1));quiz()}
 function choose(i,v){answers[i]=v;quiz()}
 async function submitQuiz(autoSubmit=false){
+  if(window.quizSubmitting)return;
   if(window.mockTimerId){clearInterval(window.mockTimerId);window.mockTimerId=null;}
   if(answers.length<active.questions.length&&!autoSubmit)return alert("Please answer every question.");
   if(autoSubmit){answers=active.questions.map((q,i)=>answers[i]||"")}
 
-  const {data:existing,error:checkError}=await sb.from("attempts")
-    .select("id").eq("assignment_id",active.id).eq("student_id",current.id).limit(1);
+  // Lock the UI immediately so a double-click cannot start two client-side submissions.
+  window.quizSubmitting=true;
+  const submitBtn=document.getElementById("submit-test-btn");
+  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent="Submitting…";}
 
-  if(checkError)return alert("Could not check submission status: "+checkError.message);
+  try{
+    // Re-read the current attempt number at the moment of submission. The
+    // database unique constraint below is the final protection against
+    // simultaneous/double requests.
+    const {data:link,error:linkError}=await sb.from("assignment_students")
+      .select("current_attempt_number")
+      .eq("assignment_id",active.id)
+      .eq("student_id",current.id)
+      .maybeSingle();
+    if(linkError)throw linkError;
+    if(!link)throw new Error("This assignment is no longer assigned to your account.");
 
-  if(existing?.length){
-    alert("Already Submitted. This assignment can only be submitted once.");
-    return studentHome();
-  }
+    const attemptNumber=Number(link.current_attempt_number||1);
+    const {data:existing,error:checkError}=await sb.from("attempts")
+      .select("id")
+      .eq("assignment_id",active.id)
+      .eq("student_id",current.id)
+      .eq("attempt_number",attemptNumber)
+      .limit(1);
 
-  const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);
+    if(checkError)throw checkError;
 
-  const {data:attempt,error}=await sb.from("attempts").insert({
-    assignment_id:active.id,
-    student_id:current.id,
-    score,
-    total_questions:active.questions.length,
-    video_completed:videoDone,
-    submitted_at:new Date().toISOString(),
-    attempt_number:1
-  }).select().single();
-
-  if(error){
-    if(error.code==="23505"){
-      alert("Already Submitted. This assignment can only be submitted once.");
+    if(existing?.length){
+      alert("Already Submitted. This assignment can only be submitted once for the current attempt. If your score is below 80%, it will become available again automatically after 3 hours. Your teacher can also re-assign it.");
       return studentHome();
     }
-    return alert(error.message);
-  }
+
+    const score=active.questions.reduce((n,q,i)=>n+(answers[i]===q.correct_option?1:0),0);
+
+    const {data:attempt,error}=await sb.from("attempts").insert({
+      assignment_id:active.id,
+      student_id:current.id,
+      score,
+      total_questions:active.questions.length,
+      video_completed:videoDone,
+      submitted_at:new Date().toISOString(),
+      attempt_number:attemptNumber
+    }).select().single();
+
+    if(error){
+      if(error.code==="23505"){
+        alert("Already Submitted. This assignment can only be submitted once for the current attempt. If your score is below 80%, it will become available again automatically after 3 hours. Your teacher can also re-assign it.");
+        return studentHome();
+      }
+      throw error;
+    }
 
   const rows=active.questions.map((q,i)=>({
     attempt_id:attempt.id,
@@ -2771,12 +2921,17 @@ async function submitQuiz(autoSubmit=false){
 
   const {error:e}=await sb.from("answers").insert(rows);
 
-  if(e){
-    await sb.from("attempts").delete().eq("id",attempt.id);
-    return alert(e.message);
-  }
+    if(e){
+      await sb.from("attempts").delete().eq("id",attempt.id);
+      throw e;
+    }
 
-  await viewPreviousWork(active.id,attempt.id);
+    await viewPreviousWork(active.id,attempt.id);
+  }catch(e){
+    window.quizSubmitting=false;
+    if(submitBtn){submitBtn.disabled=false;submitBtn.textContent="✓ Submit Test";}
+    alert("Could not submit test: "+(e.message||e));
+  }
 }
 init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start</h2><p>${esc(e.message||e)}</p></div></div>`));
 </script></body></html>

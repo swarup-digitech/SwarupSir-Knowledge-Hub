@@ -79,55 +79,44 @@ begin
   end if;
 end $$;
 
--- 8. One submission per student per assignment.
--- Remove older duplicate attempts first, keeping the latest.
-with ranked as (
-  select id, row_number() over (partition by assignment_id, student_id order by submitted_at desc nulls last, id desc) rn
-  from public.attempts
-), duplicates as (select id from ranked where rn > 1)
-delete from public.answers where attempt_id in (select id from duplicates);
-with ranked as (
-  select id, row_number() over (partition by assignment_id, student_id order by submitted_at desc nulls last, id desc) rn
-  from public.attempts
-)
-delete from public.attempts where id in (select id from ranked where rn > 1);
-create unique index if not exists uq_attempts_one_submission_per_student
-on public.attempts (assignment_id, student_id);
+-- 8. Current MCQ submission policy.
+--    Run single_submission_until_reassigned.sql after this base migration.
+--    That migration enforces one submission per current attempt and preserves
+--    the automatic below-80% / 3-hour retry as well as teacher re-assignment.
+alter table public.assignment_students
+  add column if not exists current_attempt_number integer not null default 1;
 
--- 9. Automatic low-score re-attempt: below 80% after 3 hours.
+drop index if exists public.uq_attempts_one_submission_per_student;
+
 create schema if not exists private;
-create or replace function private.reset_low_score_submissions()
-returns integer
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  failed_ids uuid[];
-  deleted_count integer := 0;
-begin
-  select coalesce(array_agg(id), '{}'::uuid[]) into failed_ids
-  from public.attempts
-  where submitted_at is not null
-    and submitted_at <= now() - interval '3 hours'
-    and total_questions > 0
-    and (score * 100) < (total_questions * 80);
-  if cardinality(failed_ids) = 0 then return 0; end if;
-  delete from public.answers where attempt_id = any(failed_ids);
-  delete from public.attempts where id = any(failed_ids);
-  get diagnostics deleted_count = row_count;
-  return deleted_count;
-end;
-$$;
-revoke execute on function private.reset_low_score_submissions() from public, anon, authenticated;
-create extension if not exists pg_cron;
+
 do $$
 begin
-  if exists (select 1 from cron.job where jobname = 'reset-low-score-submissions') then
-    perform cron.unschedule(jobid) from cron.job where jobname = 'reset-low-score-submissions';
+  if to_regclass('cron.job') is not null then
+    execute $sql$
+      do $inner$
+      begin
+        if exists (
+          select 1 from cron.job
+          where jobname = 'reset-low-score-submissions'
+        ) then
+          perform cron.unschedule(jobid)
+          from cron.job
+          where jobname = 'reset-low-score-submissions';
+        end if;
+      end
+      $inner$
+    $sql$;
   end if;
 end $$;
-select cron.schedule('reset-low-score-submissions','*/5 * * * *','select private.reset_low_score_submissions();');
+
+drop function if exists private.reset_low_score_submissions();
+
+-- For an existing database with old duplicate submissions, run:
+--   single_submission_until_reassigned.sql
+-- It safely cleans accidental double-click duplicates, preserves historical
+-- teacher-authorized attempts, initializes current_attempt_number, and creates
+-- the teacher re-assignment RPC.
 
 -- Existing students: set Roll No values as needed, for example:
 -- update public.profiles set roll_no = '1' where id = 'STUDENT-UUID-HERE';

@@ -39,14 +39,15 @@ RESTORED CORE FUNCTIONS
 16. Percentage shown with submitted score.
 17. One submission per student per assignment.
 18. Teacher can delete an attempt or fresh-reassign an assignment.
-19. Automatic re-attempt: below 80% is reset after 3 hours; exactly 80% remains submitted.
+19. A submitted assignment is locked; another attempt is allowed only after explicit teacher re-assignment.
 20. Results Excel export.
 21. PWA support and app icons.
 
 DATABASE
 Run complete_database_migrations.sql once in Supabase SQL Editor.
 It combines the feature migrations for Roll No login, credentials, hints, solution videos,
-explanations, teacher deletes, one-submission protection and the 3-hour below-80% retry rule.
+explanations and teacher deletes. For the current submission/re-assignment policy, also run
+single_submission_until_reassigned.sql once.
 The individual SQL files are also included for reference.
 
 EDGE FUNCTION
