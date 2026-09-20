@@ -44,3 +44,17 @@ select teacher_id, section_code, part_code, coalesce(language,'UNSPECIFIED') as 
        count(distinct passage_id) filter(where active and nullif(trim(coalesce(passage_id,'')),'') is not null) as passage_groups
 from public.mock_question_bank
 group by teacher_id, section_code, part_code, coalesce(language,'UNSPECIFIED');
+
+-- Legacy V2 EVS/Arithmetic rows were created before the language column existed.
+-- Preserve those existing questions as Assamese so new uploads continue numbering safely.
+update public.mock_question_bank
+set language='ASSAMESE'
+where section_code in ('EVS','ARITHMETIC') and language is null;
+
+-- Keep all existing MAT rows explicitly common.
+update public.mock_question_bank
+set language='COMMON'
+where section_code='MAT' and language is null;
+
+create index if not exists idx_mock_bank_teacher_part_lang_set
+on public.mock_question_bank(teacher_id, part_code, language, set_id, active);
