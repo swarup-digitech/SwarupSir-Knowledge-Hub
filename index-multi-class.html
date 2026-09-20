@@ -173,11 +173,69 @@ const MOCK_PLAN=[
 ];
 const mockPlanByPart=Object.fromEntries(MOCK_PLAN.map(x=>[x.part,x]));
 const mockPartLabel=part=>mockPlanByPart[String(part||'').trim().toUpperCase().replace(/\s+/g,'_')]?.label||part;
+async function loadPreviousMockTests(){
+  const box=document.getElementById('previousMockTests');
+  if(!box)return;
+  box.innerHTML='<p class="muted">Loading previous Mock Tests…</p>';
+  const {data:tests,error}=await sb.from('mock_tests').select('id,title,language,time_limit_seconds,status,created_at').eq('teacher_id',current.id).order('created_at',{ascending:false});
+  if(error){box.innerHTML=message(error.message);return;}
+  if(!tests?.length){box.innerHTML='<p class="muted">No Mock Tests have been created yet.</p>';return;}
+  const ids=tests.map(t=>t.id);
+  const {data:recipients}=await sb.from('mock_test_students').select('mock_test_id,student_id').in('mock_test_id',ids);
+  const {data:attempts}=await sb.from('mock_test_attempts').select('mock_test_id,status,score').in('mock_test_id',ids);
+  const rc=new Map(),ac=new Map();
+  (recipients||[]).forEach(r=>rc.set(r.mock_test_id,(rc.get(r.mock_test_id)||0)+1));
+  (attempts||[]).forEach(a=>ac.set(a.mock_test_id,(ac.get(a.mock_test_id)||0)+1));
+  box.innerHTML=tests.map(t=>{
+    const lang=t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common';
+    const mins=Math.round(Number(t.time_limit_seconds||7200)/60);
+    return `<div class="assignment" style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div><h3 style="margin:0 0 5px">${esc(t.title||'Mock Test')}</h3>
+          <div class="small muted">${lang} · ${mins} minutes · ${rc.get(t.id)||0} student(s) · ${ac.get(t.id)||0} attempt(s) · Created ${t.created_at?new Date(t.created_at).toLocaleString():'—'}</div>
+        </div>
+        <div class="actions">
+          <button onclick="editMockTest('${t.id}')">✎ Edit</button>
+          <button class="danger" onclick="deleteMockTest('${t.id}')">🗑 Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function editMockTest(id){
+  const {data:t,error}=await sb.from('mock_tests').select('id,title,language,time_limit_seconds,status').eq('id',id).eq('teacher_id',current.id).single();
+  if(error)return alert(error.message);
+  const title=prompt('Edit Mock Test title:',t.title||'Mock Test');
+  if(title===null)return;
+  const cleanTitle=title.trim();
+  if(!cleanTitle)return alert('Title cannot be empty.');
+  const currentMinutes=Math.round(Number(t.time_limit_seconds||7200)/60);
+  const minsText=prompt('Time limit in minutes:',String(currentMinutes));
+  if(minsText===null)return;
+  const mins=Number(minsText);
+  if(!Number.isFinite(mins)||mins<=0)return alert('Enter a valid time limit in minutes.');
+  const {error:ue}=await sb.from('mock_tests').update({title:cleanTitle,time_limit_seconds:Math.round(mins*60)}).eq('id',id).eq('teacher_id',current.id);
+  if(ue)return alert('Could not update Mock Test: '+ue.message);
+  alert('Mock Test updated successfully.');
+  loadPreviousMockTests();
+}
+async function deleteMockTest(id){
+  const {data:t,error:te}=await sb.from('mock_tests').select('id,title').eq('id',id).eq('teacher_id',current.id).single();
+  if(te)return alert(te.message);
+  const {count:attemptCount}=await sb.from('mock_test_attempts').select('id',{count:'exact',head:true}).eq('mock_test_id',id);
+  const {count:recipientCount}=await sb.from('mock_test_students').select('student_id',{count:'exact',head:true}).eq('mock_test_id',id);
+  const warning=`Delete Mock Test "${t.title}"?\n\nThis will permanently remove the test, its ${recipientCount||0} assignment(s), ${attemptCount||0} attempt(s), answers and generated questions.\n\nThis cannot be undone.`;
+  if(!confirm(warning))return;
+  const {error}=await sb.from('mock_tests').delete().eq('id',id).eq('teacher_id',current.id);
+  if(error)return alert('Could not delete Mock Test: '+error.message);
+  alert('Mock Test deleted successfully.');
+  loadPreviousMockTests();
+}
 function mockTestManagement(){render(`<div class="wrap">${header("Mock Test Management")}<div class="grid">
  <div class="card"><h2>📥 Question Bank</h2><p class="muted">Upload questions using the easiest method for each subject: PDF for MAT/Arithmetic, Excel for EVS/Language. Passage questions can be uploaded as linked passage groups.</p><button onclick="mockBulkUpload()">Bulk Upload Questions</button></div>
  <div class="card"><h2>✏️ Manage Bank</h2><p class="muted">Search, edit, activate/deactivate, add images and delete questions already in your question bank.</p><button onclick="mockBankSummary()">Manage Question Bank</button></div>
  <div class="card"><h2>🎯 Generate Test</h2><p class="muted">The system fetches the required number from every part and creates the complete 80-question test.</p><button onclick="generateMockTestPage()">Generate Mock Test</button></div>
- </div><div class="card"><h2>Question Bank & Tests</h2><div class="actions"><button class="secondary" onclick="mockTeacherResults()">Mock Test Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`)}
+ </div><div class="card"><h2>🗂 Previous Mock Tests</h2><p class="muted">Edit title/time limit or delete previously created Mock Tests.</p><div id="previousMockTests"><p class="muted">Loading…</p></div></div><div class="card"><h2>Question Bank & Tests</h2><div class="actions"><button class="secondary" onclick="mockTeacherResults()">Mock Test Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`)}
 function mockBulkUpload(){mockBankRows=[];mockPdfRows=[];mockAnswerKey={};render(`<div class="wrap">${header("Bulk Upload Mock Test Questions")}<div class="card">
  <div class="notice"><b>Flexible bulk-upload rule:</b> Upload any number of complete sets. For each question bank, the uploaded quantity must be a <b>multiple of the required questions per set</b>. For passage banks, one passage group is one set and all 5 linked questions must stay together.</div>
  <div class="grid"><div class="card" style="border:2px solid #2563eb"><span class="tag">EXCEL</span><h3>EVS & Language</h3><p class="small muted">Normal MCQs: upload 15, 30, 45… for EVS. Passage banks: upload complete groups of 5 questions (5, 10, 15…). Language uses complete 5-question passage groups. Images are optional and can be added later.</p><label>Excel file</label><input type="file" id="mockExcelFile" accept=".xlsx,.xls" onchange="readMockQuestionExcel(event)"><div id="mockExcelPreview"></div></div>
