@@ -244,7 +244,7 @@ function mockTestManagement(){render(`<div class="wrap">${header("Mock Test Mana
  <div class="card"><h2>📥 Question Bank</h2><p class="muted">Upload questions using the easiest method for each subject: PDF for MAT/Arithmetic, Excel for EVS/Language. Passage questions can be uploaded as linked passage groups.</p><button onclick="mockBulkUpload()">Bulk Upload Questions</button></div>
  <div class="card"><h2>✏️ Manage Bank</h2><p class="muted">Search, edit, activate/deactivate, add images and delete questions already in your question bank.</p><button onclick="mockBankSummary()">Manage Question Bank</button></div>
  <div class="card"><h2>🎯 Generate Test</h2><p class="muted">The system fetches the required number from every part and creates the complete 80-question test.</p><button onclick="generateMockTestPage()">Generate Mock Test</button></div>
- </div><div class="card"><h2>🗂 Previous Mock Tests</h2><p class="muted">Edit title/time limit or delete previously created Mock Tests.</p><div id="previousMockTests"><p class="muted">Loading…</p></div></div><div class="card"><h2>Question Bank & Tests</h2><div class="actions"><button class="secondary" onclick="mockTeacherResults()">Mock Test Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`)}
+ </div><div class="card"><h2>🗂 Previous Mock Tests</h2><p class="muted">Edit title/time limit or delete previously created Mock Tests.</p><div id="previousMockTests"><p class="muted">Loading…</p></div></div><div class="card"><h2>Question Bank & Tests</h2><div class="actions"><button class="secondary" onclick="mockTeacherResults()">Mock Test Results</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`);loadPreviousMockTests()}
 function mockBulkUpload(){mockBankRows=[];mockPdfRows=[];mockAnswerKey={};render(`<div class="wrap">${header("Bulk Upload Mock Test Questions")}<div class="card">
  <div class="notice"><b>Flexible bulk-upload rule:</b> Upload any number of complete sets. For each question bank, the uploaded quantity must be a <b>multiple of the required questions per set</b>. For passage banks, one passage group is one set and all 5 linked questions must stay together.</div>
  <div class="grid"><div class="card" style="border:2px solid #2563eb"><span class="tag">EXCEL</span><h3>EVS & Language</h3><p class="small muted">Normal MCQs: upload 15, 30, 45… for EVS. Passage banks: upload complete groups of 5 questions (5, 10, 15…). Language uses complete 5-question passage groups. Images are optional and can be added later.</p><label>Excel file</label><input type="file" id="mockExcelFile" accept=".xlsx,.xls" onchange="readMockQuestionExcel(event)"><div id="mockExcelPreview"></div></div>
@@ -294,8 +294,8 @@ function mockBuildSets(qs,plan){
 async function generateMockTestPage(language){
  if(language) window.mockGeneratorLanguage=language; const generatorLanguage=window.mockGeneratorLanguage||'ASSAMESE';
  const {data:classes,error}=await sb.from('classes').select('id,name').eq('teacher_id',current.id).order('name');
- if(error)return alert(error.message);
- if(!classes?.length)return alert('Create a class first.');
+ if(error)return alert('Could not load your classes: '+error.message);
+ if(!classes?.length)return alert('No class is available for this teacher account. Please create the class from the Teacher Dashboard first.');
  const {data:bank,error:be}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true);
  if(be)return alert(be.message);
  const byPart={};(bank||[]).forEach(q=>{const lang=String(q.language||'').toUpperCase();if(q.section_code==='MAT'){if(lang==='COMMON'||!lang)(byPart[q.part_code]||=[]).push(q)}else if(lang===generatorLanguage){(byPart[q.part_code]||=[]).push(q)}});
