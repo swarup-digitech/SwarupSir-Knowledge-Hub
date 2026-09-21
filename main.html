@@ -59,6 +59,50 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .choice-item .choice-text{flex:1;line-height:1.5;font-size:17px;font-weight:600;padding:2px 0;white-space:pre-wrap}
 .choice-item.selected .choice-text{color:#1d4ed8}
 @media(max-width:800px){.choice-list{grid-template-columns:1fr;gap:10px}.choice-item{min-height:62px;padding:12px 14px}.choice-item .choice-text{font-size:16px}}
+
+/* JNVST-style printable Mock Test */
+@media print{
+  .jnvst-paper{display:block!important}
+}
+.jnvst-paper{font-family:"Times New Roman",Times,serif;color:#111;background:#fff}
+.jnvst-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm 12mm 14mm 12mm;margin:0 auto;background:#fff;position:relative;page-break-after:always}
+.jnvst-page:last-child{page-break-after:auto}
+.jnvst-header{text-align:center;border-bottom:1px solid #111;padding-bottom:5px;margin-bottom:7px}
+.jnvst-code{display:flex;justify-content:space-between;font-size:10pt;font-weight:700}
+.jnvst-title{font-size:17pt;font-weight:700;letter-spacing:.3px;margin:3px 0}
+.jnvst-subtitle{font-size:13pt;font-weight:700;margin:2px 0}
+.jnvst-mock-badge{display:inline-block;border:1px solid #111;padding:2px 8px;font-size:9pt;font-weight:700;margin-top:3px}
+.jnvst-fields{width:100%;border-collapse:collapse;margin:5px 0 7px;font-size:10pt}
+.jnvst-fields td{border:1px solid #111;padding:4px}
+.jnvst-fields .label{font-weight:700;width:20%}
+.jnvst-roll{letter-spacing:5px}
+.jnvst-instructions{border:1px solid #111;padding:7px 9px;font-size:9.5pt;line-height:1.25}
+.jnvst-instructions h3{text-align:center;font-size:12pt;margin:0 0 6px}
+.jnvst-instructions ol{margin:0;padding-left:19px}
+.jnvst-instructions li{margin:0 0 3px}
+.jnvst-marks-table{width:100%;border-collapse:collapse;margin:7px 0 3px;font-size:9.5pt}
+.jnvst-marks-table th,.jnvst-marks-table td{border:1px solid #111;padding:4px;text-align:center}
+.jnvst-marks-table th:first-child,.jnvst-marks-table td:first-child{text-align:left}
+.jnvst-section-head{text-align:center;font-weight:700;font-size:14pt;margin:0 0 7px;text-transform:uppercase}
+.jnvst-part-head{text-align:center;font-weight:700;font-size:12pt;margin:9px 0 5px;border-bottom:1px solid #111;padding-bottom:3px}
+.jnvst-directions{font-size:9.5pt;line-height:1.25;margin:0 0 7px;text-align:justify}
+.jnvst-passage{border:1px solid #555;padding:7px 9px;margin:7px 0;font-size:10.5pt;line-height:1.35;break-inside:avoid}
+.jnvst-passage-title{text-align:center;font-weight:700;margin-bottom:4px}
+.jnvst-question{font-size:10.5pt;line-height:1.25;margin:0 0 8px;break-inside:avoid}
+.jnvst-qrow{display:flex;gap:7px;align-items:flex-start}
+.jnvst-qnum{font-weight:700;min-width:27px}
+.jnvst-qbody{flex:1}
+.jnvst-qtext{white-space:pre-wrap}
+.jnvst-options{display:grid;grid-template-columns:1fr 1fr;gap:3px 18px;margin-top:4px;margin-left:2px}
+.jnvst-option{white-space:pre-wrap}
+.jnvst-question-image{display:block;max-width:100%;max-height:72mm;width:auto;height:auto;margin:4px auto 5px;object-fit:contain}
+.jnvst-figure-question{border:0;text-align:center}
+.jnvst-rough{border:1px solid #111;height:230mm;margin-top:10px;padding:8px;text-align:center;font-weight:700;font-size:11pt}
+.jnvst-footer{position:absolute;bottom:6mm;left:12mm;right:12mm;border-top:1px solid #999;padding-top:2px;font-size:8.5pt;display:flex;justify-content:space-between}
+.jnvst-two-col{column-count:2;column-gap:12mm}
+.jnvst-two-col .jnvst-question{break-inside:avoid}
+.jnvst-small{font-size:9pt}
+@page{size:A4;margin:0}
 </style>
 </head>
 <body><div id="app"></div>
@@ -328,7 +372,8 @@ async function loadPreviousMockTests(){
           <div class="small muted">${lang} · ${mins} minutes · ${rc.get(t.id)||0} student(s) · ${ac.get(t.id)||0} attempt(s) · Created ${t.created_at?new Date(t.created_at).toLocaleString():'—'}</div>
         </div>
         <div class="actions">
-          <button onclick="editMockTest('${t.id}')">✎ Edit</button>
+          <button onclick="generateMockTestPDF('${t.id}')">🖨 Question Paper PDF</button>
+          <button class="secondary" onclick="editMockTest('${t.id}')">✎ Edit</button>
           <button class="secondary" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results':'✓ Approve Results'}</button>
           <button class="danger" onclick="deleteMockTest('${t.id}')">🗑 Delete</button>
         </div>
@@ -387,7 +432,7 @@ function mockTestManagement(){
     render(`<div class="wrap">${header("🎯 Mock Test Management")}
       <div class="card" style="border:2px solid #7c3aed;background:#faf5ff">
         <h2 style="color:#6d28d9">Independent Mock Test Module</h2>
-        <p class="muted">Mock Tests are managed separately from <b>Assignments</b>. Build your question banks here, generate an 80-question test, and assign it directly to students/classes.</p>
+        <p class="muted">Mock Tests are managed separately from <b>Assignments</b>. Build your question banks here, generate the 80-question JNVST-style test, assign it directly to students/classes, and generate a printable question-paper PDF.</p>
         <div class="grid" style="margin-top:15px">${parts.map(([code,label,partsText,method])=>`<div class="card" style="margin:0;border:1px solid #ddd6fe"><div class="tag" style="background:#ede9fe;color:#6d28d9">${code}</div><h3 style="margin-top:10px">${label}</h3><div class="stat" style="font-size:24px">${counts[code]}</div><div class="small muted">Active questions in bank</div><p class="small"><b>Upload:</b> ${method}</p><button onclick="mockBulkUpload()">Manage / Upload</button></div>`).join('')}</div>
       </div>
       <div class="grid">
@@ -397,7 +442,9 @@ function mockTestManagement(){
         <div class="card"><h2>📊 Mock Test Results</h2><p class="muted">View student Mock Test attempts and scores separately from Assignment Results.</p><button onclick="mockTeacherResults()">View Mock Results</button></div>
       </div>
       <div class="card"><h2>🗂 Previous Mock Tests</h2><p class="muted">Edit the title/time limit or delete previously created Mock Tests. Deleting a test also removes its generated questions, student assignments and attempts.</p><div id="previousMockTests"><p class="muted">Loading…</p></div></div>
-      <div class="card" style="background:#f8fafc"><h3>Mock Test Blueprint</h3><div class="grid">${[['MAT','20 Questions'],['EVS','20 Questions'],['ARITHMETIC','20 Questions'],['LANGUAGE','20 Questions']].map(x=>`<div class="assignment"><b>${x[0]}</b><div class="muted small">${x[1]}</div></div>`).join('')}</div><p class="small muted" style="margin-top:12px">Total: <b>80 Questions • 100 Marks • 2 Hours</b>. Each question carries 1.25 marks.</p></div>
+      <div class="card" style="background:#f8fafc"><h3>JNVST Mock Test Blueprint</h3><div class="grid">
+        ${[['SECTION I — PART 1','Mental Ability • 20 Questions'],['SECTION I — PART 2','EVS • 15 MCQs + 1 Passage × 5 = 20 Questions'],['SECTION II','Arithmetic • 20 Questions'],['SECTION III','Language • 4 Passages × 5 = 20 Questions']].map(x=>`<div class="assignment"><b>${x[0]}</b><div class="muted small">${x[1]}</div></div>`).join('')}
+      </div><p class="small muted" style="margin-top:12px">Total: <b>80 Questions • 100 Marks • 2 Hours</b>. Section I contains 20 Mental Ability + 20 EVS questions. Each question carries 1.25 marks.</p></div>
       <button class="secondary" onclick="teacherHome()">← Dashboard</button>
     </div>`);
     // render() completes asynchronously because the management page first
@@ -592,6 +639,216 @@ async function createMockTest(){
   mockTestManagement();
  }catch(e){alert('Could not generate Mock Test: '+(e.message||e))}
 }
+
+const JNVST_PDF_DIRECTIONS={
+  MAT_PATTERN:"In Question Nos. 1 to 4, four figures (A), (B), (C) and (D) have been given in each question. Of these four figures, three figures are similar in some way and one figure is different. Select the figure which is different. Darken the circle for the answer in the OMR Answer Sheet against the number corresponding to the question.",
+  MAT_SERIES:"In Question Nos. 5 to 8, a question figure is given on the left side and four answer figures marked (A), (B), (C) and (D) are given on the right side. Select the answer figure which is exactly the same as the question figure and darken the circle in the OMR Answer Sheet against the number corresponding to the question.",
+  MAT_GEOMETRICAL:"In Question Nos. 9 to 12, there is a question figure on the left side, a part of which is missing. Observe the answer figures (A), (B), (C) and (D) on the right side and find out the answer figure which, without changing the direction, fits in the missing part of the question figure in order to complete the pattern in the question figure. Indicate your answer by darkening the circle in the OMR Answer Sheet against the number corresponding to the question.",
+  MAT_MIRROR:"In Question Nos. 13 to 16, there are three question figures on the left side and the space for the fourth figure is left blank. The question figures are in a series. Find out one figure from among the four figures given on the right side which occupies the blank space for the fourth figure on the left side and completes the series. Indicate your answer by darkening the circle in the OMR Answer Sheet against the number corresponding to the question.",
+  MAT_EMBEDDED:"In Question Nos. 17 to 20, there are two sets of two question figures each. The second set has an interrogation mark (?). There exists a relationship between the first two question figures. Similar relationship should exist between the third and the fourth question figure. Select one of the answer figures which replaces the mark of interrogation. Darken the circle in the OMR Answer Sheet against the number corresponding to the question.",
+  EVS:"For each question, four probable answers as (A), (B), (C) and (D) are given. Only one out of these is correct. Choose the correct answer and darken the circle in the OMR Answer Sheet against the number corresponding to the question.",
+  ARITHMETIC:"For every question, four probable answers as (A), (B), (C) and (D) are given. Only one out of these is correct. Choose the correct answer and darken the circle in the OMR Answer Sheet against the number corresponding to the question.",
+  LANGUAGE:"There are four passages in this Section. Each passage is followed by five questions. Read each passage carefully and answer the questions that follow. For each question, four probable answers as (A), (B), (C) and (D) are given. Only one out of these is correct. Choose the correct answer and darken the circle in the OMR Answer Sheet against the number corresponding to the question."
+};
+
+function jnvstPdfEscape(v){
+  return esc(String(v??'')).replace(/\n/g,'<br>');
+}
+function jnvstPdfOption(q,o){
+  const v=q?.['option_'+o.toLowerCase()];
+  return `<div class="jnvst-option"><b>(${o})</b> ${jnvstPdfEscape(v||'')}</div>`;
+}
+function jnvstPdfQuestion(q){
+  const opts=['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('');
+  return `<div class="jnvst-question">
+    <div class="jnvst-qrow">
+      <div class="jnvst-qnum">${q.question_number}.</div>
+      <div class="jnvst-qbody">
+        ${q.image_url?`<img class="jnvst-question-image" src="${esc(q.image_url)}" alt="">`:''}
+        ${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}
+        <div class="jnvst-options">${opts}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function jnvstPdfGroupQuestions(qs){
+  return qs.map(jnvstPdfQuestion).join('');
+}
+function jnvstPdfPart(code,title,directions,qs){
+  return `<div class="jnvst-part-head">${esc(title)}</div>
+    <div class="jnvst-directions"><b>Directions :</b> ${esc(directions)}</div>
+    ${jnvstPdfGroupQuestions(qs)}`;
+}
+function jnvstPdfPassage(passageTitle,text){
+  if(!text)return '';
+  return `<div class="jnvst-passage"><div class="jnvst-passage-title">${esc(passageTitle||'Passage')}</div><div>${jnvstPdfEscape(text)}</div></div>`;
+}
+function jnvstPdfQuestionSection(qs){
+  // Keep passage together with its five associated questions. A passage is
+  // printed once even though the same passage metadata is stored on all five rows.
+  const out=[];
+  const seen=new Set();
+  for(const q of qs){
+    const pid=String(q.passage_id||'');
+    if(pid && !seen.has(pid)){
+      seen.add(pid);
+      out.push(jnvstPdfPassage(q.passage_title,q.passage_text));
+    }
+    out.push(jnvstPdfQuestion(q));
+  }
+  return out.join('');
+}
+function jnvstPdfGeneralInstructions(){
+  return `<div class="jnvst-instructions">
+    <h3>GENERAL INSTRUCTIONS FOR CANDIDATES</h3>
+    <ol>
+      <li>You are given a Test Booklet as well as an OMR (Optical Mark Recognition) Answer Sheet. The Test Booklet contains 80 questions serially numbered from 1 to 80. Count the pages of the Test Booklet and be sure that they are in proper order. Ensure that the Serial No. and the Code of the Test Booklet and the OMR Answer Sheet are same. In case of mismatch/defect/discrepancy in the Test Booklet and OMR Answer Sheet, report to your Invigilator and get the Test Booklet and OMR Answer Sheet replaced.</li>
+      <li>Answers are to be marked only in the OMR Answer Sheet as per the example given below. Candidates are required to indicate their answers at an appropriate place on the OMR Answer Sheet. Darken only one circle for each question as per the instructions given on Side-1 of the OMR Answer Sheet.</li>
+      <li>For each question, there are four probable answers, out of which only one is correct. The candidate is required to select the correct answer and darken the corresponding circle of the chosen answer.</li>
+      <li>Only Blue/Black Ballpoint Pen is to be used to write on the OMR Answer Sheet. Candidates should bring their own Ballpoint Pen. Use of pencil is strictly prohibited.</li>
+      <li>The test will be of two hours duration from 11:30 a.m. to 01:30 p.m. and will have three sections with objective-type questions.</li>
+      <li>Additional time of 40 minutes will be allowed for “Divyang students” (differently-abled students).</li>
+      <li>A single Test Booklet comprising all the three sections will be given to each candidate.</li>
+      <li>There are 80 questions in all for 100 marks as per details below. 15 minutes additional time is allowed for reading the instructions from 11:15 a.m. to 11:30 a.m.</li>
+    </ol>
+    <table class="jnvst-marks-table">
+      <thead><tr><th>Type of Test</th><th>Sections</th><th>Number of Questions</th><th>Marks</th></tr></thead>
+      <tbody>
+        <tr><td>Mental Ability Test + EVS</td><td>Section - I</td><td>From 1 to 40 = 40 Questions</td><td>50</td></tr>
+        <tr><td>Arithmetic Test</td><td>Section - II</td><td>From 41 to 60 = 20 Questions</td><td>25</td></tr>
+        <tr><td>Language Test</td><td>Section - III</td><td>From 61 to 80 = 20 Questions</td><td>25</td></tr>
+        <tr><td><b>Total</b></td><td></td><td><b>80</b></td><td><b>100</b></td></tr>
+      </tbody>
+    </table>
+    <ol start="9">
+      <li>All questions are to be attempted. Every question carries equal marks.</li>
+      <li>You must attempt questions of each section because you have to qualify in each Section separately.</li>
+      <li><b>Section-I has two Parts.</b> Part 1 contains 20 Mental Ability questions and Part 2 contains 20 EVS questions.</li>
+      <li>Overwriting, striking, cutting, applying white/correction fluid and erasing on the OMR Answer Sheet is not allowed. Such answers will not be evaluated. Do not make any stray mark on the OMR Answer Sheet.</li>
+      <li>No change in the darkened circle is allowed once marked in the OMR Answer Sheet.</li>
+      <li>Rough work must not be done on the OMR Answer Sheet. Use the rough-work page of the Test Booklet for rough work.</li>
+      <li>A bell will be rung after every 30 minutes.</li>
+      <li>No negative marking will be done.</li>
+    </ol>
+  </div>`;
+}
+
+async function generateMockTestPDF(testId){
+  const w=window.open('','_blank','width=1000,height=900');
+  if(!w){alert('The browser blocked the PDF preview window. Please allow pop-ups for this site and try again.');return;}
+  w.document.write('<!doctype html><html><head><title>Preparing question paper...</title></head><body style="font-family:Arial,sans-serif;padding:30px">Preparing JNVST-style question paper…</body></html>');
+  try{
+    const [{data:test,error:te},{data:qs,error:qe}]=await Promise.all([
+      sb.from('mock_tests').select('id,title,language,time_limit_seconds,created_at').eq('id',testId).eq('teacher_id',current.id).single(),
+      sb.from('mock_test_questions').select('*').eq('mock_test_id',testId).order('question_number')
+    ]);
+    if(te)throw te;
+    if(qe)throw qe;
+    if(!qs?.length)throw new Error('No generated questions were found for this Mock Test.');
+    const lang=test.language==='ENGLISH'?'ENGLISH':test.language==='ASSAMESE'?'ASSAMESE':'COMMON';
+    const byPart={};
+    qs.forEach(q=>(byPart[q.part_code]??=[]).push(q));
+
+    const matOrder=['MAT_PATTERN','MAT_SERIES','MAT_GEOMETRICAL','MAT_MIRROR','MAT_EMBEDDED'];
+    const matQs=matOrder.flatMap(p=>byPart[p]||[]);
+    const evsMcq=(byPart.EVS_MCQ||[]).sort((a,b)=>a.question_number-b.question_number);
+    const evsPass=(byPart.EVS_PASSAGE||[]).sort((a,b)=>a.question_number-b.question_number);
+    const arithmetic=(byPart.ARITHMETIC||[]).sort((a,b)=>a.question_number-b.question_number);
+    const language=(byPart.LANGUAGE_PASSAGE||[]).sort((a,b)=>a.question_number-b.question_number);
+
+    const partGroups=[
+      ['MAT_PATTERN','Part 1 — Mental Ability (Pattern / Odd Figure)','MAT_PATTERN'],
+      ['MAT_SERIES','Mental Ability — Part A','MAT_SERIES'],
+      ['MAT_GEOMETRICAL','Mental Ability — Part B','MAT_GEOMETRICAL'],
+      ['MAT_MIRROR','Mental Ability — Part C','MAT_MIRROR'],
+      ['MAT_EMBEDDED','Mental Ability — Part D','MAT_EMBEDDED']
+    ];
+
+    const firstPage=`<div class="jnvst-page">
+      <div class="jnvst-code"><span>MOCK TEST</span><span>JNVST-STYLE</span></div>
+      <div class="jnvst-header">
+        <div class="jnvst-title">JAWAHAR NAVODAYA VIDYALAYA SELECTION TEST — STYLE MOCK PAPER</div>
+        <div class="jnvst-subtitle">CLASS VI — MOCK TEST</div>
+        <div class="jnvst-mock-badge">${esc(test.title||'MOCK TEST')}</div>
+      </div>
+      <table class="jnvst-fields">
+        <tr><td class="label">Test Booklet No.</td><td>________________</td><td class="label">Test Booklet Code</td><td>MT</td></tr>
+        <tr><td class="label">Roll Number</td><td colspan="3" class="jnvst-roll">□ □ □ □ □ □ □ □ □ □</td></tr>
+        <tr><td class="label">Name of the Candidate</td><td colspan="3">_______________________________________________</td></tr>
+        <tr><td class="label">Signature of the Candidate</td><td colspan="3">_______________________________________________</td></tr>
+        <tr><td class="label">Time</td><td>2 Hours</td><td class="label">Maximum Marks</td><td>100</td></tr>
+      </table>
+      ${jnvstPdfGeneralInstructions()}
+      <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Page 1</span></div>
+    </div>`;
+
+    let pages=firstPage;
+    // Section I — Part 1: all 20 MAT questions. Keep the original directions
+    // for the five 4-question figure types as subheadings.
+    let matHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — I<br>PART — 1<br>MENTAL ABILITY TEST</div>`;
+    const dirByPart=Object.fromEntries(partGroups.map(x=>[x[0],JNVST_PDF_DIRECTIONS[x[0]]]));
+    const subTitles={
+      MAT_PATTERN:'Sub-Part A — Questions 1 to 4',
+      MAT_SERIES:'Sub-Part B — Questions 5 to 8',
+      MAT_GEOMETRICAL:'Sub-Part C — Questions 9 to 12',
+      MAT_MIRROR:'Sub-Part D — Questions 13 to 16',
+      MAT_EMBEDDED:'Sub-Part E — Questions 17 to 20'
+    };
+    for(const [code] of partGroups){
+      const arr=(byPart[code]||[]).sort((a,b)=>a.question_number-b.question_number);
+      if(arr.length){
+        matHtml+=`<div class="jnvst-part-head">${subTitles[code]}</div><div class="jnvst-directions"><b>Directions :</b> ${esc(dirByPart[code]||'')}</div>${jnvstPdfGroupQuestions(arr)}`;
+      }
+    }
+    matHtml+=`<div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section I — Part 1</span></div></div>`;
+    pages+=matHtml;
+
+    // Section I — Part 2: EVS. Standalone 15 questions followed by one passage
+    // and five passage-based questions.
+    let evsHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — I<br>PART — 2<br>ENVIRONMENTAL STUDIES (EVS)</div>`;
+    evsHtml+=`<div class="jnvst-directions"><b>Directions :</b> ${esc(JNVST_PDF_DIRECTIONS.EVS)}</div>`;
+    evsHtml+=jnvstPdfGroupQuestions(evsMcq);
+    if(evsPass.length){
+      evsHtml+=jnvstPdfPassage(evsPass[0].passage_title||'Passage',evsPass[0].passage_text||'');
+      evsHtml+=jnvstPdfGroupQuestions(evsPass);
+    }
+    evsHtml+=`<div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section I — Part 2</span></div></div>`;
+    pages+=evsHtml;
+
+    // Section II — Arithmetic
+    let arHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — II<br>ARITHMETIC TEST</div>
+      <div class="jnvst-directions"><b>Directions :</b> ${esc(JNVST_PDF_DIRECTIONS.ARITHMETIC)}</div>
+      <div class="jnvst-two-col">${jnvstPdfGroupQuestions(arithmetic)}</div>
+      <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section II</span></div></div>`;
+    pages+=arHtml;
+
+    // Section III — Language, preserving each passage before its five questions.
+    let langHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — III<br>LANGUAGE TEST</div>
+      <div class="jnvst-directions"><b>Directions :</b> ${esc(JNVST_PDF_DIRECTIONS.LANGUAGE)}</div>
+      ${jnvstPdfQuestionSection(language)}
+      <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section III</span></div></div>`;
+    pages+=langHtml;
+
+    pages+=`<div class="jnvst-page"><div class="jnvst-code"><span>${esc(test.title||'JNVST Mock Test')}</span><span>ROUGH WORK</span></div><div class="jnvst-rough">SPACE FOR ROUGH WORK</div><div class="jnvst-footer"><span>Use this page for rough work only.</span><span>Last Page</span></div></div>`;
+
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}</style></head><body><div class="jnvst-paper">${pages}</div></body></html>`);
+    w.document.close();
+    const waitForImages=async()=>{
+      const images=[...w.document.images];
+      await Promise.all(images.map(img=>new Promise(resolve=>{
+        if(img.complete)return resolve();
+        img.onload=resolve;img.onerror=resolve;
+      })));
+      setTimeout(()=>{w.focus();w.print();},300);
+    };
+    await waitForImages();
+  }catch(e){
+    try{w.close()}catch(_){}
+    alert('Could not generate the JNVST-style Question Paper PDF: '+(e.message||e));
+  }
+}
+
 async function studentMockTests(){const {data:links,error}=await sb.from('mock_test_students').select('mock_test_id').eq('student_id',current.id);if(error)return render(`<div class="wrap">${header('Mock Tests')}<div class="card">${message(error.message)}</div></div>`);const ids=(links||[]).map(x=>x.mock_test_id);let tests=[];if(ids.length){const {data,error:e}=await sb.from('mock_tests').select('*').in('id',ids).order('created_at',{ascending:false});if(e)return alert(e.message);tests=tests||[];tests=data||[]}const {data:attempts,error:ae}=await sb.from('mock_test_attempts').select('*').eq('student_id',current.id).in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});if(ae)return alert(ae.message);const latest=new Map();(attempts||[]).forEach(a=>{if(!latest.has(a.mock_test_id))latest.set(a.mock_test_id,a)});render(`<div class="wrap">${header('Mock Tests')}<div class="card"><h2>🎯 Mock Test</h2><p class="muted">80 questions • 100 marks • 2 hours • 1.25 marks per question.</p></div><div class="card"><h2>Available Tests</h2>${tests.length?tests.map(t=>{const a=latest.get(t.id);return `<div class="assignment"><h3>${esc(t.title)}</h3><p class="muted">80 Questions · 100 Marks · 2 Hours · Language: <b>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</b></p>${a?.status==='submitted'?`${t.results_released?`<div class="success"><b>Result Released:</b> ${Number(a.score||0).toFixed(2)}/100 (${Number(a.percentage||0).toFixed(2)}%)</div><button class="secondary" onclick="viewMockResult('${a.id}')">View Result</button>`:`<div class="notice"><b>Test submitted.</b><br>Your result will be available after the teacher approves/releases it.</div>`}`:`<button onclick="startMockTest('${t.id}')">${a?.status==='in_progress'?'Resume Mock Test':'Start Mock Test'}</button>`}</div>`}).join(''):'<p class="muted">No mock tests have been assigned to you.</p>'}</div><button class="secondary" onclick="studentHome()">← Back to Dashboard</button></div>`)}
 async function startMockTest(testId){try{const {data:test,error:te}=await sb.from('mock_tests').select('*').eq('id',testId).single();if(te)throw te;let {data:attempt}=await sb.from('mock_test_attempts').select('*').eq('mock_test_id',testId).eq('student_id',current.id).eq('status','in_progress').order('created_at',{ascending:false}).limit(1).maybeSingle();const now=Date.now();if(attempt&&new Date(attempt.end_at).getTime()<=now){await submitMockAttempt(attempt.id,true);attempt=null}if(!attempt){const start=new Date().toISOString(),end=new Date(now+Number(test.time_limit_seconds||7200)*1000).toISOString();const {data:a,error}=await sb.from('mock_test_attempts').insert({mock_test_id:testId,student_id:current.id,start_at:start,end_at:end,status:'in_progress',total_questions:80,total_marks:100}).select().single();if(error)throw error;attempt=a}const {data:qs,error:qe}=await sb.from('mock_test_questions').select('*').eq('mock_test_id',testId).order('question_number');if(qe)throw qe;const {data:ans}=await sb.from('mock_test_answers').select('question_id,selected_option').eq('attempt_id',attempt.id);const amap=Object.fromEntries((ans||[]).map(x=>[x.question_id,x.selected_option]));window.mockExam={test,attempt,qs:qs||[],answers:amap,index:0};renderMockExam();startMockTimer()}catch(e){alert('Could not start Mock Test: '+(e.message||e))}}
 let mockTimerHandle=null;function startMockTimer(){clearInterval(mockTimerHandle);mockTimerHandle=setInterval(()=>{const el=document.getElementById('mockTimer');if(!el||!window.mockExam)return clearInterval(mockTimerHandle);const left=Math.max(0,new Date(window.mockExam.attempt.end_at).getTime()-Date.now());el.textContent=formatDuration(left);if(left<=0){clearInterval(mockTimerHandle);submitMockAttempt(window.mockExam.attempt.id,true)}},500);}
