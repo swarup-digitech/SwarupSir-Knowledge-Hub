@@ -92,17 +92,42 @@ Deno.serve(async (req) => {
       const classRows = classes ?? [];
       const classMap = new Map<string, any>(classRows.map((c:any)=>[c.id,c]));
 
-      const isSub = (c:any) =>
-        String(c?.jnvst_group_type||"").toUpperCase()==="SUB" ||
-        /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(c?.description||""));
+      const courseKey = (c:any) => String(c?.course||"").trim().toUpperCase();
+      const nameKey = (c:any) => String(c?.name||"").trim().toUpperCase();
+      const descKey = (c:any) => String(c?.description||"").trim().toUpperCase();
+      const isFixedMainName = (name:any) => /^(?:JNVST\s*[- ]?(?:VI|6)|JNVST\s*[- ]?(?:IX|9))(?:\s*\([^)]*\))?$/i.test(String(name||"").trim());
+      const isSub = (c:any) => {
+        if(!c) return false;
+        const typed=String(c.jnvst_group_type||"").toUpperCase();
+        if(typed==="SUB") return true;
+        if(/^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(c.description||""))) return true;
+        // Legacy Navodaya sub-groups often have course JNVST-6/JNVST-9 but
+        // no jnvst_group_type. Treat non-fixed names as sub-groups.
+        const course=courseKey(c);
+        return (course==="JNVST-6" || course==="JNVST-9") && !isFixedMainName(c.name);
+      };
+
+      // Some older JNVST class/sub-group rows were created before
+      // jnvst_group_type/jnvst_parent_id were introduced.  Do not depend on
+      // those two columns alone when building Student Accounts.
+      const looksJnvst = (c:any) => {
+        if(!c) return false;
+        const course=courseKey(c), name=nameKey(c), desc=descKey(c);
+        return course.startsWith("JNVST") ||
+          desc.includes("JNVST_SUBGROUP_PARENT") ||
+          name.includes("JNVST") ||
+          name.startsWith("NAVODAYA_") ||
+          name.startsWith("NAVODAYA ");
+      };
 
       const isMain = (c:any) =>
         !!c &&
-        String(c.course||"").toUpperCase()!=="SCHOOL" &&
+        courseKey(c)!=="SCHOOL" &&
         !isSub(c) &&
         (
           String(c.jnvst_group_type||"").toUpperCase()==="MAIN" ||
-          String(c.course||"").toUpperCase().startsWith("JNVST")
+          courseKey(c).startsWith("JNVST") ||
+          /^JNVST\s*[- ]?(?:VI|6|IX|9)/i.test(String(c.name||""))
         );
 
       const subgroupParentKey = (c:any) => {
@@ -148,20 +173,23 @@ Deno.serve(async (req) => {
 
       const jnvstMains=classRows.filter(isMain);
       const jnvstSubs=classRows.filter(isSub);
-      const jnvstGroups=(jnvstMains.concat(jnvstSubs)).map((c:any)=>{
-        const parent=mainFor(c);
-        return {
-          id:c.id,
-          name:c.name||"",
-          is_subgroup:isSub(c),
-          main_group_id:parent?.id || (isMain(c)?c.id:""),
-          main_group_name:parent?.name || (isMain(c)?c.name:""),
-          course:c.course||""
-        };
-      }).filter((g:any)=>g.main_group_id);
+      const candidateClasses=classRows.filter(looksJnvst);
+      const jnvstGroups=(jnvstMains.concat(jnvstSubs).concat(candidateClasses))
+        .filter((c:any,i:number,a:any[])=>a.findIndex((x:any)=>x.id===c.id)===i)
+        .map((c:any)=>{
+          const parent=mainFor(c);
+          const subgroup= isSub(c);
+          return {
+            id:c.id,
+            name:c.name||"",
+            is_subgroup:subgroup,
+            main_group_id:parent?.id || (isMain(c)?c.id:""),
+            main_group_name:parent?.name || (isMain(c)?c.name:""),
+            course:c.course||""
+          };
+        }).filter((g:any)=>g.main_group_id);
 
       const subgroupRows=jnvstGroups.filter((g:any)=>g.is_subgroup);
-
       const jnvstClassIds=jnvstGroups.map((g:any)=>g.id);
       const membershipsByStudent=new Map<string, any[]>();
 
@@ -188,7 +216,38 @@ Deno.serve(async (req) => {
         }
       }
 
-      const ids=[...membershipsByStudent.keys()];
+      // Final legacy fallback: if the class metadata is too old to identify
+      // the JNVST group, inspect all teacher-owned memberships and keep only
+      // memberships whose class is not SCHOOL and whose student profile is a
+      // JNVST student. This recovers older Navodaya_Ass/Navodaya_Eng records
+      // without exposing ordinary School students.
+      let ids=[...membershipsByStudent.keys()];
+      if(!ids.length){
+        const allClassIds=classRows.map((c:any)=>c.id);
+        if(allClassIds.length){
+          const {data:allMemberships,error:ame}=await admin.from("class_students")
+            .select("student_id,class_id").in("class_id",allClassIds);
+          if(ame)return json({error:ame.message},400);
+          const possible=(allMemberships||[]).filter((row:any)=>{
+            const c=classMap.get(row.class_id);
+            return c && courseKey(c)!=="SCHOOL" && looksJnvst(c);
+          });
+          for(const row of possible){
+            const c=classMap.get(row.class_id);
+            let g=jnvstGroups.find((x:any)=>x.id===row.class_id);
+            if(!g){
+              const parent=mainFor(c);
+              g={id:c.id,name:c.name||"",is_subgroup:isSub(c),main_group_id:parent?.id||(isMain(c)?c.id:""),main_group_name:parent?.name||(isMain(c)?c.name:"")};
+              if(g.main_group_id)jnvstGroups.push(g);
+            }
+            if(!g?.main_group_id)continue;
+            const item={class_id:g.id,class_name:g.name||"",main_group_id:g.main_group_id,main_group_name:g.main_group_name||"",is_subgroup:!!g.is_subgroup};
+            if(!membershipsByStudent.has(row.student_id))membershipsByStudent.set(row.student_id,[]);
+            membershipsByStudent.get(row.student_id)!.push(item);
+          }
+          ids=[...membershipsByStudent.keys()];
+        }
+      }
       if (!ids.length)
         return json({success:true,students:[],groups:jnvstGroups});
 
@@ -203,7 +262,7 @@ Deno.serve(async (req) => {
       if (pe) return json({error:pe.message},400);
 
       const jnvstProfiles=(profiles||[]).filter((p:any)=>
-        ["JNVST-6","JNVST-9"].includes(String(p.course||"").toUpperCase())
+        String(p.course||"").toUpperCase().startsWith("JNVST")
       );
       const jnvstIds=jnvstProfiles.map((p:any)=>p.id);
 

@@ -1245,8 +1245,13 @@ function renderJnvstStudentAccounts(){
    const text=`${s.full_name||""} ${s.roll_no||""} ${s.username||""}`.toLowerCase();
    if(q&&!text.includes(q))return false;
    const ms=s.memberships||[];
-   if(main!=="all"&&!ms.some(m=>String(m.main_group_id)===main))return false;
-   if(sub!=="all"&&!ms.some(m=>String(m.class_id)===sub))return false;
+   const normalizedMs=ms.map(m=>{
+     if(m.main_group_id)return m;
+     const g=groups.find(x=>String(x.id)===String(m.class_id));
+     return g?{...m,main_group_id:g.mainId,main_group_name:g.mainName,is_subgroup:g.subId===m.class_id}:m;
+   });
+   if(main!=="all"&&!normalizedMs.some(m=>String(m.main_group_id)===main))return false;
+   if(sub!=="all"&&!normalizedMs.some(m=>String(m.class_id)===sub))return false;
    return true;
  });
  const mains=[...new Map(groups.filter(g=>g.mainId).map(g=>[g.mainId,{id:g.mainId,name:g.mainName}])).values()].sort((a,b)=>a.name.localeCompare(b.name));
