@@ -302,7 +302,7 @@ const MOCK_PLAN=[
  {section:'EVS',part:'EVS_MCQ',label:'EVS — MCQ',count:15,upload:'excel',unit:'questions'},
  {section:'EVS',part:'EVS_PASSAGE',label:'EVS — Passage Group',count:5,upload:'excel',unit:'passage'},
  {section:'ARITHMETIC',part:'ARITHMETIC',label:'Arithmetic',count:20,upload:'excel_or_pdf',unit:'questions'},
- {section:'LANGUAGE',part:'LANGUAGE_PASSAGE',label:'Language — 4 Passage Groups',count:5,passageCount:5,groupCount:4,upload:'excel',unit:'passage'}
+ {section:'LANGUAGE',part:'LANGUAGE_PASSAGE',label:'Language — 4 Passage Groups',count:20,passageCount:5,groupCount:4,upload:'excel',unit:'passage'}
 ];
 const mockPlanByPart=Object.fromEntries(MOCK_PLAN.map(x=>[x.part,x]));
 const mockPartLabel=part=>mockPlanByPart[String(part||'').trim().toUpperCase().replace(/\s+/g,'_')]?.label||part;
@@ -577,10 +577,10 @@ async function createMockTest(){
     for(const group of selectedGroups){
      const groupQuestions=group.questions||[];
      const passageText=groupQuestions.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'';
-     groupQuestions.forEach(q=>qrows.push({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:passageText||q.passage_text||null,image_url:q.image_url,marks:1.25}));
+     groupQuestions.forEach(q=>qrows.push({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:passageText||q.passage_text||null,image_url:q.image_url,marks:1.25}));
     }
    }else{
-    qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})));
+    qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})));
    }
   }
   qrows.forEach((q,i)=>q.question_number=i+1);
@@ -3056,7 +3056,7 @@ init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start<
     {section:'EVS',part:'EVS_MCQ',label:'EVS — MCQ',count:15,upload:'excel',unit:'questions'},
     {section:'EVS',part:'EVS_PASSAGE',label:'EVS — Passage Group',count:5,upload:'excel',unit:'passage'},
     {section:'ARITHMETIC',part:'ARITHMETIC',label:'Arithmetic',count:20,upload:'excel_or_pdf',unit:'questions'},
-    {section:'LANGUAGE',part:'LANGUAGE_PASSAGE',label:'Language — 4 Passage Groups',count:5,passageCount:5,groupCount:4,upload:'excel',unit:'passage'}
+    {section:'LANGUAGE',part:'LANGUAGE_PASSAGE',label:'Language — 4 Passage Groups',count:20,passageCount:5,groupCount:4,upload:'excel',unit:'passage'}
   );
   for(const k of Object.keys(mockPlanByPart)) delete mockPlanByPart[k];
   MOCK_PLAN.forEach(x=>mockPlanByPart[x.part]=x);
