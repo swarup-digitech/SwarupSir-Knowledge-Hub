@@ -831,6 +831,10 @@ async function generateMockTestPDF(testId){
 
     pages+=`<div class="jnvst-page"><div class="jnvst-code"><span>${esc(test.title||'JNVST Mock Test')}</span><span>ROUGH WORK</span></div><div class="jnvst-rough">SPACE FOR ROUGH WORK</div><div class="jnvst-footer"><span>Use this page for rough work only.</span><span>Last Page</span></div></div>`;
 
+    // Reuse the application's inline styles in the print window.
+    // The previous implementation referenced an undefined `css_add` variable,
+    // which caused PDF generation to fail before the print preview opened.
+    const css_add=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
     w.document.open();
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}</style></head><body><div class="jnvst-paper">${pages}</div></body></html>`);
     w.document.close();
