@@ -2806,7 +2806,7 @@ async function studentHome(){
       ${isCompleted?`
         <p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p>
         ${pct>=80
-          ? `<div class="success" style="margin-top:10px"><b>✓ Assignment successfully submitted.</b></div>`
+          ? `<div class="success" style="margin-top:10px"><b>✓ Assignment successfully submitted.</b></div><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View Result &amp; Answers</button></div>`
           : `<div class="notice" style="margin-top:10px"><b>Score below 80%.</b><br>You have to redo this assessment. You can view your result, answers and answer key during the 3-hour waiting period. The assessment will become available again automatically after 3 hours.</div><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View Result &amp; Answers</button></div>`}
         ${isVideo?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}
       `:`
