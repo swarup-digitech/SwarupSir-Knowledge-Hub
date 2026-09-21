@@ -17,25 +17,33 @@ create index if not exists idx_mock_test_questions_test_passage
   on public.mock_test_questions(mock_test_id, passage_id, question_number);
 
 -- Backfill missing passage metadata in the bank from another question in the same passage group.
+-- NOTE: PostgreSQL does not allow the UPDATE target alias (q) to be referenced
+-- from a FROM/LATERAL item at this level, so the source rows are materialized
+-- first and then joined back to the target table.
+with passage_source as (
+  select distinct on (teacher_id, part_code, language, passage_id)
+         teacher_id, part_code, language, passage_id,
+         passage_title, passage_text
+  from public.mock_question_bank
+  where part_code in ('EVS_PASSAGE','LANGUAGE_PASSAGE')
+    and passage_id is not null
+    and (nullif(trim(passage_title), '') is not null or nullif(trim(passage_text), '') is not null)
+  order by
+    teacher_id, part_code, language, passage_id,
+    (nullif(trim(passage_title), '') is not null) desc,
+    (nullif(trim(passage_text), '') is not null) desc,
+    question_order nulls last, created_at, id
+)
 update public.mock_question_bank q
 set passage_title = coalesce(nullif(trim(q.passage_title), ''), src.passage_title),
     passage_text  = coalesce(nullif(trim(q.passage_text), ''), src.passage_text)
-from lateral (
-  select b.passage_title, b.passage_text
-  from public.mock_question_bank b
-  where b.teacher_id = q.teacher_id
-    and b.part_code = q.part_code
-    and b.language = q.language
-    and b.passage_id = q.passage_id
-    and (nullif(trim(b.passage_title), '') is not null or nullif(trim(b.passage_text), '') is not null)
-  order by
-    (nullif(trim(b.passage_title), '') is not null) desc,
-    (nullif(trim(b.passage_text), '') is not null) desc,
-    b.question_order nulls last, b.created_at
-  limit 1
-) src
+from passage_source src
 where q.part_code in ('EVS_PASSAGE','LANGUAGE_PASSAGE')
   and q.passage_id is not null
+  and q.teacher_id = src.teacher_id
+  and q.part_code = src.part_code
+  and q.language is not distinct from src.language
+  and q.passage_id = src.passage_id
   and (nullif(trim(q.passage_title), '') is null or nullif(trim(q.passage_text), '') is null);
 
 -- Snapshot passage metadata into existing generated Mock Test questions.
