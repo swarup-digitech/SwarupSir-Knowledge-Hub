@@ -92,3 +92,6 @@ from public.mock_test_questions
 where part_code in ('EVS_PASSAGE','LANGUAGE_PASSAGE')
 group by mock_test_id, part_code, passage_id
 order by mock_test_id, part_code, passage_id;
+
+-- Ensure PostgREST sees the newly-added passage columns immediately.
+NOTIFY pgrst, 'reload schema';
