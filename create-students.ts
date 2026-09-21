@@ -190,66 +190,63 @@ Deno.serve(async (req) => {
         }).filter((g:any)=>g.main_group_id);
 
       const subgroupRows=jnvstGroups.filter((g:any)=>g.is_subgroup);
-      const jnvstClassIds=jnvstGroups.map((g:any)=>g.id);
+
+      // Robust legacy membership discovery. Older projects may have teacher-owned
+      // JNVST classes whose metadata predates jnvst_group_type/jnvst_parent_id.
+      // Do not require the class metadata to be perfect before finding the
+      // teacher's JNVST students: the student's profile.course is the final
+      // authority for whether the account belongs to JNVST.
+      const teacherClassIds=classRows.map((c:any)=>c.id);
       const membershipsByStudent=new Map<string, any[]>();
-
-      if (jnvstClassIds.length) {
-        const { data: memberships, error: me } = await admin
-          .from("class_students")
-          .select("student_id,class_id")
-          .in("class_id",jnvstClassIds);
-        if (me) return json({error:me.message},400);
-
-        for (const row of memberships ?? []) {
-          const c=jnvstGroups.find((g:any)=>g.id===row.class_id);
-          if (!c) continue;
+      if(teacherClassIds.length){
+        const {data:allMemberships,error:ame}=await admin.from("class_students")
+          .select("student_id,class_id").in("class_id",teacherClassIds);
+        if(ame)return json({error:ame.message},400);
+        for(const row of allMemberships||[]){
+          const c=classMap.get(row.class_id);
+          if(!c || courseKey(c)==="SCHOOL")continue;
+          let g=jnvstGroups.find((x:any)=>x.id===row.class_id);
+          if(!g){
+            const parent=mainFor(c);
+            const fallbackMain=parent || (courseKey(c)==="JNVST-6"
+              ? classRows.find((x:any)=>courseKey(x)==="JNVST-6" && isMain(x))
+              : courseKey(c)==="JNVST-9"
+                ? classRows.find((x:any)=>courseKey(x)==="JNVST-9" && isMain(x))
+                : null);
+            g={
+              id:c.id,
+              name:c.name||"",
+              is_subgroup:isSub(c),
+              main_group_id:fallbackMain?.id || (isMain(c)?c.id:""),
+              main_group_name:fallbackMain?.name || (isMain(c)?c.name:"")
+            };
+            if(g.main_group_id)jnvstGroups.push(g);
+          }
+          if(!g?.main_group_id)continue;
           const item={
-            class_id:c.id,
-            class_name:c.name||"",
-            main_group_id:c.main_group_id||"",
-            main_group_name:c.main_group_name||"",
-            is_subgroup:!!c.is_subgroup
+            class_id:g.id,
+            class_name:g.name||"",
+            main_group_id:g.main_group_id,
+            main_group_name:g.main_group_name||"",
+            is_subgroup:!!g.is_subgroup
           };
-          if (!membershipsByStudent.has(row.student_id))
-            membershipsByStudent.set(row.student_id,[]);
+          if(!membershipsByStudent.has(row.student_id))membershipsByStudent.set(row.student_id,[]);
           membershipsByStudent.get(row.student_id)!.push(item);
         }
       }
 
-      // Final legacy fallback: if the class metadata is too old to identify
-      // the JNVST group, inspect all teacher-owned memberships and keep only
-      // memberships whose class is not SCHOOL and whose student profile is a
-      // JNVST student. This recovers older Navodaya_Ass/Navodaya_Eng records
-      // without exposing ordinary School students.
-      let ids=[...membershipsByStudent.keys()];
-      if(!ids.length){
-        const allClassIds=classRows.map((c:any)=>c.id);
-        if(allClassIds.length){
-          const {data:allMemberships,error:ame}=await admin.from("class_students")
-            .select("student_id,class_id").in("class_id",allClassIds);
-          if(ame)return json({error:ame.message},400);
-          const possible=(allMemberships||[]).filter((row:any)=>{
-            const c=classMap.get(row.class_id);
-            return c && courseKey(c)!=="SCHOOL" && looksJnvst(c);
-          });
-          for(const row of possible){
-            const c=classMap.get(row.class_id);
-            let g=jnvstGroups.find((x:any)=>x.id===row.class_id);
-            if(!g){
-              const parent=mainFor(c);
-              g={id:c.id,name:c.name||"",is_subgroup:isSub(c),main_group_id:parent?.id||(isMain(c)?c.id:""),main_group_name:parent?.name||(isMain(c)?c.name:"")};
-              if(g.main_group_id)jnvstGroups.push(g);
-            }
-            if(!g?.main_group_id)continue;
-            const item={class_id:g.id,class_name:g.name||"",main_group_id:g.main_group_id,main_group_name:g.main_group_name||"",is_subgroup:!!g.is_subgroup};
-            if(!membershipsByStudent.has(row.student_id))membershipsByStudent.set(row.student_id,[]);
-            membershipsByStudent.get(row.student_id)!.push(item);
-          }
-          ids=[...membershipsByStudent.keys()];
+      // Also make sure fixed JNVST main groups are available to the UI even
+      // when they currently have no student membership.
+      for(const c of classRows){
+        if(!looksJnvst(c))continue;
+        if(!jnvstGroups.some((x:any)=>x.id===c.id)){
+          const parent=mainFor(c);
+          const g={id:c.id,name:c.name||"",is_subgroup:isSub(c),main_group_id:parent?.id||(isMain(c)?c.id:""),main_group_name:parent?.name||(isMain(c)?c.name:"")};
+          if(g.main_group_id)jnvstGroups.push(g);
         }
       }
-      if (!ids.length)
-        return json({success:true,students:[],groups:jnvstGroups});
+
+      const ids=[...membershipsByStudent.keys()];
 
       // Only JNVST student profiles are returned. This prevents School
       // students from entering the JNVST Student Accounts screen even if
@@ -318,9 +315,17 @@ Deno.serve(async (req) => {
       const target=byId.get(targetClassId);
       if (!target) return json({error:"Target JNVST group is not available to this teacher."},403);
 
-      const isSub=(g:any)=>String(g?.jnvst_group_type||"").toUpperCase()==="SUB" || /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(g?.description||""));
+      const isFixedMain=(g:any)=>/^(?:JNVST\s*[- ]?(?:VI|6)|JNVST\s*[- ]?(?:IX|9))(?:\s*\([^)]*\))?$/i.test(String(g?.name||"").trim());
+      const isSub=(g:any)=>{
+        if(!g)return false;
+        const typed=String(g.jnvst_group_type||"").toUpperCase();
+        if(typed==="SUB")return true;
+        if(/^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(g.description||"")))return true;
+        const course=String(g.course||"").toUpperCase();
+        return (course==="JNVST-6"||course==="JNVST-9")&&!isFixedMain(g);
+      };
       const isMain=(g:any)=>!!g && !isSub(g) && String(g.course||"").toUpperCase()!=="SCHOOL" &&
-        (String(g.jnvst_group_type||"").toUpperCase()==="MAIN" || String(g.course||"").toUpperCase().startsWith("JNVST"));
+        (String(g.jnvst_group_type||"").toUpperCase()==="MAIN" || String(g.course||"").toUpperCase().startsWith("JNVST") || /^JNVST\s*[- ]?(?:VI|6|IX|9)/i.test(String(g.name||"")));
       const parentId=(g:any)=>{
         if(!g)return "";
         if(g.jnvst_parent_id && byId.has(g.jnvst_parent_id))return g.jnvst_parent_id;
@@ -546,7 +551,15 @@ Deno.serve(async (req) => {
         .eq("classes.teacher_id",caller.user.id)
         .eq("classes.course","SCHOOL")
         .limit(1);
-      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+      if (me || !membership?.length) return json({error:"This student is not in one of your classes."},403);
+
+      const { data: studentProfile, error: spe } = await admin.from("profiles")
+        .select("id,role,course").eq("id",studentId).maybeSingle();
+      if (spe) return json({error:spe.message},400);
+      if (!studentProfile || studentProfile.role!=="student") return json({error:"Student account not found."},404);
+      const studentCourse=String(studentProfile.course||"").toUpperCase();
+      if (studentCourse!=="SCHOOL" && !studentCourse.startsWith("JNVST"))
+        return json({error:"This account is not managed by the selected course."},403);
 
       const { error: de } = await admin.auth.admin.deleteUser(studentId);
       if (de) return json({error:de.message},400);

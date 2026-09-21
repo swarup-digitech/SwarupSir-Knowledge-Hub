@@ -1207,6 +1207,110 @@ async function callTeacherFn(body){
  if(!res.ok||j.error)throw new Error(j.error||"Request failed.");
  return j;
 }
+
+// ------------------------------------------------------------
+// JNVST student creation / bulk import
+// These functions are intentionally JNVST-scoped.  The JNVST dashboard
+// must not depend on the School student-management page.
+// ------------------------------------------------------------
+async function addStudent(){
+  try{
+    const {data:classes,error}=await sb.from("classes")
+      .select("id,name,course,description,jnvst_group_type,jnvst_parent_id")
+      .eq("teacher_id",current.id)
+      .order("name");
+    if(error) throw error;
+    const jclasses=(classes||[]).filter(c=>String(c.course||"").toUpperCase().startsWith("JNVST"));
+    if(!jclasses.length){
+      return render(`<div class="wrap">${header("Add JNVST Student")}<div class="card">${message("No JNVST classes or sub-groups are available. Please create/verify the JNVST groups first.")}<div class="actions"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`);
+    }
+    const mains=jnvstMainGroups(jclasses);
+    const defaultMain=mains[0]?.id||jclasses[0].id;
+    const subs=jnvstSubgroupsForMain(jclasses,mains[0]||jclasses[0]);
+    const choices=(subs.length?subs:[mains[0]||jclasses[0]]);
+    render(`<div class="wrap">${header("Add JNVST Student")}
+      <div class="card" style="border:2px solid #f59e0b;background:#fffbeb">
+        <h3>⚠ Student Account Creation</h3>
+        <p class="small" style="margin:0">Check the student's name, Roll No., password and JNVST group carefully before creating the account. The account will be used for student login.</p>
+      </div>
+      <div class="card">
+        <label>Student Name</label><input id="jnvstAddName" placeholder="Student name">
+        <label>Roll No.</label><input id="jnvstAddRoll" type="text" inputmode="text" placeholder="e.g. X01 or 1010">
+        <label>Password</label><input id="jnvstAddPass" type="text" placeholder="At least 6 characters">
+        <label>JNVST Main Group</label>
+        <select id="jnvstAddMain" onchange="refreshJnvstAddSubgroups()">${mains.map((m,i)=>`<option value="${esc(m.id)}" ${i===0?'selected':''}>${esc(m.name)}</option>`).join("")}</select>
+        <label>JNVST Sub-Group</label><select id="jnvstAddClass">${choices.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select>
+        <div id="jnvstAddMsg"></div>
+        <div class="actions"><button onclick="createJnvstStudent()">Create Student</button><button class="secondary" onclick="teacherHome()">← Dashboard</button><button class="secondary" onclick="manageStudentAccounts()">Student Accounts</button></div>
+      </div></div>`);
+  }catch(e){render(`<div class="wrap">${header("Add JNVST Student")}<div class="card">${message(e.message||String(e))}</div></div>`)}
+}
+function refreshJnvstAddSubgroups(){
+  const mainId=document.getElementById("jnvstAddMain")?.value||"";
+  const sel=document.getElementById("jnvstAddClass"); if(!sel)return;
+  const classes=(window._jnvstClasses&&window._jnvstClasses.length?window._jnvstClasses:[]);
+  const main=classes.find(c=>String(c.id)===String(mainId));
+  const subs=jnvstSubgroupsForMain(classes,main);
+  sel.innerHTML=(subs.length?subs:[main].filter(Boolean)).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+}
+async function createJnvstStudent(){
+  const name=document.getElementById("jnvstAddName")?.value.trim();
+  const roll=document.getElementById("jnvstAddRoll")?.value.trim();
+  const pass=document.getElementById("jnvstAddPass")?.value||"";
+  const classId=document.getElementById("jnvstAddClass")?.value||"";
+  const box=document.getElementById("jnvstAddMsg");
+  if(!name||!roll||!pass||!classId)return alert("Please fill Name, Roll No., Password and JNVST Group.");
+  if(pass.length<6)return alert("Password must contain at least 6 characters.");
+  if(!confirm(`Create this JNVST student account?\n\nName: ${name}\nRoll No.: ${roll}\nJNVST Group: ${document.getElementById("jnvstAddClass")?.selectedOptions?.[0]?.textContent||classId}\n\nPlease verify the details before confirming.`))return;
+  try{
+    const j=await callTeacherFn({action:"createStudents",students:[{name,roll_no:roll,password:pass,class_id:classId}]});
+    const r=j.results?.[0];
+    if(!r?.success)throw new Error(r?.error||"Could not create student.");
+    box.innerHTML=message(`Student created successfully. Roll No.: ${r.roll_no||roll}`,true);
+    setTimeout(()=>manageStudentAccounts(),900);
+  }catch(e){box.innerHTML=message(e.message||String(e))}
+}
+function bulkImportStudents(){
+  bulkStudents=[];
+  render(`<div class="wrap">${header("Bulk JNVST Students — Excel")}
+    <div class="card" style="border:2px solid #f59e0b;background:#fffbeb"><h3>⚠ Bulk Student Account Creation</h3><p class="small" style="margin:0">Check the Excel preview carefully. Each row creates a real student login account. Existing Roll Nos. cannot be duplicated.</p></div>
+    <div class="card"><p><b>Required Excel columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div><p class="muted small">For JNVST, <b>Class</b> should be the exact existing JNVST main group or sub-group name. No email is required.</p>
+    <label>Excel file</label><input id="studentExcel" type="file" accept=".xlsx,.xls" onchange="readJnvstStudentExcel(event)"><div id="bulkPreview"></div>
+    <div class="actions"><button onclick="uploadJnvstBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Dashboard</button><button class="secondary" onclick="manageStudentAccounts()">Student Accounts</button></div></div></div>`);
+}
+function readJnvstStudentExcel(ev){
+  const file=ev.target.files?.[0];if(!file)return;
+  const r=new FileReader();r.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+    if(!raw.length)throw new Error("The Excel file is empty.");
+    const norm=v=>String(v??"").trim();
+    const headers=raw[0].map(v=>norm(v).toLowerCase().replace(/[_\s]+/g," "));
+    const col=(...names)=>{for(const x of names){const i=headers.indexOf(x);if(i>=0)return i}return -1};
+    const ni=col("name","student name"),ri=col("roll no","roll number"),ci=col("class","class name","group","group name"),pi=col("password");
+    if([ni,ri,ci,pi].some(x=>x<0))throw new Error("Required columns: Name, Roll No, Class, Password.");
+    bulkStudents=raw.slice(1).map((row,i)=>({row:i+2,name:norm(row[ni]),roll_no:norm(row[ri]),className:norm(row[ci]),password:norm(row[pi])})).filter(x=>x.name||x.roll_no||x.className||x.password);
+    if(!bulkStudents.length)throw new Error("No student rows found.");
+    const errors=[],seen=new Set();
+    bulkStudents.forEach(x=>{const k=x.className.toLowerCase()+"|"+x.roll_no.toLowerCase();if(!x.name)errors.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errors.push(`Row ${x.row}: Roll No missing`);if(!x.className)errors.push(`Row ${x.row}: Class/Group missing`);if(!x.password)errors.push(`Row ${x.row}: Password missing`);if(x.password&&x.password.length<6)errors.push(`Row ${x.row}: Password must be at least 6 characters`);if(seen.has(k))errors.push(`Row ${x.row}: duplicate Roll No ${x.roll_no} in ${x.className}`);seen.add(k)});
+    if(errors.length){document.getElementById("bulkPreview").innerHTML=message(errors.join(" | "));return;}
+    document.getElementById("bulkPreview").innerHTML=`<div class="success">Loaded ${bulkStudents.length} student rows. Review before creating accounts.</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>JNVST Group</th><th>Password</th></tr></thead><tbody>${bulkStudents.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td></tr>`).join("")}</tbody></table></div>`;
+  }catch(err){document.getElementById("bulkPreview").innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file);
+}
+async function uploadJnvstBulkStudents(){
+  if(!bulkStudents.length)return alert("Upload an Excel file first.");
+  if(!confirm(`You are about to create ${bulkStudents.length} JNVST student account(s).\n\nPlease confirm that the Excel data has been checked carefully.`))return;
+  try{
+    const {data:classes,error}=await sb.from("classes").select("id,name,course").eq("teacher_id",current.id);
+    if(error)throw error;
+    const cmap=new Map((classes||[]).filter(c=>String(c.course||"").toUpperCase().startsWith("JNVST")).map(c=>[String(c.name).trim().toLowerCase(),c.id]));
+    const missing=[...new Set(bulkStudents.filter(x=>!cmap.has(x.className.toLowerCase())).map(x=>x.className))];
+    if(missing.length)throw new Error("JNVST Class/Group not found: "+missing.join(", "));
+    const j=await callTeacherFn({action:"createStudents",students:bulkStudents.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase())}))});
+    const results=j.results||[],ok=results.filter(x=>x.success),bad=results.filter(x=>!x.success);
+    render(`<div class="wrap">${header("Bulk JNVST Student Import Result")}<div class="card"><div class="success">Successfully created: ${ok.length}</div>${bad.length?`<div class="notice">Failed: ${bad.length}<br>${bad.map(x=>esc(`${x.name||""}: ${x.error||"Unknown error"}`)).join("<br>")}</div>`:""}<div class="actions"><button onclick="manageStudentAccounts()">Student Accounts</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`);
+  }catch(e){alert(e.message||String(e))}
+}
+
 async function manageStudentAccounts(){
  try{
   const j=await callTeacherFn({action:"listCredentials"});
