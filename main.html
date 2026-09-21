@@ -1061,6 +1061,111 @@ async function normalizeJnvstAssignmentGroups(classes,assignments){
  return list;
 }
 
+
+async function manageStudentAccounts(){
+  if(!current?.id || profile?.role!=='teacher') return teacherLoginPage();
+  const qs = new URLSearchParams(location.search);
+  // Keep the page in the JNVST teacher portal unless this is explicitly the School portal.
+  const portal = qs.get('portal') === 'SCHOOL' || schoolTeacherMode ? 'SCHOOL' : 'JNVST';
+  render(`<div class="wrap">${header(portal==='SCHOOL'?'Student Accounts':'JNVST Student Accounts')}<div class="card"><div class="notice">Loading student accounts…</div></div></div>`);
+  try{
+    const action = portal==='SCHOOL' ? 'listSchoolStudents' : 'listCredentials';
+    const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':`Bearer ${(await sb.auth.getSession()).data.session?.access_token||''}`},
+      body:JSON.stringify({action})
+    });
+    const j=await res.json().catch(()=>({}));
+    if(!res.ok||j.error) throw new Error(j.error||`Could not load ${portal==='SCHOOL'?'student':'JNVST student'} accounts.`);
+    const list=Array.isArray(j.students)?j.students:[];
+    if(portal==='SCHOOL') return renderSchoolStudentAccounts(list);
+
+    const mainOrder=new Map([['JNVST-VI (Class-IV)',0],['JNVST-IX (Class IX)',1]]);
+    const groupKey=s=>{
+      const m=s.memberships?.find(x=>x.is_subgroup)||s.memberships?.[0];
+      return {main:m?.main_group_name||'Unassigned', sub:m?.is_subgroup?m.class_name:'Direct / No sub-group'};
+    };
+    list.sort((a,b)=>{
+      const ga=groupKey(a),gb=groupKey(b);
+      return (mainOrder.get(ga.main)??99)-(mainOrder.get(gb.main)??99) || ga.main.localeCompare(gb.main) || ga.sub.localeCompare(gb.sub) || String(a.full_name||'').localeCompare(String(b.full_name||''));
+    });
+
+    const byMain=new Map();
+    list.forEach(st=>{
+      const g=groupKey(st); if(!byMain.has(g.main))byMain.set(g.main,new Map());
+      const m=byMain.get(g.main); if(!m.has(g.sub))m.set(g.sub,[]); m.get(g.sub).push(st);
+    });
+
+    const renderStudent=st=>{
+      const primary=st.memberships?.find(x=>x.is_subgroup)||st.memberships?.[0];
+      const subgroups=Array.isArray(st.available_subgroups)?st.available_subgroups:[];
+      const currentSub=primary?.is_subgroup?primary.class_id:'';
+      const subgroupOptions=subgroups.length?`<select id="jnvstMove_${st.id}" style="min-width:210px"><option value="">Select sub-group…</option>${subgroups.map(g=>`<option value="${esc(g.class_id)}" ${g.class_id===currentSub?'selected':''}>${esc(g.main_group_name)} · ${esc(g.class_name)}</option>`).join('')}</select>`:'<span class="muted small">No sibling sub-groups available.</span>';
+      return `<div class="assignment" style="border:1px solid #dbe3ee;margin:8px 0;background:#fff">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div><h3 style="margin:0 0 4px">${esc(st.full_name||'Student')}</h3><div class="muted small">Roll No: <b>${esc(st.roll_no||'—')}</b> · ${esc(primary?.main_group_name||'Unassigned')} · ${esc(primary?.is_subgroup?primary.class_name:'Direct / No sub-group')}</div></div>
+          <span class="tag">Student Account</span>
+        </div>
+        <div class="grid" style="margin-top:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+          <div><label>Login ID / Email</label><input value="${esc(st.email||st.username||'')}" readonly></div>
+          <div><label>Password</label><input value="${esc(st.password||'')}" readonly></div>
+          <div><label>Move to Sub-group</label>${subgroupOptions}</div>
+        </div>
+        <div class="actions" style="margin-top:10px;flex-wrap:wrap">
+          <button class="secondary" onclick="changeJnvstStudentRoll('${st.id}','${esc(st.roll_no||'')}')">✎ Roll No</button>
+          <button class="secondary" onclick="changeJnvstStudentPassword('${st.id}','${esc(st.full_name||'Student')}')">🔑 Change Password</button>
+          ${subgroups.length?`<button onclick="moveJnvstStudent('${st.id}','${esc(st.full_name||'Student')}','${esc(primary?.class_id||'')}')">↔ Move Sub-group</button>`:''}
+        </div>
+      </div>`;
+    };
+
+    const sections=[...byMain.entries()].map(([main,subs])=>`<div class="card" style="margin-top:12px"><h2 style="margin-bottom:8px">${esc(main)}</h2>${[...subs.entries()].map(([sub,students])=>`<div style="margin:10px 0 16px"><h3 style="margin:0 0 6px">${esc(sub)} <span class="tag">${students.length}</span></h3>${students.map(renderStudent).join('')}</div>`).join('')}</div>`).join('');
+    render(`<div class="wrap">${header('JNVST Student Accounts')}
+      <div class="card"><h2>👥 Student Accounts</h2><p class="muted">Student names, Roll Nos and login credentials are shown only on this page. The main JNVST Teacher Dashboard does not display student names.</p><div class="actions"><button onclick="teacherHome()">← Back to Dashboard</button><button class="secondary" onclick="manageStudentAccounts()">↻ Refresh</button></div></div>
+      ${sections || '<div class="card"><p class="muted">No JNVST student accounts found.</p></div>'}
+    </div>`);
+  }catch(e){
+    render(`<div class="wrap">${header('JNVST Student Accounts')}<div class="card">${message(e.message||String(e))}<div class="actions" style="margin-top:12px"><button onclick="teacherHome()">← Back to Dashboard</button><button class="secondary" onclick="manageStudentAccounts()">↻ Retry</button></div></div></div>`);
+  }
+}
+
+function renderSchoolStudentAccounts(list){
+  render(`<div class="wrap">${header('Student Accounts')}<div class="card"><h2>👥 Student Accounts</h2><p class="muted">${list.length} school student account(s).</p>${list.length?list.map(st=>`<div class="assignment"><h3>${esc(st.full_name||'Student')}</h3><div class="muted small">Roll No: ${esc(st.roll_no||'—')} · Class: ${esc(st.className||'—')}</div><div class="grid" style="margin-top:10px"><div><label>Login ID / Email</label><input value="${esc(st.email||st.username||'')}" readonly></div><div><label>Password</label><input value="${esc(st.password||'')}" readonly></div></div></div>`).join(''):'<p class="muted">No student accounts found.</p>'}<div class="actions" style="margin-top:12px"><button onclick="schoolTeacherMode=false;teacherHome()">← Back</button><button class="secondary" onclick="manageStudentAccounts()">↻ Refresh</button></div></div></div>`);
+}
+
+async function invokeCreateStudentsAction(body){
+  const session=(await sb.auth.getSession()).data.session;
+  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':`Bearer ${session?.access_token||''}`},body:JSON.stringify(body)});
+  const j=await res.json().catch(()=>({}));
+  if(!res.ok||j.error) throw new Error(j.error||'Request failed.');
+  return j;
+}
+
+async function changeJnvstStudentRoll(studentId,currentRoll){
+  const value=prompt('Enter new Roll No:',currentRoll||'');
+  if(value===null)return;
+  const roll=value.trim(); if(!roll)return alert('Roll No is required.');
+  try{await invokeCreateStudentsAction({action:'setStudentRollNo',student_id:studentId,roll_no:roll});alert('Roll No updated.');await manageStudentAccounts();}
+  catch(e){alert(e.message||String(e));}
+}
+
+async function changeJnvstStudentPassword(studentId,name){
+  const password=prompt(`Enter new password for ${name}:`,'');
+  if(password===null)return;
+  if(password.length<6)return alert('Password must contain at least 6 characters.');
+  try{await invokeCreateStudentsAction({action:'setStudentPassword',student_id:studentId,password});alert('Password updated.');await manageStudentAccounts();}
+  catch(e){alert(e.message||String(e));}
+}
+
+async function moveJnvstStudent(studentId,name,sourceClassId){
+  const target=document.getElementById(`jnvstMove_${studentId}`)?.value||'';
+  if(!target)return alert('Please select the target sub-group first.');
+  if(target===sourceClassId)return alert('The student is already in this sub-group.');
+  if(!confirm(`Move ${name} to the selected sub-group?`))return;
+  try{await invokeCreateStudentsAction({action:'setStudentJnvstSubgroup',student_id:studentId,source_class_id:sourceClassId,target_class_id:target});alert('Student moved successfully.');await manageStudentAccounts();}
+  catch(e){alert(e.message||String(e));}
+}
+
 async function teacherHome(){
  if(schoolTeacherMode){ location.replace("teacher-dashboard.html"); return; }
  let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje}]=await Promise.all([
@@ -1098,7 +1203,7 @@ async function teacherHome(){
   <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">JNVST-VI (Class-IV) • JNVST-IX (Class IX)</p>${window._jnvstMigration?.groupsMigrated?.length?`<div class="success" style="margin-top:10px"><b>Previous Navodaya groups migrated:</b> ${esc(window._jnvstMigration.groupsMigrated.join(" • "))}. Students are now under the JNVST-VI (Class-IV) sub-groups.</div>`:""}</div>
   <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
   <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage Groups & Subjects</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
-  <div class="card"><h2>Students</h2>${students.map(st=>`<div class="assignment"><b>${esc(st.full_name)}</b><div class="muted small">${esc(st.username||"")} ${st.course?`• ${esc(st.course)}`:""} ${st.class_id?`• ${esc(classes.find(c=>c.id===st.class_id)?.name||"")}`:""}</div></div>`).join("")||"<p class='muted'>No JNVST students yet.</p>"}</div>
+  <div class="card"><h2>Students</h2><p class="muted">Student names and login credentials are kept inside <b>👥 Student Accounts</b>. They are not displayed on the main teacher dashboard.</p><div class="success small">${students.length ? `${students.length} JNVST student account(s) are available in Student Accounts.` : 'No JNVST students yet.'}</div></div>
   <div class="card"><h2>JNVST Classes</h2>${renderJnvstClassManager(classes,students,assignments)}</div>
   <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${jnvstMainGroups(classes).map(g=>`<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${[...new Set(classes.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))].sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div></div>
  </div>`);
