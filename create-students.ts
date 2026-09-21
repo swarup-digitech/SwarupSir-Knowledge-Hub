@@ -329,9 +329,9 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------
-    // Teacher: School student management helpers
-    // These actions are intentionally teacher-scoped and only operate
-    // on SCHOOL students who belong to one of the teacher's School classes.
+    // Teacher: student management helpers
+    // These actions are teacher-scoped and operate only on students
+    // who belong to at least one class taught by the current teacher.
     // ------------------------------------------------------------
     if (body.action === "setStudentName") {
       const studentId = String(body.student_id ?? "").trim();
@@ -343,9 +343,8 @@ Deno.serve(async (req) => {
         .select("student_id, class_id, classes!inner(id, teacher_id, course)")
         .eq("student_id", studentId)
         .eq("classes.teacher_id", caller.user.id)
-        .eq("classes.course", "SCHOOL")
         .limit(1);
-      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+      if (me || !membership?.length) return json({error:"This student is not in one of your classes."},403);
 
       const { error: pe } = await admin.from("profiles").update({full_name:fullName}).eq("id",studentId);
       if (pe) return json({error:pe.message},400);
@@ -435,9 +434,8 @@ Deno.serve(async (req) => {
         .select("student_id, class_id, classes!inner(id,teacher_id,course)")
         .eq("student_id",studentId)
         .eq("classes.teacher_id",caller.user.id)
-        .eq("classes.course","SCHOOL")
         .limit(1);
-      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+      if (me || !membership?.length) return json({error:"This student is not in one of your classes."},403);
 
       const { error: de } = await admin.auth.admin.deleteUser(studentId);
       if (de) return json({error:de.message},400);
