@@ -79,9 +79,10 @@ Deno.serve(async (req) => {
     // Teacher: list student credentials for students in own classes
     // ------------------------------------------------------------
     if (body.action === "listCredentials") {
-      // Load the teacher's JNVST class tree first. This lets the dashboard
-      // display Main Group -> Sub-group and gives the teacher safe target IDs
-      // for moving students.
+      // Load the teacher's complete JNVST group tree. The Student Accounts
+      // page needs the group list independently of current student
+      // memberships so filtering and Change Group also work for students
+      // whose older membership records do not contain the newer parent ID.
       const { data: classes, error: classErr } = await admin
         .from("classes")
         .select("id,name,course,description,jnvst_group_type,jnvst_parent_id,teacher_id")
@@ -90,54 +91,80 @@ Deno.serve(async (req) => {
 
       const classRows = classes ?? [];
       const classMap = new Map<string, any>(classRows.map((c:any)=>[c.id,c]));
+
       const isSub = (c:any) =>
         String(c?.jnvst_group_type||"").toUpperCase()==="SUB" ||
         /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(c?.description||""));
-      const jnvstSubgroupParent = (c:any) => {
+
+      const isMain = (c:any) =>
+        !!c &&
+        String(c.course||"").toUpperCase()!=="SCHOOL" &&
+        !isSub(c) &&
+        (
+          String(c.jnvst_group_type||"").toUpperCase()==="MAIN" ||
+          String(c.course||"").toUpperCase().startsWith("JNVST")
+        );
+
+      const subgroupParentKey = (c:any) => {
         const d=String(c?.description||"");
         const m=d.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?/i);
-        return m?m[1].toUpperCase():"";
+        return m ? m[1].toUpperCase() : "";
       };
 
-      const isJnvst = (c:any) =>
-        String(c?.course||"").toUpperCase()!=="SCHOOL" &&
-        (String(c?.course||"").toUpperCase().startsWith("JNVST") || isSub(c) ||
-         String(c?.jnvst_group_type||"").toUpperCase()==="MAIN");
+      const baseKey = (c:any) => {
+        if (!c) return "";
+        const course=String(c.course||"").toUpperCase();
+        if (course==="JNVST-6") return "JNVST-VI";
+        if (course==="JNVST-9") return "JNVST-IX";
+        const name=String(c.name||"").toUpperCase();
+        if (name.includes("JNVST-VI")) return "JNVST-VI";
+        if (name.includes("JNVST-IX")) return "JNVST-IX";
+        return "";
+      };
 
       const mainFor = (c:any) => {
         if (!c) return null;
+        if (isMain(c)) return c;
+
+        // Preferred: explicit parent relationship.
         if (c.jnvst_parent_id && classMap.get(c.jnvst_parent_id))
           return classMap.get(c.jnvst_parent_id);
-        const desc = String(c.description||"");
-        const m = desc.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)/i);
-        if (m) {
-          const key = m[1].toUpperCase();
-          return classRows.find((x:any) =>
-            String(x.jnvst_group_type||"").toUpperCase()==="MAIN" &&
-            (
-              key==="JNVST-VI"
-                ? String(x.course||"").toUpperCase()==="JNVST-6"
-                : String(x.course||"").toUpperCase()==="JNVST-9"
-            )
-          ) || null;
+
+        // Legacy textual parent marker.
+        const key=subgroupParentKey(c);
+        if (key) {
+          const p=classRows.find((x:any)=>isMain(x) && baseKey(x)===key);
+          if (p) return p;
         }
-        return c;
+
+        // Legacy rows sometimes only have the JNVST course and no parent.
+        const key2=baseKey(c);
+        if (key2) {
+          const p=classRows.find((x:any)=>isMain(x) && baseKey(x)===key2);
+          if (p) return p;
+        }
+        return null;
       };
 
-      const membershipsByStudent = new Map<string, any[]>();
-      const jnvstClassIds = classRows.filter(isJnvst).map((c:any)=>c.id);
-      const subgroupRows = classRows.filter((c:any)=>isSub(c));
-      const subgroupParentId = (c:any) => {
-        if (!c) return "";
-        if (c.jnvst_parent_id && classMap.get(c.jnvst_parent_id)) return c.jnvst_parent_id;
-        const key = jnvstSubgroupParent(c);
-        if (key) {
-          const parent = classRows.find((x:any)=>String(x.jnvst_group_type||"").toUpperCase()==="MAIN" &&
-            (key==="JNVST-VI" ? String(x.course||"").toUpperCase()==="JNVST-6" : String(x.course||"").toUpperCase()==="JNVST-9"));
-          return parent?.id || "";
-        }
-        return "";
-      };
+      const jnvstMains=classRows.filter(isMain);
+      const jnvstSubs=classRows.filter(isSub);
+      const jnvstGroups=(jnvstMains.concat(jnvstSubs)).map((c:any)=>{
+        const parent=mainFor(c);
+        return {
+          id:c.id,
+          name:c.name||"",
+          is_subgroup:isSub(c),
+          main_group_id:parent?.id || (isMain(c)?c.id:""),
+          main_group_name:parent?.name || (isMain(c)?c.name:""),
+          course:c.course||""
+        };
+      }).filter((g:any)=>g.main_group_id);
+
+      const subgroupRows=jnvstGroups.filter((g:any)=>g.is_subgroup);
+
+      const jnvstClassIds=jnvstGroups.map((g:any)=>g.id);
+      const membershipsByStudent=new Map<string, any[]>();
+
       if (jnvstClassIds.length) {
         const { data: memberships, error: me } = await admin
           .from("class_students")
@@ -146,62 +173,77 @@ Deno.serve(async (req) => {
         if (me) return json({error:me.message},400);
 
         for (const row of memberships ?? []) {
-          const c = classMap.get(row.class_id);
+          const c=jnvstGroups.find((g:any)=>g.id===row.class_id);
           if (!c) continue;
-          const parent = mainFor(c);
-          const item = {
+          const item={
             class_id:c.id,
-            class_name:c.name || "",
-            main_group_id:parent?.id || "",
-            main_group_name:parent?.name || c.name || "",
-            is_subgroup:isSub(c)
+            class_name:c.name||"",
+            main_group_id:c.main_group_id||"",
+            main_group_name:c.main_group_name||"",
+            is_subgroup:!!c.is_subgroup
           };
-          if (!membershipsByStudent.has(row.student_id)) membershipsByStudent.set(row.student_id,[]);
+          if (!membershipsByStudent.has(row.student_id))
+            membershipsByStudent.set(row.student_id,[]);
           membershipsByStudent.get(row.student_id)!.push(item);
         }
       }
 
-      const ids = [...membershipsByStudent.keys()];
-      if (!ids.length) return json({success:true,students:[]});
+      const ids=[...membershipsByStudent.keys()];
+      if (!ids.length)
+        return json({success:true,students:[],groups:jnvstGroups});
 
+      // Only JNVST student profiles are returned. This prevents School
+      // students from entering the JNVST Student Accounts screen even if
+      // an old/incorrect class membership exists.
       const { data: profiles, error: pe } = await admin
-        .from("profiles").select("id, full_name, username, roll_no").in("id", ids).order("full_name");
+        .from("profiles")
+        .select("id,full_name,username,roll_no,course,role")
+        .in("id",ids)
+        .eq("role","student");
       if (pe) return json({error:pe.message},400);
 
+      const jnvstProfiles=(profiles||[]).filter((p:any)=>
+        ["JNVST-6","JNVST-9"].includes(String(p.course||"").toUpperCase())
+      );
+      const jnvstIds=jnvstProfiles.map((p:any)=>p.id);
+
       const { data: creds, error: ce } = await admin
-        .from("student_credentials").select("student_id, email, password_plaintext, updated_at").in("student_id", ids);
+        .from("student_credentials")
+        .select("student_id,email,password_plaintext,updated_at")
+        .in("student_id",jnvstIds);
       if (ce) return json({error:ce.message},400);
 
-      const cm = new Map((creds??[]).map((c:any)=>[c.student_id,c]));
-      return json({
-        success:true,
-        students:(profiles??[]).map((p:any)=>({
-          id:p.id, full_name:p.full_name, username:p.username, roll_no:p.roll_no || "",
-          email:cm.get(p.id)?.email || p.username || "",
-          password:cm.get(p.id)?.password_plaintext || "",
-          updated_at:cm.get(p.id)?.updated_at || null,
-          memberships:membershipsByStudent.get(p.id) || [],
-          available_subgroups:[...(new Set(
-            (membershipsByStudent.get(p.id) || []).flatMap((m:any) =>
-              subgroupRows
-                .filter((c:any) => subgroupParentId(c) === m.main_group_id)
-                .map((c:any) => JSON.stringify({
-                  class_id:c.id,
-                  class_name:c.name || "",
-                  main_group_id:m.main_group_id,
-                  main_group_name:m.main_group_name || "",
-                  is_subgroup:true
-                }))
-            )
-          ))].map((x:string)=>JSON.parse(x))
-        }))
+      const cm=new Map((creds??[]).map((c:any)=>[c.student_id,c]));
+
+      const students=jnvstProfiles.map((p:any)=>{
+        const memberships=membershipsByStudent.get(p.id)||[];
+        const mainIds=[...new Set(memberships.map((m:any)=>m.main_group_id).filter(Boolean))];
+        const available=subgroupRows
+          .filter((g:any)=>mainIds.includes(g.main_group_id))
+          .map((g:any)=>({
+            class_id:g.id,
+            class_name:g.name,
+            main_group_id:g.main_group_id,
+            main_group_name:g.main_group_name,
+            is_subgroup:true
+          }));
+        return {
+          id:p.id,
+          full_name:p.full_name||"",
+          username:p.username||"",
+          roll_no:p.roll_no||"",
+          course:p.course||"",
+          email:cm.get(p.id)?.email||p.username||"",
+          password:cm.get(p.id)?.password_plaintext||"",
+          updated_at:cm.get(p.id)?.updated_at||null,
+          memberships,
+          available_subgroups:available
+        };
       });
+
+      return json({success:true,students,groups:jnvstGroups});
     }
 
-    // ------------------------------------------------------------
-    // Teacher: move a JNVST student between sub-groups belonging to
-    // the same main group.
-    // ------------------------------------------------------------
     if (body.action === "setStudentJnvstSubgroup") {
       const studentId = String(body.student_id ?? "").trim();
       const targetClassId = String(body.target_class_id ?? "").trim();
@@ -227,9 +269,16 @@ Deno.serve(async (req) => {
         const m=d.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?/i);
         if(m){
           const key=m[1].toUpperCase();
-          const p=rows.find((x:any)=>String(x.jnvst_group_type||"").toUpperCase()==="MAIN" &&
+          const p=rows.find((x:any)=>isMain(x) &&
             (key==="JNVST-VI" ? String(x.course||"").toUpperCase()==="JNVST-6" : String(x.course||"").toUpperCase()==="JNVST-9"));
-          return p?.id||"";
+          if(p)return p.id;
+        }
+        // Legacy subgroup rows may have the JNVST course but no explicit
+        // parent marker. Resolve them to the corresponding fixed main group.
+        const course=String(g.course||"").toUpperCase();
+        if(isSub(g) && (course==="JNVST-6" || course==="JNVST-9")){
+          const p=rows.find((x:any)=>isMain(x) && String(x.course||"").toUpperCase()===course);
+          if(p)return p.id;
         }
         return isMain(g)?g.id:"";
       };

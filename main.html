@@ -1210,12 +1210,25 @@ async function callTeacherFn(body){
 async function manageStudentAccounts(){
  try{
   const j=await callTeacherFn({action:"listCredentials"});
-  const students=j.students||[];
-  const allGroups=[];
-  students.forEach(s=>(s.memberships||[]).forEach(m=>{
-    const key=`${m.main_group_id||""}::${m.class_id||""}`;
-    if(!allGroups.some(g=>g.key===key))allGroups.push({key,mainId:m.main_group_id||"",mainName:m.main_group_name||"",subId:m.is_subgroup?m.class_id:"",subName:m.is_subgroup?m.class_name:""});
-  }));
+  const students=(j.students||[]).filter(s=>String(s.course||"").toUpperCase().startsWith("JNVST"));
+  const allGroups=(j.groups||[]).map(g=>({
+    key:`${g.main_group_id||g.id||""}::${g.is_subgroup?g.id:""}`,
+    mainId:g.main_group_id||g.id||"",
+    mainName:g.main_group_name||g.name||"",
+    subId:g.is_subgroup?g.id:"",
+    subName:g.is_subgroup?g.name:""
+  })).filter(g=>g.mainId);
+  // Backward-compatible fallback if an older Edge Function does not yet
+  // return the explicit group list.
+  if(!allGroups.length){
+    students.forEach(s=>(s.memberships||[]).forEach(m=>{
+      const key=`${m.main_group_id||""}::${m.class_id||""}`;
+      if(!allGroups.some(g=>g.key===key))allGroups.push({
+        key,mainId:m.main_group_id||"",mainName:m.main_group_name||"",
+        subId:m.is_subgroup?m.class_id:"",subName:m.is_subgroup?m.class_name:""
+      });
+    }));
+  }
   allGroups.sort((a,b)=>`${a.mainName} ${a.subName}`.localeCompare(`${b.mainName} ${b.subName}`));
   window._jnvstAccountStudents=students;
   window._jnvstAccountGroups=allGroups;
@@ -1240,13 +1253,22 @@ function renderJnvstStudentAccounts(){
  const subs=groups.filter(g=>g.subId&&(main==="all"||g.mainId===main)).sort((a,b)=>a.subName.localeCompare(b.subName));
  const groupLabel=s=>{
    const m=s.memberships||[];
-   const subg=m.find(x=>x.is_subgroup);
-   if(subg)return `${subg.main_group_name} → ${subg.class_name}`;
-   const mainm=m[0];
-   return mainm?`${mainm.main_group_name||mainm.class_name} → Main group`:"Not grouped";
+   const subg=m.find(x=>x.is_subgroup && x.class_id);
+   if(subg)return `${subg.main_group_name||"JNVST"} → ${subg.class_name}`;
+   const mainm=m.find(x=>x.main_group_id||x.class_id);
+   if(mainm)return `${mainm.main_group_name||mainm.class_name||"JNVST"} → Main group`;
+   // Legacy/fallback: derive the display label from the explicit group list.
+   const candidate=(window._jnvstAccountGroups||[]).find(g=>g.subId===s.class_id);
+   return candidate?`${candidate.mainName} → ${candidate.subName}`:"Not grouped";
  };
  const targetOptions=s=>{
-   const available=(s.available_subgroups||[]).filter(x=>x.class_id);
+   let available=(s.available_subgroups||[]).filter(x=>x.class_id);
+   if(!available.length){
+     const mainIds=new Set((s.memberships||[]).map(m=>String(m.main_group_id||"")).filter(Boolean));
+     available=(window._jnvstAccountGroups||[])
+       .filter(g=>g.subId && mainIds.has(String(g.mainId)))
+       .map(g=>({class_id:g.subId,class_name:g.subName,main_group_id:g.mainId,main_group_name:g.mainName}));
+   }
    return available.length?available.map(x=>`<option value="${esc(x.class_id)}">${esc(x.class_name)}</option>`).join(""):'<option value="">No sub-groups available</option>';
  };
  document.getElementById("app").innerHTML=`${header("JNVST Student Accounts")}
