@@ -1081,103 +1081,6 @@ async function normalizeJnvstAssignmentGroups(classes,assignments){
  return list;
 }
 
-
-async function callTeacherFn(body){
-  const {data:{session}}=await sb.auth.getSession();
-  if(!session)throw new Error("Please log in again.");
-  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`,"apikey":SUPABASE_KEY},
-    body:JSON.stringify(body)
-  });
-  const j=await res.json().catch(()=>({}));
-  if(!res.ok||j.error)throw new Error(j.error||"Request failed.");
-  return j;
-}
-async function manageStudentAccounts(){
-  try{
-    const [{data:classes,error:classErr},j]=await Promise.all([
-      sb.from("classes").select("id,name,course,jnvst_group_type,jnvst_parent_id,description").eq("teacher_id",current.id).order("name"),
-      callTeacherFn({action:"listCredentials"})
-    ]);
-    if(classErr)throw classErr;
-    const students=j.students||[];
-    const jnvstClasses=(classes||[]).filter(c=>String(c.course||"").toUpperCase()!=="SCHOOL");
-    window._teacherStudentClasses=jnvstClasses;
-    render(`<div class="wrap">${header("Student Accounts")}<div class="card">
-      <div class="notice" style="border-left:5px solid #dc2626"><b>⚠ Caution — Student Account Management</b><br>
-      Changes made here affect the student's login, Roll No, name or JNVST group. Please check the student's details carefully before saving. Passwords are sensitive and should only be changed when necessary. Account deletion is permanent.</div>
-      <div class="actions" style="margin:14px 0;flex-wrap:wrap">
-        <button onclick="addJnvstStudentFromAccounts()">+ Add Student</button>
-        <button onclick="bulkImportJnvstStudentsFromAccounts()">↑ Bulk Students (Excel)</button>
-        <button class="secondary" onclick="teacherHome()">← Dashboard</button>
-      </div>
-      <div class="grid" style="margin-bottom:12px"><div><label>Search student</label><input id="studentAccountSearch" placeholder="Search by name or Roll No" oninput="filterStudentAccounts()"></div><div><label>Filter Group</label><select id="studentAccountGroupFilter" onchange="filterStudentAccounts()"><option value="all">All JNVST groups</option>${[...new Set(students.flatMap(s=>(s.memberships||[]).map(m=>m.main_group_name||m.class_name||"")))].filter(Boolean).sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div>
-      <div id="studentAccountsTable">${renderStudentAccountsTable(students)}</div>
-    </div></div>`);
-    window._teacherStudentsForAccounts=students;
-  }catch(e){render(`<div class="wrap">${header("Student Accounts")}<div class="card">${message(e.message||String(e))}</div></div>`)}
-}
-function renderStudentAccountsTable(students){
-  return `<div style="overflow:auto"><table id="studentAccountsData"><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Main Group</th><th>Sub-group</th><th>Actions</th></tr></thead><tbody>${students.map(s=>{
-    const memberships=s.memberships||[];const main=[...new Set(memberships.map(m=>m.main_group_name).filter(Boolean))].join(", ")||"—";const subs=memberships.filter(m=>m.is_subgroup);const sub=subs.map(m=>m.class_name).join(", ")||"—";
-    const safeName=JSON.stringify(s.full_name||"");
-    return `<tr data-student-name="${esc((s.full_name||"").toLowerCase())}" data-student-roll="${esc((s.roll_no||"").toLowerCase())}" data-student-group="${esc(main.toLowerCase())}"><td><b>${esc(s.full_name||"")}</b><div class="muted small">${esc(s.email||s.username||"")}</div></td><td>${esc(s.roll_no||"—")}</td><td>${esc(s.password||"—")}</td><td>${esc(main)}</td><td>${esc(sub)}</td><td><div class="actions" style="flex-wrap:wrap"><button onclick='editStudentName(${JSON.stringify(s.id)},${safeName})'>Name</button><button onclick='editStudentRoll(${JSON.stringify(s.id)},${safeName},${JSON.stringify(s.roll_no||"")})'>Roll No</button><button onclick='editStudentPassword(${JSON.stringify(s.id)},${safeName})'>Password</button><button onclick='editStudentSubgroup(${JSON.stringify(s.id)},${safeName})'>Change Group</button><button class="danger" onclick='deleteJnvstStudentAccount(${JSON.stringify(s.id)},${safeName})'>Delete</button></div></td></tr>`;
-  }).join("")||`<tr><td colspan="6">No JNVST students found.</td></tr>`}</tbody></table></div>`;
-}
-function filterStudentAccounts(){
-  const q=(document.getElementById("studentAccountSearch")?.value||"").trim().toLowerCase();const g=(document.getElementById("studentAccountGroupFilter")?.value||"all").toLowerCase();
-  document.querySelectorAll("#studentAccountsData tbody tr").forEach(tr=>{const hit=!q||`${tr.dataset.studentName||""} ${tr.dataset.studentRoll||""}`.includes(q);const gh=g==="all"||(tr.dataset.studentGroup||"").includes(g);tr.style.display=hit&&gh?"":"none";});
-}
-async function editStudentName(studentId,name){
-  const v=prompt(`Enter the new full name for ${name}:`,name);if(v===null)return;const value=v.trim();if(!value)return alert("Name cannot be empty.");if(value===name)return;
-  if(!confirm(`⚠ Confirm name change\n\nStudent: ${name}\nNew name: ${value}\n\nThis changes the student's name throughout the system. Continue?`))return;
-  try{await callTeacherFn({action:"setStudentName",student_id:studentId,full_name:value});alert(`✓ Student name updated successfully to "${value}".`);await manageStudentAccounts()}catch(e){alert("Could not update name: "+(e.message||e))}
-}
-async function editStudentRoll(studentId,name,currentRoll){
-  const v=prompt(`Enter the new Roll No for ${name}:`,currentRoll);if(v===null)return;const value=v.trim();if(!value)return alert("Roll No is required.");if(value===currentRoll)return;
-  if(!confirm(`⚠ Confirm Roll No change\n\nStudent: ${name}\nOld Roll No: ${currentRoll||"—"}\nNew Roll No: ${value}\n\nThis changes the student's login identifier. Continue?`))return;
-  try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:value});alert(`✓ Roll No updated successfully to ${value}.`);await manageStudentAccounts()}catch(e){alert("Could not update Roll No: "+(e.message||e))}
-}
-async function editStudentPassword(studentId,name){
-  const v=prompt(`Enter the new password for ${name}:`);if(v===null)return;if(v.length<6)return alert("Password must contain at least 6 characters.");
-  if(!confirm(`⚠ Confirm password change\n\nStudent: ${name}\n\nThe student's current password will stop working immediately. Make sure you have recorded the new password securely. Continue?`))return;
-  try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("✓ Password changed successfully.");await manageStudentAccounts()}catch(e){alert("Could not change password: "+(e.message||e))}
-}
-async function editStudentSubgroup(studentId,name){
-  const students=window._teacherStudentsForAccounts||[];const s=students.find(x=>x.id===studentId);const options=(s?.available_subgroups||[]);if(!options.length)return alert("No JNVST sub-groups are available for this student's main group.");
-  const current=(s.memberships||[]).find(m=>m.is_subgroup);const list=options.map((x,i)=>`${i+1}. ${x.class_name}${current?.class_id===x.class_id?" (Current)":""}`).join("\n");
-  const v=prompt(`Change JNVST sub-group for ${name}.\n\n${list}\n\nEnter the number of the new sub-group:`);if(v===null)return;const n=Number(v.trim());if(!Number.isInteger(n)||n<1||n>options.length)return alert("Please enter a valid sub-group number.");const target=options[n-1];if(current?.class_id===target.class_id)return alert(`${name} is already in ${target.class_name}.`);
-  if(!confirm(`⚠ Confirm JNVST group change\n\nStudent: ${name}\nNew sub-group: ${target.class_name}\n\nThe student's current JNVST sub-group membership will be replaced. Continue?`))return;
-  try{await callTeacherFn({action:"setStudentJnvstSubgroup",student_id:studentId,source_class_id:current?.class_id||"",target_class_id:target.class_id});alert(`✓ ${name} was moved to ${target.class_name}.`);await manageStudentAccounts()}catch(e){alert("Could not change JNVST group: "+(e.message||e))}
-}
-async function deleteJnvstStudentAccount(studentId,name){
-  if(!confirm(`⚠ WARNING — PERMANENT ACTION\n\nYou are about to permanently delete the student account for:\n\n${name}\n\nThis can remove the student's login and access to the course. Existing records may also become inaccessible depending on database rules.\n\nDo you really want to continue?`))return;
-  const check=prompt(`Final confirmation. Type the student's name exactly:\n\n${name}`);if(check!==name)return alert("Deletion cancelled. The name did not match exactly.");
-  try{await callTeacherFn({action:"deleteStudent",student_id:studentId});alert(`✓ Student account for ${name} was deleted.`);await manageStudentAccounts()}catch(e){alert("Could not delete student account: "+(e.message||e))}
-}
-async function addJnvstStudentFromAccounts(){
-  const classes=window._teacherStudentClasses||[];const subs=classes.filter(c=>isJnvstSubGroup(c));if(!subs.length)return alert("Create a JNVST sub-group first in Manage Groups & Subjects.");
-  render(`<div class="wrap">${header("Add JNVST Student")}<div class="card"><div class="notice" style="border-left:5px solid #dc2626"><b>⚠ Check carefully before creating the account.</b><br>Roll No must be unique. The student will use Roll No + Password to log in.</div><label>Student Name</label><input id="jnvstNewName"><label>Roll No</label><input id="jnvstNewRoll" type="text"><label>Password</label><input id="jnvstNewPassword" type="text" minlength="6"><label>JNVST Sub-group</label><select id="jnvstNewClass">${subs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select><div class="actions" style="margin-top:15px"><button onclick="saveJnvstStudentFromAccounts()">Create Student</button><button class="secondary" onclick="manageStudentAccounts()">Cancel</button></div></div></div>`);
-}
-async function saveJnvstStudentFromAccounts(){
-  const name=document.getElementById("jnvstNewName")?.value.trim(),roll=document.getElementById("jnvstNewRoll")?.value.trim(),password=document.getElementById("jnvstNewPassword")?.value||"",classId=document.getElementById("jnvstNewClass")?.value;
-  if(!name||!roll||!password||!classId)return alert("Fill all fields.");if(password.length<6)return alert("Password must contain at least 6 characters.");
-  if(!confirm(`⚠ Confirm creation\n\nStudent: ${name}\nRoll No: ${roll}\n\nA new student login will be created. Continue?`))return;
-  try{const j=await callTeacherFn({action:"createStudents",students:[{name,roll_no:roll,password,class_id:classId}]});const r=j.results?.[0];if(!r?.success)throw new Error(r?.error||"Could not create student.");alert(`✓ Student created successfully. Roll No: ${r.roll_no}`);await manageStudentAccounts()}catch(e){alert("Could not create student: "+(e.message||e))}
-}
-async function bulkImportJnvstStudentsFromAccounts(){
-  render(`<div class="wrap">${header("Bulk JNVST Students — Excel")}<div class="card"><div class="notice" style="border-left:5px solid #dc2626"><b>⚠ Review the Excel data carefully.</b><br>Required columns: <b>Name | Roll No | Class | Password</b>. Class must exactly match a JNVST sub-group taught by you. Do not upload passwords for students other than those being created.</div><input id="jnvstStudentExcel" type="file" accept=".xlsx,.xls" onchange="readJnvstStudentExcel(event)"><div id="jnvstBulkPreview"></div><div class="actions" style="margin-top:15px"><button onclick="uploadJnvstStudentExcel()">Create All Students</button><button class="secondary" onclick="manageStudentAccounts()">Cancel</button></div></div></div>`);
-  window._jnvstBulkStudents=[];
-}
-function readJnvstStudentExcel(ev){
-  const file=ev.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});if(!raw.length)throw new Error("The Excel file is empty.");const norm=v=>String(v??"").trim();const headers=raw[0].map(v=>norm(v).toLowerCase().replace(/[_\s]+/g," "));const col=(...names)=>{for(const x of names){const i=headers.indexOf(x);if(i>=0)return i}return -1};const ni=col("name","student name"),ri=col("roll no","roll number"),ci=col("class","class name"),pi=col("password");if([ni,ri,ci,pi].some(x=>x<0))throw new Error("Required columns: Name, Roll No, Class, Password.");window._jnvstBulkStudents=raw.slice(1).map((row,i)=>({row:i+2,name:norm(row[ni]),roll_no:norm(row[ri]),className:norm(row[ci]),password:norm(row[pi])})).filter(x=>x.name||x.roll_no||x.className||x.password);if(!window._jnvstBulkStudents.length)throw new Error("No student rows found.");const errors=[],seen=new Set();window._jnvstBulkStudents.forEach(x=>{const k=x.className.toLowerCase()+"|"+x.roll_no.toLowerCase();if(!x.name)errors.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errors.push(`Row ${x.row}: Roll No missing`);if(!x.className)errors.push(`Row ${x.row}: Class missing`);if(!x.password)errors.push(`Row ${x.row}: Password missing`);if(x.password&&x.password.length<6)errors.push(`Row ${x.row}: Password must be at least 6 characters`);if(seen.has(k))errors.push(`Row ${x.row}: duplicate Roll No ${x.roll_no} in ${x.className}`);seen.add(k)});if(errors.length){document.getElementById("jnvstBulkPreview").innerHTML=message(errors.join(" | "));return;}document.getElementById("jnvstBulkPreview").innerHTML=`<div class="success">Loaded ${window._jnvstBulkStudents.length} student rows. Please review before creating accounts.</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Class</th><th>Password</th></tr></thead><tbody>${window._jnvstBulkStudents.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td></tr>`).join("")}</tbody></table></div>`}catch(err){document.getElementById("jnvstBulkPreview").innerHTML=message("Could not read Excel: "+err.message)}};r.readAsArrayBuffer(file)
-}
-async function uploadJnvstStudentExcel(){
-  const rows=window._jnvstBulkStudents||[];if(!rows.length)return alert("Upload and validate an Excel file first.");const classes=window._teacherStudentClasses||[];const cmap=new Map(classes.filter(c=>isJnvstSubGroup(c)).map(c=>[String(c.name).trim().toLowerCase(),c.id]));const missing=[...new Set(rows.filter(x=>!cmap.has(x.className.toLowerCase())).map(x=>x.className))];if(missing.length)return alert("These JNVST sub-groups were not found in your account: "+missing.join(", "));
-  if(!confirm(`⚠ Confirm bulk student creation\n\n${rows.length} student account(s) will be created. This action cannot be automatically undone. Continue?`))return;
-  try{const j=await callTeacherFn({action:"createStudents",students:rows.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase())}))});const results=j.results||[],ok=results.filter(x=>x.success),bad=results.filter(x=>!x.success);render(`<div class="wrap">${header("Bulk Import Result")}<div class="card"><div class="success">${ok.length} student(s) created successfully.</div>${bad.length?`<div class="notice">${bad.length} row(s) failed.</div><pre>${esc(bad.map(x=>`${x.name||""} — Roll ${x.roll_no||""}: ${x.error}`).join("\n"))}</pre>`:""}<div class="actions"><button onclick="manageStudentAccounts()">Student Accounts</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div></div></div>`)}catch(e){alert("Bulk creation failed: "+(e.message||e))}
-}
 async function teacherHome(){
  if(schoolTeacherMode){ location.replace("teacher-dashboard.html"); return; }
  let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje}]=await Promise.all([
@@ -1205,16 +1108,23 @@ async function teacherHome(){
  }catch(e){return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message("Could not prepare the fixed JNVST classes or migrate the previous Navodaya groups: "+(e.message||e))}</div></div>`)}
  const classes=(allClasses||[]).filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL");
  const classIds=new Set(classes.map(c=>c.id));
- const students=(allStudents||[]).filter(st=>["JNVST-6","JNVST-9"].includes(String(st.course||"").trim().toUpperCase()));
- // class_students is the source of truth for student -> class membership.
- if(students.length){const {data:members}=await sb.from("class_students").select("student_id,class_id").in("student_id",students.map(s=>s.id));const cm=new Map((members||[]).map(x=>[x.student_id,x.class_id]));students.forEach(s=>s.class_id=cm.get(s.id)||"")}
+ // JNVST dashboard students are determined by BOTH course and membership in
+ // a teacher-owned JNVST class. This prevents School students or orphaned
+ // profiles from appearing on the JNVST dashboard.
+ let students=[];
+ if(classIds.size){
+   const {data:members,error:me}=await sb.from("class_students").select("student_id,class_id").in("class_id",[...classIds]);
+   if(me)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message(me.message)}</div></div>`);
+   const cm=new Map((members||[]).map(x=>[x.student_id,x.class_id]));
+   students=(allStudents||[]).filter(st=>["JNVST-6","JNVST-9"].includes(String(st.course||"").trim().toUpperCase()) && cm.has(st.id)).map(st=>({...st,class_id:cm.get(st.id)||""}));
+ }
  const assignments=(allAssignments||[]).filter(a=>classIds.has(a.class_id));
  const normalAssignments=assignments.filter(a=>a.assignment_type!=="MOCK"&&a.assignment_type!=="mock");
  window._jnvstClasses=classes;window._jnvstStudents=students;window._jnvstAssignments=assignments;
  render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}
   <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">JNVST-VI (Class-IV) • JNVST-IX (Class IX)</p>${window._jnvstMigration?.groupsMigrated?.length?`<div class="success" style="margin-top:10px"><b>Previous Navodaya groups migrated:</b> ${esc(window._jnvstMigration.groupsMigrated.join(" • "))}. Students are now under the JNVST-VI (Class-IV) sub-groups.</div>`:""}</div>
   <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
-  <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage Groups & Subjects</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div><div class="notice small" style="margin-top:12px"><b>Student operations are managed inside 👥 Student Accounts.</b> Student names and login details are intentionally not shown on the main dashboard.</div></div>
+  <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage Groups & Subjects</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button></div></div>
   <div class="card"><h2>JNVST Classes</h2>${renderJnvstClassManager(classes,students,assignments)}</div>
   <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${jnvstMainGroups(classes).map(g=>`<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${[...new Set(classes.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))].sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div></div>
  </div>`);
@@ -1285,6 +1195,97 @@ function filterSchoolAssignments(){
   });
 }
 
+async function manageStudentAccounts(){
+ try{
+  const j=await callTeacherFn({action:"listCredentials"});
+  const students=j.students||[];
+  const allGroups=[];
+  students.forEach(s=>(s.memberships||[]).forEach(m=>{
+    const key=`${m.main_group_id||""}::${m.class_id||""}`;
+    if(!allGroups.some(g=>g.key===key))allGroups.push({key,mainId:m.main_group_id||"",mainName:m.main_group_name||"",subId:m.is_subgroup?m.class_id:"",subName:m.is_subgroup?m.class_name:""});
+  }));
+  allGroups.sort((a,b)=>`${a.mainName} ${a.subName}`.localeCompare(`${b.mainName} ${b.subName}`));
+  window._jnvstAccountStudents=students;
+  window._jnvstAccountGroups=allGroups;
+  renderJnvstStudentAccounts();
+ }catch(e){render(`<div class="wrap">${header("JNVST Student Accounts")}<div class="card">${message(e.message||String(e))}<div class="actions"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`)}
+}
+function renderJnvstStudentAccounts(){
+ const students=window._jnvstAccountStudents||[];
+ const groups=window._jnvstAccountGroups||[];
+ const q=(document.getElementById("jnvstStudentSearch")?.value||"").trim().toLowerCase();
+ const main=(document.getElementById("jnvstStudentMainFilter")?.value||"all");
+ const sub=(document.getElementById("jnvstStudentSubFilter")?.value||"all");
+ const rows=students.filter(s=>{
+   const text=`${s.full_name||""} ${s.roll_no||""} ${s.username||""}`.toLowerCase();
+   if(q&&!text.includes(q))return false;
+   const ms=s.memberships||[];
+   if(main!=="all"&&!ms.some(m=>String(m.main_group_id)===main))return false;
+   if(sub!=="all"&&!ms.some(m=>String(m.class_id)===sub))return false;
+   return true;
+ });
+ const mains=[...new Map(groups.filter(g=>g.mainId).map(g=>[g.mainId,{id:g.mainId,name:g.mainName}])).values()].sort((a,b)=>a.name.localeCompare(b.name));
+ const subs=groups.filter(g=>g.subId&&(main==="all"||g.mainId===main)).sort((a,b)=>a.subName.localeCompare(b.subName));
+ const groupLabel=s=>{
+   const m=s.memberships||[];
+   const subg=m.find(x=>x.is_subgroup);
+   if(subg)return `${subg.main_group_name} → ${subg.class_name}`;
+   const mainm=m[0];
+   return mainm?`${mainm.main_group_name||mainm.class_name} → Main group`:"Not grouped";
+ };
+ const targetOptions=s=>{
+   const available=(s.available_subgroups||[]).filter(x=>x.class_id);
+   return available.length?available.map(x=>`<option value="${esc(x.class_id)}">${esc(x.class_name)}</option>`).join(""):'<option value="">No sub-groups available</option>';
+ };
+ document.getElementById("app").innerHTML=`${header("JNVST Student Accounts")}
+  <div class="card" style="border:2px solid #f59e0b;background:#fffbeb">
+   <h3 style="margin-bottom:6px">⚠ Student Account Management</h3>
+   <p class="small" style="margin:0">Changes here affect the student's login and JNVST group. Check the details carefully before saving. Group changes affect future assignments; existing assignment records are not automatically recreated.</p>
+  </div>
+  <div class="card">
+   <div class="grid">
+    <div><label>Search</label><input id="jnvstStudentSearch" placeholder="Name / Roll No / Username" oninput="renderJnvstStudentAccounts()"></div>
+    <div><label>Main Group</label><select id="jnvstStudentMainFilter" onchange="updateJnvstStudentSubFilter();renderJnvstStudentAccounts()"><option value="all">All Main Groups</option>${mains.map(g=>`<option value="${esc(g.id)}" ${g.id===main?'selected':''}>${esc(g.name)}</option>`).join("")}</select></div>
+    <div><label>Sub-Group</label><select id="jnvstStudentSubFilter" onchange="renderJnvstStudentAccounts()"><option value="all">All Sub-Groups</option>${subs.map(g=>`<option value="${esc(g.subId)}" ${g.subId===sub?'selected':''}>${esc(g.mainName)} → ${esc(g.subName)}</option>`).join("")}</select></div>
+   </div>
+   <div class="small muted">Showing ${rows.length} of ${students.length} JNVST student(s).</div>
+  </div>
+  <div class="card"><div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>JNVST Group</th><th>Change Group</th><th>Actions</th></tr></thead><tbody>
+  ${rows.map(s=>`<tr>
+   <td><b>${esc(s.full_name||"")}</b><div class="small muted">${esc(s.username||"")}</div></td>
+   <td>${esc(s.roll_no||"—")}</td>
+   <td><code>${esc(s.password||"—")}</code></td>
+   <td>${esc(groupLabel(s))}</td>
+   <td><select id="jnvstTarget_${s.id}" style="min-width:190px;margin:0">${targetOptions(s)}</select><button class="secondary" style="margin-top:5px" onclick="changeJnvstStudentGroup('${s.id}')">Change Group</button></td>
+   <td><div class="actions"><button onclick="editJnvstStudent('${s.id}')">✎ Edit</button><button class="secondary" onclick="changeJnvstStudentRoll('${s.id}')">Roll No</button><button class="secondary" onclick="changeJnvstStudentPassword('${s.id}')">Password</button><button class="danger" onclick="deleteJnvstStudent('${s.id}')">Delete</button></div></td>
+  </tr>`).join("")||'<tr><td colspan="6">No JNVST students match the selected filter.</td></tr>'}
+  </tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>`;
+}
+function updateJnvstStudentSubFilter(){
+ const main=document.getElementById("jnvstStudentMainFilter")?.value||"all";
+ const sel=document.getElementById("jnvstStudentSubFilter");if(!sel)return;
+ const groups=window._jnvstAccountGroups||[];
+ sel.innerHTML='<option value="all">All Sub-Groups</option>'+groups.filter(g=>g.subId&&(main==="all"||g.mainId===main)).sort((a,b)=>a.subName.localeCompare(b.subName)).map(g=>`<option value="${esc(g.subId)}">${esc(g.mainName)} → ${esc(g.subName)}</option>`).join("");
+}
+async function changeJnvstStudentGroup(studentId){
+ const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;
+ const target=document.getElementById(`jnvstTarget_${studentId}`)?.value||"";
+ if(!target)return alert("No target sub-group is available for this student.");
+ const targetName=document.getElementById(`jnvstTarget_${studentId}`)?.selectedOptions?.[0]?.textContent||"selected group";
+ const current=(s.memberships||[]).find(m=>m.is_subgroup)?.class_name||(s.memberships||[])[0]?.class_name||"Main group";
+ if((s.memberships||[]).some(m=>m.class_id===target))return alert(`${s.full_name} is already in ${targetName}.`);
+ if(!confirm(`WARNING: Change JNVST group for ${s.full_name}?\n\nCurrent: ${current}\nNew: ${targetName}\n\nThis changes the student's JNVST group membership. Continue?`))return;
+ try{
+  await callTeacherFn({action:"setStudentJnvstSubgroup",student_id:studentId,target_class_id:target});
+  alert(`${s.full_name} was moved to ${targetName}.`);
+  await manageStudentAccounts();
+ }catch(e){alert("Could not change group: "+(e.message||e))}
+}
+async function changeJnvstStudentRoll(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;const v=prompt(`New Roll No for ${s.full_name}:`,s.roll_no||"");if(v===null)return;if(!v.trim())return alert("Roll No is required.");if(!confirm(`Change Roll No for ${s.full_name} to "${v.trim()}"?`))return;try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");await manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function changeJnvstStudentPassword(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;const v=prompt(`New password for ${s.full_name}:`);if(v===null)return;if(v.length<6)return alert("Password must be at least 6 characters.");if(!confirm(`Change the login password for ${s.full_name}?`))return;try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");await manageStudentAccounts()}catch(e){alert(e.message||e)}}
+async function editJnvstStudent(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;render(`<div class="wrap">${header("Edit JNVST Student")}<div class="card"><div class="notice">⚠ Check all information carefully. Saving changes modifies the student's account information.</div><label>Student Name</label><input id="jseName" value="${esc(s.full_name||"")}"><label>Roll No</label><input id="jseRoll" value="${esc(s.roll_no||"")}"><label>New Password <span class="muted small">(leave blank to keep current)</span></label><input id="jsePass" type="text"><div class="actions"><button onclick="saveJnvstStudent('${studentId}')">💾 Save Changes</button><button class="secondary" onclick="manageStudentAccounts()">Cancel</button></div></div></div>`)}
+async function saveJnvstStudent(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;const name=document.getElementById("jseName")?.value.trim(),roll=document.getElementById("jseRoll")?.value.trim(),pass=document.getElementById("jsePass")?.value||"";if(!name||!roll)return alert("Name and Roll No are required.");if(pass&&pass.length<6)return alert("Password must be at least 6 characters.");if(!confirm(`WARNING: Save changes to ${s.full_name}?\n\nName: ${name}\nRoll No: ${roll}${pass?"\nPassword: will be changed":""}\n\nContinue?`))return;try{await callTeacherFn({action:"setStudentName",student_id:studentId,full_name:name});if(roll!==String(s.roll_no||""))await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:roll});if(pass)await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:pass});alert("Student details updated successfully.");await manageStudentAccounts()}catch(e){alert("Could not save changes: "+(e.message||e))}}
+async function deleteJnvstStudent(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;if(!confirm(`WARNING: Delete the JNVST student account for ${s.full_name}?\n\nThis will permanently remove the student's login account. This action cannot be undone.\n\nClick OK only if you are certain.`))return;const typed=prompt(`Final confirmation. Type the student's name exactly:\n\n${s.full_name}`);if(typed===null||typed.trim()!==String(s.full_name||"").trim())return alert("Deletion cancelled. Student name did not match.");try{await callTeacherFn({action:"deleteStudent",student_id:studentId});alert("Student account deleted.");await manageStudentAccounts()}catch(e){alert(e.message||e)}}
 function manageJnvstClasses(){
  const classes=(window._jnvstClasses||[]),students=(window._jnvstStudents||[]),assignments=(window._jnvstAssignments||[]);
  const mains=jnvstMainGroups(classes);

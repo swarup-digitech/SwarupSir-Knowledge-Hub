@@ -93,6 +93,11 @@ Deno.serve(async (req) => {
       const isSub = (c:any) =>
         String(c?.jnvst_group_type||"").toUpperCase()==="SUB" ||
         /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(c?.description||""));
+      const jnvstSubgroupParent = (c:any) => {
+        const d=String(c?.description||"");
+        const m=d.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?/i);
+        return m?m[1].toUpperCase():"";
+      };
 
       const isJnvst = (c:any) =>
         String(c?.course||"").toUpperCase()!=="SCHOOL" &&
@@ -121,6 +126,18 @@ Deno.serve(async (req) => {
 
       const membershipsByStudent = new Map<string, any[]>();
       const jnvstClassIds = classRows.filter(isJnvst).map((c:any)=>c.id);
+      const subgroupRows = classRows.filter((c:any)=>isSub(c));
+      const subgroupParentId = (c:any) => {
+        if (!c) return "";
+        if (c.jnvst_parent_id && classMap.get(c.jnvst_parent_id)) return c.jnvst_parent_id;
+        const key = jnvstSubgroupParent(c);
+        if (key) {
+          const parent = classRows.find((x:any)=>String(x.jnvst_group_type||"").toUpperCase()==="MAIN" &&
+            (key==="JNVST-VI" ? String(x.course||"").toUpperCase()==="JNVST-6" : String(x.course||"").toUpperCase()==="JNVST-9"));
+          return parent?.id || "";
+        }
+        return "";
+      };
       if (jnvstClassIds.length) {
         const { data: memberships, error: me } = await admin
           .from("class_students")
@@ -166,8 +183,8 @@ Deno.serve(async (req) => {
           memberships:membershipsByStudent.get(p.id) || [],
           available_subgroups:[...(new Set(
             (membershipsByStudent.get(p.id) || []).flatMap((m:any) =>
-              classRows
-                .filter((c:any) => isSub(c) && c.jnvst_parent_id === m.main_group_id)
+              subgroupRows
+                .filter((c:any) => subgroupParentId(c) === m.main_group_id)
                 .map((c:any) => JSON.stringify({
                   class_id:c.id,
                   class_name:c.name || "",
@@ -187,76 +204,61 @@ Deno.serve(async (req) => {
     // ------------------------------------------------------------
     if (body.action === "setStudentJnvstSubgroup") {
       const studentId = String(body.student_id ?? "").trim();
-      const sourceClassId = String(body.source_class_id ?? "").trim();
       const targetClassId = String(body.target_class_id ?? "").trim();
-      if (!studentId || !targetClassId)
-        return json({error:"Student and target sub-group are required."},400);
+      if (!studentId || !targetClassId) return json({error:"Student and target sub-group are required."},400);
 
-      const { data: groups, error: ge } = await admin
+      const { data: teacherClasses, error: gce } = await admin
         .from("classes")
         .select("id,name,course,description,jnvst_group_type,jnvst_parent_id,teacher_id")
-        .eq("teacher_id", caller.user.id)
-        .in("id", [...new Set([sourceClassId,targetClassId].filter(Boolean))]);
-      if (ge) return json({error:ge.message},400);
+        .eq("teacher_id", caller.user.id);
+      if (gce) return json({error:gce.message},400);
+      const rows=teacherClasses||[];
+      const byId=new Map<string,any>(rows.map((g:any)=>[g.id,g]));
+      const target=byId.get(targetClassId);
+      if (!target) return json({error:"Target JNVST group is not available to this teacher."},403);
 
-      const byId = new Map<string,any>((groups??[]).map((g:any)=>[g.id,g]));
-      const source = sourceClassId ? byId.get(sourceClassId) : null;
-      const target = byId.get(targetClassId);
-      if (!target) return json({error:"Target sub-group is not available to this teacher."},403);
+      const isSub=(g:any)=>String(g?.jnvst_group_type||"").toUpperCase()==="SUB" || /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(g?.description||""));
+      const isMain=(g:any)=>!!g && !isSub(g) && String(g.course||"").toUpperCase()!=="SCHOOL" &&
+        (String(g.jnvst_group_type||"").toUpperCase()==="MAIN" || String(g.course||"").toUpperCase().startsWith("JNVST"));
+      const parentId=(g:any)=>{
+        if(!g)return "";
+        if(g.jnvst_parent_id && byId.has(g.jnvst_parent_id))return g.jnvst_parent_id;
+        const d=String(g.description||"");
+        const m=d.match(/^JNVST_SUBGROUP_PARENT:(JNVST-VI|JNVST-IX)\s*\|?/i);
+        if(m){
+          const key=m[1].toUpperCase();
+          const p=rows.find((x:any)=>String(x.jnvst_group_type||"").toUpperCase()==="MAIN" &&
+            (key==="JNVST-VI" ? String(x.course||"").toUpperCase()==="JNVST-6" : String(x.course||"").toUpperCase()==="JNVST-9"));
+          return p?.id||"";
+        }
+        return isMain(g)?g.id:"";
+      };
+      if(!isSub(target)) return json({error:"Select a JNVST sub-group as the target."},400);
+      const targetParent=parentId(target); if(!targetParent)return json({error:"The target sub-group is not linked to a JNVST main group."},400);
 
-      const isSub = (g:any) =>
-        String(g?.jnvst_group_type||"").toUpperCase()==="SUB" ||
-        /^JNVST_SUBGROUP_PARENT(?::|_ID:)/i.test(String(g?.description||""));
-      if (!isSub(target) || (source && !isSub(source)))
-        return json({error:"Students can only be moved between JNVST sub-groups."},400);
+      const {data:studentProfile,error:spe}=await admin.from("profiles").select("id,role,course").eq("id",studentId).maybeSingle();
+      if(spe)return json({error:spe.message},400);
+      if(!studentProfile || studentProfile.role!=="student" || !["JNVST-6","JNVST-9"].includes(String(studentProfile.course||"").toUpperCase()))
+        return json({error:"This account is not a JNVST student."},403);
 
-      const sourceParent = source?.jnvst_parent_id || "";
-      const targetParent = target?.jnvst_parent_id || "";
-      if (!sourceParent || !targetParent || sourceParent !== targetParent)
-        return json({error:"The source and target sub-groups must belong to the same main group."},400);
+      const {data:members,error:me}=await admin.from("class_students").select("class_id").eq("student_id",studentId);
+      if(me)return json({error:me.message},400);
+      const currentRows=(members||[]).map((m:any)=>byId.get(m.class_id)).filter(Boolean).filter((g:any)=>isMain(g)||isSub(g));
+      const source=currentRows.find((g:any)=>parentId(g)===targetParent) || currentRows.find((g:any)=>isSub(g));
+      if(!source)return json({error:"The student is not currently linked to a JNVST group under this teacher."},400);
+      if(parentId(source)!==targetParent)return json({error:"The target sub-group belongs to a different main group."},400);
 
-      // Confirm the student is actually in the source subgroup. If the UI
-      // omitted the source, locate the student's JNVST subgroup automatically.
-      let actualSourceId = sourceClassId;
-      if (!actualSourceId) {
-        const { data: currentMemberships, error: cme } = await admin
-          .from("class_students")
-          .select("class_id, classes!inner(id,teacher_id,jnvst_group_type,jnvst_parent_id,description)")
-          .eq("student_id",studentId)
-          .eq("classes.teacher_id",caller.user.id);
-        if (cme) return json({error:cme.message},400);
-        const found=(currentMemberships??[]).find((x:any)=>isSub(x.classes) && x.classes.jnvst_parent_id===targetParent);
-        actualSourceId=found?.class_id||"";
+      const existingTarget=(members||[]).some((m:any)=>m.class_id===targetClassId);
+      if(!existingTarget){
+        const {error:ie}=await admin.from("class_students").insert({student_id:studentId,class_id:targetClassId});
+        if(ie)return json({error:ie.message},400);
       }
-
-      if (actualSourceId && actualSourceId !== targetClassId) {
-        const { data: currentSource, error: sme } = await admin
-          .from("class_students").select("student_id,class_id")
-          .eq("student_id",studentId).eq("class_id",actualSourceId).maybeSingle();
-        if (sme) return json({error:sme.message},400);
-        if (!currentSource) return json({error:"The student is not currently in the selected source sub-group."},400);
+      // Keep exactly one membership inside this JNVST main-group tree.
+      const removeIds=(members||[]).map((m:any)=>m.class_id).filter((id:string)=>id!==targetClassId && parentId(byId.get(id))===targetParent);
+      if(removeIds.length){
+        const {error:de}=await admin.from("class_students").delete().eq("student_id",studentId).in("class_id",removeIds);
+        if(de)return json({error:de.message},400);
       }
-
-      // Make sure the student is not being added to a teacher-owned class
-      // from outside the teacher's JNVST tree.
-      const { data: existingTarget, error: ete } = await admin
-        .from("class_students").select("student_id,class_id")
-        .eq("student_id",studentId).eq("class_id",targetClassId).maybeSingle();
-      if (ete) return json({error:ete.message},400);
-
-      if (!existingTarget) {
-        const { error: ie } = await admin.from("class_students").insert({
-          student_id:studentId,class_id:targetClassId
-        });
-        if (ie) return json({error:ie.message},400);
-      }
-
-      if (actualSourceId && actualSourceId !== targetClassId) {
-        const { error: de } = await admin.from("class_students")
-          .delete().eq("student_id",studentId).eq("class_id",actualSourceId);
-        if (de) return json({error:de.message},400);
-      }
-
       return json({success:true,student_id:studentId,target_class_id:targetClassId});
     }
 
@@ -329,9 +331,9 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------
-    // Teacher: student management helpers
-    // These actions are teacher-scoped and operate only on students
-    // who belong to at least one class taught by the current teacher.
+    // Teacher: School student management helpers
+    // These actions are intentionally teacher-scoped and only operate
+    // on SCHOOL students who belong to one of the teacher's School classes.
     // ------------------------------------------------------------
     if (body.action === "setStudentName") {
       const studentId = String(body.student_id ?? "").trim();
@@ -406,7 +408,7 @@ Deno.serve(async (req) => {
         .eq("classes.teacher_id",caller.user.id)
         .eq("classes.course","SCHOOL")
         .limit(1);
-      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
+      if (me || !membership?.length) return json({error:"This student is not in one of your classes."},403);
       const classId = membership[0].class_id;
 
       if (groupId) {
@@ -434,8 +436,9 @@ Deno.serve(async (req) => {
         .select("student_id, class_id, classes!inner(id,teacher_id,course)")
         .eq("student_id",studentId)
         .eq("classes.teacher_id",caller.user.id)
+        .eq("classes.course","SCHOOL")
         .limit(1);
-      if (me || !membership?.length) return json({error:"This student is not in one of your classes."},403);
+      if (me || !membership?.length) return json({error:"This School student is not in one of your classes."},403);
 
       const { error: de } = await admin.auth.admin.deleteUser(studentId);
       if (de) return json({error:de.message},400);
