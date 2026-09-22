@@ -104,6 +104,11 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .jnvst-two-col .jnvst-question{break-inside:avoid}
 .jnvst-small{font-size:9pt}
 @page{size:A4;margin:0}
+
+.omr-result-card{border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#ffffff)}
+.omr-result-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.omr-pdf-frame{width:100%;height:75vh;min-height:520px;border:1px solid #cbd5e1;border-radius:12px;background:#fff}
+@media(max-width:700px){.omr-pdf-frame{height:68vh;min-height:420px}}
 </style>
 </head>
 <body><div id="app"></div>
@@ -3346,6 +3351,15 @@ async function studentHome(){
         <button onclick="studentMockTests()">View Mock Tests</button>
       </div>
     </div>
+    <div class="card omr-result-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2 style="margin:0;color:#1d4ed8">📄 OMR Test Result</h2>
+          <p class="muted" style="margin:6px 0 0">View and download your classroom OMR examination report.</p>
+        </div>
+        <button onclick="studentOmrResult()">View OMR Result</button>
+      </div>
+    </div>
     <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2>
       <p class="muted">New and not-submitted assignments are highlighted automatically.</p>
       <div class="notice small"><b>Submission rule:</b> A score of 80% or more completes the assignment successfully. If your score is below 80%, you must redo the assessment; it becomes available again automatically after 3 hours. During the waiting period, you can view your result, answers and answer key. Your teacher can also re-assign it for a new attempt.</div>
@@ -3361,6 +3375,89 @@ async function studentHome(){
   </div>`);
   setTimeout(showStudentInstallPrompt,300);
 }
+
+function revokeStudentOmrUrl(){
+  if(window._studentOmrObjectUrl){
+    try{ URL.revokeObjectURL(window._studentOmrObjectUrl); }catch(_){}
+    window._studentOmrObjectUrl=null;
+  }
+  window._studentOmrBlob=null;
+}
+
+async function studentOmrResult(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+  revokeStudentOmrUrl();
+
+  const name=profile?.full_name||"Student";
+  const roll=profile?.roll_no||"";
+  render(`<div class="wrap">${header("OMR Test Result")}
+    <div class="card omr-result-card">
+      <h2 style="color:#1d4ed8">📄 OMR Test Result</h2>
+      <div class="omr-result-meta">
+        <span class="tag">Student: ${esc(name)}</span>
+        ${roll?`<span class="tag">Roll No: ${esc(roll)}</span>`:""}
+      </div>
+      <p class="muted" style="margin-top:15px">Checking your OMR examination report…</p>
+      <div id="omrResultStatus" class="notice">Please wait.</div>
+    </div>
+    <button class="secondary" onclick="studentHome()">← Back to Dashboard</button>
+  </div>`);
+
+  try{
+    const {data,error}=await sb.functions.invoke("get-omr-result",{body:{}});
+    if(error) throw error;
+    if(!(data instanceof Blob)){
+      throw new Error("The OMR result service returned an invalid response.");
+    }
+    if(!data.size) throw new Error("The OMR report is empty.");
+    const type=(data.type||"").toLowerCase();
+    if(type && !type.includes("pdf")){
+      throw new Error("The OMR result service did not return a PDF.");
+    }
+
+    window._studentOmrBlob=data;
+    window._studentOmrObjectUrl=URL.createObjectURL(data);
+
+    const box=document.getElementById("omrResultStatus");
+    if(box) box.outerHTML=`<div class="success" style="margin-top:15px">
+      <b>✓ OMR Test Report is available.</b>
+      <div class="actions" style="margin-top:12px">
+        <button onclick="openStudentOmrPdf()">👁 Open PDF</button>
+        <button class="secondary" onclick="downloadStudentOmrPdf()">⬇ Download PDF</button>
+      </div>
+    </div>
+    <div id="omrPdfViewerCard" class="card" style="margin-top:16px">
+      <h3>OMR Test Report</h3>
+      <iframe class="omr-pdf-frame" src="${window._studentOmrObjectUrl}" title="OMR Test Report PDF"></iframe>
+    </div>`;
+  }catch(e){
+    const box=document.getElementById("omrResultStatus");
+    let msg="Your OMR result has not been uploaded yet. Please check again later.";
+    if(e?.name==="FunctionsFetchError"){
+      msg="The OMR result service could not be reached. Please try again later.";
+    }
+    if(box) box.outerHTML=`<div class="notice" style="margin-top:15px"><b>OMR Result Not Available</b><br>${esc(msg)}</div>`;
+    console.error("OMR result error:",e);
+  }
+}
+
+function openStudentOmrPdf(){
+  if(!window._studentOmrObjectUrl)return alert("Please load your OMR result first.");
+  const win=window.open(window._studentOmrObjectUrl,"_blank","noopener");
+  if(!win) alert("Your browser blocked the PDF window. Please allow pop-ups for this site.");
+}
+
+function downloadStudentOmrPdf(){
+  if(!window._studentOmrBlob || !window._studentOmrObjectUrl)return alert("Please load your OMR result first.");
+  const roll=String(profile?.roll_no||"Student").trim().replace(/[^A-Za-z0-9_-]+/g,"_");
+  const a=document.createElement("a");
+  a.href=window._studentOmrObjectUrl;
+  a.download=`${roll}_OMR_Test_Report.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function showStudentDashboardTab(type){const newPanel=document.getElementById("student-dash-panel-new"),donePanel=document.getElementById("student-dash-panel-completed"),newTab=document.getElementById("student-dash-tab-new"),doneTab=document.getElementById("student-dash-tab-completed");if(!newPanel||!donePanel)return;if(type==="completed"){newPanel.style.display="none";donePanel.style.display="block";newTab.classList.add("secondary");doneTab.classList.remove("secondary")}else{newPanel.style.display="block";donePanel.style.display="none";newTab.classList.remove("secondary");doneTab.classList.add("secondary")}}
 
 async function viewPreviousWork(assignmentId,attemptId){
