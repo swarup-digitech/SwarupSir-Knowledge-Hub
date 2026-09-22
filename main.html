@@ -105,6 +105,16 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .jnvst-two-col{column-count:2;column-gap:12mm}
 .jnvst-two-col .jnvst-question{break-inside:avoid}
 .jnvst-small{font-size:9pt}
+/* Teacher Question Paper Generator: allow the content to flow naturally across
+   printed pages. The footer is kept in normal document flow so it can never
+   overlap the final question. */
+.qp-paper-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm;margin:0 auto;background:#fff;page-break-after:always}
+.qp-paper-page:last-child{page-break-after:auto}
+.qp-paper-page .jnvst-footer{position:static;margin-top:10mm;border-top:1px solid #999;padding-top:3px;font-size:8.5pt;display:flex;justify-content:space-between}
+.qp-passage-number{text-align:center;font-weight:700;font-size:11pt;margin-bottom:2px}
+.qp-passage-title{text-align:center;font-weight:700;font-size:11pt;margin-bottom:4px}
+.qp-passage-title + div{line-height:1.35}
+
 @page{size:A4;margin:0}
 
 .omr-result-card{border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#ffffff)}
@@ -633,11 +643,27 @@ function qpPrepareRows(){
 }
 function downloadSelectedAnswerKeyExcel(){try{const rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');const wb=XLSX.utils.book_new();const info=[['Paper Title',document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper'],['Generated On',new Date().toLocaleString('en-IN')],['Selection Mode',qpState.mode==='passages'?'Passage Sets':'Questions by Topic'],['Total Questions',rows.length]];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(info),'Paper Info');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(qpBuildAnswerRows(rows)),'Answer Key');XLSX.writeFile(wb,`answer-key-${new Date().toISOString().slice(0,10)}.xlsx`);}catch(e){alert('Could not create Answer Key Excel: '+(e.message||e))}}
 function qpHtmlQuestion(q){const hasImage=!!qpNorm(q.image_url);const opts=hasImage?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;return `<div class="jnvst-question"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="jnvst-question-image" src="${esc(q.image_url)}" alt="">`:''}${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}${opts}</div></div></div>`;}
-function qpBuildPassageHtml(rows){const out=[];const seen=new Set();for(const q of rows){const pid=q._passageGroup||q.passage_id;if(pid&&!seen.has(pid)){seen.add(pid);out.push(jnvstPdfPassage(q._passageTitle||q.passage_title,q._passageText||q.passage_text));}out.push(qpHtmlQuestion(q));}return out.join('');}
+function qpBuildPassageHtml(rows){
+  const out=[];
+  const seen=new Set();
+  let passageNumber=0;
+  for(const q of rows){
+    const pid=q._passageGroup||q.passage_id;
+    if(pid&&!seen.has(pid)){
+      seen.add(pid);
+      passageNumber++;
+      const title=qpNorm(q._passageTitle||q.passage_title)||'Passage';
+      const text=q._passageText||q.passage_text||'';
+      out.push(`<div class="jnvst-passage"><div class="qp-passage-number">Passage ${passageNumber}</div><div class="qp-passage-title">${esc(title)}</div><div>${jnvstPdfEscape(text)}</div></div>`);
+    }
+    out.push(qpHtmlQuestion(q));
+  }
+  return out.join('');
+}
 async function generateSelectedQuestionPaper(){
   try{let rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');
     rows=rows.map(x=>({...x}));const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const w=window.open('','_blank','width=1100,height=900');if(!w)return alert('Please allow pop-ups for the PDF/print preview.');const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');const includeAnswers=document.getElementById('qpPdfAnswers')?.value==='yes';
-    const body=`<div class="jnvst-page"><div class="jnvst-topline"><span>Classroom Exam</span><span>Exam Date: ${new Date().toLocaleDateString('en-IN')}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR'S KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div><div class="jnvst-mock-badge">QUESTION PAPER</div></div><table class="jnvst-fields"><tr><td class="label">Name</td><td>&nbsp;</td><td class="label">Roll No.</td><td>&nbsp;</td></tr><tr><td class="label">Time</td><td>________________</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option. Questions containing images already include their options where applicable.</div>${qpState.mode==='passages'?qpBuildPassageHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="jnvst-footer"><span>(c)Swarup Sir, Ph: 98643-90279</span><span>Classroom OMR Exam</span></div></div>`;
+    const body=`<div class="qp-paper-page"><div class="jnvst-topline"><span>Teacher Copy</span><span>Generated ${new Date().toLocaleDateString('en-IN')}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div><div class="jnvst-mock-badge">QUESTION PAPER</div></div><table class="jnvst-fields"><tr><td class="label">Name</td><td>&nbsp;</td><td class="label">Roll No.</td><td>&nbsp;</td></tr><tr><td class="label">Time</td><td>________________</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option. Questions containing images already include their options where applicable.</div>${qpState.mode==='passages'?qpBuildPassageHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="jnvst-footer"><span>(c)Swarup Sir, Ph: 98643-90279</span><span>Teacher Question Paper</span></div></div>`;
     const answerBlock=includeAnswers?`<div class="jnvst-page"><div class="jnvst-section-head">ANSWER KEY — TEACHER COPY</div><table class="jnvst-marks-table"><thead><tr><th>Q.No.</th><th>Answer</th><th>Topic</th></tr></thead><tbody>${rows.map(q=>`<tr><td>${q._number}</td><td><b>${esc(q.correct_option)}</b></td><td>${esc(qpTopicLabel(q))}</td></tr>`).join('')}</tbody></table></div>`:'';
     w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body><div class="jnvst-paper">${body}${answerBlock}</div></body></html>`);w.document.close();await new Promise(r=>setTimeout(r,400));const imgs=[...w.document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));w.focus();w.print();
   }catch(e){alert('Could not generate Question Paper: '+(e.message||e));}
