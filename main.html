@@ -108,14 +108,17 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Teacher Question Paper Generator: allow the content to flow naturally across
    printed pages. The footer is kept in normal document flow so it can never
    overlap the final question. */
-.qp-paper-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm;margin:0 auto;background:#fff;page-break-after:always}
+.qp-paper-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:8mm 12mm 10mm;margin:0 auto;background:#fff;page-break-after:always}
 .qp-paper-page:last-child{page-break-after:auto}
-.qp-paper-page .jnvst-footer{position:static;margin-top:10mm;border-top:1px solid #999;padding-top:3px;font-size:8.5pt;display:flex;justify-content:space-between}
+.qp-paper-footer{position:static!important;display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;align-items:center;margin-top:6mm;border-top:1px solid #999;padding-top:3px;font-size:8.2pt;line-height:1.2;break-inside:avoid;page-break-inside:avoid}.qp-paper-footer span:nth-child(4){grid-column:1/-1;text-align:center;font-size:7.8pt;font-weight:600;color:#334155}
 .qp-passage-number{text-align:center;font-weight:700;font-size:11pt;margin-bottom:2px}
 .qp-passage-title{text-align:center;font-weight:700;font-size:11pt;margin-bottom:4px}
 .qp-passage-title + div{line-height:1.35}
+.qp-set-serial{display:inline-block;border:1.5px solid #1d4ed8;border-radius:5px;padding:2px 7px;font-size:9.5pt;font-weight:800;letter-spacing:.35px;color:#17365d;background:#eff6ff}
+.qp-footer-copy{display:block;text-align:center;margin-top:2px;font-size:8pt;font-weight:600;color:#334155}
 
 @page{size:A4;margin:0}
+@media print{.qp-paper-page{padding-top:8mm!important;padding-bottom:10mm!important}.qp-paper-footer{position:static!important;display:flex!important}}
 
 .omr-result-card{border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#ffffff)}
 .omr-result-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -521,7 +524,7 @@ async function saveMockBulkUploads(){try{let savedExcel=0,savedPdf=0;const clean
  alert(`Upload complete: ${savedExcel+savedPdf} new question(s).\nSet/Passage IDs were generated automatically.\nExcel: ${savedExcel}; PDF: ${savedPdf}.`);mockTestManagement()}catch(e){alert('Upload validation failed: '+(e.message||e))}}
 async function mockBankSummary(){const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});if(error)return alert(error.message);const counts={};const groups={};(data||[]).forEach(x=>{if(x.active!==false){counts[x.part_code]=(counts[x.part_code]||0)+1;if(x.passage_id){const k=x.part_code+'::'+x.passage_id;(groups[k]||=0);groups[k]++}}});render(`<div class="wrap">${header('Manage Mock Question Bank')}<div class="card"><div class="notice small">Edit any question, change its answer, update the passage, add/replace an image, or deactivate/delete it. Deactivated questions are not used when generating a new test.</div><div style="overflow:auto"><table><thead><tr><th>Part</th><th>Question</th><th>Passage</th><th>Image</th><th>Status</th><th>Action</th></tr></thead><tbody>${(data||[]).map(q=>`<tr><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc((q.question_text||'[PDF/image question]').slice(0,100))}</td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40))}</td><td>${q.image_url?'Yes':'No'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="6">No questions in your bank.</td></tr>'}</tbody></table></div><div class="card" style="background:#f8fafc;margin-top:15px"><h3>Availability & Set Validation</h3>${MOCK_PLAN.map(x=>{const c=counts[x.part]||0;const complete=x.unit==='passage'?Object.entries(groups).filter(([k,g])=>k.startsWith(x.part+'::')&&g===(x.passageCount||x.count)).length:Math.floor(c/x.count);const remainder=x.unit==='passage'?c-(complete*(x.passageCount||x.count)):c%x.count;return `<div class="small" style="padding:6px 0"><b>${esc(x.label)}</b>: ${c} active · ${complete} complete set(s) of ${x.count}${remainder?' · '+remainder+' question(s) not in a complete set':' · ready'}</div>`}).join('')}</div><div class="actions"><button onclick="mockBulkUpload()">Bulk Upload</button><button onclick="generateMockTestPage()">Generate Test</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div></div>`)}
 
-let qpState={bank:[],mode:'questions',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),lastRows:null,lastSignature:''};
+let qpState={bank:[],mode:'questions',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),lastRows:null,lastSignature:'',lastSerial:''};
 function qpNorm(v){return String(v??'').trim()}
 function qpTopicLabel(q){return qpNorm(q.topic)||mockPartLabel(q.part_code)||q.part_code}
 function qpIsPassage(q){return String(q.part_code||'').toUpperCase()==='LANGUAGE_PASSAGE'||String(q.part_code||'').toUpperCase()==='EVS_PASSAGE'||!!qpNorm(q.passage_id)}
@@ -585,7 +588,7 @@ function qpSelectRandomPassages(){
 function qpSelectVisiblePassages(){const search=qpNorm(document.getElementById('qpPassageSearch')?.value).toLowerCase();const part=document.getElementById('qpPassagePart')?.value||'ALL';const groups=qpPassageGroups(qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&(part==='ALL'||q.part_code===part))).filter(g=>g.questions.length===5).filter(g=>!search||[g.id,g.title,g.text].some(v=>qpNorm(v).toLowerCase().includes(search)));groups.forEach(g=>qpState.selectedPassages.add(g.id));qpState.lastRows=null;qpState.lastSignature='';qpRenderPassages();qpRenderSummary();}
 function qpSetMode(mode){qpState.mode=mode;document.getElementById('qpQuestionsPanel').style.display=mode==='questions'?'block':'none';document.getElementById('qpPassagesPanel').style.display=mode==='passages'?'block':'none';if(mode==='questions'){qpRenderTopicRows();qpRefreshQuestionPool();}else{qpRenderPassages();}qpRenderSummary();}
 async function questionPaperGeneratorPage(){
-  qpState={bank:[],mode:'questions',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),lastRows:null,lastSignature:''};
+  qpState={bank:[],mode:'questions',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),lastRows:null,lastSignature:'',lastSerial:''};
   const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true});
   if(error)return alert('Could not load Mock Test question bank: '+error.message+'\n\nIf this mentions a missing "topic" column, run the supplied mock_question_paper_generator.sql once in Supabase SQL Editor.');
   qpState.bank=data||[];
@@ -596,7 +599,7 @@ async function questionPaperGeneratorPage(){
     </div>
     <div id="qpQuestionsPanel" class="card"><h2>1. Select One or More Topics</h2><div class="grid"><div><label>Search Topic</label><input id="qpTopicSearch" placeholder="Search topic" oninput="qpRenderTopicRows()"></div><div><label>Search Question</label><input id="qpQuestionSearch" placeholder="Search question" oninput="qpRefreshQuestionPool()"></div></div><div id="qpTopicList" style="max-height:260px;overflow:auto;margin-top:10px"></div><div id="qpAvailability" class="notice small">Available questions in selected topic(s): ${qpState.bank.length}</div><label>Number of Questions</label><input id="qpQuestionCount" type="number" min="1" value="20"><div class="actions"><button class="secondary" onclick="qpSelectVisible()">☑ Select Visible</button><button class="secondary" onclick="qpClearQuestions()">Clear Selection</button></div><div id="qpQuestionList" style="max-height:330px;overflow:auto;margin-top:10px"></div></div>
     <div id="qpPassagesPanel" class="card" style="display:none"><h2>1. Select Complete Passage Sets</h2><p class="muted">For Language / EVS passage questions, a passage and its linked questions are treated as one set. A set is never split.</p><div class="grid"><div><label>Passage Section</label><select id="qpPassagePart" onchange="qpState.selectedPassages.clear();qpState.lastRows=null;qpState.lastSignature='';qpRenderPassages();qpRenderSummary()"><option value="ALL">EVS + Language</option><option value="LANGUAGE_PASSAGE">Language</option><option value="EVS_PASSAGE">EVS</option></select></div><div><label>Number of Passage Sets</label><input id="qpPassageCount" type="number" min="1" value="1"></div><div><label>Search Passage</label><input id="qpPassageSearch" placeholder="Passage title / ID" oninput="qpRenderPassages()"></div></div><div class="actions"><button onclick="qpSelectRandomPassages()">🎲 Select Random Sets</button><button class="secondary" onclick="qpSelectVisiblePassages()">☑ Select Visible</button><button class="secondary" onclick="qpState.selectedPassages.clear();qpState.lastRows=null;qpState.lastSignature='';qpRenderPassages();qpRenderSummary()">Clear Selection</button></div><div id="qpPassageList" style="max-height:380px;overflow:auto;margin-top:10px"></div></div>
-    <div class="card"><div id="qpSummary" class="success">Selected: 0</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download Answer Key Excel</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
+    <div class="card"><div id="qpSummary" class="success">Selected: 0</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download Answer Key Excel</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
   </div>`);
   qpRenderTopicRows();qpRefreshQuestionPool();qpRenderPassages();
 }
@@ -608,6 +611,19 @@ function qpSelectedRows(){
   const chosen=new Set(qpState.selected);return qpState.bank.filter(q=>chosen.has(q.id));
 }
 function qpShuffle(arr){const out=[...arr];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;}
+function qpGetSetSerial(signature){
+  if(qpState.lastSerial && qpState.lastSignature===signature)return qpState.lastSerial;
+  const d=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const stamp=`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  const rand=Math.random().toString(36).slice(2,6).toUpperCase();
+  return `QSET-${stamp}-${rand}`;
+}
+function qpCurrentSetSerial(){
+  const signature=qpState.lastSignature||JSON.stringify({mode:qpState.mode,selected:[...qpState.selected].sort(),passages:[...qpState.selectedPassages].sort()});
+  if(!qpState.lastSerial)qpState.lastSerial=qpGetSetSerial(signature);
+  return qpState.lastSerial;
+}
 function qpAssignNumbers(rows){
   return (rows||[]).map((q,i)=>({...q,_number:i+1}));
 }
@@ -639,9 +655,12 @@ function qpPrepareRows(){
     if(rows.length<wanted)throw new Error(`Only ${rows.length} questions are selected. Please select at least ${wanted}.`);
     rows=rows.slice(0,wanted);
   }
-  rows=qpAssignNumbers(rows);qpState.lastRows=rows.map(x=>({...x}));qpState.lastSignature=signature;return rows;
+  rows=qpAssignNumbers(rows);
+  qpState.lastSerial=qpGetSetSerial(signature);
+  qpState.lastRows=rows.map(x=>({...x}));qpState.lastSignature=signature;return rows;
 }
-function downloadSelectedAnswerKeyExcel(){try{const rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');const wb=XLSX.utils.book_new();const info=[['Paper Title',document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper'],['Generated On',new Date().toLocaleString('en-IN')],['Selection Mode',qpState.mode==='passages'?'Passage Sets':'Questions by Topic'],['Total Questions',rows.length]];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(info),'Paper Info');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(qpBuildAnswerRows(rows)),'Answer Key');XLSX.writeFile(wb,`answer-key-${new Date().toISOString().slice(0,10)}.xlsx`);}catch(e){alert('Could not create Answer Key Excel: '+(e.message||e))}}
+function downloadSelectedAnswerKeyExcel(){try{const rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');const serial=qpCurrentSetSerial();const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const wb=XLSX.utils.book_new();const info=[['Question Set Serial No.',serial],['Paper Title',title],['Generated On',new Date().toLocaleString('en-IN')],['Selection Mode',qpState.mode==='passages'?'Passage Sets':'Questions by Topic'],['Total Questions',rows.length],['Total Marks',rows.length],['Passage Sets',qpState.mode==='passages'?[...new Set(rows.map(q=>q._passageGroup||q.passage_id).filter(Boolean))].length:0]];const wsInfo=XLSX.utils.aoa_to_sheet(info);wsInfo['A1'].s={font:{bold:true}};wsInfo['B1'].s={font:{bold:true,color:{rgb:'17365D'}}};XLSX.utils.book_append_sheet(wb,wsInfo,'Paper Info');const answerRows=qpBuildAnswerRows(rows);const ws=XLSX.utils.json_to_sheet(answerRows);XLSX.utils.book_append_sheet(wb,ws,'Answer Key');const footer=XLSX.utils.aoa_to_sheet([[],['(c)Swarup Sir, Ph: 98643-90279'],['Classroom OMR Exam Question Paper. Copy-wright materials.']]);XLSX.utils.book_append_sheet(wb,footer,'Credits');XLSX.writeFile(wb,`answer-key-${serial}.xlsx`);}catch(e){alert('Could not create Answer Key Excel: '+(e.message||e))}}
+
 function qpHtmlQuestion(q){const hasImage=!!qpNorm(q.image_url);const opts=hasImage?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;return `<div class="jnvst-question"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="jnvst-question-image" src="${esc(q.image_url)}" alt="">`:''}${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}${opts}</div></div></div>`;}
 function qpBuildPassageHtml(rows){
   const out=[];
@@ -660,10 +679,95 @@ function qpBuildPassageHtml(rows){
   }
   return out.join('');
 }
+async function qpLoadDocxLibrary(){
+  if(window.docx&&window.docx.Document)return window.docx;
+  if(window.__qpDocxPromise)return window.__qpDocxPromise;
+  window.__qpDocxPromise=new Promise((resolve,reject)=>{
+    const existing=[...document.scripts].find(s=>/docx@/i.test(s.src));
+    if(existing){existing.addEventListener('load',()=>window.docx?resolve(window.docx):reject(new Error('Word document library did not load.')));existing.addEventListener('error',()=>reject(new Error('Could not load Word document library.')));return;}
+    const script=document.createElement('script');
+    script.src='https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js';
+    script.async=true;
+    script.onload=()=>window.docx?resolve(window.docx):reject(new Error('Word document library did not load.'));
+    script.onerror=()=>reject(new Error('Could not load Word document library. Please check your internet connection.'));
+    document.head.appendChild(script);
+  });
+  return window.__qpDocxPromise;
+}
+async function qpFetchImageData(url){
+  if(!url)return null;
+  try{
+    const r=await fetch(url,{mode:'cors'});if(!r.ok)throw new Error('image fetch failed');
+    const b=await r.arrayBuffer();
+    let mime='image/png';
+    try{mime=r.headers.get('content-type')||mime}catch(_){ }
+    return {data:b,mime};
+  }catch(e){return null;}
+}
+function qpDocxOptions(q,d){
+  const {Paragraph,TextRun,Table,TableRow,TableCell,WidthType,BorderStyle}=d;
+  const vals=[['A',q.option_a],['B',q.option_b],['C',q.option_c],['D',q.option_d]];
+  const cells=vals.map(([letter,text])=>new TableCell({children:[new Paragraph({children:[new TextRun({text:`(${letter}) `,bold:true}),new TextRun({text:String(text||'')})]})],width:{size:50,type:WidthType.PERCENT}}));
+  return new Table({rows:[new TableRow({children:[cells[0],cells[1]]}),new TableRow({children:[cells[2],cells[3]]})],width:{size:100,type:WidthType.PERCENT},borders:{top:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},bottom:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},left:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},right:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},insideHorizontal:{style:BorderStyle.SINGLE,size:4,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:4,color:'E5E7EB'}}});
+}
+async function qpDocxQuestionBlocks(q,d){
+  const {Paragraph,TextRun,ImageRun}=d;
+  const blocks=[];
+  blocks.push(new Paragraph({spacing:{before:120,after:60},children:[new TextRun({text:`${q._number}. `,bold:true,color:'1D4ED8'}),new TextRun({text:String(q.question_text||'')})]}));
+  if(q.image_url){
+    const img=await qpFetchImageData(q.image_url);
+    if(img){
+      const type=/jpe?g/i.test(img.mime)?'jpg':'png';
+      blocks.push(new Paragraph({alignment:d.AlignmentType.CENTER,spacing:{after:100},children:[new ImageRun({data:img.data,transformation:{width:500,height:280},type})]}));
+    }
+  }
+  if(!q.image_url)blocks.push(qpDocxOptions(q,d));
+  return blocks;
+}
+async function downloadSelectedQuestionPaperWord(){
+  try{
+    const rows=qpPrepareRows();
+    if(!rows.length)return alert('Please select questions or passage sets first.');
+    const d=await qpLoadDocxLibrary();
+    const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,WidthType,AlignmentType,BorderStyle,Footer,PageNumber}=d;
+    const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';
+    const serial=qpCurrentSetSerial();
+    const children=[];
+    children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:60},children:[new TextRun({text:`Question Set Serial No.: ${serial}`,bold:true,size:18,color:'17365D'})]}));
+    children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:80},children:[new TextRun({text:'SWARUP SIR\'S KNOWLEDGE HUB',bold:true,size:30,color:'17365D'})]}));
+    children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:50},children:[new TextRun({text:title,bold:true,size:25,color:'1D4ED8'})]}));
+    children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:160},children:[new TextRun({text:'QUESTION PAPER',bold:true,size:20,color:'FFFFFF',shading:{fill:'2563EB'}})]}));
+    const fields=new Table({width:{size:100,type:WidthType.PERCENT},rows:[
+      new TableRow({children:[new TableCell({children:[new Paragraph({children:[new TextRun({text:'Name: ',bold:true}),new TextRun({text:'________________________________'})]})]}),new TableCell({children:[new Paragraph({children:[new TextRun({text:'Roll No.: ',bold:true}),new TextRun({text:'________________'})]})]})]}),
+      new TableRow({children:[new TableCell({children:[new Paragraph({children:[new TextRun({text:'Time: ',bold:true}),new TextRun({text:'________________'})]})]}),new TableCell({children:[new Paragraph({children:[new TextRun({text:'Marks: ',bold:true}),new TextRun({text:String(rows.length)})]})]})]})
+    ],borders:{top:{style:BorderStyle.SINGLE,size:6,color:'B7C9E2'},bottom:{style:BorderStyle.SINGLE,size:6,color:'B7C9E2'},left:{style:BorderStyle.SINGLE,size:6,color:'B7C9E2'},right:{style:BorderStyle.SINGLE,size:6,color:'B7C9E2'},insideHorizontal:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},insideVertical:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'}}});
+    children.push(fields);
+    children.push(new Paragraph({spacing:{before:160,after:160},children:[new TextRun({text:'Instructions: ',bold:true}),new TextRun({text:'Read each question carefully and choose the correct option. Questions containing images already include their options where applicable.'})]}));
+    if(qpState.mode==='passages'){
+      const seen=new Set();let passageNumber=0;
+      for(const q of rows){
+        const pid=q._passageGroup||q.passage_id;
+        if(pid&&!seen.has(pid)){
+          seen.add(pid);passageNumber++;
+          children.push(new Paragraph({pageBreakBefore:passageNumber>1,spacing:{before:180,after:60},children:[new TextRun({text:`Passage ${passageNumber}`,bold:true,size:22,color:'1D4ED8'})]}));
+          children.push(new Paragraph({spacing:{after:70},children:[new TextRun({text:qpNorm(q._passageTitle||q.passage_title)||'Passage',bold:true,size:20})]}));
+          children.push(new Paragraph({spacing:{after:130},children:[new TextRun({text:String(q._passageText||q.passage_text||'')})]}));
+        }
+        const blocks=await qpDocxQuestionBlocks(q,d);children.push(...blocks);
+      }
+    }else{
+      for(const q of rows){const blocks=await qpDocxQuestionBlocks(q,d);children.push(...blocks);}
+    }
+    const doc=new Document({sections:[{properties:{page:{margin:{top:454,right:680,bottom:567,left:680}}},children,footers:{default:new Footer({children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:`Set No.: ${serial}  •  (c)Swarup Sir, Ph: 98643-90279  •  Page `,size:16,color:'64748B'}),new TextRun({children:[PageNumber.CURRENT],size:16,color:'64748B'})]})]})}}]});
+    const blob=await Packer.toBlob(doc);
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${serial}-${title.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'')||'question-paper'}.docx`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
+  }catch(e){alert('Could not create Word file: '+(e.message||e));}
+}
 async function generateSelectedQuestionPaper(){
   try{let rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');
     rows=rows.map(x=>({...x}));const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const w=window.open('','_blank','width=1100,height=900');if(!w)return alert('Please allow pop-ups for the PDF/print preview.');const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');const includeAnswers=document.getElementById('qpPdfAnswers')?.value==='yes';
-    const body=`<div class="qp-paper-page"><div class="jnvst-topline"><span>Classroom OMR Exam</span><span>Generated ${new Date().toLocaleDateString('en-IN')}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div><div class="jnvst-mock-badge">QUESTION PAPER</div></div><table class="jnvst-fields"><tr><td class="label">Name</td><td>&nbsp;</td><td class="label">Roll No.</td><td>&nbsp;</td></tr><tr><td class="label">Time</td><td>________________</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option. Questions containing images already include their options where applicable.</div>${qpState.mode==='passages'?qpBuildPassageHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="jnvst-footer"><span>(c)Swarup Sir, Ph: 98643-90279</span><span>Copywright Materilas</span></div></div>`;
+    const serial=qpCurrentSetSerial();
+    const body=`<div class="qp-paper-page"><div class="jnvst-topline"><span class="qp-set-serial">Set No.: ${esc(serial)}</span><span>Exam Date: ${new Date().toLocaleDateString('en-IN')}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div><div class="jnvst-mock-badge">QUESTION PAPER</div></div><table class="jnvst-fields"><tr><td class="label">Name</td><td>&nbsp;</td><td class="label">Roll No.</td><td>&nbsp;</td></tr><tr><td class="label">Time</td><td>________________</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option. Questions containing images already include their options where applicable.</div>${qpState.mode==='passages'?qpBuildPassageHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="qp-paper-footer"><span>Set No.: ${esc(serial)}</span><span>(c)Swarup Sir, Ph: 98643-90279</span><span>Page</span><span>Classroom OMR Exam Question Paper. Copy-wright materials.</span></div></div>`;
     const answerBlock=includeAnswers?`<div class="jnvst-page"><div class="jnvst-section-head">ANSWER KEY — TEACHER COPY</div><table class="jnvst-marks-table"><thead><tr><th>Q.No.</th><th>Answer</th><th>Topic</th></tr></thead><tbody>${rows.map(q=>`<tr><td>${q._number}</td><td><b>${esc(q.correct_option)}</b></td><td>${esc(qpTopicLabel(q))}</td></tr>`).join('')}</tbody></table></div>`:'';
     w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body><div class="jnvst-paper">${body}${answerBlock}</div></body></html>`);w.document.close();await new Promise(r=>setTimeout(r,400));const imgs=[...w.document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));w.focus();w.print();
   }catch(e){alert('Could not generate Question Paper: '+(e.message||e));}
