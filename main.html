@@ -1615,7 +1615,7 @@ function renderJnvstStudentAccounts(){
    <td><code>${esc(s.password||"—")}</code></td>
    <td>${esc(groupLabel(s))}</td>
    <td><select id="jnvstTarget_${s.id}" style="min-width:190px;margin:0">${targetOptions(s)}</select><button class="secondary" style="margin-top:5px" onclick="changeJnvstStudentGroup('${s.id}')">Change Group</button></td>
-   <td><div class="actions"><button onclick="editJnvstStudent('${s.id}')">✎ Edit</button><button class="secondary" onclick="changeJnvstStudentRoll('${s.id}')">Roll No</button><button class="secondary" onclick="changeJnvstStudentPassword('${s.id}')">Password</button><button class="danger" onclick="deleteJnvstStudent('${s.id}')">Delete</button></div></td>
+   <td><div class="actions"><button onclick="editJnvstStudent('${s.id}')">✎ Edit</button><button class="secondary" onclick="enrollJnvstPastAssignments('${s.id}')">📚 Past Assignments</button><button class="secondary" onclick="changeJnvstStudentRoll('${s.id}')">Roll No</button><button class="secondary" onclick="changeJnvstStudentPassword('${s.id}')">Password</button><button class="danger" onclick="deleteJnvstStudent('${s.id}')">Delete</button></div></td>
   </tr>`).join("")||'<tr><td colspan="6">No JNVST students match the selected filter.</td></tr>'}
   </tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>`;
 }
@@ -1640,6 +1640,211 @@ async function changeJnvstStudentGroup(studentId){
  }catch(e){alert("Could not change group: "+(e.message||e))}
 }
 async function changeJnvstStudentRoll(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;const v=prompt(`New Roll No for ${s.full_name}:`,s.roll_no||"");if(v===null)return;if(!v.trim())return alert("Roll No is required.");if(!confirm(`Change Roll No for ${s.full_name} to "${v.trim()}"?`))return;try{await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:v.trim()});alert("Roll No updated.");await manageStudentAccounts()}catch(e){alert(e.message||e)}}
+
+async function enrollJnvstPastAssignments(studentId){
+  const student=(window._jnvstAccountStudents||[]).find(x=>String(x.id)===String(studentId));
+  if(!student)return alert("Student not found.");
+
+  // Read the student's actual current JNVST memberships directly. This avoids
+  // depending on the credential Edge Function's display payload.
+  const {data:membershipRows,error:me}=await sb.from("class_students")
+    .select("class_id, classes!inner(id,name,course,jnvst_group_type,jnvst_parent_id,description)")
+    .eq("student_id",studentId);
+  if(me)return alert("Could not load the student's JNVST group: "+me.message);
+  const memberships=(membershipRows||[]).map(x=>({
+    class_id:x.class_id,
+    class:x.classes
+  })).filter(x=>String(x.class?.course||"").toUpperCase().startsWith("JNVST"));
+  if(!memberships.length)return alert("This student is not linked to a JNVST main group/sub-group.");
+
+  const {data:classes,error:ce}=await sb.from("classes")
+    .select("id,name,course,jnvst_group_type,jnvst_parent_id,description")
+    .eq("teacher_id",current.id);
+  if(ce)return alert("Could not load JNVST groups: "+ce.message);
+  const classMap=new Map((classes||[]).map(c=>[String(c.id),c]));
+  const memberSubIds=new Set();
+  const memberMainIds=new Set();
+  const studentSubNames=new Set();
+  const studentMainNames=new Set();
+  memberships.forEach(m=>{
+    const c=classMap.get(String(m.class_id))||m.class;
+    if(!c)return;
+    if(isJnvstSubGroup(c)){
+      memberSubIds.add(String(c.id));
+      studentSubNames.add(String(c.name||"").trim().toLowerCase());
+      if(c.jnvst_parent_id)memberMainIds.add(String(c.jnvst_parent_id));
+    }else{
+      memberMainIds.add(String(c.id));
+      studentMainNames.add(String(c.name||"").trim().toLowerCase());
+    }
+  });
+  memberMainIds.forEach(id=>{
+    const c=classMap.get(String(id));
+    if(c)studentMainNames.add(String(c.name||"").trim().toLowerCase());
+  });
+
+  const {data:assignments,error:ae}=await sb.from("assignments")
+    .select("id,title,subject,class_id,main_group,sub_group,assignment_type,created_at")
+    .eq("created_by",current.id)
+    .order("created_at",{ascending:false});
+  if(ae)return alert("Could not load assignments: "+ae.message);
+
+  // An assignment matches when it belongs to the student's sub-group, or to
+  // the student's main group without a restrictive sub-group, or explicitly
+  // names the student's sub-group among multiple sub-groups.
+  const matching=(assignments||[]).filter(a=>{
+    const c=classMap.get(String(a.class_id||""));
+    if(!c || String(c.course||"").toUpperCase().startsWith("JNVST"))return false;
+    const classId=String(a.class_id||"");
+    const mainId=String(c.jnvst_parent_id||classId);
+    const subText=String(a.sub_group||"").trim();
+    const subNames=subText?subText.split(/\s*,\s*/).map(x=>x.trim().toLowerCase()).filter(Boolean):[];
+    if(memberSubIds.has(classId))return true;
+    if(memberMainIds.has(classId) && !subText)return true;
+    if(memberMainIds.has(mainId) && (!subText || subNames.some(n=>studentSubNames.has(n))))return true;
+    // Older assignments may not have parent metadata populated; use stored
+    // main_group/sub_group labels as a backward-compatible fallback.
+    const aMain=String(a.main_group||"").trim().toLowerCase();
+    const aSub=subNames;
+    if(aMain && studentMainNames.has(aMain) && (!a.sub_group || aSub.some(n=>studentSubNames.has(n))))return true;
+    return false;
+  });
+
+  const ids=matching.map(a=>a.id);
+  let links=[];
+  if(ids.length){
+    const {data,error}=await sb.from("assignment_students")
+      .select("assignment_id,current_attempt_number")
+      .eq("student_id",studentId)
+      .in("assignment_id",ids);
+    if(error)return alert("Could not check existing assignments: "+error.message);
+    links=links||[];
+    links= data||[];
+  }
+  const linked=new Set(links.map(x=>String(x.assignment_id)));
+
+  window._jnvstPastEnrollment={
+    studentId,
+    matching,
+    selected:new Set(matching.filter(a=>!linked.has(String(a.id))).map(a=>String(a.id))),
+    linked
+  };
+  renderJnvstPastAssignmentEnrollment();
+}
+
+function renderJnvstPastAssignmentEnrollment(){
+  const st=window._jnvstAccountStudents?.find(x=>String(x.id)===String(window._jnvstPastEnrollment?.studentId));
+  const state=window._jnvstPastEnrollment;
+  if(!st||!state)return manageStudentAccounts();
+  const q=(document.getElementById("pastAssignSearch")?.value||"").trim().toLowerCase();
+  const type=(document.getElementById("pastAssignType")?.value||"all").toUpperCase();
+  const rows=state.matching.filter(a=>{
+    const text=`${a.title||""} ${a.subject||""}`.toLowerCase();
+    if(q&&!text.includes(q))return false;
+    if(type!=="ALL"&&String(a.assignment_type||"").toUpperCase()!==type)return false;
+    return true;
+  });
+  const selectedCount=state.selected.size;
+  const newCount=[...state.selected].filter(id=>!state.linked.has(id)).length;
+  const alreadyCount=state.linked.size;
+
+  render(`<div class="wrap">${header("Enroll Past Assignments")}
+    <div class="card" style="border:2px solid #2563eb;background:#f8fbff">
+      <h2 style="margin:0 0 5px">📚 ${esc(st.full_name||"Student")}</h2>
+      <div class="muted">Roll No: <b>${esc(st.roll_no||"—")}</b></div>
+      <div class="small muted" style="margin-top:5px">Matching past assignments: <b>${state.matching.length}</b> · Already assigned: <b>${alreadyCount}</b> · Selected: <b>${selectedCount}</b></div>
+    </div>
+    <div class="card">
+      <div class="actions" style="margin-bottom:10px">
+        <button onclick="selectAllPastAssignments()">✓ Select All Matching</button>
+        <button class="secondary" onclick="clearPastAssignments()">Clear All</button>
+        <button class="secondary" onclick="selectAllVisiblePastAssignments()">Select All Visible</button>
+      </div>
+      <div class="grid">
+        <div><label>Search</label><input id="pastAssignSearch" placeholder="Assignment title / subject" oninput="renderJnvstPastAssignmentEnrollment()"></div>
+        <div><label>Type</label><select id="pastAssignType" onchange="renderJnvstPastAssignmentEnrollment()"><option value="all">All Types</option><option value="MCQ">MCQ</option><option value="VIDEO">Video + MCQ</option></select></div>
+      </div>
+    </div>
+    <div class="card">
+      ${rows.length?rows.map(a=>{
+        const id=String(a.id), linked=state.linked.has(id), checked=state.selected.has(id);
+        const c=(window._jnvstAccountGroups||[]).find(g=>String(g.subId||g.mainId)===String(a.class_id||""));
+        const groupLabel=a.sub_group?`${a.main_group||""} → ${a.sub_group}`:(a.main_group||c?.mainName||"JNVST");
+        return `<label style="display:block;padding:11px 4px;border-bottom:1px solid #e5e7eb;cursor:pointer">
+          <input class="past-assignment-check" type="checkbox" value="${esc(id)}" ${checked?"checked":""} ${linked?"disabled":""} onchange="togglePastAssignment('${esc(id)}',this.checked)" style="width:auto;margin-right:9px">
+          <b>${esc(a.title||"Untitled")}</b>
+          <span class="tag" style="margin-left:7px">${esc(a.assignment_type||"MCQ")}</span>
+          <div class="small muted" style="margin:4px 0 0 25px">${esc(a.subject||"")} · ${esc(groupLabel)} · ${linked?"Already assigned":"Available for enrollment"}</div>
+        </label>`;
+      }).join(""):`<div class="notice">No matching past assignments were found for this student's JNVST group.</div>`}
+    </div>
+    <div class="card">
+      <div class="success">Ready to enroll: <b>${newCount}</b> assignment${newCount===1?"":"s"}.</div>
+      <div class="actions" style="margin-top:10px">
+        <button onclick="savePastAssignmentEnrollment()">📚 Enroll Selected</button>
+        <button class="secondary" onclick="manageStudentAccounts()">← Back to Student Accounts</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+function togglePastAssignment(id,checked){
+  const state=window._jnvstPastEnrollment;if(!state)return;
+  if(state.linked.has(String(id)))return;
+  if(checked)state.selected.add(String(id));else state.selected.delete(String(id));
+}
+function selectAllPastAssignments(){
+  const s=window._jnvstPastEnrollment;if(!s)return;
+  s.matching.forEach(a=>{if(!s.linked.has(String(a.id)))s.selected.add(String(a.id));});
+  renderJnvstPastAssignmentEnrollment();
+}
+function clearPastAssignments(){
+  const s=window._jnvstPastEnrollment;if(!s)return;
+  s.selected=new Set([...s.selected].filter(id=>s.linked.has(id)));
+  renderJnvstPastAssignmentEnrollment();
+}
+function selectAllVisiblePastAssignments(){
+  const s=window._jnvstPastEnrollment;if(!s)return;
+  const q=(document.getElementById("pastAssignSearch")?.value||"").trim().toLowerCase();
+  const type=(document.getElementById("pastAssignType")?.value||"all").toUpperCase();
+  s.matching.forEach(a=>{
+    const text=`${a.title||""} ${a.subject||""}`.toLowerCase();
+    const ok=(!q||text.includes(q))&&(type==="ALL"||String(a.assignment_type||"").toUpperCase()===type);
+    if(ok&&!s.linked.has(String(a.id)))s.selected.add(String(a.id));
+  });
+  renderJnvstPastAssignmentEnrollment();
+}
+async function savePastAssignmentEnrollment(){
+  const s=window._jnvstPastEnrollment;if(!s)return;
+  const ids=[...s.selected].filter(id=>!s.linked.has(id));
+  if(!ids.length)return alert("No new assignments are selected.");
+  const student=window._jnvstAccountStudents?.find(x=>String(x.id)===String(s.studentId));
+  if(!student)return;
+  if(!confirm(`Enroll ${student.full_name} in ${ids.length} past assignment${ids.length===1?"":"s"}?\n\nExisting assignments will not be duplicated.`))return;
+  try{
+    // Re-check existing links immediately before insert to avoid duplicates
+    // when the teacher has another tab open or clicks twice.
+    const {data:existing,error:ee}=await sb.from("assignment_students")
+      .select("assignment_id")
+      .eq("student_id",s.studentId)
+      .in("assignment_id",ids);
+    if(ee)throw ee;
+    const existingSet=new Set((existing||[]).map(x=>String(x.assignment_id)));
+    const rows=ids.filter(id=>!existingSet.has(String(id))).map(assignment_id=>({
+      assignment_id,student_id:s.studentId,current_attempt_number:1
+    }));
+    if(rows.length){
+      const {error:ie}=await sb.from("assignment_students").insert(rows);
+      if(ie)throw ie;
+    }
+    const skipped=ids.length-rows.length;
+    alert(`Enrollment completed.\n\nNew assignments: ${rows.length}\nAlready assigned: ${skipped}`);
+    await manageStudentAccounts();
+  }catch(e){
+    alert("Could not enroll past assignments.\n\n"+(e.message||e));
+  }
+}
+
 async function changeJnvstStudentPassword(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;const v=prompt(`New password for ${s.full_name}:`);if(v===null)return;if(v.length<6)return alert("Password must be at least 6 characters.");if(!confirm(`Change the login password for ${s.full_name}?`))return;try{await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:v});alert("Password updated.");await manageStudentAccounts()}catch(e){alert(e.message||e)}}
 async function editJnvstStudent(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;render(`<div class="wrap">${header("Edit JNVST Student")}<div class="card"><div class="notice">⚠ Check all information carefully. Saving changes modifies the student's account information.</div><label>Student Name</label><input id="jseName" value="${esc(s.full_name||"")}"><label>Roll No</label><input id="jseRoll" value="${esc(s.roll_no||"")}"><label>New Password <span class="muted small">(leave blank to keep current)</span></label><input id="jsePass" type="text"><div class="actions"><button onclick="saveJnvstStudent('${studentId}')">💾 Save Changes</button><button class="secondary" onclick="manageStudentAccounts()">Cancel</button></div></div></div>`)}
 async function saveJnvstStudent(studentId){const s=(window._jnvstAccountStudents||[]).find(x=>x.id===studentId);if(!s)return;const name=document.getElementById("jseName")?.value.trim(),roll=document.getElementById("jseRoll")?.value.trim(),pass=document.getElementById("jsePass")?.value||"";if(!name||!roll)return alert("Name and Roll No are required.");if(pass&&pass.length<6)return alert("Password must be at least 6 characters.");if(!confirm(`WARNING: Save changes to ${s.full_name}?\n\nName: ${name}\nRoll No: ${roll}${pass?"\nPassword: will be changed":""}\n\nContinue?`))return;try{await callTeacherFn({action:"setStudentName",student_id:studentId,full_name:name});if(roll!==String(s.roll_no||""))await callTeacherFn({action:"setStudentRollNo",student_id:studentId,roll_no:roll});if(pass)await callTeacherFn({action:"setStudentPassword",student_id:studentId,password:pass});alert("Student details updated successfully.");await manageStudentAccounts()}catch(e){alert("Could not save changes: "+(e.message||e))}}
