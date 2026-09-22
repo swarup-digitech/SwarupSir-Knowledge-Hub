@@ -1410,7 +1410,7 @@ async function uploadJnvstBulkStudents(){
 async function manageStudentAccounts(){
  try{
   const j=await callTeacherFn({action:"listCredentials"});
-  const students=(j.students||[]).filter(s=>String(s.course||"").toUpperCase().startsWith("JNVST"));
+  const students=(j.students||[]).filter(s=>{const c=String(s.course||"").toUpperCase();return c.startsWith("JNVST")||((s.memberships||[]).some(m=>String(m.course||"").toUpperCase().startsWith("JNVST")));});
   const allGroups=(j.groups||[]).map(g=>({
     key:`${g.main_group_id||g.id||""}::${g.is_subgroup?g.id:""}`,
     mainId:g.main_group_id||g.id||"",
