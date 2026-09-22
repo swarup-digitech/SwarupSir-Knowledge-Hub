@@ -1554,7 +1554,11 @@ async function manageStudentAccounts(){
   renderJnvstStudentAccounts();
  }catch(e){render(`<div class="wrap">${header("JNVST Student Accounts")}<div class="card">${message(e.message||String(e))}<div class="actions"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div></div>`)}
 }
-function renderJnvstStudentAccounts(){
+function renderJnvstStudentAccounts(preserveSearchFocus=false){
+ const searchEl=document.getElementById("jnvstStudentSearch");
+ const previousSearchValue=searchEl?.value||"";
+ const previousSearchStart=searchEl?.selectionStart;
+ const previousSearchEnd=searchEl?.selectionEnd;
  const students=window._jnvstAccountStudents||[];
  const groups=window._jnvstAccountGroups||[];
  const q=(document.getElementById("jnvstStudentSearch")?.value||"").trim().toLowerCase();
@@ -1602,7 +1606,7 @@ function renderJnvstStudentAccounts(){
   </div>
   <div class="card">
    <div class="grid">
-    <div><label>Search</label><input id="jnvstStudentSearch" placeholder="Name / Roll No / Username" oninput="renderJnvstStudentAccounts()"></div>
+    <div><label>Search</label><input id="jnvstStudentSearch" value="${esc(q)}" placeholder="Name / Roll No / Username" oninput="renderJnvstStudentAccounts(true)"></div>
     <div><label>Main Group</label><select id="jnvstStudentMainFilter" onchange="updateJnvstStudentSubFilter();renderJnvstStudentAccounts()"><option value="all">All Main Groups</option>${mains.map(g=>`<option value="${esc(g.id)}" ${g.id===main?'selected':''}>${esc(g.name)}</option>`).join("")}</select></div>
     <div><label>Sub-Group</label><select id="jnvstStudentSubFilter" onchange="renderJnvstStudentAccounts()"><option value="all">All Sub-Groups</option>${subs.map(g=>`<option value="${esc(g.subId)}" ${g.subId===sub?'selected':''}>${esc(g.mainName)} → ${esc(g.subName)}</option>`).join("")}</select></div>
    </div>
@@ -1618,6 +1622,15 @@ function renderJnvstStudentAccounts(){
    <td><div class="actions"><button onclick="editJnvstStudent('${s.id}')">✎ Edit</button><button class="secondary" onclick="enrollJnvstPastAssignments('${s.id}')">📚 Past Assignments</button><button class="secondary" onclick="changeJnvstStudentRoll('${s.id}')">Roll No</button><button class="secondary" onclick="changeJnvstStudentPassword('${s.id}')">Password</button><button class="danger" onclick="deleteJnvstStudent('${s.id}')">Delete</button></div></td>
   </tr>`).join("")||'<tr><td colspan="6">No JNVST students match the selected filter.</td></tr>'}
   </tbody></table></div><div class="actions" style="margin-top:15px"><button class="secondary" onclick="teacherHome()">← Dashboard</button></div></div>`;
+ if(preserveSearchFocus){
+   const el=document.getElementById("jnvstStudentSearch");
+   if(el){
+     el.focus();
+     const posStart=Number.isInteger(previousSearchStart)?previousSearchStart:el.value.length;
+     const posEnd=Number.isInteger(previousSearchEnd)?previousSearchEnd:posStart;
+     try{el.setSelectionRange(posStart,posEnd);}catch(_e){}
+   }
+ }
 }
 function updateJnvstStudentSubFilter(){
  const main=document.getElementById("jnvstStudentMainFilter")?.value||"all";
@@ -1694,7 +1707,9 @@ async function enrollJnvstPastAssignments(studentId){
   // names the student's sub-group among multiple sub-groups.
   const matching=(assignments||[]).filter(a=>{
     const c=classMap.get(String(a.class_id||""));
-    if(!c || String(c.course||"").toUpperCase().startsWith("JNVST"))return false;
+    // Only JNVST assignments are eligible here. The previous condition was
+    // inverted and therefore excluded every JNVST assignment.
+    if(!c || !String(c.course||"").toUpperCase().startsWith("JNVST"))return false;
     const classId=String(a.class_id||"");
     const mainId=String(c.jnvst_parent_id||classId);
     const subText=String(a.sub_group||"").trim();
@@ -1732,7 +1747,11 @@ async function enrollJnvstPastAssignments(studentId){
   renderJnvstPastAssignmentEnrollment();
 }
 
-function renderJnvstPastAssignmentEnrollment(){
+function renderJnvstPastAssignmentEnrollment(preserveSearchFocus=false){
+  const searchEl=document.getElementById("pastAssignSearch");
+  const previousSearchValue=searchEl?.value||"";
+  const previousSearchStart=searchEl?.selectionStart;
+  const previousSearchEnd=searchEl?.selectionEnd;
   const st=window._jnvstAccountStudents?.find(x=>String(x.id)===String(window._jnvstPastEnrollment?.studentId));
   const state=window._jnvstPastEnrollment;
   if(!st||!state)return manageStudentAccounts();
@@ -1761,7 +1780,7 @@ function renderJnvstPastAssignmentEnrollment(){
         <button class="secondary" onclick="selectAllVisiblePastAssignments()">Select All Visible</button>
       </div>
       <div class="grid">
-        <div><label>Search</label><input id="pastAssignSearch" placeholder="Assignment title / subject" oninput="renderJnvstPastAssignmentEnrollment()"></div>
+        <div><label>Search</label><input id="pastAssignSearch" value="${esc(q)}" placeholder="Assignment title / subject" oninput="renderJnvstPastAssignmentEnrollment(true)"></div>
         <div><label>Type</label><select id="pastAssignType" onchange="renderJnvstPastAssignmentEnrollment()"><option value="all">All Types</option><option value="MCQ">MCQ</option><option value="VIDEO">Video + MCQ</option></select></div>
       </div>
     </div>
@@ -1786,6 +1805,15 @@ function renderJnvstPastAssignmentEnrollment(){
       </div>
     </div>
   </div>`);
+  if(preserveSearchFocus){
+    const el=document.getElementById("pastAssignSearch");
+    if(el){
+      el.focus();
+      const posStart=Number.isInteger(previousSearchStart)?previousSearchStart:el.value.length;
+      const posEnd=Number.isInteger(previousSearchEnd)?previousSearchEnd:posStart;
+      try{el.setSelectionRange(posStart,posEnd);}catch(_e){}
+    }
+  }
 }
 
 function togglePastAssignment(id,checked){
