@@ -888,7 +888,7 @@ async function generateMockTestPDF(testId){
   }
 }
 
-async function studentMockTests(){const {data:links,error}=await sb.from('mock_test_students').select('mock_test_id').eq('student_id',current.id);if(error)return render(`<div class="wrap">${header('Mock Tests')}<div class="card">${message(error.message)}</div></div>`);const ids=(links||[]).map(x=>x.mock_test_id);let tests=[];if(ids.length){const {data,error:e}=await sb.from('mock_tests').select('*').in('id',ids).order('created_at',{ascending:false});if(e)return alert(e.message);tests=tests||[];tests=data||[]}const {data:attempts,error:ae}=await sb.from('mock_test_attempts').select('*').eq('student_id',current.id).in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});if(ae)return alert(ae.message);const latest=new Map();(attempts||[]).forEach(a=>{if(!latest.has(a.mock_test_id))latest.set(a.mock_test_id,a)});render(`<div class="wrap">${header('Mock Tests')}<div class="card"><h2>🎯 Mock Test</h2><p class="muted">80 questions • 100 marks • 2 hours • 1.25 marks per question.</p></div><div class="card"><h2>Available Tests</h2>${tests.length?tests.map(t=>{const a=latest.get(t.id);return `<div class="assignment"><h3>${esc(t.title)}</h3><p class="muted">80 Questions · 100 Marks · 2 Hours · Language: <b>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</b></p>${a?.status==='submitted'?`${t.results_released?`<div class="success"><b>Result Released:</b> ${Number(a.score||0).toFixed(2)}/100 (${Number(a.percentage||0).toFixed(2)}%)</div><div class="actions"><button class="secondary" onclick="viewMockResult('${a.id}')">👁 View Result</button><button onclick="generateStudentMockResultPDF('${a.id}')">📄 Download Result Sheet</button></div>`:`<div class="notice"><b>Test submitted.</b><br>Your result will be available after the teacher approves/releases it.</div>`}`:`<button onclick="startMockTest('${t.id}')">${a?.status==='in_progress'?'Resume Mock Test':'Start Mock Test'}</button>`}</div>`}).join(''):'<p class="muted">No mock tests have been assigned to you.</p>'}</div><button class="secondary" onclick="studentHome()">← Back to Dashboard</button></div>`)}
+async function studentMockTests(){const {data:links,error}=await sb.from('mock_test_students').select('mock_test_id').eq('student_id',current.id);if(error)return render(`<div class="wrap">${header('Mock Tests')}<div class="card">${message(error.message)}</div></div>`);const ids=(links||[]).map(x=>x.mock_test_id);let tests=[];if(ids.length){const {data,error:e}=await sb.from('mock_tests').select('*').in('id',ids).order('created_at',{ascending:false});if(e)return alert(e.message);tests=tests||[];tests=data||[]}const {data:attempts,error:ae}=await sb.from('mock_test_attempts').select('*').eq('student_id',current.id).in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('created_at',{ascending:false});if(ae)return alert(ae.message);const latest=new Map();(attempts||[]).forEach(a=>{if(!latest.has(a.mock_test_id))latest.set(a.mock_test_id,a)});render(`<div class="wrap">${header('Mock Tests')}<div class="card"><h2>🎯 Mock Test</h2><p class="muted">80 questions • 100 marks • 2 hours • 1.25 marks per question.</p></div><div class="card"><h2>Available Tests</h2>${tests.length?tests.map(t=>{const a=latest.get(t.id);return `<div class="assignment"><h3>${esc(t.title)}</h3><p class="muted">80 Questions · 100 Marks · 2 Hours · Language: <b>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</b></p>${a?.status==='submitted'?`${t.results_released?`<div class="success"><b>Result Released:</b> ${Number(a.score||0).toFixed(2)}/100 (${Number(a.percentage||0).toFixed(2)}%)</div><button class="secondary" onclick="viewMockResult('${a.id}')">View Result</button>`:`<div class="notice"><b>Test submitted.</b><br>Your result will be available after the teacher approves/releases it.</div>`}`:`<button onclick="startMockTest('${t.id}')">${a?.status==='in_progress'?'Resume Mock Test':'Start Mock Test'}</button>`}</div>`}).join(''):'<p class="muted">No mock tests have been assigned to you.</p>'}</div><button class="secondary" onclick="studentHome()">← Back to Dashboard</button></div>`)}
 async function startMockTest(testId){try{const {data:test,error:te}=await sb.from('mock_tests').select('*').eq('id',testId).single();if(te)throw te;let {data:attempt}=await sb.from('mock_test_attempts').select('*').eq('mock_test_id',testId).eq('student_id',current.id).eq('status','in_progress').order('created_at',{ascending:false}).limit(1).maybeSingle();const now=Date.now();if(attempt&&new Date(attempt.end_at).getTime()<=now){await submitMockAttempt(attempt.id,true);attempt=null}if(!attempt){const start=new Date().toISOString(),end=new Date(now+Number(test.time_limit_seconds||7200)*1000).toISOString();const {data:a,error}=await sb.from('mock_test_attempts').insert({mock_test_id:testId,student_id:current.id,start_at:start,end_at:end,status:'in_progress',total_questions:80,total_marks:100}).select().single();if(error)throw error;attempt=a}const {data:qs,error:qe}=await sb.from('mock_test_questions').select('*').eq('mock_test_id',testId).order('question_number');if(qe)throw qe;const {data:ans}=await sb.from('mock_test_answers').select('question_id,selected_option').eq('attempt_id',attempt.id);const amap=Object.fromEntries((ans||[]).map(x=>[x.question_id,x.selected_option]));window.mockExam={test,attempt,qs:qs||[],answers:amap,index:0};renderMockExam();startMockTimer()}catch(e){alert('Could not start Mock Test: '+(e.message||e))}}
 let mockTimerHandle=null;function startMockTimer(){clearInterval(mockTimerHandle);mockTimerHandle=setInterval(()=>{const el=document.getElementById('mockTimer');if(!el||!window.mockExam)return clearInterval(mockTimerHandle);const left=Math.max(0,new Date(window.mockExam.attempt.end_at).getTime()-Date.now());el.textContent=formatDuration(left);if(left<=0){clearInterval(mockTimerHandle);submitMockAttempt(window.mockExam.attempt.id,true)}},500);}
 function formatDuration(ms){const s=Math.max(0,Math.floor(ms/1000)),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`}
@@ -898,19 +898,7 @@ async function persistMockAnswer(id,opt){try{const {error}=await sb.from('mock_t
 function mockMove(d){window.mockExam.index=Math.min(window.mockExam.qs.length-1,Math.max(0,window.mockExam.index+d));renderMockExam()}function mockJump(i){window.mockExam.index=i;renderMockExam()}
 function confirmExitMockTest(){if(confirm('Exit the test? Your saved answers and timer will remain, so you can resume before the deadline.'))studentMockTests()}
 async function submitMockAttempt(attemptId,auto=false){try{clearInterval(mockTimerHandle);const {data:attempt,error:ae}=await sb.from('mock_test_attempts').select('*').eq('id',attemptId).eq('student_id',current.id).single();if(ae)throw ae;if(attempt.status==='submitted')return viewMockResult(attemptId);const {data:qs,error:qe}=await sb.from('mock_test_questions').select('id,question_number,section_code,part_code,correct_option,marks').eq('mock_test_id',attempt.mock_test_id).order('question_number');if(qe)throw qe;const {data:ans,error:ane}=await sb.from('mock_test_answers').select('*').eq('attempt_id',attemptId);if(ane)throw ane;const amap=new Map((ans||[]).map(x=>[x.question_id,x.selected_option]));let score=0;const section={};(qs||[]).forEach(q=>{const ok=amap.get(q.id)===q.correct_option;if(ok)score+=Number(q.marks||1.25);if(!section[q.section_code])section[q.section_code]={correct:0,questions:0,marks:0};section[q.section_code].questions++;if(ok){section[q.section_code].correct++;section[q.section_code].marks+=Number(q.marks||1.25)}});const percentage=score;const {error}=await sb.from('mock_test_attempts').update({status:'submitted',submitted_at:new Date().toISOString(),score,percentage,section_results:section}).eq('id',attemptId);if(error)throw error;window.mockExam=null;if(auto)alert('Time is over. Your Mock Test was submitted automatically.');return viewMockResult(attemptId)}catch(e){alert('Could not submit test: '+(e.message||e))}}
-async function viewMockResult(attemptId){
-  try{
-    const data=await loadStudentMockResult(attemptId);const {attempt:a,test,rows,subjects}=data;const answered=rows.filter(q=>q.is_answered).length;
-    render(`<div class="wrap">${header('Mock Test Result')}
-      <div class="card"><div class="result-student-head"><div><h2>${esc(test.title||'Mock Test')}</h2><p class="muted">Result approved by teacher · ${esc(test.language==='ENGLISH'?'English':test.language==='ASSAMESE'?'Assamese':'Common')}</p></div><div class="result-score"><b>${Number(a.score||0).toFixed(2)}/100</b><span>${Number(a.percentage||0).toFixed(2)}%</span></div></div>
-      <div class="result-summary"><div><b>Attempted</b><br>${answered}/${rows.length}</div><div><b>Correct</b><br><span class="result-correct">${rows.filter(q=>q.is_correct).length}</span></div><div><b>Wrong</b><br><span class="result-wrong">${rows.filter(q=>q.is_answered&&!q.is_correct).length}</span></div><div><b>Unanswered</b><br>${rows.filter(q=>!q.is_answered).length}</div></div></div>
-      <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Subject-wise Result</h2><button onclick="generateStudentMockResultPDF('${a.id}')">📄 Download Result Sheet</button></div><div style="overflow:auto"><table><thead><tr><th>Subject</th><th>Questions</th><th>Correct</th><th>Wrong</th><th>Unanswered</th><th>Marks</th><th>%</th></tr></thead><tbody>${Object.entries(subjects).map(([k,s])=>`<tr><td>${esc(k)}</td><td>${s.questions}</td><td class="result-correct">${s.correct}</td><td class="result-wrong">${s.wrong}</td><td>${s.unanswered}</td><td>${s.marks.toFixed(2)}</td><td>${s.questions?((s.correct/s.questions)*100).toFixed(2):'0.00'}%</td></tr>`).join('')}</tbody></table></div></div>
-      <div class="card"><h2>Question-wise Answer Summary</h2><p class="muted small">Wrong answers are highlighted in red. The downloadable Result Sheet contains only Question No., Answer Key and Student's Answer.</p><div class="result-questions">${rows.map(q=>`<div class="result-question"><b>Q${q.question_number}</b><div class="result-answer"><span>Key: <strong class="answer-key">${esc(q.correct||'—')}</strong></span><span>Student: <strong class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${esc(q.student_answer||'—')}</strong></span></div><span class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${q.student_answer?(q.is_correct?'✓':'✗'):'—'}</span></div>`).join('')}</div></div>
-      <div class="actions"><button class="secondary" onclick="studentMockTests()">← Back to Mock Tests</button><button onclick="generateStudentMockResultPDF('${a.id}')">📄 Download Result Sheet</button></div>
-    </div>`);
-  }catch(e){alert(e.message||e)}
-}
-
+async function viewMockResult(attemptId){const {data:a,error:ae}=await sb.from('mock_test_attempts').select('*,mock_tests(title,results_released)').eq('id',attemptId).eq('student_id',current.id).single();if(ae)return alert(ae.message);if(!a.mock_tests?.results_released)return alert('Your result has not yet been approved by the teacher.');const {data:answers,error:ansErr}=await sb.from('mock_test_answers').select('id').eq('attempt_id',attemptId);if(ansErr)return alert(ansErr.message);const r=a.section_results||{},answered=(answers||[]).length;render(`<div class="wrap">${header('Mock Test Result')}<div class="card"><h2>${esc(a.mock_tests?.title||'Mock Test')}</h2><div class="result-summary"><div><b>Score</b><br>${Number(a.score||0).toFixed(2)}/100</div><div><b>Percentage</b><br>${Number(a.percentage||0).toFixed(2)}%</div><div><b>Attempted</b><br>${answered}/80</div><div><b>Unanswered</b><br>${80-answered}</div></div></div><div class="card"><h2>Section-wise Result</h2><table><thead><tr><th>Section</th><th>Correct</th><th>Questions</th><th>Marks</th></tr></thead><tbody>${Object.entries(r).map(([k,x])=>`<tr><td>${esc(k)}</td><td>${x.correct}</td><td>${x.questions}</td><td>${Number(x.marks||0).toFixed(2)}</td></tr>`).join('')}</tbody></table></div><button class="secondary" onclick="studentMockTests()">← Back to Mock Tests</button></div>`)}
 async function mockTeacherResults(){
   const {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
   if(error)return alert(error.message);
@@ -967,56 +955,45 @@ async function viewMockTeacherAttempt(attemptId){try{const data=await loadMockTe
 
 function safePdfText(v){return String(v??'').replace(/[\u0000-\u001f]/g,' ').trim()}
 
-async function loadStudentMockResult(attemptId){
-  const {data:a,error:ae}=await sb.from('mock_test_attempts').select('*,mock_tests(*)').eq('id',attemptId).eq('student_id',current.id).single();
-  if(ae)throw ae;
-  const test=a.mock_tests;
-  if(!test?.results_released)throw new Error('Your result has not yet been approved by the teacher.');
-  const [{data:qs,error:qe},{data:ans,error:ane},{data:p,error:pe}]=await Promise.all([
-    sb.from('mock_test_questions').select('id,question_number,section_code,part_code,correct_option,marks').eq('mock_test_id',a.mock_test_id).order('question_number'),
-    sb.from('mock_test_answers').select('question_id,selected_option').eq('attempt_id',attemptId),
-    sb.from('profiles').select('id,full_name,roll_no').eq('id',current.id).single()
-  ]);
-  if(qe)throw qe;if(ane)throw ane;if(pe)throw pe;
-  const amap=new Map((ans||[]).map(x=>[x.question_id,String(x.selected_option||'').toUpperCase()]));
-  const rows=(qs||[]).map(q=>{const student=amap.get(q.id)||'';const key=String(q.correct_option||'').toUpperCase();return {...q,student_answer:student,correct:key,is_answered:!!student,is_correct:!!student&&student===key}});
-  const subjects={};
-  rows.forEach(q=>{const k=mockSubjectLabel(q.section_code);if(!subjects[k])subjects[k]={questions:0,correct:0,wrong:0,unanswered:0,marks:0};const x=subjects[k];x.questions++;if(!q.student_answer)x.unanswered++;else if(q.is_correct){x.correct++;x.marks+=Number(q.marks||1.25)}else x.wrong++});
-  return {attempt:a,test,profile:p,rows,subjects};
+async function generateMockResultPDF(attemptId){
+  try{
+    const data=await loadMockTeacherAttempt(attemptId);
+    const {attempt:a,test,profile:p,rows,subjects}=data;
+    const js=window.jspdf;if(!js?.jsPDF)throw new Error('PDF library is not loaded. Please refresh the page and try again.');
+    const doc=new js.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+    const navy=[15,23,42],blue=[37,99,235],light=[239,246,255],red=[220,38,38],green=[22,163,74],gray=[100,116,139],line=[226,232,240];
+    const title=safePdfText(test.title||'Mock Test');
+    const name=safePdfText(p.full_name||'');const roll=safePdfText(p.roll_no||'');
+    const lang=test.language==='ENGLISH'?'English':test.language==='ASSAMESE'?'Assamese':'Common';
+    // Header
+    doc.setFillColor(...navy);doc.rect(0,0,W,28,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text("SWARUP SIR'S KNOWLEDGE HUB",14,11);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text('MOCK TEST RESULT SHEET',14,19);
+    doc.setFontSize(9);doc.text(title,W-14,12,{align:'right'});doc.text(`Language: ${lang}`,W-14,19,{align:'right'});
+    // Student info card
+    doc.setFillColor(...light);doc.roundedRect(12,34,W-24,30,3,3,'F');
+    doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text('STUDENT DETAILS',17,41);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(`Name: ${name}`,17,49);doc.text(`Roll No: ${roll}`,17,56);
+    doc.text(`Submitted: ${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}`,W/2,49);
+    doc.setFont('helvetica','bold');doc.text(`Score: ${Number(a.score||0).toFixed(2)} / 100`,W/2,56);
+    // Summary
+    doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('SUBJECT-WISE PERFORMANCE',12,73);
+    const subjectBody=Object.entries(subjects).map(([k,s])=>[k,String(s.questions),String(s.correct),String(s.wrong),String(s.unanswered),s.marks.toFixed(2),s.questions?((s.correct/s.questions)*100).toFixed(2)+'%':'0.00%']);
+    doc.autoTable({startY:77,head:[['Subject','Questions','Correct','Wrong','Unanswered','Marks','%']],body:subjectBody,theme:'grid',styles:{font:'helvetica',fontSize:8.5,cellPadding:2.4,textColor:navy,lineColor:line,lineWidth:.2},headStyles:{fillColor:blue,textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[248,250,252]},columnStyles:{0:{fontStyle:'bold'}}});
+    let y=(doc.lastAutoTable?.finalY||77)+12;
+    // Compact response table: ONLY requested fields
+    doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('QUESTION-WISE ANSWER SHEET',12,y);y+=4;
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...gray);doc.text('Student answers that differ from the original key are highlighted in red.',12,y+5);y+=9;
+    const body=rows.map(q=>[String(q.question_number),q.correct||'—',q.student_answer||'—']);
+    doc.autoTable({startY:y,head:[['Question No.','Answer Key','Student\'s Answer']],body,theme:'grid',styles:{font:'helvetica',fontSize:9,cellPadding:2.7,halign:'center',textColor:navy,lineColor:line,lineWidth:.2},headStyles:{fillColor:navy,textColor:[255,255,255],fontStyle:'bold',halign:'center'},columnStyles:{0:{cellWidth:42,fontStyle:'bold'},1:{cellWidth:55,fontStyle:'bold'},2:{cellWidth:70,fontStyle:'bold'}},didParseCell:function(d){if(d.section==='body'&&d.column.index===2){const q=rows[d.row.index];if(!q.student_answer){d.cell.styles.textColor=gray;d.cell.styles.fillColor=[248,250,252]}else if(!q.is_correct){d.cell.styles.textColor=[255,255,255];d.cell.styles.fillColor=red}else{d.cell.styles.textColor=green;d.cell.styles.fillColor=[240,253,244]}}}});
+    const pages=doc.internal.getNumberOfPages();
+    for(let i=1;i<=pages;i++){doc.setPage(i);doc.setDrawColor(...line);doc.line(12,H-12,W-12,H-12);doc.setTextColor(...gray);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(`Swarup Sir's Knowledge Hub · ${name} · Roll No: ${roll}`,12,H-6);doc.text(`Page ${i} of ${pages}`,W-12,H-6,{align:'right'})}
+    const slug=(title+'_'+name+'_'+roll).replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'');
+    doc.save(`${slug||'Mock_Test'}_Result.pdf`);
+  }catch(e){alert('Could not generate PDF: '+(e.message||e))}
 }
 
-function buildMockResultPDF(data){
-  const {attempt:a,test,profile:p,rows,subjects}=data;
-  const js=window.jspdf;if(!js?.jsPDF)throw new Error('PDF library is not loaded. Please refresh the page and try again.');
-  const doc=new js.jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
-  const navy=[15,23,42],blue=[37,99,235],light=[239,246,255],red=[220,38,38],green=[22,163,74],gray=[100,116,139],line=[226,232,240];
-  const title=safePdfText(test.title||'Mock Test'),name=safePdfText(p.full_name||''),roll=safePdfText(p.roll_no||'');
-  const lang=test.language==='ENGLISH'?'English':test.language==='ASSAMESE'?'Assamese':'Common';
-  doc.setFillColor(...navy);doc.rect(0,0,W,28,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text("SWARUP SIR'S KNOWLEDGE HUB",14,11);
-  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text('MOCK TEST RESULT SHEET',14,19);
-  doc.setFontSize(9);doc.text(title,W-14,12,{align:'right'});doc.text(`Language: ${lang}`,W-14,19,{align:'right'});
-  doc.setFillColor(...light);doc.roundedRect(12,34,W-24,30,3,3,'F');
-  doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text('STUDENT DETAILS',17,41);
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(`Name: ${name}`,17,49);doc.text(`Roll No: ${roll}`,17,56);
-  doc.text(`Submitted: ${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}`,W/2,49);
-  doc.setFont('helvetica','bold');doc.text(`Score: ${Number(a.score||0).toFixed(2)} / 100`,W/2,56);
-  doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('SUBJECT-WISE PERFORMANCE',12,73);
-  const subjectBody=Object.entries(subjects).map(([k,s])=>[k,String(s.questions),String(s.correct),String(s.wrong),String(s.unanswered),s.marks.toFixed(2),s.questions?((s.correct/s.questions)*100).toFixed(2)+'%':'0.00%']);
-  doc.autoTable({startY:77,head:[['Subject','Questions','Correct','Wrong','Unanswered','Marks','%']],body:subjectBody,theme:'grid',styles:{font:'helvetica',fontSize:8.5,cellPadding:2.4,textColor:navy,lineColor:line,lineWidth:.2},headStyles:{fillColor:blue,textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[248,250,252]},columnStyles:{0:{fontStyle:'bold'}}});
-  let y=(doc.lastAutoTable?.finalY||77)+12;
-  doc.setTextColor(...navy);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('QUESTION-WISE ANSWER SHEET',12,y);y+=4;
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...gray);doc.text('Student answers that differ from the original key are highlighted in red.',12,y+5);y+=9;
-  const body=rows.map(q=>[String(q.question_number),q.correct||'—',q.student_answer||'—']);
-  doc.autoTable({startY:y,head:[['Question No.','Answer Key','Student\'s Answer']],body,theme:'grid',styles:{font:'helvetica',fontSize:9,cellPadding:2.7,halign:'center',textColor:navy,lineColor:line,lineWidth:.2},headStyles:{fillColor:navy,textColor:[255,255,255],fontStyle:'bold',halign:'center'},columnStyles:{0:{cellWidth:42,fontStyle:'bold'},1:{cellWidth:55,fontStyle:'bold'},2:{cellWidth:70,fontStyle:'bold'}},didParseCell:function(d){if(d.section==='body'&&d.column.index===2){const q=rows[d.row.index];if(!q.student_answer){d.cell.styles.textColor=gray;d.cell.styles.fillColor=[248,250,252]}else if(!q.is_correct){d.cell.styles.textColor=[255,255,255];d.cell.styles.fillColor=red}else{d.cell.styles.textColor=green;d.cell.styles.fillColor=[240,253,244]}}}});
-  const pages=doc.internal.getNumberOfPages();
-  for(let i=1;i<=pages;i++){doc.setPage(i);doc.setDrawColor(...line);doc.line(12,H-12,W-12,H-12);doc.setTextColor(...gray);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(`Swarup Sir's Knowledge Hub · ${name} · Roll No: ${roll}`,12,H-6);doc.text(`Page ${i} of ${pages}`,W-12,H-6,{align:'right'})}
-  const slug=(title+'_'+name+'_'+roll).replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'');doc.save(`${slug||'Mock_Test'}_Result.pdf`);
-}
-
-async function generateMockResultPDF(attemptId){try{const data=await loadMockTeacherAttempt(attemptId);buildMockResultPDF(data)}catch(e){alert('Could not generate PDF: '+(e.message||e))}}
-async function generateStudentMockResultPDF(attemptId){try{const data=await loadStudentMockResult(attemptId);buildMockResultPDF(data)}catch(e){alert('Could not generate your result PDF: '+(e.message||e))}}
 
 function jnvstBaseKey(c){
  const n=String(c?.name||"").trim().toUpperCase().replace(/\s+/g," ");
