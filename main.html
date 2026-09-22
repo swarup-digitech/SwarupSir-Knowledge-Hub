@@ -598,6 +598,20 @@ function qpSelectedRows(){
   const chosen=new Set(qpState.selected);return qpState.bank.filter(q=>chosen.has(q.id));
 }
 function qpShuffle(arr){const out=[...arr];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;}
+function qpAssignNumbers(rows){
+  return (rows||[]).map((q,i)=>({...q,_number:i+1}));
+}
+function qpBuildAnswerRows(rows){
+  return (rows||[]).map(q=>({
+    "Q.No.": q._number,
+    "Section": q.section_code || '',
+    "Part": q.part_code || '',
+    "Topic": qpTopicLabel(q),
+    "Passage Set": q._passageGroup || q.passage_id || '',
+    "Question ID": q.id || '',
+    "Correct Option": String(q.correct_option || '').toUpperCase()
+  }));
+}
 function qpPrepareRows(){
   const signature=JSON.stringify({mode:qpState.mode,selected:[...qpState.selected].sort(),passages:[...qpState.selectedPassages].sort(),count:Number(document.getElementById('qpQuestionCount')?.value||0),order:document.getElementById('qpOrder')?.value||'random'});
   if(qpState.lastRows&&qpState.lastSignature===signature)return qpState.lastRows.map(x=>({...x}));
