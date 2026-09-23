@@ -700,12 +700,24 @@ const QB_MARKS=[1,2,3,4,5,6,10];
 function qbEsc(s){return esc(s)}
 async function loadQuestionBank(){
   const [{data:ch,error:ce},{data:q,error:qe}]=await Promise.all([
-    sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id).order('chapter_number').order('chapter_name'),
+    sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id).order('chapter_code').order('chapter_name'),
     sb.from('school_question_bank_questions').select('*').eq('teacher_id',teacher.id).order('created_at',{ascending:false})
   ]);
   if(ce) throw ce;if(qe) throw qe;
   qbChapters=ch||[];qbQuestions=q||[];
 }
+function qbChapterCode(c){return String(c?.chapter_code||c?.chapter_number||'').trim()}
+function qbChapterParent(c){return qbChapters.find(x=>x.id===c?.parent_chapter_id)||null}
+function qbChapterLabel(c){if(!c)return '—'; const code=qbChapterCode(c); const parent=qbChapterParent(c); return `${qbEsc(code)}. ${qbEsc(c.chapter_name)}${parent?' <span class=\"small muted\">(Subchapter of '+qbEsc(qbChapterCode(parent))+')</span>':''}`}
+function qbChapterOptions(selectedId='', includeBlank=true){
+  const roots=qbChapters.filter(c=>!c.parent_chapter_id).sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true}));
+  const children=new Map(); qbChapters.filter(c=>c.parent_chapter_id).forEach(c=>{if(!children.has(c.parent_chapter_id))children.set(c.parent_chapter_id,[]);children.get(c.parent_chapter_id).push(c)});
+  const out=[]; if(includeBlank)out.push('<option value=\"\">All Chapters / Subchapters</option>');
+  const add=(c,depth)=>{out.push(`<option value=\"${c.id}\" ${selectedId===c.id?'selected':''}>${depth?'↳ ':''}${qbChapterCode(c)}. ${qbEsc(c.chapter_name)}</option>`); (children.get(c.id)||[]).sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).forEach(x=>add(x,depth+1));};
+  roots.forEach(c=>add(c,0)); return out.join('');
+}
+function qbDescendantIds(id){const ids=new Set([id]); let changed=true; while(changed){changed=false; qbChapters.forEach(c=>{if(c.parent_chapter_id&&ids.has(c.parent_chapter_id)&&!ids.has(c.id)){ids.add(c.id);changed=true;}})} return ids;}
+function qbChapterDisplay(c){return `${qbChapterCode(c)}. ${c.chapter_name}${c.parent_chapter_id?' (Subchapter)':''}`;}
 function questionBankHome(){
   loadQuestionBank().then(()=>{
     document.getElementById('app').innerHTML=`${header('📚 Question Bank')}
@@ -718,7 +730,7 @@ function questionBankHome(){
       </div>
       <div class="searchgrid" style="margin-top:14px">
         <input id="qbSearch" placeholder="Search question..." oninput="qbRenderTable()">
-        <select id="qbChapterFilter" onchange="qbRenderTable()"><option value="">All Chapters</option>${qbChapters.map(c=>`<option value="${c.id}">${qbEsc(c.chapter_name)}</option>`).join('')}</select>
+        <select id="qbChapterFilter" onchange="qbRenderTable()">${qbChapterOptions()}</select>
         <select id="qbLevelFilter" onchange="qbRenderTable()"><option value="">All Cognitive Levels</option>${QB_LEVELS.map(x=>`<option>${x}</option>`).join('')}</select>
       </div>
     </div>
@@ -728,106 +740,82 @@ function questionBankHome(){
 }
 function qbRenderTable(){
   const s=(document.getElementById('qbSearch')?.value||'').toLowerCase(), ch=document.getElementById('qbChapterFilter')?.value||'', lv=document.getElementById('qbLevelFilter')?.value||'';
-  const rows=qbQuestions.filter(q=>(!s||`${q.question_text_en||''} ${q.question_text_as||''}`.toLowerCase().includes(s))&&(!ch||q.chapter_id===ch)&&(!lv||q.cognitive_level===lv));
+  const allowed=ch?qbDescendantIds(ch):null; const rows=qbQuestions.filter(q=>(!s||`${q.question_text_en||''} ${q.question_text_as||''}`.toLowerCase().includes(s))&&(!allowed||allowed.has(q.chapter_id))&&(!lv||q.cognitive_level===lv));
   const html=`<div class="small muted" style="margin-bottom:8px">${rows.length} question(s)</div>
-  <div style="overflow:auto"><table><thead><tr><th>#</th><th>Question</th><th>Chapter</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>Difficulty</th><th>Actions</th></tr></thead><tbody>
-  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${qbEsc((q.question_text_en||q.question_text_as||'').slice(0,160))}${q.has_images?' 🖼️':''}</td><td>${qbEsc(qbChapters.find(c=>c.id===q.chapter_id)?.chapter_name||'—')}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
+  <div style="overflow:auto"><table><thead><tr><th>#</th><th>Question</th><th>Chapter / Subchapter</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>Difficulty</th><th>Actions</th></tr></thead><tbody>
+  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${qbEsc((q.question_text_en||q.question_text_as||'').slice(0,160))}${q.has_images?' 🖼️':''}</td><td>${qbChapterDisplay(qbChapters.find(c=>c.id===q.chapter_id))}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
   </tbody></table></div>`;
   document.getElementById('qbTable').innerHTML=html;
 }
 function qbChapterManager(){
   loadQuestionBank().then(()=>{
-    document.getElementById('app').innerHTML=`${header('📖 Question Bank — Chapters')}
-    <div class="card"><div class="grid"><div><label>Chapter Number</label><input id="qbcNo" type="number" min="1"><label>Chapter Name</label><input id="qbcName"><label>Description</label><textarea id="qbcDesc"></textarea><button onclick="qbAddChapter()">Add Chapter</button></div>
-    <div><h3>Existing Chapters</h3>${qbChapters.map(c=>`<div class="student-card"><b>${c.chapter_number}. ${qbEsc(c.chapter_name)}</b><div class="small muted">${qbEsc(c.description||'')}</div><button class="danger" style="margin-top:7px" onclick="qbDeleteChapter('${c.id}')">Delete</button></div>`).join('')}</div></div></div>
-    <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Chapter Excel Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
+    const parentOpts='<option value="">— Main Chapter —</option>'+qbChapters.filter(c=>!c.parent_chapter_id).sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>`<option value="${c.id}">${qbChapterCode(c)}. ${qbEsc(c.chapter_name)}</option>`).join('');
+    document.getElementById('app').innerHTML=`${header('📖 Question Bank — Chapters & Subchapters')}
+    <div class="card"><div class="grid">
+      <div><label>Chapter / Subchapter No.</label><input id="qbcCode" placeholder="e.g. 1 or 1.1" pattern="\\d+(\\.\\d+)*">
+      <label>Chapter / Subchapter Name</label><input id="qbcName">
+      <label>Parent Chapter</label><select id="qbcParent">${parentOpts}</select>
+      <label>Description</label><textarea id="qbcDesc"></textarea>
+      <button onclick="qbAddChapter()">Add Chapter / Subchapter</button></div>
+      <div><h3>Existing Chapters</h3>${qbChapters.slice().sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>`<div class="student-card"><b>${qbChapterDisplay(c)}</b><div class="small muted">${qbEsc(c.description||'')}</div><button class="danger" style="margin-top:7px" onclick="qbDeleteChapter('${c.id}')">Delete</button></div>`).join('')||'<div class="muted">No chapters yet.</div>'}</div>
+    </div></div>
+    <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Chapter/Subchapter Excel Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
   }).catch(e=>alert(e.message));
 }
 async function qbAddChapter(){
-  const n=Number(document.getElementById('qbcNo').value),name=document.getElementById('qbcName').value.trim();
-  if(!n||!name)return alert('Enter chapter number and name.');
-  const {error}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:n,chapter_name:name,description:document.getElementById('qbcDesc').value.trim()||null});
+  const code=document.getElementById('qbcCode').value.trim(),name=document.getElementById('qbcName').value.trim(),parentId=document.getElementById('qbcParent').value||null;
+  if(!/^\d+(\.\d+)*$/.test(code)||!name)return alert('Enter a valid Chapter/Subchapter No. (for example 1 or 1.1) and name.');
+  if(parentId && !code.startsWith(qbChapterCode(qbChapters.find(c=>c.id===parentId))+'.'))return alert('Subchapter number must begin with its parent chapter number, e.g. parent 1 → subchapter 1.1.');
+  const exists=qbChapters.find(c=>qbChapterCode(c)===code); if(exists)return alert('This Chapter/Subchapter No. already exists.');
+  const top=Number(code.split('.')[0]);
+  const {error}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:top,chapter_code:code,parent_chapter_id:parentId,chapter_name:name,description:document.getElementById('qbcDesc').value.trim()||null});
   if(error)return alert(error.message);qbChapterManager();
 }
 async function qbDeleteChapter(id){
-  if(qbQuestions.some(q=>q.chapter_id===id))return alert('This chapter has questions. Move/delete the questions first.');
-  if(!confirm('Delete this chapter?'))return;
+  if(qbQuestions.some(q=>q.chapter_id===id))return alert('This chapter/subchapter has questions. Move/delete the questions first.');
+  if(qbChapters.some(c=>c.parent_chapter_id===id))return alert('This chapter has subchapters. Delete or move the subchapters first.');
+  if(!confirm('Delete this chapter/subchapter?'))return;
   const {error}=await sb.from('school_question_bank_chapters').delete().eq('id',id).eq('teacher_id',teacher.id);
   if(error)return alert(error.message);qbChapterManager();
 }
 
 function qbBulkChapterUpload(){
-  document.getElementById('app').innerHTML=`${header('📚 Question Bank — Bulk Chapter Upload')}
-  <div class="card">
-    <div class="notice"><b>Upload chapter details in Excel.</b> Use the supplied template. One chapter per row. Required: Chapter No and Chapter Name. Description is optional.</div>
-    <div class="actions" style="margin-top:10px">
-      <a class="btn" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Download Chapter Excel Template</a>
-      <button class="secondary" onclick="qbChapterManager()">📖 Chapter Manager</button>
-      <button class="secondary" onclick="questionBankHome()">← Question Bank</button>
-    </div>
-  </div>
-  <div class="card">
-    <h3>Excel File</h3>
-    <p class="small muted">Columns: <b>Chapter No</b>, <b>Chapter Name</b>, <b>Description</b>.</p>
-    <input type="file" accept=".xlsx,.xls" onchange="qbReadChapterExcel(event)">
-    <div id="qbChapterBulkPreview" style="margin-top:12px"></div>
-  </div>
-  <div class="card">
-    <h3>Duplicate Chapter Handling</h3>
-    <select id="qbChapterDuplicateAction">
-      <option value="skip">Skip duplicates</option>
-      <option value="update">Update existing chapter details</option>
-      <option value="stop">Stop if a duplicate is found</option>
-    </select>
-    <div id="qbChapterBulkStatus" style="margin-top:12px"></div>
-    <div class="actions" style="margin-top:12px">
-      <button onclick="qbImportChapterExcel()">✅ Import Chapters</button>
-      <button class="secondary" onclick="qbChapterManager()">Cancel</button>
-    </div>
-  </div>`;
+  document.getElementById('app').innerHTML=`${header('📚 Question Bank — Bulk Chapter / Subchapter Upload')}
+  <div class="card"><div class="notice"><b>Upload chapters and subchapters in Excel.</b> Use the supplied template. Use Chapter No such as <b>1</b>, <b>1.1</b>, <b>1.2</b>. Parent Chapter No is required for subchapters.</div>
+  <div class="actions" style="margin-top:10px"><a class="btn" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Download Chapter/Subchapter Template</a><button class="secondary" onclick="qbChapterManager()">📖 Chapter Manager</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div></div>
+  <div class="card"><h3>Excel File</h3><p class="small muted">Columns: <b>Chapter No</b>, <b>Parent Chapter No</b>, <b>Chapter Name</b>, <b>Description</b>.</p><input type="file" accept=".xlsx,.xls" onchange="qbReadChapterExcel(event)"><div id="qbChapterBulkPreview" style="margin-top:12px"></div></div>
+  <div class="card"><h3>Duplicate Chapter/Subchapter Handling</h3><select id="qbChapterDuplicateAction"><option value="skip">Skip duplicates</option><option value="update">Update existing details</option><option value="stop">Stop if a duplicate is found</option></select><div id="qbChapterBulkStatus" style="margin-top:12px"></div><div class="actions" style="margin-top:12px"><button onclick="qbImportChapterExcel()">✅ Import Chapters</button><button class="secondary" onclick="qbChapterManager()">Cancel</button></div></div>`;
 }
 let qbBulkChapterRows=[];
 function qbReadChapterExcel(ev){
-  const f=ev.target.files?.[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=e=>{try{
-    const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    if(raw.length<2)throw Error('Excel template contains no chapter rows.');
+  const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(raw.length<2)throw Error('Excel template contains no chapter rows.');
     const h=raw[0].map(qbBulkHeader),get=(row,...names)=>{const i=qbBulkFind(h,...names);return i>=0?qbBulkNormalize(row[i]):''};
-    qbBulkChapterRows=raw.slice(1).map((row,i)=>({row:i+2,chapterNo:get(row,'Chapter No','Chapter Number'),chapterName:get(row,'Chapter Name'),description:get(row,'Description')})).filter(x=>x.chapterNo||x.chapterName||x.description);
-    const bad=qbBulkChapterRows.filter(x=>!/^\d+$/.test(x.chapterNo)||Number(x.chapterNo)<1||!x.chapterName);
-    const duplicateRows=[]; const seen=new Set();
-    qbBulkChapterRows.forEach(x=>{const k=String(x.chapterNo)+'|'+x.chapterName.toLowerCase();if(seen.has(k))duplicateRows.push(x.row);seen.add(k)});
-    qbBulkSetPreview('qbChapterBulkPreview',`<div class="${bad.length?'notice':'success'}">Loaded <b>${qbBulkChapterRows.length}</b> chapter row(s). ${bad.length?`<span style="color:#b91c1c">${bad.length} invalid row(s).</span>`:'Basic validation passed.'}${duplicateRows.length?` <span style="color:#b91c1c">Duplicate rows inside file: ${duplicateRows.join(', ')}.</span>`:''}</div><div style="overflow:auto;max-height:350px"><table><thead><tr><th>Row</th><th>Chapter No</th><th>Chapter Name</th><th>Description</th><th>Status</th></tr></thead><tbody>${qbBulkChapterRows.map(x=>{const ok=/^\d+$/.test(x.chapterNo)&&Number(x.chapterNo)>0&&x.chapterName;return `<tr><td>${x.row}</td><td>${qbEsc(x.chapterNo)}</td><td>${qbEsc(x.chapterName)}</td><td>${qbEsc(x.description||'')}</td><td>${ok?'✓':'Invalid'}</td></tr>`}).join('')}</tbody></table></div>`);
-  }catch(e){qbBulkChapterRows=[];qbBulkSetPreview('qbChapterBulkPreview',msg('Could not read Chapter Excel: '+e.message))}};
-  r.readAsArrayBuffer(f);
+    qbBulkChapterRows=raw.slice(1).map((row,i)=>({row:i+2,chapterNo:get(row,'Chapter No','Chapter Number'),parentNo:get(row,'Parent Chapter No','Parent Chapter Number','Parent Chapter'),chapterName:get(row,'Chapter Name'),description:get(row,'Description')})).filter(x=>x.chapterNo||x.parentNo||x.chapterName||x.description);
+    const bad=qbBulkChapterRows.filter(x=>!/^(\d+)(\.\d+)*$/.test(x.chapterNo)||!x.chapterName||(x.parentNo&&!/^\d+(\.\d+)*$/.test(x.parentNo)));
+    qbBulkSetPreview('qbChapterBulkPreview',`<div class="${bad.length?'notice':'success'}">Loaded <b>${qbBulkChapterRows.length}</b> row(s). ${bad.length?`<span style="color:#b91c1c">${bad.length} invalid row(s).</span>`:'Basic validation passed.'}</div><div style="overflow:auto;max-height:350px"><table><thead><tr><th>Row</th><th>Chapter No</th><th>Parent</th><th>Name</th><th>Description</th><th>Status</th></tr></thead><tbody>${qbBulkChapterRows.map(x=>{const ok=/^(\d+)(\.\d+)*$/.test(x.chapterNo)&&x.chapterName&&(!x.parentNo||/^\d+(\.\d+)*$/.test(x.parentNo));return `<tr><td>${x.row}</td><td>${qbEsc(x.chapterNo)}</td><td>${qbEsc(x.parentNo||'—')}</td><td>${qbEsc(x.chapterName)}</td><td>${qbEsc(x.description||'')}</td><td>${ok?'✓':'Invalid'}</td></tr>`}).join('')}</tbody></table></div>`);
+  }catch(e){qbBulkChapterRows=[];qbBulkSetPreview('qbChapterBulkPreview',msg('Could not read Chapter Excel: '+e.message))}};r.readAsArrayBuffer(f);
 }
 async function qbImportChapterExcel(){
-  if(!qbBulkChapterRows.length)return alert('Upload the Chapter Excel file first.');
-  const invalid=qbBulkChapterRows.filter(x=>!/^\d+$/.test(x.chapterNo)||Number(x.chapterNo)<1||!x.chapterName);
-  if(invalid.length)return alert('Invalid row(s): '+invalid.map(x=>x.row).join(', '));
-  const action=document.getElementById('qbChapterDuplicateAction')?.value||'skip';
-  const status=document.getElementById('qbChapterBulkStatus'); let created=0,updated=0,skipped=0;
+  if(!qbBulkChapterRows.length)return alert('Upload the Chapter/Subchapter Excel file first.');
+  const invalid=qbBulkChapterRows.filter(x=>!/^(\d+)(\.\d+)*$/.test(x.chapterNo)||!x.chapterName||(x.parentNo&&!/^\d+(\.\d+)*$/.test(x.parentNo)));if(invalid.length)return alert('Invalid row(s): '+invalid.map(x=>x.row).join(', '));
+  const action=document.getElementById('qbChapterDuplicateAction')?.value||'skip',status=document.getElementById('qbChapterBulkStatus');let created=0,updated=0,skipped=0;
   try{
-    const {data:existing,error}=await sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id);
-    if(error)throw error;
-    const byNo=new Map((existing||[]).map(c=>[String(c.chapter_number),c]));
+    const {data:existing,error}=await sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id);if(error)throw error;
+    const byCode=new Map((existing||[]).map(c=>[qbChapterCode(c),c]));
+    // Parents first so subchapters can reference them.
+    const ordered=[...qbBulkChapterRows].sort((a,b)=>a.chapterNo.split('.').length-b.chapterNo.split('.').length||a.chapterNo.localeCompare(b.chapterNo,undefined,{numeric:true}));
     const seen=new Set();
-    for(const r of qbBulkChapterRows){
-      const no=String(Number(r.chapterNo));
-      if(seen.has(no)){if(action==='stop')throw Error(`Duplicate Chapter No ${no} appears more than once in the Excel file.`);if(action==='skip'){skipped++;continue;}}
-      seen.add(no);
-      const old=byNo.get(no);
-      if(old){
-        if(action==='stop')throw Error(`Chapter No ${no} already exists (${old.chapter_name}).`);
-        if(action==='skip'){skipped++;continue;}
-        const {error:e}=await sb.from('school_question_bank_chapters').update({chapter_name:r.chapterName,description:r.description||null}).eq('id',old.id).eq('teacher_id',teacher.id);if(e)throw e;updated++;byNo.set(no,{...old,chapter_name:r.chapterName,description:r.description||null});
-      }else{
-        const {data,error:e}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:Number(r.chapterNo),chapter_name:r.chapterName,description:r.description||null}).select().single();if(e)throw e;created++;byNo.set(no,data);
-      }
+    for(const r of ordered){
+      const code=r.chapterNo, parentCode=r.parentNo|| (code.includes('.')?code.split('.').slice(0,-1).join('.'):null);
+      if(parentCode && !code.startsWith(parentCode+'.'))throw Error(`Row ${r.row}: Parent Chapter No ${parentCode} does not match ${code}.`);
+      if(seen.has(code)){if(action==='stop')throw Error(`Duplicate Chapter No ${code} appears more than once in the Excel file.`);if(action==='skip'){skipped++;continue;}} seen.add(code);
+      let parentId=null;if(parentCode){const par=byCode.get(parentCode);if(!par)throw Error(`Row ${r.row}: Parent Chapter ${parentCode} was not found. Add the parent first or include it in the same file.`);parentId=par.id;}
+      const old=byCode.get(code);
+      if(old){if(action==='stop')throw Error(`Chapter/Subchapter ${code} already exists.`);if(action==='skip'){skipped++;continue;} const {error:e}=await sb.from('school_question_bank_chapters').update({chapter_number:Number(code.split('.')[0]),chapter_code:code,parent_chapter_id:parentId,chapter_name:r.chapterName,description:r.description||null}).eq('id',old.id).eq('teacher_id',teacher.id);if(e)throw e;updated++;byCode.set(code,{...old,chapter_code:code,parent_chapter_id:parentId,chapter_name:r.chapterName,description:r.description||null});}
+      else {const {data,error:e}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:Number(code.split('.')[0]),chapter_code:code,parent_chapter_id:parentId,chapter_name:r.chapterName,description:r.description||null}).select().single();if(e)throw e;created++;byCode.set(code,data);}
     }
-    await loadQuestionBank();
-    status.innerHTML=`<div class="success"><b>Chapter import completed.</b> Created: ${created} &nbsp; Updated: ${updated} &nbsp; Skipped: ${skipped}</div><button onclick="qbChapterManager()">Open Chapter Manager</button>`;
+    await loadQuestionBank();status.innerHTML=`<div class="success"><b>Chapter/subchapter import completed.</b> Created: ${created} &nbsp; Updated: ${updated} &nbsp; Skipped: ${skipped}</div><button onclick="qbChapterManager()">Open Chapter Manager</button>`;
   }catch(e){status.innerHTML=msg('Import stopped: '+e.message)}
 }
 
@@ -853,23 +841,35 @@ function qbBulkUpload(){
    <div class="card" style="border:2px solid #7c3aed;background:#faf8ff;margin:0"><span class="tag" style="background:#ede9fe;color:#6d28d9">METHOD 2</span><h3>Word — Structured Questions</h3><p class="small muted">Use the Word template exactly. Each question is enclosed by <b>[QUESTION]</b> and <b>[/QUESTION]</b>.</p><label>Word .docx file</label><input type="file" accept=".docx" onchange="qbReadBulkWord(event)"><div id="qbBulkWordPreview"></div></div>
    <div class="card" style="border:2px solid #16a34a;background:#f7fff9;margin:0"><span class="tag" style="background:#dcfce7;color:#166534">METHOD 3</span><h3>PDF — Page Images + Metadata Excel</h3><p class="small muted"><b>One complete question per PDF page.</b> PDF pages are rendered as images, so Assamese, fonts, diagrams and formatting are preserved. No OCR is used. Use the supplied metadata Excel.</p><label>Question PDF</label><input type="file" accept=".pdf" onchange="qbReadBulkPdf(event)"><label>PDF Metadata Excel</label><input type="file" accept=".xlsx,.xls" onchange="qbReadBulkPdfMeta(event)"><div id="qbBulkPdfPreview"></div></div>
   </div>
-  <div class="card"><h3>Import</h3><div class="grid"><div><label>Default Chapter (used only where the source has no chapter)</label><select id="qbBulkDefaultChapter"><option value="">Select</option>${qbChapters.map(c=>`<option value="${c.id}">${c.chapter_number}. ${qbEsc(c.chapter_name)}</option>`).join('')}</select></div><div><label>Missing chapter action</label><select id="qbBulkMissingChapter"><option value="reject">Reject rows with unknown Chapter No.</option><option value="create">Create missing chapters automatically</option></select></div></div><div id="qbBulkStatus" style="margin-top:12px"></div><div class="actions" style="margin-top:12px"><button onclick="qbImportBulk()">✅ Import Questions</button><button class="secondary" onclick="questionBankHome()">Cancel</button></div></div>`;
+  <div class="card"><h3>Import</h3><div class="grid"><div><label>Default Chapter (used only where the source has no chapter)</label><select id="qbBulkDefaultChapter">${qbChapterOptions('',false)}</select></div><div><label>Missing chapter action</label><select id="qbBulkMissingChapter"><option value="reject">Reject rows with unknown Chapter No.</option><option value="create">Create missing chapters automatically</option></select></div></div><div id="qbBulkStatus" style="margin-top:12px"></div><div class="actions" style="margin-top:12px"><button onclick="qbImportBulk()">✅ Import Questions</button><button class="secondary" onclick="questionBankHome()">Cancel</button></div></div>`;
 }
 function qbBulkSetPreview(id,html){const e=document.getElementById(id);if(e)e.innerHTML=html}
 function qbBulkNormalize(v){return String(v??'').trim()}
 function qbBulkHeader(v){return qbBulkNormalize(v).toLowerCase().replace(/[_\s]+/g,' ')}
 function qbBulkFind(h,...names){for(const n of names){const i=h.indexOf(qbBulkHeader(n));if(i>=0)return i}return -1}
 function qbBulkNumber(v,def=0){const n=Number(v);return Number.isFinite(n)?n:def}
-function qbBulkValid(r,i,source='structured'){const e=[];if(source!=='pdf'&&!r.chapterNo) e.push('Chapter');if(!r.questionType||!QB_TYPES.includes(r.questionType))e.push('Question Type');if(!r.marks||r.marks<=0)e.push('Marks');if(!QB_LEVELS.includes(r.cognitiveLevel))e.push('Cognitive Level');if(!['Easy','Medium','Hard'].includes(r.difficulty))e.push('Difficulty');if(!r.english&&!r.assamese)e.push('English/Assamese question');if(source!=='pdf'&&r.questionType==='MCQ'&&(!r.correctAnswer||!r.optionAEn&&!r.optionAAs))e.push('MCQ options/correct answer');if(source==='pdf'&&r.questionType==='MCQ'&&!r.correctAnswer)e.push('Correct Answer');return e}
-function qbReadBulkExcel(ev){const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(raw.length<2)throw Error('Excel template contains no question rows.');const h=raw[0].map(qbBulkHeader),get=(row,...n)=>{const i=qbBulkFind(h,...n);return i>=0?qbBulkNormalize(row[i]):''};qbBulkExcelRows=raw.slice(1).map((row,i)=>({row:i+2,chapterNo:get(row,'Chapter No','Chapter Number'),chapterName:get(row,'Chapter Name'),questionType:get(row,'Question Type')||'MCQ',marks:qbBulkNumber(get(row,'Marks')),cognitiveLevel:get(row,'Cognitive Level')||'Knowledge',difficulty:get(row,'Difficulty')||'Medium',english:get(row,'English Question','Question English'),assamese:get(row,'Assamese Question','Question Assamese'),optionAEn:get(row,'Option A English'),optionAAs:get(row,'Option A Assamese'),optionBEn:get(row,'Option B English'),optionBAs:get(row,'Option B Assamese'),optionCEn:get(row,'Option C English'),optionCAs:get(row,'Option C Assamese'),optionDEn:get(row,'Option D English'),optionDAs:get(row,'Option D Assamese'),correctAnswer:get(row,'Correct Answer'),explanation:get(row,'Explanation','Answer / Explanation'),imageUrl:get(row,'Image URL')})).filter(x=>x.english||x.assamese);const bad=qbBulkExcelRows.map((x,i)=>({x,i})).filter(z=>qbBulkValid(z.x,z.i,'excel').length);qbBulkSetPreview('qbBulkExcelPreview',`<div class="success">Loaded <b>${qbBulkExcelRows.length}</b> row(s). ${bad.length?`<span style="color:#b91c1c">${bad.length} row(s) need correction.</span>`:'All rows pass basic validation.'}</div><div style="overflow:auto;max-height:300px"><table><thead><tr><th>Row</th><th>Chapter</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>English</th><th>Assamese</th><th>Correct</th></tr></thead><tbody>${qbBulkExcelRows.map(x=>`<tr><td>${x.row}</td><td>${qbEsc(x.chapterNo||'Default')}</td><td>${qbEsc(x.questionType)}</td><td>${x.marks}</td><td>${qbEsc(x.cognitiveLevel)}</td><td>${qbEsc(x.english.slice(0,80))}</td><td>${qbEsc(x.assamese.slice(0,80))}</td><td>${qbEsc(x.correctAnswer||'')}</td></tr>`).join('')}</tbody></table></div>`)}catch(e){qbBulkExcelRows=[];qbBulkSetPreview('qbBulkExcelPreview',msg('Could not read Excel: '+e.message))}};r.readAsArrayBuffer(f)}
+function qbBulkValid(r,i,source='structured'){const e=[];if(source!=='pdf'&&!r.chapterNo&&!r.subchapterNo) e.push('Chapter/Subchapter');if(!r.questionType||!QB_TYPES.includes(r.questionType))e.push('Question Type');if(!r.marks||r.marks<=0)e.push('Marks');if(!QB_LEVELS.includes(r.cognitiveLevel))e.push('Cognitive Level');if(!['Easy','Medium','Hard'].includes(r.difficulty))e.push('Difficulty');if(!r.english&&!r.assamese)e.push('English/Assamese question');if(source!=='pdf'&&r.questionType==='MCQ'&&(!r.correctAnswer||!r.optionAEn&&!r.optionAAs))e.push('MCQ options/correct answer');if(source==='pdf'&&r.questionType==='MCQ'&&!r.correctAnswer)e.push('Correct Answer');return e}
+function qbReadBulkExcel(ev){const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(raw.length<2)throw Error('Excel template contains no question rows.');const h=raw[0].map(qbBulkHeader),get=(row,...n)=>{const i=qbBulkFind(h,...n);return i>=0?qbBulkNormalize(row[i]):''};qbBulkExcelRows=raw.slice(1).map((row,i)=>({row:i+2,chapterNo:get(row,'Chapter No','Chapter Number'),chapterName:get(row,'Chapter Name'),subchapterNo:get(row,'Subchapter No','Subchapter Number'),questionType:get(row,'Question Type')||'MCQ',marks:qbBulkNumber(get(row,'Marks')),cognitiveLevel:get(row,'Cognitive Level')||'Knowledge',difficulty:get(row,'Difficulty')||'Medium',english:get(row,'English Question','Question English'),assamese:get(row,'Assamese Question','Question Assamese'),optionAEn:get(row,'Option A English'),optionAAs:get(row,'Option A Assamese'),optionBEn:get(row,'Option B English'),optionBAs:get(row,'Option B Assamese'),optionCEn:get(row,'Option C English'),optionCAs:get(row,'Option C Assamese'),optionDEn:get(row,'Option D English'),optionDAs:get(row,'Option D Assamese'),correctAnswer:get(row,'Correct Answer'),explanation:get(row,'Explanation','Answer / Explanation'),imageUrl:get(row,'Image URL')})).filter(x=>x.english||x.assamese);const bad=qbBulkExcelRows.map((x,i)=>({x,i})).filter(z=>qbBulkValid(z.x,z.i,'excel').length);qbBulkSetPreview('qbBulkExcelPreview',`<div class="success">Loaded <b>${qbBulkExcelRows.length}</b> row(s). ${bad.length?`<span style="color:#b91c1c">${bad.length} row(s) need correction.</span>`:'All rows pass basic validation.'}</div><div style="overflow:auto;max-height:300px"><table><thead><tr><th>Row</th><th>Chapter / Subchapter</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>English</th><th>Assamese</th><th>Correct</th></tr></thead><tbody>${qbBulkExcelRows.map(x=>`<tr><td>${x.row}</td><td>${qbEsc(x.subchapterNo||x.chapterNo||'Default')}</td><td>${qbEsc(x.questionType)}</td><td>${x.marks}</td><td>${qbEsc(x.cognitiveLevel)}</td><td>${qbEsc(x.english.slice(0,80))}</td><td>${qbEsc(x.assamese.slice(0,80))}</td><td>${qbEsc(x.correctAnswer||'')}</td></tr>`).join('')}</tbody></table></div>`)}catch(e){qbBulkExcelRows=[];qbBulkSetPreview('qbBulkExcelPreview',msg('Could not read Excel: '+e.message))}};r.readAsArrayBuffer(f)}
 function qbWordLinesFromHtml(html){const d=document.createElement('div');d.innerHTML=html;return Array.from(d.querySelectorAll('p,li,h1,h2,h3,h4')).map(x=>x.textContent.replace(/\u00a0/g,' ').trim()).filter(Boolean)}
-function qbParseWordBlock(lines){const rows=[];let cur=null,lastKey='';for(const line of lines){if(/^\[QUESTION\]$/i.test(line)){if(cur)rows.push(cur);cur={};lastKey='';continue}if(/^\[\/QUESTION\]$/i.test(line)){if(cur)rows.push(cur);cur=null;lastKey='';continue}if(!cur)continue;const m=line.match(/^([^:]+):\s*(.*)$/);if(m){lastKey=qbBulkHeader(m[1]);cur[lastKey]=m[2].trim()}else if(lastKey){cur[lastKey]=(cur[lastKey]?cur[lastKey]+'\n':'')+line}}if(cur)rows.push(cur);return rows.map((x,i)=>({row:i+1,chapterNo:x['chapter no']||x['chapter number']||'',chapterName:x['chapter name']||'',questionType:x['question type']||'MCQ',marks:qbBulkNumber(x['marks']),cognitiveLevel:x['cognitive level']||'Knowledge',difficulty:x['difficulty']||'Medium',english:x['english question']||'',assamese:x['assamese question']||'',optionAEn:x['option a english']||'',optionAAs:x['option a assamese']||'',optionBEn:x['option b english']||'',optionBAs:x['option b assamese']||'',optionCEn:x['option c english']||'',optionCAs:x['option c assamese']||'',optionDEn:x['option d english']||'',optionDAs:x['option d assamese']||'',correctAnswer:x['correct answer']||'',explanation:x['explanation']||x['answer / explanation']||''}))}
-async function qbReadBulkWord(ev){const f=ev.target.files?.[0];if(!f)return;try{if(!window.mammoth)throw Error('Word reader library did not load. Refresh the page and try again.');const a=await f.arrayBuffer(),res=await mammoth.convertToHtml({arrayBuffer:a});qbBulkWordRows=qbParseWordBlock(qbWordLinesFromHtml(res.value));qbBulkSetPreview('qbBulkWordPreview',`<div class="success">Read <b>${qbBulkWordRows.length}</b> question(s) from Word.</div><div style="overflow:auto;max-height:300px"><table><thead><tr><th>#</th><th>Chapter</th><th>Type</th><th>Marks</th><th>English</th><th>Assamese</th></tr></thead><tbody>${qbBulkWordRows.map(x=>`<tr><td>${x.row}</td><td>${qbEsc(x.chapterNo||'Default')}</td><td>${qbEsc(x.questionType)}</td><td>${x.marks}</td><td>${qbEsc(x.english.slice(0,90))}</td><td>${qbEsc(x.assamese.slice(0,90))}</td></tr>`).join('')}</tbody></table></div>`)}catch(e){qbBulkWordRows=[];qbBulkSetPreview('qbBulkWordPreview',msg('Could not read Word: '+e.message))}}
-function qbReadBulkPdfMeta(ev){const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(raw.length<2)throw Error('Metadata Excel contains no rows.');const h=raw[0].map(qbBulkHeader),get=(row,...n)=>{const i=qbBulkFind(h,...n);return i>=0?qbBulkNormalize(row[i]):''};qbBulkPdfMeta={};raw.slice(1).forEach((row,i)=>{const page=get(row,'Page No','Question No')||String(i+1);qbBulkPdfMeta[page]={chapterNo:get(row,'Chapter No','Chapter Number'),chapterName:get(row,'Chapter Name'),questionType:get(row,'Question Type')||'MCQ',marks:qbBulkNumber(get(row,'Marks')),cognitiveLevel:get(row,'Cognitive Level')||'Knowledge',difficulty:get(row,'Difficulty')||'Medium',correctAnswer:get(row,'Correct Answer'),explanation:get(row,'Explanation','Answer / Explanation')};});qbBulkSetPreview('qbBulkPdfPreview',`<div class="success">Loaded metadata for <b>${Object.keys(qbBulkPdfMeta).length}</b> page(s).</div>`)}catch(e){qbBulkPdfMeta={};qbBulkSetPreview('qbBulkPdfPreview',msg('Could not read metadata Excel: '+e.message))}};r.readAsArrayBuffer(f)}
+function qbParseWordBlock(lines){const rows=[];let cur=null,lastKey='';for(const line of lines){if(/^\[QUESTION\]$/i.test(line)){if(cur)rows.push(cur);cur={};lastKey='';continue}if(/^\[\/QUESTION\]$/i.test(line)){if(cur)rows.push(cur);cur=null;lastKey='';continue}if(!cur)continue;const m=line.match(/^([^:]+):\s*(.*)$/);if(m){lastKey=qbBulkHeader(m[1]);cur[lastKey]=m[2].trim()}else if(lastKey){cur[lastKey]=(cur[lastKey]?cur[lastKey]+'\n':'')+line}}if(cur)rows.push(cur);return rows.map((x,i)=>({row:i+1,chapterNo:x['chapter no']||x['chapter number']||'',chapterName:x['chapter name']||'',subchapterNo:x['subchapter no']||x['subchapter number']||'',questionType:x['question type']||'MCQ',marks:qbBulkNumber(x['marks']),cognitiveLevel:x['cognitive level']||'Knowledge',difficulty:x['difficulty']||'Medium',english:x['english question']||'',assamese:x['assamese question']||'',optionAEn:x['option a english']||'',optionAAs:x['option a assamese']||'',optionBEn:x['option b english']||'',optionBAs:x['option b assamese']||'',optionCEn:x['option c english']||'',optionCAs:x['option c assamese']||'',optionDEn:x['option d english']||'',optionDAs:x['option d assamese']||'',correctAnswer:x['correct answer']||'',explanation:x['explanation']||x['answer / explanation']||''}))}
+async function qbReadBulkWord(ev){const f=ev.target.files?.[0];if(!f)return;try{if(!window.mammoth)throw Error('Word reader library did not load. Refresh the page and try again.');const a=await f.arrayBuffer(),res=await mammoth.convertToHtml({arrayBuffer:a});qbBulkWordRows=qbParseWordBlock(qbWordLinesFromHtml(res.value));qbBulkSetPreview('qbBulkWordPreview',`<div class="success">Read <b>${qbBulkWordRows.length}</b> question(s) from Word.</div><div style="overflow:auto;max-height:300px"><table><thead><tr><th>#</th><th>Chapter / Subchapter</th><th>Type</th><th>Marks</th><th>English</th><th>Assamese</th></tr></thead><tbody>${qbBulkWordRows.map(x=>`<tr><td>${x.row}</td><td>${qbEsc(x.subchapterNo||x.chapterNo||'Default')}</td><td>${qbEsc(x.questionType)}</td><td>${x.marks}</td><td>${qbEsc(x.english.slice(0,90))}</td><td>${qbEsc(x.assamese.slice(0,90))}</td></tr>`).join('')}</tbody></table></div>`)}catch(e){qbBulkWordRows=[];qbBulkSetPreview('qbBulkWordPreview',msg('Could not read Word: '+e.message))}}
+function qbReadBulkPdfMeta(ev){const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(raw.length<2)throw Error('Metadata Excel contains no rows.');const h=raw[0].map(qbBulkHeader),get=(row,...n)=>{const i=qbBulkFind(h,...n);return i>=0?qbBulkNormalize(row[i]):''};qbBulkPdfMeta={};raw.slice(1).forEach((row,i)=>{const page=get(row,'Page No','Question No')||String(i+1);qbBulkPdfMeta[page]={chapterNo:get(row,'Chapter No','Chapter Number'),chapterName:get(row,'Chapter Name'),subchapterNo:get(row,'Subchapter No','Subchapter Number'),questionType:get(row,'Question Type')||'MCQ',marks:qbBulkNumber(get(row,'Marks')),cognitiveLevel:get(row,'Cognitive Level')||'Knowledge',difficulty:get(row,'Difficulty')||'Medium',correctAnswer:get(row,'Correct Answer'),explanation:get(row,'Explanation','Answer / Explanation')};});qbBulkSetPreview('qbBulkPdfPreview',`<div class="success">Loaded metadata for <b>${Object.keys(qbBulkPdfMeta).length}</b> page(s).</div>`)}catch(e){qbBulkPdfMeta={};qbBulkSetPreview('qbBulkPdfPreview',msg('Could not read metadata Excel: '+e.message))}};r.readAsArrayBuffer(f)}
 function qbCropCanvas(sourceCanvas){const ctx=sourceCanvas.getContext('2d',{willReadFrequently:true}),w=sourceCanvas.width,h=sourceCanvas.height,data=ctx.getImageData(0,0,w,h).data,threshold=248;let minX=w,minY=h,maxX=-1,maxY=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(data[i+3]>10&&(data[i]<threshold||data[i+1]<threshold||data[i+2]<threshold)){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}}if(maxX<0)return sourceCanvas;const pad=Math.max(12,Math.round(Math.min(w,h)*.018));minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(w-1,maxX+pad);maxY=Math.min(h-1,maxY+pad);const out=document.createElement('canvas');out.width=maxX-minX+1;out.height=maxY-minY+1;out.getContext('2d').drawImage(sourceCanvas,minX,minY,out.width,out.height,0,0,out.width,out.height);return out}
 async function qbReadBulkPdf(ev){const f=ev.target.files?.[0];if(!f)return;const box=document.getElementById('qbBulkPdfPreview');box.innerHTML=msg('Rendering PDF pages as images — no OCR is used…',true);try{const mod=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');mod.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';const pdf=await mod.getDocument({data:await f.arrayBuffer()}).promise;qbBulkPdfPages=[];for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),base=page.getViewport({scale:1}),scale=Math.min(2.5,Math.max(1.6,1800/base.width)),vp=page.getViewport({scale}),canvas=document.createElement('canvas');canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);await page.render({canvasContext:ctx,viewport:vp}).promise;const cropped=qbCropCanvas(canvas);qbBulkPdfPages.push({page:String(p),image:cropped.toDataURL('image/jpeg',.93)})}box.innerHTML=`<div class="success">Prepared <b>${qbBulkPdfPages.length}</b> page image(s). No OCR used.</div><div class="small muted">Each PDF page becomes one Question Bank question. Metadata comes from the PDF Metadata Excel.</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px">${qbBulkPdfPages.slice(0,12).map(x=>`<div class="student-card"><img src="${x.image}" style="width:100%"><div class="small muted">Page ${x.page}</div></div>`).join('')}</div>`}catch(e){qbBulkPdfPages=[];box.innerHTML=msg('Could not convert PDF: '+e.message)}}
-function qbFindChapter(row,defaultId){let c=null;if(row.chapterNo)c=qbChapters.find(c=>String(c.chapter_number)===String(row.chapterNo));if(!c&&row.chapterName)c=qbChapters.find(c=>c.chapter_name.trim().toLowerCase()===row.chapterName.trim().toLowerCase());if(c)return c;if(!row.chapterNo&&!row.chapterName&&defaultId)return qbChapters.find(c=>c.id===defaultId)||null;return null}
-async function qbEnsureChapter(row,defaultId,cache){let c=qbFindChapter(row,defaultId);if(c)return c;if(document.getElementById('qbBulkMissingChapter')?.value!=='create')throw Error(`Chapter not found for row/page ${row.row||row.page}: ${row.chapterNo||row.chapterName||'blank'}`);const n=Number(row.chapterNo);if(!n||!row.chapterName)throw Error(`Missing Chapter No and Chapter Name for row/page ${row.row||row.page}.`);const key=n+'|'+row.chapterName.toLowerCase();if(cache.has(key))return cache.get(key);const {data,error}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:n,chapter_name:row.chapterName}).select().single();if(error)throw error;cache.set(key,data);qbChapters.push(data);return data}
+function qbFindChapter(row,defaultId){
+  const code=String(row.subchapterNo||row.chapterNo||'').trim();let c=null;
+  if(code)c=qbChapters.find(x=>qbChapterCode(x)===code);
+  if(!c&&row.chapterName)c=qbChapters.find(x=>x.chapter_name.trim().toLowerCase()===row.chapterName.trim().toLowerCase());
+  if(c)return c;if(!code&&!row.chapterName&&defaultId)return qbChapters.find(c=>c.id===defaultId)||null;return null;
+}
+async function qbEnsureChapter(row,defaultId,cache){
+  let c=qbFindChapter(row,defaultId);if(c)return c;
+  if(document.getElementById('qbBulkMissingChapter')?.value!=='create')throw Error(`Chapter/Subchapter not found for row/page ${row.row||row.page}: ${row.subchapterNo||row.chapterNo||row.chapterName||'blank'}`);
+  const code=String(row.subchapterNo||row.chapterNo||'').trim();if(!/^\d+(\.\d+)*$/.test(code)||!row.chapterName)throw Error(`Missing valid Chapter No and Chapter Name for row/page ${row.row||row.page}.`);
+  const parentCode=code.includes('.')?code.split('.').slice(0,-1).join('.'):null;let parentId=null;if(parentCode){const par=qbChapters.find(x=>qbChapterCode(x)===parentCode);if(!par)throw Error(`Parent chapter ${parentCode} is missing for ${code}. Include/create the parent first.`);parentId=par.id;}
+  const key=code+'|'+row.chapterName.toLowerCase();if(cache.has(key))return cache.get(key);
+  const {data,error}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:Number(code.split('.')[0]),chapter_code:code,parent_chapter_id:parentId,chapter_name:row.chapterName}).select().single();if(error)throw error;cache.set(key,data);qbChapters.push(data);return data;
+}
 function qbBulkOptionObjects(r){return ['A','B','C','D'].map(L=>({label:L,en:r['option'+L+'En'],as:r['option'+L+'As']})).filter(o=>o.en||o.as)}
 async function qbInsertBulkRow(r,chapter,blocksToUpload=[]){const q={teacher_id:teacher.id,chapter_id:chapter.id,question_text_en:r.english||'',question_text_as:r.assamese||'',question_type:r.questionType,marks:r.marks,cognitive_level:r.cognitiveLevel,difficulty:r.difficulty,explanation:r.explanation||'',correct_answer:r.correctAnswer||null,has_images:!!r.image};const {data,error}=await sb.from('school_question_bank_questions').insert(q).select().single();if(error)throw error;const blocks=[];if(r.image){const path=`${teacher.id}/${crypto.randomUUID()}-bulk.jpg`;const blob=await (await fetch(r.image)).blob();const up=await sb.storage.from('school-question-bank-images').upload(path,blob,{contentType:'image/jpeg'});if(up.error)throw up.error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);blocks.push({question_id:data.id,block_order:1,block_type:'IMAGE',image_url:u.publicUrl,image_width:100,alt_text:'Bulk PDF question'});}else{blocks.push({question_id:data.id,block_order:1,block_type:'TEXT',text_en:r.english||'',text_as:r.assamese||''})}const bi=await sb.from('school_question_bank_blocks').insert(blocks);if(bi.error)throw bi.error;const os=qbBulkOptionObjects(r);if(r.questionType==='MCQ'&&os.length){const oi=await sb.from('school_question_bank_options').insert(os.map((o,i)=>({question_id:data.id,display_order:i,option_label:o.label,option_text_en:o.en||'',option_text_as:o.as||'',is_correct:String(r.correctAnswer||'').trim().toUpperCase()===o.label})));if(oi.error)throw oi.error}return data}
 async function qbImportBulk(){const excel=qbBulkExcelRows,word=qbBulkWordRows,pdf=qbBulkPdfPages;let rows=[];if(excel.length)rows=excel;else if(word.length)rows=word;else if(pdf.length){if(!Object.keys(qbBulkPdfMeta).length)return alert('Upload the PDF Metadata Excel first.');rows=pdf.map(x=>({...qbBulkPdfMeta[x.page],page:x.page,row:x.page,image:x.image}));}else return alert('Upload an Excel, Word, or PDF + Metadata Excel file first.');const sourceType=excel.length?'excel':word.length?'word':'pdf';const sourceRows=rows.filter(x=>qbBulkValid(x,0,sourceType).length===0);const invalid=rows.filter(x=>qbBulkValid(x,0,sourceType).length);if(invalid.length)return alert('Please correct invalid row/page(s): '+invalid.slice(0,20).map(x=>x.row||x.page).join(', '));const def=document.getElementById('qbBulkDefaultChapter')?.value||'',cache=new Map();try{let ok=0;for(const r of sourceRows){const c=await qbEnsureChapter(r,def,cache);await qbInsertBulkRow(r,c);ok++}document.getElementById('qbBulkStatus').innerHTML=`<div class="success"><b>${ok} question(s) imported successfully.</b></div><button onclick="questionBankHome()">Open Question Bank</button>`;await loadQuestionBank()}catch(e){document.getElementById('qbBulkStatus').innerHTML=msg('Import stopped: '+e.message)}}
@@ -883,7 +883,7 @@ function qbEditor(id=null){
   document.getElementById('app').innerHTML=`${header(id?'Edit Question':'Add Question')}
   <div class="card">
    <div class="grid">
-    <div><label>Chapter</label><select id="qbChapter">${qbChapters.map(c=>`<option value="${c.id}" ${(q?.chapter_id||ch)===c.id?'selected':''}>${c.chapter_number}. ${qbEsc(c.chapter_name)}</option>`).join('')}</select></div>
+    <div><label>Chapter / Subchapter</label><select id="qbChapter">${qbChapterOptions(q?.chapter_id||ch,false)}</select></div>
     <div><label>Question Type</label><select id="qbType" onchange="qbTypeChanged()">${QB_TYPES.map(t=>`<option ${(q?.question_type||'MCQ')===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div><label>Marks</label><select id="qbMarks">${QB_MARKS.map(m=>`<option ${Number(q?.marks||2)===m?'selected':''}>${m}</option>`).join('')}</select></div>
     <div><label>Cognitive Level</label><select id="qbLevel">${QB_LEVELS.map(x=>`<option ${(q?.cognitive_level||'Knowledge')===x?'selected':''}>${x}</option>`).join('')}</select></div>
@@ -956,7 +956,7 @@ async function generateBankPaper(){
    <div><label>Duration</label><input id="gpDuration" placeholder="2 Hours"></div>
   </div></div>
   <div class="card"><h3>Cognitive Distribution</h3><div class="grid">${QB_LEVELS.map((x,i)=>`<div><label>${x} %</label><input id="gpPct${i}" type="number" min="0" max="100" value="${[30,30,20,20][i]}" oninput="gpRecalc()"><div class="small muted" id="gpMark${i}">30 marks</div></div>`).join('')}</div><div id="gpDistMsg" class="small muted"></div></div>
-  <div class="card"><h3>Optional Chapter Filter</h3><select id="gpChapter"><option value="">All Chapters</option>${qbChapters.map(c=>`<option value="${c.id}">${c.chapter_number}. ${qbEsc(c.chapter_name)}</option>`).join('')}</select>
+  <div class="card"><h3>Optional Chapter Filter</h3><select id="gpChapter">${qbChapterOptions()}</select>
    <div style="margin-top:14px"><h3>Optional Question-Type Distribution</h3><div class="grid">${QB_TYPES.map((x,i)=>`<div><label>${x} %</label><input id="gpTypePct${i}" type="number" min="0" max="100" value="${i===0?100:0}" oninput="gpTypeMsg()"></div>`).join('')}</div><div id="gpTypeMsg" class="small muted"></div></div>
   </div>
   <div class="card"><h3>Generate</h3><p class="small muted">The generator searches combinations of question marks to meet each cognitive target. If exact matching is impossible, it chooses the closest available combination and reports the deviation.</p><div class="actions"><button onclick="gpGenerate()">⚙ Generate Paper</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div><div id="gpResult" style="margin-top:12px"></div></div>`;
@@ -987,7 +987,7 @@ async function gpGenerate(){
   if(!total||p.reduce((a,b)=>a+b,0)!==100)return alert('Total marks must be set and cognitive percentages must total 100%.');
   const lang=document.getElementById('gpLang').value,ch=document.getElementById('gpChapter').value;
   const typeP=QB_TYPES.map((_,i)=>Number(document.getElementById('gpTypePct'+i).value||0));
-  const candidates=qbQuestions.filter(q=>!ch||q.chapter_id===ch);
+  const allowedCh=ch?qbDescendantIds(ch):null; const candidates=qbQuestions.filter(q=>!allowedCh||allowedCh.has(q.chapter_id));
   const blocks=(await sb.from('school_question_bank_blocks').select('*').in('question_id',candidates.map(q=>q.id)).order('block_order')).data||[];
   const opts=(await sb.from('school_question_bank_options').select('*').in('question_id',candidates.map(q=>q.id)).order('display_order')).data||[];
   const selected=[],used=new Set(),report=[];
