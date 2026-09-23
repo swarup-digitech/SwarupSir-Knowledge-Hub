@@ -739,7 +739,7 @@ async function downloadSelectedQuestionPaperWord(){
     children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:60},children:[new TextRun({text:`QUESTION PAPER SET: SET ${setCode}`,bold:true,size:18,color:'17365D'})]}));
     children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:80},children:[new TextRun({text:'SWARUP SIR\'S KNOWLEDGE HUB',bold:true,size:30,color:'17365D'})]}));
     children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:50},children:[new TextRun({text:title,bold:true,size:25,color:'1D4ED8'})]}));
-    children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:160},children:[new TextRun({text:'QUESTION PAPER',bold:true,size:20,color:'FFFFFF',shading:{fill:'2563EB'}})]}));
+   // children.push(new Paragraph({alignment:AlignmentType.CENTER,spacing:{after:160},children:[new TextRun({text:'QUESTION PAPER',bold:true,size:20,color:'FFFFFF',shading:{fill:'2563EB'}})]}));
     const fields=new Table({width:{size:100,type:WidthType.PERCENT},rows:[
       new TableRow({children:[new TableCell({children:[new Paragraph({children:[new TextRun({text:'Name: ',bold:true}),new TextRun({text:'________________________________'})]})]}),new TableCell({children:[new Paragraph({children:[new TextRun({text:'Roll No.: ',bold:true}),new TextRun({text:'________________'})]})]})]}),
       new TableRow({children:[new TableCell({children:[new Paragraph({children:[new TextRun({text:'Time: ',bold:true}),new TextRun({text:'________________'})]})]}),new TableCell({children:[new Paragraph({children:[new TextRun({text:'Marks: ',bold:true}),new TextRun({text:String(rows.length)})]})]})]})
