@@ -1,4 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
 const SUPABASE_URL='https://jupefjdquakqsizapzbv.supabase.co',SUPABASE_KEY='sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP',CREATE_STUDENT_FN='create-students';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let teacher=null,students=[],classes=[],groups=[],assessments=[],bulkRows=[];
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -11,7 +12,7 @@ function home(){document.getElementById('app').innerHTML=`${header('School Teach
 <h2>👨‍🏫 Teacher Tools</h2>
 <div class="actions">
 <button onclick="newAssessment()">📝 New School Assessment</button>
-<button onclick="bulkQuestionUpload()">📥 Bulk Questions Upload</button>
+<button onclick="bulkQuestionUpload()">📥 Bulk Questions Upload</button><button onclick="questionBankHome()">📚 Question Bank</button><button onclick="generateBankPaper()">📄 Generate Paper</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ Create Assignment</button>
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=manageAssignments'">✎ Manage Assignments</button>
 <button onclick="manageSchoolAssessments()">📝 Manage School Assessments</button>
@@ -647,4 +648,230 @@ async function saveSchoolAssessmentRecipients(id,fresh=false){
 async function deleteAssessment(id){if(!confirm('Delete this assessment? All questions and answer submissions for it will also be removed.'))return;const {error}=await sb.from('school_assessments').delete().eq('id',id).eq('created_by',teacher.id);if(error)return alert(error.message);await load();home()}
 async function logout(){await sb.auth.signOut();location.replace('teacher-login.html')}
 init();
+
+/* ===================== SCHOOL QUESTION BANK =====================
+   Question Bank v1:
+   - Chapters
+   - bilingual English/Assamese question content
+   - ordered TEXT/IMAGE blocks
+   - MCQ/SHORT/LONG
+   - marks + cognitive level + difficulty
+   - bilingual MCQ options, optional option images
+   - blueprint paper generation with best-fit cognitive distribution
+   - browser-print PDF (Unicode-safe for Assamese)
+================================================================= */
+let qbChapters=[], qbQuestions=[], qbBlocks=[], qbOptions=[];
+const QB_LEVELS=['Knowledge','Understanding','Application','HOTS'];
+const QB_TYPES=['MCQ','Short','Long'];
+const QB_MARKS=[1,2,3,4,5,6,10];
+function qbEsc(s){return esc(s)}
+async function loadQuestionBank(){
+  const [{data:ch,error:ce},{data:q,error:qe}]=await Promise.all([
+    sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id).order('chapter_number').order('chapter_name'),
+    sb.from('school_question_bank_questions').select('*').eq('teacher_id',teacher.id).order('created_at',{ascending:false})
+  ]);
+  if(ce) throw ce;if(qe) throw qe;
+  qbChapters=ch||[];qbQuestions=q||[];
+}
+function questionBankHome(){
+  loadQuestionBank().then(()=>{
+    document.getElementById('app').innerHTML=`${header('📚 Question Bank')}
+    <div class="card">
+      <div class="actions">
+        <button onclick="qbEditor()">+ Add Question</button>
+        <button class="secondary" onclick="qbChapterManager()">📖 Chapters</button>
+        <button class="secondary" onclick="generateBankPaper()">📄 Generate Paper</button>
+        <button class="secondary" onclick="home()">← Dashboard</button>
+      </div>
+      <div class="searchgrid" style="margin-top:14px">
+        <input id="qbSearch" placeholder="Search question..." oninput="qbRenderTable()">
+        <select id="qbChapterFilter" onchange="qbRenderTable()"><option value="">All Chapters</option>${qbChapters.map(c=>`<option value="${c.id}">${qbEsc(c.chapter_name)}</option>`).join('')}</select>
+        <select id="qbLevelFilter" onchange="qbRenderTable()"><option value="">All Cognitive Levels</option>${QB_LEVELS.map(x=>`<option>${x}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="card"><div id="qbTable"></div></div>`;
+    qbRenderTable();
+  }).catch(e=>alert('Could not load Question Bank: '+e.message));
+}
+function qbRenderTable(){
+  const s=(document.getElementById('qbSearch')?.value||'').toLowerCase(), ch=document.getElementById('qbChapterFilter')?.value||'', lv=document.getElementById('qbLevelFilter')?.value||'';
+  const rows=qbQuestions.filter(q=>(!s||`${q.question_text_en||''} ${q.question_text_as||''}`.toLowerCase().includes(s))&&(!ch||q.chapter_id===ch)&&(!lv||q.cognitive_level===lv));
+  const html=`<div class="small muted" style="margin-bottom:8px">${rows.length} question(s)</div>
+  <div style="overflow:auto"><table><thead><tr><th>#</th><th>Question</th><th>Chapter</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>Difficulty</th><th>Actions</th></tr></thead><tbody>
+  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${qbEsc((q.question_text_en||q.question_text_as||'').slice(0,160))}${q.has_images?' 🖼️':''}</td><td>${qbEsc(qbChapters.find(c=>c.id===q.chapter_id)?.chapter_name||'—')}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
+  </tbody></table></div>`;
+  document.getElementById('qbTable').innerHTML=html;
+}
+function qbChapterManager(){
+  loadQuestionBank().then(()=>{
+    document.getElementById('app').innerHTML=`${header('📖 Question Bank — Chapters')}
+    <div class="card"><div class="grid"><div><label>Chapter Number</label><input id="qbcNo" type="number" min="1"><label>Chapter Name</label><input id="qbcName"><label>Description</label><textarea id="qbcDesc"></textarea><button onclick="qbAddChapter()">Add Chapter</button></div>
+    <div><h3>Existing Chapters</h3>${qbChapters.map(c=>`<div class="student-card"><b>${c.chapter_number}. ${qbEsc(c.chapter_name)}</b><div class="small muted">${qbEsc(c.description||'')}</div><button class="danger" style="margin-top:7px" onclick="qbDeleteChapter('${c.id}')">Delete</button></div>`).join('')}</div></div></div>
+    <div class="actions"><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
+  }).catch(e=>alert(e.message));
+}
+async function qbAddChapter(){
+  const n=Number(document.getElementById('qbcNo').value),name=document.getElementById('qbcName').value.trim();
+  if(!n||!name)return alert('Enter chapter number and name.');
+  const {error}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:n,chapter_name:name,description:document.getElementById('qbcDesc').value.trim()||null});
+  if(error)return alert(error.message);qbChapterManager();
+}
+async function qbDeleteChapter(id){
+  if(qbQuestions.some(q=>q.chapter_id===id))return alert('This chapter has questions. Move/delete the questions first.');
+  if(!confirm('Delete this chapter?'))return;
+  const {error}=await sb.from('school_question_bank_chapters').delete().eq('id',id).eq('teacher_id',teacher.id);
+  if(error)return alert(error.message);qbChapterManager();
+}
+let qbEditingId=null,qbEditorBlocks=[],qbEditorOptions=[];
+function qbEditor(id=null){
+  qbEditingId=id;
+  const q=id?qbQuestions.find(x=>x.id===id):null;
+  qbEditorBlocks=[];qbEditorOptions=[];
+  const ch=qbChapters.length?qbChapters[0].id:'';
+  document.getElementById('app').innerHTML=`${header(id?'Edit Question':'Add Question')}
+  <div class="card">
+   <div class="grid">
+    <div><label>Chapter</label><select id="qbChapter">${qbChapters.map(c=>`<option value="${c.id}" ${(q?.chapter_id||ch)===c.id?'selected':''}>${c.chapter_number}. ${qbEsc(c.chapter_name)}</option>`).join('')}</select></div>
+    <div><label>Question Type</label><select id="qbType" onchange="qbTypeChanged()">${QB_TYPES.map(t=>`<option ${(q?.question_type||'MCQ')===t?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div><label>Marks</label><select id="qbMarks">${QB_MARKS.map(m=>`<option ${Number(q?.marks||2)===m?'selected':''}>${m}</option>`).join('')}</select></div>
+    <div><label>Cognitive Level</label><select id="qbLevel">${QB_LEVELS.map(x=>`<option ${(q?.cognitive_level||'Knowledge')===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    <div><label>Difficulty</label><select id="qbDifficulty">${['Easy','Medium','Hard'].map(x=>`<option ${(q?.difficulty||'Medium')===x?'selected':''}>${x}</option>`).join('')}</select></div>
+   </div>
+  </div>
+  <div class="card">
+    <h3>Question Content</h3>
+    <p class="small muted">Build the question in blocks. Use <b>Text</b> and <b>Image</b> blocks, then move them up/down. The same order is preserved in the generated paper.</p>
+    <div id="qbBlocks"></div>
+    <div class="actions"><button class="secondary" onclick="qbAddTextBlock()">+ Text Block</button><button class="secondary" onclick="qbAddImageBlock()">🖼 Upload Image</button></div>
+  </div>
+  <div class="card" id="qbOptionsCard"><h3>MCQ Options</h3><div id="qbOptions"></div><button class="secondary" onclick="qbAddOption()">+ Add Option</button></div>
+  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions"><button onclick="qbSave()">💾 Save Question</button><button class="secondary" onclick="questionBankHome()">Cancel</button></div></div>`;
+  if(!id){qbAddTextBlock();} else {
+    sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order').then(({data,error})=>{
+      if(error)return alert(error.message);qbEditorBlocks=data||[];qbRenderBlocks();
+    });
+    sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order').then(({data,error})=>{
+      if(error)return alert(error.message);qbEditorOptions=data||[];qbRenderOptions();
+    });
+  }
+  qbTypeChanged();
+}
+function qbTypeChanged(){const t=document.getElementById('qbType')?.value;const c=document.getElementById('qbOptionsCard');if(c)c.style.display=t==='MCQ'?'block':'none';}
+function qbAddTextBlock(){qbEditorBlocks.push({id:null,block_type:'TEXT',text_en:'',text_as:''});qbRenderBlocks()}
+function qbAddImageBlock(){const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;try{const path=`${teacher.id}/${crypto.randomUUID()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from('school-question-bank-images').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});if(error)throw error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);qbEditorBlocks.push({id:null,block_type:'IMAGE',image_url:u.publicUrl,image_width:70,alt_text:f.name});qbRenderBlocks()}catch(e){alert('Image upload failed: '+e.message)}};input.click()}
+function qbRenderBlocks(){const el=document.getElementById('qbBlocks');if(!el)return;el.innerHTML=qbEditorBlocks.map((b,i)=>`<div class="student-card" style="position:relative">
+  <div class="actions" style="justify-content:space-between"><b>${i+1}. ${b.block_type}</b><span><button class="secondary" onclick="qbMoveBlock(${i},-1)">↑</button> <button class="secondary" onclick="qbMoveBlock(${i},1)">↓</button> <button class="danger" onclick="qbRemoveBlock(${i})">Delete</button></span></div>
+  ${b.block_type==='TEXT'?`<label>English</label><textarea rows="3" oninput="qbEditorBlocks[${i}].text_en=this.value">${qbEsc(b.text_en||'')}</textarea><label>Assamese</label><textarea rows="3" oninput="qbEditorBlocks[${i}].text_as=this.value">${qbEsc(b.text_as||'')}</textarea>`:`<img src="${qbEsc(b.image_url||'')}" style="display:block;max-width:100%;width:${Number(b.image_width||70)}%;margin:8px auto;border:1px solid #dbe3ee;border-radius:8px"><label>Image Width (%)</label><input type="number" min="20" max="100" value="${Number(b.image_width||70)}" oninput="qbEditorBlocks[${i}].image_width=this.value"><label>Alt text</label><input value="${qbEsc(b.alt_text||'')}" oninput="qbEditorBlocks[${i}].alt_text=this.value">`}
+ </div>`).join('')}
+}
+function qbMoveBlock(i,d){const j=i+d;if(j<0||j>=qbEditorBlocks.length)return;[qbEditorBlocks[i],qbEditorBlocks[j]]=[qbEditorBlocks[j],qbEditorBlocks[i]];qbRenderBlocks()}
+function qbRemoveBlock(i){qbEditorBlocks.splice(i,1);qbRenderBlocks()}
+function qbAddOption(){qbEditorOptions.push({option_label:String.fromCharCode(65+qbEditorOptions.length),option_text_en:'',option_text_as:'',is_correct:false,image_url:null});qbRenderOptions()}
+function qbRenderOptions(){const el=document.getElementById('qbOptions');if(!el)return;el.innerHTML=qbEditorOptions.map((o,i)=>`<div class="student-card"><div class="grid"><div><label>Option ${o.option_label}</label><textarea rows="2" oninput="qbEditorOptions[${i}].option_text_en=this.value">${qbEsc(o.option_text_en||'')}</textarea></div><div><label>Assamese</label><textarea rows="2" oninput="qbEditorOptions[${i}].option_text_as=this.value">${qbEsc(o.option_text_as||'')}</textarea></div></div><label><input type="radio" name="qbCorrect" ${o.is_correct?'checked':''} onchange="qbEditorOptions.forEach(x=>x.is_correct=false);qbEditorOptions[${i}].is_correct=true"> Correct answer</label></div>`).join('')}
+async function qbSave(){
+  if(!qbChapters.length)return alert('Create at least one chapter first.');
+  if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
+  const type=document.getElementById('qbType').value;
+  if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return alert('MCQ needs at least 2 options and exactly one correct answer.');
+  const payload={teacher_id:teacher.id,chapter_id:document.getElementById('qbChapter').value,question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,explanation:document.getElementById('qbExplanation').value.trim()||null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
+  try{
+    let qid=qbEditingId;
+    if(qid){const {error}=await sb.from('school_question_bank_questions').update(payload).eq('id',qid).eq('teacher_id',teacher.id);if(error)throw error;await sb.from('school_question_bank_blocks').delete().eq('question_id',qid);await sb.from('school_question_bank_options').delete().eq('question_id',qid);}
+    else {const {data,error}=await sb.from('school_question_bank_questions').insert(payload).select().single();if(error)throw error;qid=data.id;}
+    const blocks=qbEditorBlocks.map((b,i)=>({question_id:qid,block_order:i+1,block_type:b.block_type,text_en:b.text_en||null,text_as:b.text_as||null,image_url:b.image_url||null,image_width:Number(b.image_width||70),alt_text:b.alt_text||null}));
+    const {error:be}=await sb.from('school_question_bank_blocks').insert(blocks);if(be)throw be;
+    if(type==='MCQ'){const opts=qbEditorOptions.map((o,i)=>({question_id:qid,display_order:i+1,option_label:o.option_label||String.fromCharCode(65+i),option_text_en:o.option_text_en||null,option_text_as:o.option_text_as||null,is_correct:!!o.is_correct,image_url:o.image_url||null}));const {error:oe}=await sb.from('school_question_bank_options').insert(opts);if(oe)throw oe;}
+    alert('Question saved successfully.');questionBankHome();
+  }catch(e){alert('Could not save question: '+e.message)}
+}
+async function qbEdit(id){qbEditor(id)}
+async function qbDelete(id){if(!confirm('Delete this question and its images/options?'))return;const {error}=await sb.from('school_question_bank_questions').delete().eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);questionBankHome()}
+function qbQuestionForPaper(q,blocks,opts,lang){
+  const bs=blocks.filter(b=>b.question_id===q.id).sort((a,b)=>a.block_order-b.block_order);
+  const os=opts.filter(o=>o.question_id===q.id).sort((a,b)=>a.display_order-b.display_order);
+  const useAs=lang==='AS' || lang==='BOTH';
+  const useEn=lang==='EN' || lang==='BOTH';
+  return {q,bs,os,useAs,useEn};
+}
+async function generateBankPaper(){
+  await loadQuestionBank().catch(e=>{alert(e.message)});
+  if(!qbQuestions.length)return alert('Add questions to the Question Bank first.');
+  document.getElementById('app').innerHTML=`${header('📄 Generate Question Paper')}
+  <div class="card"><div class="grid">
+   <div><label>Class</label><input id="gpClass" placeholder="e.g. VI"></div>
+   <div><label>Subject</label><input id="gpSubject" placeholder="e.g. Mathematics"></div>
+   <div><label>Total Marks</label><input id="gpTotal" type="number" min="1" value="100" oninput="gpRecalc()"></div>
+   <div><label>Language</label><select id="gpLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">English + Assamese</option></select></div>
+   <div><label>Duration</label><input id="gpDuration" placeholder="2 Hours"></div>
+  </div></div>
+  <div class="card"><h3>Cognitive Distribution</h3><div class="grid">${QB_LEVELS.map((x,i)=>`<div><label>${x} %</label><input id="gpPct${i}" type="number" min="0" max="100" value="${[30,30,20,20][i]}" oninput="gpRecalc()"><div class="small muted" id="gpMark${i}">30 marks</div></div>`).join('')}</div><div id="gpDistMsg" class="small muted"></div></div>
+  <div class="card"><h3>Optional Chapter Filter</h3><select id="gpChapter"><option value="">All Chapters</option>${qbChapters.map(c=>`<option value="${c.id}">${c.chapter_number}. ${qbEsc(c.chapter_name)}</option>`).join('')}</select>
+   <div style="margin-top:14px"><h3>Optional Question-Type Distribution</h3><div class="grid">${QB_TYPES.map((x,i)=>`<div><label>${x} %</label><input id="gpTypePct${i}" type="number" min="0" max="100" value="${i===0?100:0}" oninput="gpTypeMsg()"></div>`).join('')}</div><div id="gpTypeMsg" class="small muted"></div></div>
+  </div>
+  <div class="card"><h3>Generate</h3><p class="small muted">The generator searches combinations of question marks to meet each cognitive target. If exact matching is impossible, it chooses the closest available combination and reports the deviation.</p><div class="actions"><button onclick="gpGenerate()">⚙ Generate Paper</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div><div id="gpResult" style="margin-top:12px"></div></div>`;
+  gpRecalc();gpTypeMsg();
+}
+function gpRecalc(){const total=Number(document.getElementById('gpTotal')?.value||0),p=QB_LEVELS.map((_,i)=>Number(document.getElementById('gpPct'+i)?.value||0));p.forEach((x,i)=>{const e=document.getElementById('gpMark'+i);if(e)e.textContent=(total*x/100).toFixed(2)+' marks'});const m=document.getElementById('gpDistMsg');if(m)m.textContent='Distribution total: '+p.reduce((a,b)=>a+b,0)+'%'+(p.reduce((a,b)=>a+b,0)===100?' ✓':' — must equal 100%');}
+function gpTypeMsg(){const p=QB_TYPES.map((_,i)=>Number(document.getElementById('gpTypePct'+i)?.value||0));const e=document.getElementById('gpTypeMsg');if(e)e.textContent='Question-type total: '+p.reduce((a,b)=>a+b,0)+'%'+(p.reduce((a,b)=>a+b,0)===100?' ✓':' (set 100% or leave 100/0/0)')}
+function gpSubsetClosest(items,target){
+  // bounded subset sum; state stores indices and sum, cap state count for browser safety
+  target=Math.round(target*100)/100;
+  const scale=1, T=Math.round(target);
+  let states=new Map([[0,[]]]);
+  for(let i=0;i<items.length;i++){
+    const m=Number(items[i].marks); if(!Number.isFinite(m)||m<=0)continue;
+    const next=new Map(states);
+    for(const [sum,arr] of states){
+      const ns=sum+m;if(ns>T+10)continue;
+      if(!next.has(ns))next.set(ns,arr.concat(i));
+    }
+    states=next;
+  }
+  let best=0,bestArr=[];
+  for(const [sum,arr] of states){if(Math.abs(target-sum)<Math.abs(target-best)){best=sum;bestArr=arr}else if(sum===target){best=sum;bestArr=arr;break}}
+  return {sum:best,indices:bestArr};
+}
+async function gpGenerate(){
+  const total=Number(document.getElementById('gpTotal').value||0),p=QB_LEVELS.map((_,i)=>Number(document.getElementById('gpPct'+i).value||0));
+  if(!total||p.reduce((a,b)=>a+b,0)!==100)return alert('Total marks must be set and cognitive percentages must total 100%.');
+  const lang=document.getElementById('gpLang').value,ch=document.getElementById('gpChapter').value;
+  const typeP=QB_TYPES.map((_,i)=>Number(document.getElementById('gpTypePct'+i).value||0));
+  const candidates=qbQuestions.filter(q=>!ch||q.chapter_id===ch);
+  const blocks=(await sb.from('school_question_bank_blocks').select('*').in('question_id',candidates.map(q=>q.id)).order('block_order')).data||[];
+  const opts=(await sb.from('school_question_bank_options').select('*').in('question_id',candidates.map(q=>q.id)).order('display_order')).data||[];
+  const selected=[],used=new Set(),report=[];
+  for(let li=0;li<QB_LEVELS.length;li++){
+    const level=QB_LEVELS[li],target=total*p[li]/100;
+    let pool=candidates.filter(q=>q.cognitive_level===level&&!used.has(q.id));
+    const typeWanted=typeP.findIndex(x=>x>0);
+    if(typeWanted>=0 && typeP.filter(x=>x>0).length===1)pool=pool.filter(q=>q.question_type===QB_TYPES[typeWanted]);
+    const r=gpSubsetClosest(pool,target);
+    r.indices.forEach(i=>{const q=pool[i];if(!used.has(q.id)){used.add(q.id);selected.push(q)}});
+    report.push({level,target,actual:r.sum,diff:r.sum-target});
+  }
+  let sum=selected.reduce((a,q)=>a+Number(q.marks),0);
+  // Fill remaining marks from unused questions, preferring smallest positive difference.
+  if(sum<total){
+    const remain=candidates.filter(q=>!used.has(q.id)).sort((a,b)=>Math.abs((total-sum)-a.marks)-Math.abs((total-sum)-b.marks));
+    for(const q of remain){if(sum>=total)break;if(sum+Number(q.marks)<=total){used.add(q.id);selected.push(q);sum+=Number(q.marks)}}
+  }
+  if(!selected.length)return alert('No suitable questions found for the selected blueprint.');
+  window._generatedBankPaper={selected,blocks,opts,lang,total,report,className:document.getElementById('gpClass').value||'',subject:document.getElementById('gpSubject').value||'',duration:document.getElementById('gpDuration').value||''};
+  const exact=selected.reduce((a,q)=>a+Number(q.marks),0)===total;
+  document.getElementById('gpResult').innerHTML=`<div class="${exact?'success':'notice'}"><b>${exact?'Paper generated successfully.':'Best-fit paper generated.'}</b> Selected ${selected.length} questions = ${sum} marks. ${report.map(r=>`${r.level}: ${r.actual}/${r.target.toFixed(0)}`).join(' | ')}</div><button onclick="previewBankPaper()">👁 Preview / Print PDF</button>`;
+}
+function bankBlockHtml(b,lang){
+  if(b.block_type==='IMAGE')return `<div style="text-align:center;margin:8px 0"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'')}" style="max-width:100%;width:${Number(b.image_width||70)}%;height:auto;display:inline-block"></div>`;
+  const text=lang==='AS'?b.text_as:(lang==='BOTH'?`${b.text_en||''}${b.text_en&&b.text_as?'<br>':''}${b.text_as||''}`:b.text_en);
+  return text?`<div style="margin:5px 0;white-space:pre-wrap">${text}</div>`:'';
+}
+function previewBankPaper(){
+  const p=window._generatedBankPaper;if(!p)return;
+  const qs=p.selected.map((q,i)=>{const bs=p.blocks.filter(b=>b.question_id===q.id),os=p.opts.filter(o=>o.question_id===q.id);return `<div class="bank-print-q"><div><b>${i+1}. [${q.marks} marks]</b></div>${bs.map(b=>bankBlockHtml(b,p.lang)).join('')}${q.question_type==='MCQ'?`<div style="margin-top:6px">${os.map(o=>`<div style="margin:4px 0;padding-left:18px"><b>${qbEsc(o.option_label)}.</b> ${p.lang==='AS'?qbEsc(o.option_text_as||''):p.lang==='BOTH'?`${qbEsc(o.option_text_en||'')}${o.option_text_en&&o.option_text_as?'<br>':''}${qbEsc(o.option_text_as||'')}`:qbEsc(o.option_text_en||'')}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" style="max-width:55%;height:auto">`:''}</div>`).join('')}</div>`:''}</div>`}).join('');
+  const answer=p.selected.map((q,i)=>{const o=p.opts.find(o=>o.question_id===q.id&&o.is_correct);return `<tr><td>${i+1}</td><td>${q.question_type==='MCQ'?qbEsc(o?.option_label||'—'):'See expected answer / marking notes'}</td><td>${q.marks}</td></tr>`}).join('');
+  const w=window.open('','_blank','width=1000,height=800');if(!w)return alert('Allow pop-ups for the print preview.');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Question Paper</title><style>
+  @page{size:A4;margin:15mm}body{font-family:Arial,"Noto Sans Assamese","Nirmala UI",sans-serif;color:#111;line-height:1.4}.header{text-align:center;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}.meta{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin:5px 0}.bank-print-q{break-inside:avoid;margin:0 0 12px}.opts{margin-left:15px}.ans{page-break-before:always}table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:6px}.no-print{margin-bottom:12px}@media print{.no-print{display:none}}</style></head><body><div class="no-print"><button onclick="window.print()">Print / Save as PDF</button></div><div class="header"><h2 style="margin:0">SWARUP SIR'S KNOWLEDGE HUB</h2><h3>${qbEsc(p.subject||'Question Paper')}</h3><div class="meta"><span>Class: ${qbEsc(p.className)}</span><span>Language: ${p.lang==='BOTH'?'English + Assamese':p.lang==='AS'?'Assamese':'English'}</span><span>Marks: ${p.total}</span><span>Time: ${qbEsc(p.duration)}</span></div></div>${qs}<div class="ans"><h2>ANSWER KEY</h2><table><thead><tr><th>Q.No.</th><th>Answer</th><th>Marks</th></tr></thead><tbody>${answer}</tbody></table></div></body></html>`);w.document.close();
+}
+
 </script></body></html>
