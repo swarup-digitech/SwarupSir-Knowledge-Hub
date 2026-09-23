@@ -762,8 +762,7 @@ function qbAddImageBlock(){const input=document.createElement('input');input.typ
 function qbRenderBlocks(){const el=document.getElementById('qbBlocks');if(!el)return;el.innerHTML=qbEditorBlocks.map((b,i)=>`<div class="student-card" style="position:relative">
   <div class="actions" style="justify-content:space-between"><b>${i+1}. ${b.block_type}</b><span><button class="secondary" onclick="qbMoveBlock(${i},-1)">↑</button> <button class="secondary" onclick="qbMoveBlock(${i},1)">↓</button> <button class="danger" onclick="qbRemoveBlock(${i})">Delete</button></span></div>
   ${b.block_type==='TEXT'?`<label>English</label><textarea rows="3" oninput="qbEditorBlocks[${i}].text_en=this.value">${qbEsc(b.text_en||'')}</textarea><label>Assamese</label><textarea rows="3" oninput="qbEditorBlocks[${i}].text_as=this.value">${qbEsc(b.text_as||'')}</textarea>`:`<img src="${qbEsc(b.image_url||'')}" style="display:block;max-width:100%;width:${Number(b.image_width||70)}%;margin:8px auto;border:1px solid #dbe3ee;border-radius:8px"><label>Image Width (%)</label><input type="number" min="20" max="100" value="${Number(b.image_width||70)}" oninput="qbEditorBlocks[${i}].image_width=this.value"><label>Alt text</label><input value="${qbEsc(b.alt_text||'')}" oninput="qbEditorBlocks[${i}].alt_text=this.value">`}
- </div>`).join('')}
-}
+ </div>`).join('');}
 function qbMoveBlock(i,d){const j=i+d;if(j<0||j>=qbEditorBlocks.length)return;[qbEditorBlocks[i],qbEditorBlocks[j]]=[qbEditorBlocks[j],qbEditorBlocks[i]];qbRenderBlocks()}
 function qbRemoveBlock(i){qbEditorBlocks.splice(i,1);qbRenderBlocks()}
 function qbAddOption(){qbEditorOptions.push({option_label:String.fromCharCode(65+qbEditorOptions.length),option_text_en:'',option_text_as:'',is_correct:false,image_url:null});qbRenderOptions()}
