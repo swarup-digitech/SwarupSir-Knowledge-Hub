@@ -21,6 +21,7 @@ create table if not exists public.school_question_bank_questions (
   marks integer not null check (marks > 0),
   cognitive_level text not null check (cognitive_level in ('Knowledge','Understanding','Application','HOTS')),
   difficulty text not null default 'Medium' check (difficulty in ('Easy','Medium','Hard')),
+  variation_group text,
   explanation text,
   has_images boolean not null default false,
   created_at timestamptz not null default now(),
