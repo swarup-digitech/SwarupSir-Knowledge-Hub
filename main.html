@@ -522,7 +522,83 @@ async function saveMockBulkUploads(){try{let savedExcel=0,savedPdf=0;const clean
    const {data:old,error:oe}=await sb.from('mock_question_bank').select('question_text,option_a,option_b,option_c,option_d,part_code,language').eq('teacher_id',current.id).eq('active',true);if(oe)throw oe;const seen=new Set((old||[]).map(q=>[q.part_code,q.language,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d].map(v=>String(v||'').trim().toLowerCase()).join('¦')));const fresh=rows.filter(r=>{const k=[r.part_code,r.language,r.question_text,r.option_a,r.option_b,r.option_c,r.option_d].map(v=>String(v||'').trim().toLowerCase()).join('¦');if(seen.has(k))return false;seen.add(k);return true});if(fresh.length!==rows.length)throw new Error(`${plan.label}: one or more questions are duplicates of active questions already in the bank. The entire upload was rejected so no incomplete set is created.`);const {error:ie}=await sb.from('mock_question_bank').insert(rows);if(ie)throw ie;savedExcel+=rows.length}
  if(mockPdfRows.length){const part=cleanPart(document.getElementById('mockPdfPart').value),plan=mockPlanByPart[part];if(!plan||!['pdf','excel_or_pdf'].includes(plan.upload))throw new Error('PDF upload is available only for MAT and Arithmetic.');if(mockPdfRows.length%plan.count!==0)throw new Error(`${plan.label}: PDF has ${mockPdfRows.length} pages; required multiple is ${plan.count}.`);const missing=mockPdfRows.map(x=>x.page).filter(n=>!mockAnswerKey[n]);if(missing.length)throw new Error('Missing answer key for PDF page(s): '+missing.join(', '));const answerPages=Object.keys(mockAnswerKey).map(Number).filter(n=>n>=1);const extra=answerPages.filter(n=>n>mockPdfRows.length);if(extra.length)throw new Error('Answer key contains page number(s) not present in this PDF: '+extra.join(', '));const lang=plan.section==='MAT'?'COMMON':(document.getElementById('mockPdfLanguage')?.value||'ASSAMESE');const setCount=mockPdfRows.length/plan.count;const ids=await mockNextIds(part,lang,setCount,'set');for(let i=0;i<mockPdfRows.length;i++){const x=mockPdfRows[i],setId=ids[Math.floor(i/plan.count)],path=`${current.id}/${crypto.randomUUID()}.jpg`,url=await uploadMockImage(x.image_data,path);const {error}=await sb.from('mock_question_bank').insert({teacher_id:current.id,section_code:plan.section,part_code:part,topic:plan.label,language:lang,set_id:setId,question_order:(i%plan.count)+1,correct_option:mockAnswerKey[x.page],image_url:url,source_type:'pdf',source_question_no:x.page});if(error)throw error;savedPdf++}}
  alert(`Upload complete: ${savedExcel+savedPdf} new question(s).\nSet/Passage IDs were generated automatically.\nExcel: ${savedExcel}; PDF: ${savedPdf}.`);mockTestManagement()}catch(e){alert('Upload validation failed: '+(e.message||e))}}
-async function mockBankSummary(){const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});if(error)return alert(error.message);const counts={};const groups={};(data||[]).forEach(x=>{if(x.active!==false){counts[x.part_code]=(counts[x.part_code]||0)+1;if(x.passage_id){const k=x.part_code+'::'+x.passage_id;(groups[k]||=0);groups[k]++}}});render(`<div class="wrap">${header('Manage Mock Question Bank')}<div class="card"><div class="notice small">Edit any question, change its answer, update the passage, add/replace an image, or deactivate/delete it. Deactivated questions are not used when generating a new test.</div><div style="overflow:auto"><table><thead><tr><th>Part</th><th>Question</th><th>Passage</th><th>Image</th><th>Status</th><th>Action</th></tr></thead><tbody>${(data||[]).map(q=>`<tr><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc((q.question_text||'[PDF/image question]').slice(0,100))}</td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40))}</td><td>${q.image_url?'Yes':'No'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="6">No questions in your bank.</td></tr>'}</tbody></table></div><div class="card" style="background:#f8fafc;margin-top:15px"><h3>Availability & Set Validation</h3>${MOCK_PLAN.map(x=>{const c=counts[x.part]||0;const complete=x.unit==='passage'?Object.entries(groups).filter(([k,g])=>k.startsWith(x.part+'::')&&g===(x.passageCount||x.count)).length:Math.floor(c/x.count);const remainder=x.unit==='passage'?c-(complete*(x.passageCount||x.count)):c%x.count;return `<div class="small" style="padding:6px 0"><b>${esc(x.label)}</b>: ${c} active · ${complete} complete set(s) of ${x.count}${remainder?' · '+remainder+' question(s) not in a complete set':' · ready'}</div>`}).join('')}</div><div class="actions"><button onclick="mockBulkUpload()">Bulk Upload</button><button onclick="generateMockTestPage()">Generate Test</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div></div>`)}
+let mockBankCache=[];
+let mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''};
+function mockBankNorm(v){return String(v??'').trim().toLowerCase();}
+function mockBankUnique(values){return [...new Set(values.map(v=>String(v??'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));}
+function mockBankDisplayLanguage(v){const x=String(v||'').toUpperCase();return x==='ASSAMESE'?'Assamese':x==='ENGLISH'?'English':x==='COMMON'?'Common (MAT)':(v||'—');}
+function mockBankFilteredRows(){
+  const f=mockBankFilters;
+  const q=mockBankNorm(f.search);
+  return mockBankCache.filter(x=>{
+    const lang=String(x.language||'').toUpperCase();
+    const part=String(x.part_code||'').toUpperCase();
+    const topic=String(x.topic||'').trim();
+    const passage=String(x.passage_title||x.passage_id||'').trim();
+    if(f.medium && lang!==String(f.medium).toUpperCase()) return false;
+    if(f.part && part!==String(f.part).toUpperCase()) return false;
+    if(f.topic && topic!==f.topic) return false;
+    if(f.passage && passage!==f.passage) return false;
+    if(f.status==='active' && x.active===false) return false;
+    if(f.status==='inactive' && x.active!==false) return false;
+    if(q){
+      const hay=[x.question_text,x.option_a,x.option_b,x.option_c,x.option_d,x.topic,x.passage_title,x.passage_text,x.passage_id,x.part_code,x.language].map(v=>String(v??'')).join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function applyMockBankFilters(){
+  mockBankFilters={
+    medium:document.getElementById('mbfMedium')?.value||'',
+    part:document.getElementById('mbfPart')?.value||'',
+    topic:document.getElementById('mbfTopic')?.value||'',
+    passage:document.getElementById('mbfPassage')?.value||'',
+    status:document.getElementById('mbfStatus')?.value||'active',
+    search:document.getElementById('mbfSearch')?.value||''
+  };
+  renderMockBankManager();
+}
+function resetMockBankFilters(){mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''};renderMockBankManager();}
+function renderMockBankManager(){
+  const data=mockBankCache||[];
+  const rows=mockBankFilteredRows();
+  const counts={}; const groups={};
+  data.forEach(x=>{if(x.active!==false){counts[x.part_code]=(counts[x.part_code]||0)+1;if(x.passage_id){const k=x.part_code+'::'+x.passage_id;groups[k]=(groups[k]||0)+1;}}});
+  const topics=mockBankUnique(data.map(x=>x.topic));
+  const passages=mockBankUnique(data.map(x=>x.passage_title||x.passage_id));
+  const parts=mockBankUnique(data.map(x=>x.part_code));
+  const media=mockBankUnique(data.map(x=>x.language));
+  const sel=(id,value,options,placeholder)=>`<select id="${id}"><option value="">${placeholder}</option>${options.map(v=>`<option value="${esc(v)}" ${String(value)===String(v)?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
+  render(`<div class="wrap">${header('Manage Mock Question Bank')}
+    <div class="card">
+      <div class="notice small"><b>Filter the question bank before viewing questions.</b> Select one or more criteria. The filters affect only this management view; they do not delete or modify questions.</div>
+      <div class="grid" style="margin-top:12px">
+        <div><label>Medium</label>${sel('mbfMedium',mockBankFilters.medium,media.map(mockBankDisplayLanguage),'All Mediums')}</div>
+        <div><label>Part / Question Bank</label>${sel('mbfPart',mockBankFilters.part,parts.map(mockPartLabel),'All Parts')}</div>
+        <div><label>Topic</label>${sel('mbfTopic',mockBankFilters.topic,topics,'All Topics')}</div>
+        <div><label>Passage</label>${sel('mbfPassage',mockBankFilters.passage,passages,'All Passages')}</div>
+        <div><label>Status</label><select id="mbfStatus"><option value="active" ${mockBankFilters.status==='active'?'selected':''}>Active Only</option><option value="" ${!mockBankFilters.status?'selected':''}>All Questions</option><option value="inactive" ${mockBankFilters.status==='inactive'?'selected':''}>Inactive Only</option></select></div>
+        <div><label>Search</label><input id="mbfSearch" value="${esc(mockBankFilters.search)}" placeholder="Question, option, topic, passage..."></div>
+      </div>
+      <div class="actions" style="margin-top:12px"><button onclick="applyMockBankFilters()">🔎 Apply Filters</button><button class="secondary" onclick="resetMockBankFilters()">↺ Reset</button><span class="small muted" style="align-self:center">Showing <b>${rows.length}</b> of <b>${data.length}</b> question(s)</span></div>
+    </div>
+    <div class="card">
+      <div class="small muted" style="margin-bottom:10px">Edit any question, change its answer, update the passage, add/replace an image, or deactivate/delete it. Deactivated questions are not used when generating a new test.</div>
+      <div style="overflow:auto"><table><thead><tr><th>#</th><th>Medium</th><th>Part</th><th>Topic</th><th>Question</th><th>Passage</th><th>Image</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${esc(mockBankDisplayLanguage(q.language))}</td><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc(q.topic||'—')}</td><td>${esc((q.question_text||'[PDF/image question]').slice(0,100))}</td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40)||'—')}</td><td>${q.image_url?'Yes':'No'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="9">No questions match the selected filters.</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="card" style="background:#f8fafc"><h3>Availability & Set Validation</h3>${MOCK_PLAN.map(x=>{const c=counts[x.part]||0;const complete=x.unit==='passage'?Object.entries(groups).filter(([k,g])=>k.startsWith(x.part+'::')&&g===(x.passageCount||x.count)).length:Math.floor(c/x.count);const remainder=x.unit==='passage'?c-(complete*(x.passageCount||x.count)):c%x.count;return `<div class="small" style="padding:6px 0"><b>${esc(x.label)}</b>: ${c} active · ${complete} complete set(s) of ${x.count}${remainder?' · '+remainder+' question(s) not in a complete set':' · ready'}</div>`}).join('')}</div>
+    <div class="actions"><button onclick="mockBulkUpload()">Bulk Upload</button><button onclick="generateMockTestPage()">Generate Test</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div>
+  </div>`);
+}
+async function mockBankSummary(){
+  const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
+  if(error)return alert(error.message);
+  mockBankCache=data||[];
+  mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''};
+  renderMockBankManager();
+}
+
 
 let qpState={bank:[],mode:'questions',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),lastRows:null,lastSignature:'',lastSerial:'',setCode:'A'};
 function qpNorm(v){return String(v??'').trim()}
