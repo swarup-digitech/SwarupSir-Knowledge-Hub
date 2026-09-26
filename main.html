@@ -527,60 +527,78 @@ let mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',searc
 function mockBankNorm(v){return String(v??'').trim().toLowerCase();}
 function mockBankUnique(values){return [...new Set(values.map(v=>String(v??'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));}
 function mockBankDisplayLanguage(v){const x=String(v||'').toUpperCase();return x==='ASSAMESE'?'Assamese':x==='ENGLISH'?'English':x==='COMMON'?'Common (MAT)':(v||'—');}
+function mockBankMediumKey(v){const x=String(v||'').toUpperCase();return x==='COMMON (MAT)'?'COMMON':x;}
+function mockBankPartChoices(medium){
+  const m=mockBankMediumKey(medium);
+  if(m==='COMMON') return MOCK_PLAN.filter(x=>x.section==='MAT').map(x=>({value:x.part,label:x.label.replace(/^MAT\s*[—-]\s*/,'')}));
+  return [
+    {value:'ARITHMETIC',label:'Arithmetic'},
+    {value:'EVS_MCQ',label:'EVS-MCQ'},
+    {value:'EVS_PASSAGE',label:'ENS-Passage'},
+    {value:'LANGUAGE_PASSAGE',label:'Language'}
+  ];
+}
+function mockBankLanguageRows(medium){
+  const m=mockBankMediumKey(medium);
+  if(m==='COMMON') return mockBankCache.filter(x=>{const l=String(x.language||'').toUpperCase();return l==='COMMON'||!l||String(x.part_code||'').toUpperCase().startsWith('MAT_');});
+  return mockBankCache.filter(x=>String(x.language||'').toUpperCase()===m);
+}
+function mockBankDynamicOptions(){
+  const medium=mockBankMediumKey(mockBankFilters.medium);
+  const base=medium?mockBankLanguageRows(medium):mockBankCache;
+  const parts=mockBankPartChoices(medium).filter(p=>base.some(x=>String(x.part_code||'').toUpperCase()===p.value));
+  const part=String(mockBankFilters.part||'').toUpperCase();
+  const partRows=part?base.filter(x=>String(x.part_code||'').toUpperCase()===part):base;
+  const topics=mockBankUnique(partRows.filter(x=>!['EVS_PASSAGE','LANGUAGE_PASSAGE'].includes(String(x.part_code||'').toUpperCase())).map(x=>x.topic));
+  const passages=mockBankUnique(partRows.filter(x=>['EVS_PASSAGE','LANGUAGE_PASSAGE'].includes(String(x.part_code||'').toUpperCase())).map(x=>x.passage_title||x.passage_id));
+  return {parts,topics,passages};
+}
 function mockBankFilteredRows(){
-  const f=mockBankFilters;
-  const q=mockBankNorm(f.search);
+  const f=mockBankFilters; const q=mockBankNorm(f.search); const medium=mockBankMediumKey(f.medium); const part=String(f.part||'').toUpperCase();
   return mockBankCache.filter(x=>{
-    const lang=String(x.language||'').toUpperCase();
-    const part=String(x.part_code||'').toUpperCase();
-    const topic=String(x.topic||'').trim();
-    const passage=String(x.passage_title||x.passage_id||'').trim();
-    if(f.medium && lang!==String(f.medium).toUpperCase()) return false;
-    if(f.part && part!==String(f.part).toUpperCase()) return false;
-    if(f.topic && topic!==f.topic) return false;
-    if(f.passage && passage!==f.passage) return false;
-    if(f.status==='active' && x.active===false) return false;
-    if(f.status==='inactive' && x.active!==false) return false;
-    if(q){
-      const hay=[x.question_text,x.option_a,x.option_b,x.option_c,x.option_d,x.topic,x.passage_title,x.passage_text,x.passage_id,x.part_code,x.language].map(v=>String(v??'')).join(' ').toLowerCase();
-      if(!hay.includes(q)) return false;
-    }
+    const lang=String(x.language||'').toUpperCase(); const xp=String(x.part_code||'').toUpperCase();
+    const topic=String(x.topic||'').trim(); const passage=String(x.passage_title||x.passage_id||'').trim();
+    if(medium==='COMMON'){if(!(lang==='COMMON'||!lang||xp.startsWith('MAT_')))return false;} else if(medium){if(lang!==medium)return false;}
+    if(part && xp!==part)return false;
+    if(f.topic && topic!==f.topic)return false;
+    if(f.passage && passage!==f.passage)return false;
+    if(f.status==='active' && x.active===false)return false;
+    if(f.status==='inactive' && x.active!==false)return false;
+    if(q){const hay=[x.question_text,x.option_a,x.option_b,x.option_c,x.option_d,x.topic,x.passage_title,x.passage_text,x.passage_id,x.part_code,x.language].map(v=>String(v??'')).join(' ').toLowerCase();if(!hay.includes(q))return false;}
     return true;
   });
 }
 function applyMockBankFilters(){
-  mockBankFilters={
-    medium:document.getElementById('mbfMedium')?.value||'',
-    part:document.getElementById('mbfPart')?.value||'',
-    topic:document.getElementById('mbfTopic')?.value||'',
-    passage:document.getElementById('mbfPassage')?.value||'',
-    status:document.getElementById('mbfStatus')?.value||'active',
-    search:document.getElementById('mbfSearch')?.value||''
-  };
+  mockBankFilters={medium:document.getElementById('mbfMedium')?.value||'',part:document.getElementById('mbfPart')?.value||'',topic:document.getElementById('mbfTopic')?.value||'',passage:document.getElementById('mbfPassage')?.value||'',status:document.getElementById('mbfStatus')?.value||'active',search:document.getElementById('mbfSearch')?.value||''};
   renderMockBankManager();
+}
+function mockBankMediumChanged(v){
+  mockBankFilters.medium=v||''; mockBankFilters.part=''; mockBankFilters.topic=''; mockBankFilters.passage=''; renderMockBankManager();
+}
+function mockBankPartChanged(v){
+  mockBankFilters.part=v||''; mockBankFilters.topic=''; mockBankFilters.passage=''; renderMockBankManager();
 }
 function resetMockBankFilters(){mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''};renderMockBankManager();}
 function renderMockBankManager(){
-  const data=mockBankCache||[];
-  const rows=mockBankFilteredRows();
-  const counts={}; const groups={};
+  const data=mockBankCache||[]; const rows=mockBankFilteredRows(); const counts={}; const groups={};
   data.forEach(x=>{if(x.active!==false){counts[x.part_code]=(counts[x.part_code]||0)+1;if(x.passage_id){const k=x.part_code+'::'+x.passage_id;groups[k]=(groups[k]||0)+1;}}});
-  const topics=mockBankUnique(data.map(x=>x.topic));
-  const passages=mockBankUnique(data.map(x=>x.passage_title||x.passage_id));
-  const parts=mockBankUnique(data.map(x=>x.part_code));
-  const media=mockBankUnique(data.map(x=>x.language));
-  const sel=(id,value,options,placeholder)=>`<select id="${id}"><option value="">${placeholder}</option>${options.map(v=>`<option value="${esc(v)}" ${String(value)===String(v)?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
+  const medium=mockBankMediumKey(mockBankFilters.medium); const opts=mockBankDynamicOptions();
+  const commonSelected=medium==='COMMON'; const languageSelected=medium==='ASSAMESE'||medium==='ENGLISH';
+  const sel=(id,value,options,placeholder,onchange='')=>`<select id="${id}" ${onchange?`onchange="${onchange}"`:''}><option value="">${placeholder}</option>${options.map(v=>{const val=typeof v==='string'?v:v.value,label=typeof v==='string'?v:v.label;return `<option value="${esc(val)}" ${String(value)===String(val)?'selected':''}>${esc(label)}</option>`}).join('')}</select>`;
   render(`<div class="wrap">${header('Manage Mock Question Bank')}
     <div class="card">
-      <div class="notice small"><b>Filter the question bank before viewing questions.</b> Select one or more criteria. The filters affect only this management view; they do not delete or modify questions.</div>
+      <div class="notice small"><b>Filter the question bank before viewing questions.</b> First select the <b>Medium</b>. The available Part choices then change automatically.</div>
       <div class="grid" style="margin-top:12px">
-        <div><label>Medium</label>${sel('mbfMedium',mockBankFilters.medium,media.map(mockBankDisplayLanguage),'All Mediums')}</div>
-        <div><label>Part / Question Bank</label>${sel('mbfPart',mockBankFilters.part,parts.map(mockPartLabel),'All Parts')}</div>
-        <div><label>Topic</label>${sel('mbfTopic',mockBankFilters.topic,topics,'All Topics')}</div>
-        <div><label>Passage</label>${sel('mbfPassage',mockBankFilters.passage,passages,'All Passages')}</div>
+        <div><label>Medium</label><select id="mbfMedium" onchange="mockBankMediumChanged(this.value)"><option value="">Select Medium</option><option value="COMMON" ${medium==='COMMON'?'selected':''}>Common (MAT)</option><option value="ENGLISH" ${medium==='ENGLISH'?'selected':''}>English</option><option value="ASSAMESE" ${medium==='ASSAMESE'?'selected':''}>Assamese</option></select></div>
+        <div><label>Part</label>${sel('mbfPart',mockBankFilters.part,opts.parts,'Select Part','mockBankPartChanged(this.value)')}</div>
+        <div style="${commonSelected?'display:none':'display:block'}"><label>Topic</label>${sel('mbfTopic',mockBankFilters.topic,opts.topics,'All Topics')}</div>
+        <div style="${commonSelected?'display:none':'display:block'}"><label>Passage</label>${sel('mbfPassage',mockBankFilters.passage,opts.passages,'All Passages')}</div>
         <div><label>Status</label><select id="mbfStatus"><option value="active" ${mockBankFilters.status==='active'?'selected':''}>Active Only</option><option value="" ${!mockBankFilters.status?'selected':''}>All Questions</option><option value="inactive" ${mockBankFilters.status==='inactive'?'selected':''}>Inactive Only</option></select></div>
         <div><label>Search</label><input id="mbfSearch" value="${esc(mockBankFilters.search)}" placeholder="Question, option, topic, passage..."></div>
       </div>
+      ${!medium?'<div class="notice small" style="margin-top:12px">Please select <b>Common (MAT)</b>, <b>English</b> or <b>Assamese</b> to view the corresponding question bank.</div>':''}
+      ${languageSelected?'<div class="small muted" style="margin-top:8px">English/Assamese mode: Arithmetic, EVS-MCQ, ENS-Passage and Language are available. Passage choices are restricted to the selected language.</div>':''}
+      ${commonSelected?'<div class="small muted" style="margin-top:8px">Common (MAT) mode: Topic and Passage filters are hidden. Select one of the five MAT parts.</div>':''}
       <div class="actions" style="margin-top:12px"><button onclick="applyMockBankFilters()">🔎 Apply Filters</button><button class="secondary" onclick="resetMockBankFilters()">↺ Reset</button><span class="small muted" style="align-self:center">Showing <b>${rows.length}</b> of <b>${data.length}</b> question(s)</span></div>
     </div>
     <div class="card">
@@ -593,12 +611,8 @@ function renderMockBankManager(){
 }
 async function mockBankSummary(){
   const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
-  if(error)return alert(error.message);
-  mockBankCache=data||[];
-  mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''};
-  renderMockBankManager();
+  if(error)return alert(error.message); mockBankCache=data||[]; mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''}; renderMockBankManager();
 }
-
 
 let qpState={bank:[],mode:'questions',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),lastRows:null,lastSignature:'',lastSerial:'',setCode:'A'};
 function qpNorm(v){return String(v??'').trim()}
