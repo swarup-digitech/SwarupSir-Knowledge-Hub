@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script src="https://unpkg.com/mathlive/dist/mathlive.min.js"></script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
-.eq-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 7px}.eq-toolbar button{padding:7px 11px;font-size:13px}.eq-hint{font-size:12px;color:#64748b}.eq-preview{margin:6px 0 10px;padding:9px 11px;border:1px dashed #cbd5e1;border-radius:9px;background:#f8fafc;min-height:24px;white-space:normal}.math-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:99999;padding:15px}.math-modal-card{width:min(820px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.28)}.math-modal-card math-field{display:block;width:100%;min-height:72px;font-size:30px;border:1px solid #cbd5e1;border-radius:10px;padding:12px;background:#fff}.math-symbols{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.math-symbols button{padding:7px 10px;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:8px}.math-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
+.eq-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 7px}.eq-toolbar button{padding:7px 11px;font-size:13px}.eq-hint{font-size:12px;color:#64748b}.eq-preview{margin:6px 0 10px;padding:9px 11px;border:1px dashed #cbd5e1;border-radius:9px;background:#f8fafc;min-height:24px;white-space:normal}.math-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:99999;padding:15px}.math-modal-card{width:min(820px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.28)}.math-editor-input{display:block;width:100%;min-height:110px;font-size:22px;line-height:1.5;border:1px solid #cbd5e1;border-radius:10px;padding:12px;background:#fff;resize:vertical;font-family:Arial,sans-serif}.math-live-preview{margin-top:10px;min-height:55px;border:1px dashed #cbd5e1;border-radius:10px;padding:12px;background:#f8fafc;font-size:24px}.math-symbols{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.math-symbols button{padding:7px 10px;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:8px} .mathfield-shell{border:1px solid #cbd5e1;border-radius:12px;background:#fff;padding:4px;margin-top:10px;box-shadow:inset 0 1px 2px #00000008}.mathfield-shell math-field{display:block;width:100%;min-height:105px;padding:18px 14px;font-size:30px;border:0;outline:0;background:#fff;border-radius:10px;--selection-background-color:#dbeafe;--contains-highlight-background-color:#eff6ff;--caret-color:#2563eb}.mathfield-status{font-size:12px;color:#64748b;margin-top:7px}.mathfield-latex{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px dashed #cbd5e1;font-family:Consolas,monospace;font-size:13px;word-break:break-all}.math-modal-card.math-visual{width:min(900px,97vw)}.math-help{font-size:13px;color:#475569;margin:8px 0}.math-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
 const SUPABASE_URL='https://jupefjdquakqsizapzbv.supabase.co',SUPABASE_KEY='sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP',CREATE_STUDENT_FN='create-students';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let teacher=null,students=[],classes=[],groups=[],assessments=[],bulkRows=[];
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -530,13 +530,22 @@ async function editQuestions(id){
  <div class="actions" style="margin-top:10px"><button onclick="editAssessmentDetails('${id}')">⚙ Edit Assessment</button><button onclick="bulkQuestionUpload('${id}')" style="background:#16a34a">📥 Bulk Questions Upload</button><button onclick="reviewAssessment('${id}')">📊 Review Submissions</button><button class="secondary" onclick="home()">← Dashboard</button></div></div>
  <div id="qbox">${(q||[]).map(x=>{const sols=smap.get(x.id)||[];return `<div class="student-card" id="qcard_${x.id}">
    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><label style="margin:0">Question ${x.question_order}</label><span class="tag">${Number(x.marks)||0} Marks</span></div>
-   ${x.question_image_url?`<div style="margin:8px 0 12px;text-align:center"><img src="${esc(x.question_image_url)}" alt="Question ${x.question_order}" style="max-width:100%;max-height:650px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px;padding:6px"></div><div class="small muted">Image question — Assamese/PDF content is stored as an image.</div>`:`<label>Question Text</label><textarea id="qt_${x.id}" rows="4">${esc(x.question_text||'')}</textarea>`}
+   ${x.question_image_url?`<div style="margin:8px 0 12px;text-align:center"><img src="${esc(x.question_image_url)}" alt="Question ${x.question_order}" style="max-width:100%;max-height:650px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px;padding:6px"></div><div class="small muted">Image question — Assamese/PDF content is stored as an image.</div>`:`<label>Question Text</label>
+   <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qt_${x.id}')">∑ Equation Editor</button><span class="eq-hint">Visual math editor</span></div>
+   <textarea id="qt_${x.id}" rows="4" oninput="qbRefreshMathPreview('qt_prev_${x.id}',this.value)">${esc(x.question_text||'')}</textarea>
+   <div id="qt_prev_${x.id}" class="eq-preview">${qbMathPreview(x.question_text||'')}</div>`}
    <label>Marks</label><input id="qm_${x.id}" type="number" min="0" step="0.5" value="${esc(x.marks)}">
-   <label>Hint (optional)</label><textarea id="qh_${x.id}" rows="2" placeholder="Helpful clue without giving the answer...">${esc(x.hint||'')}</textarea>
+   <label>Hint (optional)</label>
+   <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qh_${x.id}')">∑ Equation Editor</button><span class="eq-hint">Visual math editor</span></div>
+   <textarea id="qh_${x.id}" rows="2" placeholder="Helpful clue without giving the answer..." oninput="qbRefreshMathPreview('qh_prev_${x.id}',this.value)">${esc(x.hint||'')}</textarea>
+   <div id="qh_prev_${x.id}" class="eq-preview">${qbMathPreview(x.hint||'')}</div>
    <div class="actions" style="margin-top:9px"><button onclick="saveQ('${x.id}','${id}')">💾 Save Question</button><button class="secondary" onclick="document.getElementById('sol_${x.id}').open=true">📚 Solutions (${sols.length})</button><button class="danger" onclick="delQ('${x.id}','${id}')">Delete</button></div>
    <details id="sol_${x.id}" style="margin-top:10px;border:1px solid #dbe3ee;border-radius:12px;padding:10px;background:#f8fafc"><summary style="cursor:pointer;font-weight:700">📚 Solution Manager</summary>
     <div class="notice small" style="margin-top:10px">Solutions are shown to a student only when <b>the student's answer for this question is reviewed</b> and <b>Show solution to students</b> is enabled.</div>
-    <label>Written Explanation</label><textarea id="st_${x.id}" rows="5" placeholder="Step-by-step solution...">${esc((sols.find(s=>s.solution_type==='text')||{}).content||'')}</textarea>
+    <label>Written Explanation</label>
+    <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('st_${x.id}')">∑ Equation Editor</button><span class="eq-hint">Visual math editor</span></div>
+    <textarea id="st_${x.id}" rows="5" placeholder="Step-by-step solution..." oninput="qbRefreshMathPreview('st_prev_${x.id}',this.value)">${esc((sols.find(s=>s.solution_type==='text')||{}).content||'')}</textarea>
+    <div id="st_prev_${x.id}" class="eq-preview">${qbMathPreview((sols.find(s=>s.solution_type==='text')||{}).content||'')}</div>
     <div class="actions" style="margin-top:8px"><button onclick="saveWrittenSolution('${x.id}','${id}')">💾 Save Written Explanation</button></div>
     <label style="margin-top:12px">YouTube Solution Video</label><input id="sv_${x.id}" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${esc((sols.find(s=>s.solution_type==='youtube')||{}).youtube_url||'')}">
     <div class="actions" style="margin-top:8px"><button onclick="saveVideoSolution('${x.id}','${id}')">🎥 Save YouTube Video</button></div>
@@ -546,6 +555,7 @@ async function editQuestions(id){
     <div id="solList_${x.id}" style="margin-top:8px">${solutionListHtml(x.id,sols)}</div>
    </details>
  </div>`}).join('')||'<div class="card"><div class="notice">No questions have been added yet.</div></div>'}</div>`;
+ if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
 }
 async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return alert(error.message);editQuestions(id)}
 async function saveQ(qid,aid){
@@ -1039,50 +1049,136 @@ function qbInsertAtCursor(textarea,text){
   const pos=start+text.length;textarea.focus();textarea.setSelectionRange(pos,pos);
   textarea.dispatchEvent(new Event('input',{bubbles:true}));
 }
-function qbCloseMathEditor(){document.getElementById('qbMathModal')?.remove()}
+let qbMathEditorState={target:null,start:0,end:0};
+function qbCloseMathEditor(){
+  const modal=document.getElementById('qbMathModal');
+  if(modal) modal.remove();
+  try{window.mathVirtualKeyboard?.hide?.()}catch(e){}
+  qbMathEditorState={target:null,start:0,end:0};
+}
 function qbOpenMathEditor(targetId){
-  const target=document.getElementById(targetId);if(!target)return;
+  const target=document.getElementById(targetId);
+  if(!target){alert('Question text box not found. Please refresh the page and try again.');return;}
   qbCloseMathEditor();
-  const modal=document.createElement('div');modal.id='qbMathModal';modal.className='math-modal';
-  modal.innerHTML=`<div class="math-modal-card">
-    <h3 style="margin:0 0 5px">∑ Insert Mathematics Equation</h3>
-    <div class="small muted" style="margin-bottom:9px">Use the visual editor. The equation will be inserted at the cursor position.</div>
-    <math-field id="qbMathField" virtual-keyboard-mode="manual"></math-field>
-    <div class="math-symbols">
-      <button type="button" onclick="qbMathPreset('frac')">Fraction</button>
-      <button type="button" onclick="qbMathPreset('sqrt')">√ Root</button>
-      <button type="button" onclick="qbMathPreset('power')">x² Power</button>
-      <button type="button" onclick="qbMathPreset('subscript')">x₂ Subscript</button>
-      <button type="button" onclick="qbMathPreset('angle')">∠ Angle</button>
-      <button type="button" onclick="qbMathPreset('sin')">sin</button>
-      <button type="button" onclick="qbMathPreset('cos')">cos</button>
-      <button type="button" onclick="qbMathPreset('tan')">tan</button>
-      <button type="button" onclick="qbMathPreset('pi')">π</button>
-      <button type="button" onclick="qbMathPreset('theta')">θ</button>
-      <button type="button" onclick="qbMathPreset('degree')">°</button>
+  qbMathEditorState={
+    target:target,
+    start:Number.isFinite(target.selectionStart)?target.selectionStart:target.value.length,
+    end:Number.isFinite(target.selectionEnd)?target.selectionEnd:target.value.length
+  };
+  const modal=document.createElement('div');
+  modal.id='qbMathModal';
+  modal.className='math-modal';
+  modal.innerHTML=`<div class="math-modal-card math-visual" role="dialog" aria-modal="true" aria-labelledby="qbMathTitle">
+    <h3 id="qbMathTitle" style="margin:0 0 4px">∑ Mathematics Equation Editor</h3>
+    <div class="math-help">Type directly in the equation field. Fractions, powers, roots, trigonometry, symbols, matrices and other mathematical structures are entered visually.</div>
+    <div class="mathfield-shell">
+      <math-field id="qbMathField" smart-mode="on" smart-superscript="on" letter-shape-style="tex" math-virtual-keyboard-policy="auto"></math-field>
     </div>
-    <div class="small muted">You can also type directly in the equation box. Examples: <code>x^2+5x+6=0</code>, <code>\frac{a+b}{c}</code>, <code>\sin^2 A+\cos^2 A=1</code>.</div>
-    <div class="math-modal-actions"><button type="button" class="secondary" onclick="qbCloseMathEditor()">Cancel</button><button type="button" onclick="qbConfirmMathEditor('${targetId}')">Insert Equation</button></div>
+    <div class="mathfield-status" id="qbMathStatus">Loading mathematics editor…</div>
+    <div class="math-symbols">
+      <button type="button" data-mf="frac">Fraction</button>
+      <button type="button" data-mf="sqrt">√ Root</button>
+      <button type="button" data-mf="power">x²</button>
+      <button type="button" data-mf="subscript">x₂</button>
+      <button type="button" data-mf="angle">∠</button>
+      <button type="button" data-mf="sin">sin</button>
+      <button type="button" data-mf="cos">cos</button>
+      <button type="button" data-mf="tan">tan</button>
+      <button type="button" data-mf="log">log</button>
+      <button type="button" data-mf="pi">π</button>
+      <button type="button" data-mf="theta">θ</button>
+      <button type="button" data-mf="degree">°</button>
+      <button type="button" data-mf="pm">±</button>
+      <button type="button" data-mf="sum">∑</button>
+      <button type="button" data-mf="integral">∫</button>
+      <button type="button" data-mf="matrix">Matrix</button>
+    </div>
+    <div class="mathfield-latex" id="qbMathLatex">LaTeX: —</div>
+    <div class="math-modal-actions">
+      <button type="button" id="qbMathCancel" class="secondary">Cancel</button>
+      <button type="button" id="qbMathInsert">Insert Equation</button>
+    </div>
   </div>`;
   document.body.appendChild(modal);
-  const mf=document.getElementById('qbMathField');mf.focus();
+
+  const init=()=>{
+    const mf=document.getElementById('qbMathField');
+    const insertBtn=document.getElementById('qbMathInsert');
+    const cancelBtn=document.getElementById('qbMathCancel');
+    const status=document.getElementById('qbMathStatus');
+    const latexBox=document.getElementById('qbMathLatex');
+    if(!mf||!insertBtn||!cancelBtn){alert('Equation editor could not be initialized.');qbCloseMathEditor();return;}
+    // Restore an existing equation only when the whole selected text is a single math token.
+    const selected=target.value.slice(qbMathEditorState.start,qbMathEditorState.end).trim();
+    if(selected.startsWith('\\(')&&selected.endsWith('\\)')) mf.value=selected.slice(2,-2);
+    else if(selected.startsWith('$$')&&selected.endsWith('$$')) mf.value=selected.slice(2,-2);
+    else mf.value='';
+    status.textContent='Ready — click inside the equation and type.';
+    const update=()=>{latexBox.textContent='LaTeX: '+(mf.value||'—');};
+    mf.addEventListener('input',update);
+    insertBtn.addEventListener('click',()=>qbConfirmMathEditor());
+    cancelBtn.addEventListener('click',qbCloseMathEditor);
+    modal.addEventListener('click',e=>{if(e.target===modal)qbCloseMathEditor()});
+    modal.querySelectorAll('[data-mf]').forEach(btn=>btn.addEventListener('click',()=>qbMathFieldCommand(btn.dataset.mf)));
+    update();
+    // Explicitly focus after the custom element has upgraded.
+    requestAnimationFrame(()=>{try{mf.focus();}catch(e){}});
+  };
+  if(customElements?.whenDefined){
+    customElements.whenDefined('math-field').then(init).catch(()=>init());
+  }else init();
 }
-function qbMathCmd(value){const mf=document.getElementById('qbMathField');if(!mf)return;mf.insert(value);mf.focus()}
-function qbMathPreset(name){const map={frac:'\\frac{#@}{#@}',sqrt:'\\sqrt{#@}',power:'x^{#@}',subscript:'x_{#@}',angle:'\\angle #@',sin:'\\sin #@',cos:'\\cos #@',tan:'\\tan #@',pi:'\\pi',theta:'\\theta',degree:'^\\circ'};qbMathCmd(map[name]||'')}
-function qbConfirmMathEditor(targetId){
-  const mf=document.getElementById('qbMathField'),target=document.getElementById(targetId);if(!mf||!target)return;
-  const latex=(mf.getValue('latex')||'').trim();if(!latex)return alert('Please enter an equation first.');
-  qbInsertAtCursor(target,'\\('+latex+'\\)');qbCloseMathEditor();
+function qbMathFieldCommand(name){
+  const mf=document.getElementById('qbMathField');
+  if(!mf)return;
+  const commands={
+    frac:['insert','\\frac{#0}{#?}'],
+    sqrt:['insert','\\sqrt{#0}'],
+    power:['insert','^{#?}'],
+    subscript:['insert','_{#?}'],
+    angle:['insert','\\angle '],
+    sin:['insert','\\sin '],
+    cos:['insert','\\cos '],
+    tan:['insert','\\tan '],
+    log:['insert','\\log '],
+    pi:['insert','\\pi'],
+    theta:['insert','\\theta'],
+    degree:['insert','^{\\circ}'],
+    pm:['insert','\\pm'],
+    sum:['insert','\\sum_{i=1}^{n}'],
+    integral:['insert','\\int_{a}^{b}'],
+    matrix:['insert','\\begin{pmatrix}#0&#?\\\\#?&#?\\end{pmatrix}']
+  };
+  const cmd=commands[name];
+  try{if(cmd)mf.executeCommand(cmd);else mf.focus();}catch(e){try{mf.focus();}catch(_) {}}
+}
+function qbConfirmMathEditor(){
+  const mf=document.getElementById('qbMathField');
+  const state=qbMathEditorState||{};
+  const target=state.target;
+  if(!mf||!target){alert('Question text box is no longer available. Please close the editor and try again.');return;}
+  const latex=(mf.value||'').trim();
+  if(!latex){alert('Please enter a mathematical expression first.');try{mf.focus()}catch(e){};return;}
+  const start=Math.max(0,Math.min(Number(state.start)||0,target.value.length));
+  const end=Math.max(start,Math.min(Number(state.end)||start,target.value.length));
+  const insertion='\\('+latex+'\\)';
+  target.focus();
+  if(typeof target.setRangeText==='function') target.setRangeText(insertion,start,end,'end');
+  else target.value=target.value.slice(0,start)+insertion+target.value.slice(end);
+  target.dispatchEvent(new Event('input',{bubbles:true}));
+  target.dispatchEvent(new Event('change',{bubbles:true}));
+  qbCloseMathEditor();
+  target.focus();
 }
 function qbRenderBlocks(){const el=document.getElementById('qbBlocks');if(!el)return;el.innerHTML=qbEditorBlocks.map((b,i)=>`<div class="student-card" style="position:relative">
   <div class="actions" style="justify-content:space-between"><b>${i+1}. ${b.block_type}</b><span><button class="secondary" onclick="qbMoveBlock(${i},-1)">↑</button> <button class="secondary" onclick="qbMoveBlock(${i},1)">↓</button> <button class="danger" onclick="qbRemoveBlock(${i})">Delete</button></span></div>
   ${b.block_type==='TEXT'?`
     <label>English</label>
-    <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_en_${i}')">∑ Insert Equation</button><span class="eq-hint">Fractions, powers, roots, trigonometry, angles, etc.</span></div>
+    <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_en_${i}')">∑ Equation Editor</button><span class="eq-hint">Visual math editor</span></div>
     <textarea id="qb_en_${i}" rows="4" oninput="qbEditorBlocks[${i}].text_en=this.value;qbRefreshMathPreview('qb_prev_en_${i}',this.value)">${qbEsc(b.text_en||'')}</textarea>
     <div id="qb_prev_en_${i}" class="eq-preview">${qbMathPreview(b.text_en||'')}</div>
     <label>Assamese</label>
-    <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_as_${i}')">∑ Insert Equation</button><span class="eq-hint">অসমীয়া প্ৰশ্নৰ মাজতো equation যোগ কৰিব পাৰিব।</span></div>
+    <div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_as_${i}')">∑ Equation Editor</button><span class="eq-hint">দৃশ্যমান গণিত সম্পাদক</span></div>
     <textarea id="qb_as_${i}" rows="4" oninput="qbEditorBlocks[${i}].text_as=this.value;qbRefreshMathPreview('qb_prev_as_${i}',this.value)">${qbEsc(b.text_as||'')}</textarea>
     <div id="qb_prev_as_${i}" class="eq-preview">${qbMathPreview(b.text_as||'')}</div>`:`<img src="${qbEsc(b.image_url||'')}" style="display:block;max-width:100%;width:${Number(b.image_width||70)}%;margin:8px auto;border:1px solid #dbe3ee;border-radius:8px"><label>Image Width (%)</label><input type="number" min="20" max="100" value="${Number(b.image_width||70)}" oninput="qbEditorBlocks[${i}].image_width=this.value"><label>Alt text</label><input value="${qbEsc(b.alt_text||'')}" oninput="qbEditorBlocks[${i}].alt_text=this.value">`}
  </div>`).join('');
@@ -1091,7 +1187,7 @@ function qbRenderBlocks(){const el=document.getElementById('qbBlocks');if(!el)re
 function qbMoveBlock(i,d){const j=i+d;if(j<0||j>=qbEditorBlocks.length)return;[qbEditorBlocks[i],qbEditorBlocks[j]]=[qbEditorBlocks[j],qbEditorBlocks[i]];qbRenderBlocks()}
 function qbRemoveBlock(i){qbEditorBlocks.splice(i,1);qbRenderBlocks()}
 function qbAddOption(){qbEditorOptions.push({option_label:String.fromCharCode(65+qbEditorOptions.length),option_text_en:'',option_text_as:'',is_correct:false,image_url:null});qbRenderOptions()}
-function qbRenderOptions(){const el=document.getElementById('qbOptions');if(!el)return;el.innerHTML=qbEditorOptions.map((o,i)=>`<div class="student-card"><div class="grid"><div><label>Option ${o.option_label}</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_opt_en_${i}')">∑ Equation</button></div><textarea id="qb_opt_en_${i}" rows="2" oninput="qbEditorOptions[${i}].option_text_en=this.value;qbRefreshMathPreview('qb_opt_prev_en_${i}',this.value)">${qbEsc(o.option_text_en||'')}</textarea><div id="qb_opt_prev_en_${i}" class="eq-preview">${qbMathPreview(o.option_text_en||'')}</div></div><div><label>Assamese</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_opt_as_${i}')">∑ Equation</button></div><textarea id="qb_opt_as_${i}" rows="2" oninput="qbEditorOptions[${i}].option_text_as=this.value;qbRefreshMathPreview('qb_opt_prev_as_${i}',this.value)">${qbEsc(o.option_text_as||'')}</textarea><div id="qb_opt_prev_as_${i}" class="eq-preview">${qbMathPreview(o.option_text_as||'')}</div></div></div><label><input type="radio" name="qbCorrect" ${o.is_correct?'checked':''} onchange="qbEditorOptions.forEach(x=>x.is_correct=false);qbEditorOptions[${i}].is_correct=true"> Correct answer</label></div>`).join('');if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([el]).catch(()=>{})}
+function qbRenderOptions(){const el=document.getElementById('qbOptions');if(!el)return;el.innerHTML=qbEditorOptions.map((o,i)=>`<div class="student-card"><div class="grid"><div><label>Option ${o.option_label}</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_opt_en_${i}')">∑ Equation Editor</button></div><textarea id="qb_opt_en_${i}" rows="2" oninput="qbEditorOptions[${i}].option_text_en=this.value;qbRefreshMathPreview('qb_opt_prev_en_${i}',this.value)">${qbEsc(o.option_text_en||'')}</textarea><div id="qb_opt_prev_en_${i}" class="eq-preview">${qbMathPreview(o.option_text_en||'')}</div></div><div><label>Assamese</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="qbOpenMathEditor('qb_opt_as_${i}')">∑ Equation Editor</button></div><textarea id="qb_opt_as_${i}" rows="2" oninput="qbEditorOptions[${i}].option_text_as=this.value;qbRefreshMathPreview('qb_opt_prev_as_${i}',this.value)">${qbEsc(o.option_text_as||'')}</textarea><div id="qb_opt_prev_as_${i}" class="eq-preview">${qbMathPreview(o.option_text_as||'')}</div></div></div><label><input type="radio" name="qbCorrect" ${o.is_correct?'checked':''} onchange="qbEditorOptions.forEach(x=>x.is_correct=false);qbEditorOptions[${i}].is_correct=true"> Correct answer</label></div>`).join('');if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([el]).catch(()=>{})}
 async function qbSave(){
   if(!qbChapters.length)return alert('Create at least one chapter first.');
   if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
