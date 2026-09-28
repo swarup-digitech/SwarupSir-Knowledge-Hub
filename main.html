@@ -141,7 +141,7 @@ const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let schoolTeacherMode=false;
 let current=null,profile=null,active=null,answers=[],videoDone=false;
 let studentRefreshTimer=null, studentDashboardSnapshot=null;
-let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={}, importedSingleExcel=false, importedForNewAssignment=false;
+let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={}, importedSingleExcel=false, importedForNewAssignment=false, importedSolutionPdfPages=[];
 let newAssignmentDraft=null;
 let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
@@ -3104,7 +3104,19 @@ async function saveAssignment(){
  let qs=[];
  if(importedForNewAssignment&&importedQuestions.length){
    const imageMode=importedQuestions.some(q=>q.image_mode);
-   qs=importedQuestions.map((q,i)=>{const n=importedSingleExcel?(q.sourceNo||i+1):(i+1);return {assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question.trim(),option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[n],explanation:importedExplanations[n]||null,question_order:i+1,image_url:imageMode?q.image_data:null}});
+   if(importedSolutionPdfPages.length && importedSolutionPdfPages.length!==importedQuestions.length){await sb.from("assignments").delete().eq("id",a.id);return alert(`Solution PDF page count (${importedSolutionPdfPages.length}) must exactly match the Questions PDF page count (${importedQuestions.length}).`)}
+   qs=importedQuestions.map((q,i)=>{const n=importedSingleExcel?(q.sourceNo||i+1):(i+1);return {assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question.trim(),option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[n],explanation:importedExplanations[n]||null,question_order:i+1,image_url:imageMode?q.image_data:null,solution_image_url:null}});
+   if(importedSolutionPdfPages.length){
+     try{
+       for(let i=0;i<importedSolutionPdfPages.length;i++){
+         const path=`${current.id}/${a.id}/solution-${i+1}-${crypto.randomUUID()}.jpg`;
+         const blob=await (await fetch(importedSolutionPdfPages[i].image_data)).blob();
+         const {error:ue}=await sb.storage.from("assignment-solution-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});
+         if(ue)throw ue;
+         qs[i].solution_image_url=sb.storage.from("assignment-solution-images").getPublicUrl(path).data.publicUrl;
+       }
+     }catch(solutionError){await sb.from("assignments").delete().eq("id",a.id);return alert("Could not upload solution images: "+solutionError.message)}
+   }
  }else{
    qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
  }
@@ -3112,7 +3124,7 @@ async function saveAssignment(){
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}
  try{const rows=recipientInfo.studentIds.map(student_id=>({assignment_id:a.id,student_id}));const {error:re}=await sb.from("assignment_students").insert(rows);if(re)throw re}catch(e){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
  alert(`${type==="video"?"Video":"No-video"} assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);
- importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;
+ importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];
  teacherHome()
 }
 
@@ -3134,7 +3146,7 @@ function startBulkImportFromNewAssignment(){
  bulkImportMCQs();
 }
 async function bulkImportMCQs(){
- importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;
+ importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedSolutionPdfPages=[];
  render(`<div class="wrap">${header("Import MCQs")}<div class="card">
  <h2>Choose an upload method</h2>
  <p class="muted">You can use either method. Method 1 keeps the existing PDF + Excel workflow. Method 2 treats every PDF page as an image, so Assamese and other non-Latin text is displayed exactly as it appears in the PDF.</p>
@@ -3151,6 +3163,9 @@ async function bulkImportMCQs(){
    <p class="small muted">Each page becomes an image. No OCR is used, so Assamese text, special symbols, fractions and mathematical notation remain visually correct.</p>
    <label>Questions PDF</label><input id="imagePdf" type="file" accept=".pdf" onchange="readImagePdf(event)">
    <label>Answer Key Excel (optional)</label><input id="imageAkey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
+   <label style="margin-top:12px">Solution PDF (optional — 1 solution page per question)</label><input id="imageSolutionPdf" type="file" accept=".pdf" onchange="readImageSolutionPdf(event)">
+   <div class="small muted" style="margin-top:5px">Each solution PDF page becomes a cropped image. Page 1 → Question 1, Page 2 → Question 2, etc. The solution PDF must have the same number of pages as the Questions PDF.</div>
+   <div id="imageSolutionPreview"></div>
    <div class="notice small">Excel is optional. If provided, use Question No + Correct Option + Explanation (optional). Otherwise choose the correct answer (A/B/C/D) on the next screen.</div>
   </div>
   <div class="card" style="border:2px solid #7c3aed;background:#faf7ff">
@@ -3221,6 +3236,33 @@ async function readImagePdf(ev){
   box.innerHTML=message(`Converted ${arr.length} PDF page${arr.length===1?"":"s"} to question images. Click Preview / Continue to set the answer key.`,true)
  }catch(e){box.innerHTML=message("PDF image conversion failed: "+(e.message||e))}
 }
+async function readImageSolutionPdf(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const box=document.getElementById("imageSolutionPreview");if(!box)return;
+ box.innerHTML=message("Converting solution PDF pages to cropped images…",true);
+ try{
+  const pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:await file.arrayBuffer()}).promise,arr=[];
+  for(let p=1;p<=pdf.numPages;p++){
+   const page=await pdf.getPage(p);
+   const base=page.getViewport({scale:1});
+   const maxWidth=1800;
+   const scale=Math.min(2.5,Math.max(1.6,maxWidth/base.width));
+   const viewport=page.getViewport({scale});
+   const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{alpha:false});
+   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+   ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+   await page.render({canvasContext:ctx,viewport}).promise;
+   const cropped=cropWhiteMargins(canvas);
+   arr.push({page:p,image_data:cropped.toDataURL("image/jpeg",0.93)});
+  }
+  importedSolutionPdfPages=arr;
+  const qCount=importedQuestions.length;
+  const mismatch=qCount>0 && qCount!==arr.length;
+  box.innerHTML=`<div class="${mismatch?'notice':'success'}">Prepared <b>${arr.length}</b> solution page(s) as cropped images.${mismatch?` <b>Warning:</b> Questions PDF currently has ${qCount} page(s), so the counts do not match.`:""}</div>
+   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px">${arr.slice(0,8).map(x=>`<div style="border:1px solid #dbe3ee;border-radius:10px;padding:6px;background:#fff"><img src="${x.image_data}" style="width:100%;display:block;border-radius:7px"><div class="small muted" style="text-align:center;margin-top:4px">Solution ${x.page}</div></div>`).join("")}</div>`;
+ }catch(e){importedSolutionPdfPages=[];box.innerHTML=message("Solution PDF conversion failed: "+(e.message||e));}
+}
+
 function parseQuestionText(text,pageNo){
  const clean=text.replace(/\s+/g," ").trim();
  const qmatch=clean.match(/^(?:Question\s*\d+\s*[:.)-]?\s*)?(.*?)(?=\s+A[.)]\s)/i);
@@ -3277,6 +3319,7 @@ function returnImportedToNewAssignment(){
  if(!importedQuestions.length)return alert("No imported questions are available.");
  const missing=importedQuestions.map((q,i)=>importedSingleExcel?(q.sourceNo||i+1):(i+1)).filter(n=>!importedAnswers[n]);
  if(missing.length)return alert("Please select the correct answer for question(s): "+missing.join(", "));
+ if(importedSolutionPdfPages.length && importedSolutionPdfPages.length!==importedQuestions.length)return alert(`Solution PDF page count (${importedSolutionPdfPages.length}) must exactly match the Questions PDF page count (${importedQuestions.length}).`);
  const imageMode=importedQuestions.some(q=>q.image_mode);
  if(!imageMode){const invalid=importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D);if(invalid.length)return alert("Some questions are incomplete. Please check the imported file.")}
  newAssignment();
@@ -3286,6 +3329,7 @@ async function saveImportedMCQs(){
  const imageMode=importedQuestions.some(q=>q.image_mode);
  const missing=importedQuestions.map((q,i)=>importedSingleExcel?(q.sourceNo||i+1):(i+1)).filter(n=>!importedAnswers[n]);
  if(missing.length)return alert("Please select the correct answer for question(s): "+missing.join(", "));
+ if(importedSolutionPdfPages.length && importedSolutionPdfPages.length!==importedQuestions.length)return alert(`Solution PDF page count (${importedSolutionPdfPages.length}) must exactly match the Questions PDF page count (${importedQuestions.length}).`);
  if(!imageMode){const invalid=importedQuestions.filter(q=>!q.question||!q.A||!q.B||!q.C||!q.D);if(invalid.length)return alert("Some PDF pages could not be read correctly. Use the Image per Page method for those questions.")}
  const {data:classes}=await sb.from("classes").select("id,name").eq("teacher_id",current.id).order("name");if(!classes?.length){alert("Create a class first.");return newClass()}
  render(`<div class="wrap">${header("Create Assignment from Imported MCQs")}<div class="card"><label>Class</label><select id="iac" onchange="loadImportedAssignmentStudents(this.value)">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
@@ -3307,10 +3351,20 @@ async function finishImportedAssignment(){
  if(!iat.value.trim())return alert("Enter an assignment title.");let studentIds;try{studentIds=await getImportedStudentIds(iac.value);if(!studentIds.length)return alert("Select at least one student or add students to this class.")}catch(e){return alert(e.message)}
  const {data:a,error}=await sb.from("assignments").insert({class_id:iac.value,title:iat.value.trim(),subject:ias.value.trim(),description:iad.value.trim(),video_url:iav.value.trim()||null,created_by:current.id}).select().single();if(error)return alert(error.message);
  const imageMode=importedQuestions.some(q=>q.image_mode);
- const qs=importedQuestions.map((q,i)=>({assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question,option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[importedSingleExcel?(q.sourceNo||i+1):(i+1)],explanation:importedExplanations[importedSingleExcel?(q.sourceNo||i+1):(i+1)]||null,question_order:i+1,image_url:imageMode?q.image_data:null}));
+ const qs=importedQuestions.map((q,i)=>({assignment_id:a.id,question_text:imageMode?"[IMAGE QUESTION]":q.question,option_a:imageMode?"Option A":q.A,option_b:imageMode?"Option B":q.B,option_c:imageMode?"Option C":q.C,option_d:imageMode?"Option D":q.D,correct_option:importedAnswers[importedSingleExcel?(q.sourceNo||i+1):(i+1)],explanation:importedExplanations[importedSingleExcel?(q.sourceNo||i+1):(i+1)]||null,question_order:i+1,image_url:imageMode?q.image_data:null,solution_image_url:null}));
+ if(importedSolutionPdfPages.length){
+   for(let i=0;i<importedSolutionPdfPages.length;i++){
+     const path=`${current.id}/${a.id}/solution-${i+1}-${crypto.randomUUID()}.jpg`;
+     const blob=await (await fetch(importedSolutionPdfPages[i].image_data)).blob();
+     const {error:ue}=await sb.storage.from("assignment-solution-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});
+     if(ue){await sb.from("assignments").delete().eq("id",a.id);return alert("Could not upload solution image "+(i+1)+": "+ue.message);}
+     const {data:pu}=sb.storage.from("assignment-solution-images").getPublicUrl(path);
+     qs[i].solution_image_url=pu.publicUrl;
+   }
+ }
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert("Could not save imported questions: "+e.message)}
  const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:a.id,student_id}));const {error:ae}=await sb.from("assignment_students").insert(rows);if(ae){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment created, but student assignment failed: "+ae.message)}
- alert(`Assignment created and assigned to ${rows.length} student${rows.length===1?"":"s"}.`);teacherHome()
+ alert(`Assignment created and assigned to ${rows.length} student${rows.length===1?"":"s"}${importedSolutionPdfPages.length?` with ${importedSolutionPdfPages.length} solution image(s)`:""}.`);importedSolutionPdfPages=[];teacherHome()
 }
 async function uploadAssignmentQuestionImage(file, assignmentId){
   if(!file) return null;
@@ -3358,6 +3412,10 @@ function assignmentQuestionCardHtml(q,i){
       <input class="question-video-url" type="url" placeholder="https://www.youtube.com/watch?v=..." value="${esc(q.solution_video_url||'')}">
       <label style="font-weight:700;color:#334155">Explanation (optional)</label>
       <textarea class="question-explanation" placeholder="Explain why the answer is correct...">${esc(q.explanation||'')}</textarea>
+      <label style="font-weight:700;color:#7c3aed">Solution Image (optional)</label>
+      ${q.solution_image_url ? '<div style="margin:8px 0"><img src="' + esc(q.solution_image_url) + '" alt="Solution" style="display:block;width:100%;max-height:500px;object-fit:contain;border:1px solid #ddd6fe;border-radius:10px;background:#fff"></div>' : '<div class="small muted">No solution image attached.</div>'}
+      <input class="question-solution-image" type="file" accept="image/*">
+      <div class="small muted">Upload a replacement solution image for this question (maximum 10 MB).</div>
     </div>
     <div class="question-save-row">
       <button type="button" onclick="saveSingleEditedQuestion('${esc(q.assignment_id||'')}','${esc(q.id)}')">💾 Save This Question</button>
@@ -3420,13 +3478,14 @@ function getEditedQuestion(card){
     hint:card.querySelector('.question-hint')?.value?.trim()||null,
     solution_video_url:card.querySelector('.question-video-url')?.value?.trim()||null,
     explanation:card.querySelector('.question-explanation')?.value?.trim()||null,
+    solution_image_file:card.querySelector('.question-solution-image')?.files?.[0]||null,
     image_mode:type==='image'
   };
 }
 async function persistEditedQuestion(assignmentId,questionId,card){
   const payload=getEditedQuestion(card);
   let imageUrl=null;
-  const {data:old,error:oe}=await sb.from('questions').select('image_url').eq('id',questionId).eq('assignment_id',assignmentId).single();
+  const {data:old,error:oe}=await sb.from('questions').select('image_url,solution_image_url').eq('id',questionId).eq('assignment_id',assignmentId).single();
   if(oe)throw oe;
   imageUrl=old?.image_url||null;
   const type=payload.image_mode?'image':'text';
@@ -3441,7 +3500,18 @@ async function persistEditedQuestion(assignmentId,questionId,card){
     if(!payload.question_text.trim())throw new Error('Text question cannot be empty.');
   }
   delete payload.image_mode;
-  payload.image_url=imageUrl;
+  const solutionFile=payload.solution_image_file;delete payload.solution_image_file;
+  let solutionImageUrl=old?.solution_image_url||null;
+  if(solutionFile){
+    if(!solutionFile.type.startsWith("image/"))throw new Error("Solution must be an image file.");
+    if(solutionFile.size>10*1024*1024)throw new Error("Solution image size must be 10 MB or less.");
+    const ext=(solutionFile.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+    const path=`${current.id}/${assignmentId}/solution-${questionId}-${crypto.randomUUID()}.${ext}`;
+    const {error:ue}=await sb.storage.from("assignment-solution-images").upload(path,solutionFile,{contentType:solutionFile.type,upsert:false});
+    if(ue)throw ue;
+    solutionImageUrl=sb.storage.from("assignment-solution-images").getPublicUrl(path).data.publicUrl;
+  }
+  payload.image_url=imageUrl;payload.solution_image_url=solutionImageUrl;
   const {error}=await sb.from('questions').update(payload).eq('id',questionId).eq('assignment_id',assignmentId);
   if(error)throw error;
 }
@@ -3533,7 +3603,7 @@ async function viewAssignment(id){
  if(qe)return alert(qe.message);
  render(`<div class="wrap">${header(esc(a.title))}
  <div class="card"><p class="muted">${esc(a.subject||"")}</p>${a.video_url?`<iframe class="video" src="${esc(embed(a.video_url))}" allowfullscreen></iframe>`:""}</div>
- <div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>q.image_url?`<div class="assignment"><h3>Question ${i+1}</h3><img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:750px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px"><span class="tag">Answer: ${esc(q.correct_option)}</span>${q.hint?`<div class="hint-box"><b>Hint:</b> ${esc(q.hint)}</div>`:""}${q.explanation?`<div style="margin-top:10px;padding:10px 12px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px"><b style="color:#166534">Explanation:</b> ${esc(q.explanation)}</div>`:""}${q.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">Solution Video</b><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p><span class="tag">Answer: ${esc(q.correct_option)}</span>${q.hint?`<div class="hint-box"><b>Hint:</b> ${esc(q.hint)}</div>`:""}${q.explanation?`<div style="margin-top:10px;padding:10px 12px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px"><b style="color:#166534">Explanation:</b> ${esc(q.explanation)}</div>`:""}${q.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">Solution Video</b><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`).join("")}</div>
+ <div class="card"><h2>Questions (${qs?.length||0})</h2>${(qs||[]).map((q,i)=>q.image_url?`<div class="assignment"><h3>Question ${i+1}</h3><img src="${esc(q.image_url)}" alt="Question ${i+1}" style="display:block;width:100%;max-height:750px;object-fit:contain;border:1px solid #dbe3ee;border-radius:10px"><span class="tag">Answer: ${esc(q.correct_option)}</span>${q.hint?`<div class="hint-box"><b>Hint:</b> ${esc(q.hint)}</div>`:""}${q.explanation?`<div style="margin-top:10px;padding:10px 12px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px"><b style="color:#166534">Explanation:</b> ${esc(q.explanation)}</div>`:""}${q.solution_image_url?`<div style="margin-top:12px;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px"><b style="color:#6d28d9">Solution</b><img src="${esc(q.solution_image_url)}" alt="Solution" style="display:block;width:100%;max-height:700px;object-fit:contain;margin-top:8px;border-radius:8px"></div>`:""}${q.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">Solution Video</b><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`:`<div class="assignment"><b>${i+1}. ${esc(q.question_text)}</b><p>A. ${esc(q.option_a)}</p><p>B. ${esc(q.option_b)}</p><p>C. ${esc(q.option_c)}</p><p>D. ${esc(q.option_d)}</p><span class="tag">Answer: ${esc(q.correct_option)}</span>${q.hint?`<div class="hint-box"><b>Hint:</b> ${esc(q.hint)}</div>`:""}${q.explanation?`<div style="margin-top:10px;padding:10px 12px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px"><b style="color:#166534">Explanation:</b> ${esc(q.explanation)}</div>`:""}${q.solution_image_url?`<div style="margin-top:12px;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px"><b style="color:#6d28d9">Solution</b><img src="${esc(q.solution_image_url)}" alt="Solution" style="display:block;width:100%;max-height:700px;object-fit:contain;margin-top:8px;border-radius:8px"></div>`:""}${q.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">Solution Video</b><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`).join("")}</div>
  <div class="actions"><button class="secondary" onclick="teacherHome()">← Back</button></div></div>`)
 }
 
@@ -4299,7 +4369,7 @@ function renderStudentAnswerItems(items,type){
       return `<div class="${cls}"><b>${letter}.</b> ${esc(text)} ${mark?`<span class="student-review-mark">${mark}</span>`:""}</div>`;
     }).join("");
     const selectedText=opts[selected]??selected, correctText=opts[correct]??correct;
-    return `<div class="assignment" style="margin-top:12px"><h3 style="color:${isCorrect?'#166534':'#dc2626'}">Question ${questionNo} ${isCorrect?'— ✓ Correct':'— ✗ Wrong'}</h3>${q?.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${questionNo}"></div>`:`<p><b>${esc(q?.question_text||"Question unavailable")}</b></p>`}<div style="margin-top:10px">${optionRows}</div><div class="student-review-summary"><span class="student-review-your">Your answer: ${esc(selected)}${q?.image_url?"":` — ${esc(selectedText)}`}</span><span class="student-review-key">Correct answer: ${esc(correct)}${q?.image_url?"":` — ${esc(correctText)}`}</span></div>${isCorrect?`<div class="success" style="margin-top:10px"><b>Correct ✓</b></div>`:`<div class="notice" style="margin-top:10px"><b>Wrong ✗</b></div>`}${q?.explanation?`<div style="margin-top:10px;padding:12px 14px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px;line-height:1.5"><b style="color:#166534">Explanation:</b><div style="margin-top:4px;white-space:pre-wrap">${esc(q.explanation)}</div></div>`:""}${q?.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">🎥 Answer / Solution Video</b><p class="small muted">Watch the explanation for this question.</p><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`;
+    return `<div class="assignment" style="margin-top:12px"><h3 style="color:${isCorrect?'#166534':'#dc2626'}">Question ${questionNo} ${isCorrect?'— ✓ Correct':'— ✗ Wrong'}</h3>${q?.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}" alt="Question ${questionNo}"></div>`:`<p><b>${esc(q?.question_text||"Question unavailable")}</b></p>`}<div style="margin-top:10px">${optionRows}</div><div class="student-review-summary"><span class="student-review-your">Your answer: ${esc(selected)}${q?.image_url?"":` — ${esc(selectedText)}`}</span><span class="student-review-key">Correct answer: ${esc(correct)}${q?.image_url?"":` — ${esc(correctText)}`}</span></div>${isCorrect?`<div class="success" style="margin-top:10px"><b>Correct ✓</b></div>`:`<div class="notice" style="margin-top:10px"><b>Wrong ✗</b></div>`}${q?.explanation?`<div style="margin-top:10px;padding:12px 14px;border-left:4px solid #166534;background:#f0fdf4;border-radius:8px;line-height:1.5"><b style="color:#166534">Explanation:</b><div style="margin-top:4px;white-space:pre-wrap">${esc(q.explanation)}</div></div>`:""}${q?.solution_image_url?`<div style="margin-top:12px;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px"><b style="color:#6d28d9">Solution</b><img src="${esc(q.solution_image_url)}" alt="Solution" style="display:block;width:100%;max-height:700px;object-fit:contain;margin-top:8px;border-radius:8px"></div>`:""}${q?.solution_video_url?`<div class="solution-video-box"><b class="solution-video-label">🎥 Answer / Solution Video</b><p class="small muted">Watch the explanation for this question.</p><iframe class="solution-video" src="${esc(embed(q.solution_video_url))}" allowfullscreen></iframe></div>`:""}</div>`;
   }).join("");
 }
 function toggleStudentAnswerTab(type){
