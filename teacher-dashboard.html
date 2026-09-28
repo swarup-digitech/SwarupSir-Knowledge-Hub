@@ -118,11 +118,11 @@ async function bulkQuestionUpload(preselectId=''){
         <input id="bqPdf" type="file" accept=".pdf" onchange="readBulkAssessmentPdf(event)">
         <label>Marks / Hint Excel</label>
         <input id="bqPdfKey" type="file" accept=".xlsx,.xls" onchange="readBulkAssessmentKey(event)">
-        <label style="margin-top:12px">Solution PDF <span class="muted" style="font-weight:400">(optional — 1 solution page per question)</span></label>
+        <label style="margin-top:12px">Solution PDF <span class="small muted">(optional — 1 solution page per question)</span></label>
         <input id="bqSolutionPdf" type="file" accept=".pdf" onchange="readBulkAssessmentSolutionPdf(event)">
-        <div class="small muted" style="margin-top:5px">Each PDF page becomes a cropped solution image. Page 1 is attached to Question 1, page 2 to Question 2, and so on. No OCR is used.</div>
-        <div id="bqPdfPreview"></div>
+        <div class="small muted" style="margin-top:5px">Each solution PDF page is converted to a cropped image and saved against the corresponding question. Page 1 → first uploaded question, page 2 → second, etc.</div>
         <div id="bqSolutionPdfPreview"></div>
+        <div id="bqPdfPreview"></div>
       </div>
     </div>
 
@@ -217,6 +217,48 @@ function readBulkAssessmentKey(ev){
   r.readAsArrayBuffer(f);
 }
 
+async function readBulkAssessmentSolutionPdf(ev){
+  const f=ev.target.files?.[0]; if(!f)return;
+  const box=document.getElementById('bqSolutionPdfPreview');
+  if(!box)return;
+  box.innerHTML=msg('Rendering solution PDF pages as images — OCR is not used…',true);
+  try{
+    const mod=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
+    mod.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+    const pdf=await mod.getDocument({data:await f.arrayBuffer()}).promise;
+    const pages=[];
+    for(let p=1;p<=pdf.numPages;p++){
+      const page=await pdf.getPage(p);
+      const base=page.getViewport({scale:1});
+      const maxWidth=1800;
+      const scale=Math.min(2.5,Math.max(1.6,maxWidth/base.width));
+      const viewport=page.getViewport({scale});
+      const canvas=document.createElement('canvas');
+      const ctx=canvas.getContext('2d',{alpha:false});
+      canvas.width=Math.ceil(viewport.width);
+      canvas.height=Math.ceil(viewport.height);
+      ctx.fillStyle='#fff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      await page.render({canvasContext:ctx,viewport}).promise;
+      const cropped=cropSchoolQuestionWhiteMargins(canvas);
+      pages.push({no:String(p),image_data:cropped.toDataURL('image/jpeg',0.93)});
+    }
+    bulkAssessmentSolutionPdfPages=pages;
+    const questionCount=bulkAssessmentPdfPages.length;
+    const mismatch=questionCount&&questionCount!==pages.length;
+    box.innerHTML=`<div class="${mismatch?'notice':'success'}">Prepared <b>${pages.length}</b> solution page(s) as cropped images.${mismatch?` <b>Warning:</b> Questions PDF has ${questionCount} page(s), so the counts do not match.`:''}</div>
+      <div class="small muted" style="margin-top:8px">Solutions are mapped in order: Solution page 1 → first newly uploaded question, page 2 → second, and so on.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px">
+        ${pages.slice(0,12).map(x=>`<div style="border:1px solid #dbe3ee;border-radius:10px;padding:6px;background:#fff"><img src="${x.image_data}" style="width:100%;display:block;border-radius:7px" alt="Solution page ${x.no}"><div class="small muted" style="margin-top:4px;text-align:center">Solution ${x.no}</div></div>`).join('')}
+      </div>
+      ${pages.length>12?`<div class="small muted" style="margin-top:8px">Showing first 12 previews.</div>`:''}`;
+    showBulkStatus(`${pages.length} solution PDF page(s) converted to cropped images.`,true);
+  }catch(e){
+    bulkAssessmentSolutionPdfPages=[];
+    box.innerHTML=msg('Could not convert solution PDF to images: '+e.message);
+  }
+}
+
 function cropSchoolQuestionWhiteMargins(sourceCanvas){
   const ctx=sourceCanvas.getContext('2d',{willReadFrequently:true});
   const w=sourceCanvas.width, h=sourceCanvas.height;
@@ -300,63 +342,11 @@ async function readBulkAssessmentPdf(ev){
   }
 }
 
-async function renderSchoolPdfToCroppedImages(file, label='PDF'){
-  const mod=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
-  mod.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
-  const pdf=await mod.getDocument({data:await file.arrayBuffer()}).promise;
-  const pages=[];
-  for(let p=1;p<=pdf.numPages;p++){
-    const page=await pdf.getPage(p);
-    const base=page.getViewport({scale:1});
-    const maxWidth=1800;
-    const scale=Math.min(2.5,Math.max(1.6,maxWidth/base.width));
-    const viewport=page.getViewport({scale});
-    const canvas=document.createElement('canvas');
-    const ctx=canvas.getContext('2d',{alpha:false});
-    canvas.width=Math.ceil(viewport.width);
-    canvas.height=Math.ceil(viewport.height);
-    ctx.fillStyle='#fff';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    await page.render({canvasContext:ctx,viewport}).promise;
-    const cropped=cropSchoolQuestionWhiteMargins(canvas);
-    pages.push({no:String(p),image_data:cropped.toDataURL('image/jpeg',0.93)});
-  }
-  return pages;
-}
-
-async function readBulkAssessmentSolutionPdf(ev){
-  const f=ev.target.files?.[0]; if(!f)return;
-  const box=document.getElementById('bqSolutionPdfPreview');
-  box.innerHTML=msg('Rendering solution PDF pages as cropped images — OCR is not used…',true);
-  try{
-    const pages=await renderSchoolPdfToCroppedImages(f,'Solution PDF');
-    bulkAssessmentSolutionPdfPages=pages;
-    const qCount=bulkAssessmentPdfPages.length;
-    const countMessage=qCount&&pages.length!==qCount
-      ? `<div class="notice"><b>${pages.length}</b> solution page(s) loaded for <b>${qCount}</b> question page(s). The number of solution pages must match the number of question pages before saving.</div>`
-      : `<div class="success">Prepared <b>${pages.length}</b> solution page(s).</div>`;
-    box.innerHTML=`${countMessage}
-      <div class="small muted" style="margin-top:8px">Solution pages are paired by page number: Solution 1 → Question 1, Solution 2 → Question 2, etc.</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px">
-        ${pages.slice(0,12).map(x=>`<div style="border:1px solid #dbe3ee;border-radius:10px;padding:6px;background:#fff">
-          <img src="${x.image_data}" style="width:100%;display:block;border-radius:7px" alt="Solution page ${x.no}">
-          <div class="small muted" style="margin-top:4px;text-align:center">Solution ${x.no}</div>
-        </div>`).join('')}
-      </div>
-      ${pages.length>12?`<div class="small muted" style="margin-top:8px">Showing first 12 previews.</div>`:''}`;
-    showBulkStatus(`${pages.length} solution PDF page(s) converted to cropped images.`,true);
-  }catch(e){
-    bulkAssessmentSolutionPdfPages=[];
-    box.innerHTML=msg('Could not convert solution PDF to images: '+e.message);
-  }
-}
-
 async function saveBulkAssessmentQuestions(){
   const aid=document.getElementById('bqaAssessment')?.value;
   if(!aid)return alert('Select an assessment.');
   let rows=[];
   if(bulkAssessmentRows.length){
-    if(bulkAssessmentSolutionPdfPages.length)return alert('Solution PDF upload is available with Method 2 (PDF questions). Use Method 2 for page-by-page solution images.');
     rows=bulkAssessmentRows.map(x=>({
       assessment_id:aid,
       question_order:0,
@@ -368,9 +358,6 @@ async function saveBulkAssessmentQuestions(){
     if(!Object.keys(bulkAssessmentPdfMeta).length)return alert('Upload the Marks / Hint Excel for the PDF first.');
     const missing=bulkAssessmentPdfPages.filter(x=>!bulkAssessmentPdfMeta[x.no]||!Number.isFinite(bulkAssessmentPdfMeta[x.no].marks));
     if(missing.length)return alert('Marks are missing for PDF question/page: '+missing.map(x=>x.no).join(', '));
-    if(bulkAssessmentSolutionPdfPages.length && bulkAssessmentSolutionPdfPages.length!==bulkAssessmentPdfPages.length){
-      return alert(`Question PDF has ${bulkAssessmentPdfPages.length} page(s), but Solution PDF has ${bulkAssessmentSolutionPdfPages.length} page(s). Please upload exactly one solution page for each question page.`);
-    }
     rows=bulkAssessmentPdfPages.map(x=>{
       const meta=bulkAssessmentPdfMeta[x.no];
       return {
@@ -386,6 +373,10 @@ async function saveBulkAssessmentQuestions(){
     return alert('Upload an Excel file or a PDF + Marks Excel file first.');
   }
 
+  if(bulkAssessmentSolutionPdfPages.length && bulkAssessmentSolutionPdfPages.length!==rows.length){
+    return alert(`Solution PDF page count (${bulkAssessmentSolutionPdfPages.length}) must exactly match the number of newly uploaded questions (${rows.length}).\n\nSolution page 1 maps to the first uploaded question, page 2 to the second, and so on.`);
+  }
+
   try{
     const {data:last,error:le}=await sb.from('school_questions')
       .select('question_order').eq('assessment_id',aid)
@@ -393,22 +384,19 @@ async function saveBulkAssessmentQuestions(){
     if(le)throw le;
     let next=(last?.[0]?.question_order||0)+1;
     rows.forEach(x=>x.question_order=next++);
-
     // PDF questions are stored as real images in Supabase Storage.
-    // Keep text empty because school_questions.question_text is NOT NULL.
-    // The PDF/Assamese content itself remains an image; no OCR is used.
+    // Keep text as an empty string because school_questions.question_text is NOT NULL.\n    // The PDF/Assamese content itself remains an image; no OCR is used.
     const dbRows=[];
     for(const x of rows){
       let imageUrl=null;
-      let imagePath=null;
       if(x.question_image_data){
-        imagePath=`${teacher.id}/${aid}/q${x.question_order}-${crypto.randomUUID()}.jpg`;
+        const path=`${teacher.id}/${aid}/q${x.question_order}-${crypto.randomUUID()}.jpg`;
         const blob=await (await fetch(x.question_image_data)).blob();
         const {error:ue}=await sb.storage.from('school-question-images').upload(
-          imagePath,blob,{contentType:'image/jpeg',upsert:false}
+          path,blob,{contentType:'image/jpeg',upsert:false}
         );
         if(ue)throw ue;
-        const {data:pu}=sb.storage.from('school-question-images').getPublicUrl(imagePath);
+        const {data:pu}=sb.storage.from('school-question-images').getPublicUrl(path);
         imageUrl=pu.publicUrl;
       }
       dbRows.push({
@@ -420,45 +408,47 @@ async function saveBulkAssessmentQuestions(){
         hint:(x.hint||'').trim()||null
       });
     }
-
     const {data:insertedQuestions,error}=await sb.from('school_questions').insert(dbRows).select('id,question_order');
     if(error)throw error;
 
-    // Optional Method 2 solution PDF: each page becomes a cropped JPG solution image.
-    // Solution page N is attached to question page N.
+    // Optional Method 2 solution PDF: one cropped image per page, mapped in upload order.
     if(bulkAssessmentSolutionPdfPages.length){
-      if(!insertedQuestions?.length)throw new Error('Questions were inserted but their IDs could not be returned; solution images were not attached.');
-      const qByOrder=new Map((insertedQuestions||[]).map(q=>[String(q.question_order),q.id]));
-      const solutionRows=[];
-      for(const page of bulkAssessmentSolutionPdfPages){
-        const targetRow=rows[Number(page.no)-1];
-        const questionId=targetRow ? qByOrder.get(String(targetRow.question_order)) : null;
-        if(!questionId)throw new Error(`Could not match solution page ${page.no} to a question.`);
-        const path=`${teacher.id}/${aid}/${questionId}/solution-${page.no}-${crypto.randomUUID()}.jpg`;
-        const blob=await (await fetch(page.image_data)).blob();
-        const {error:ue}=await sb.storage.from('school-question-solutions').upload(
-          path,blob,{contentType:'image/jpeg',upsert:false}
-        );
-        if(ue)throw ue;
-        const {data:pu}=sb.storage.from('school-question-solutions').getPublicUrl(path);
-        solutionRows.push({
-          question_id:questionId,
-          solution_type:'file',
-          title:`Solution ${page.no}`,
-          file_name:`solution-${page.no}.jpg`,
-          file_url:pu.publicUrl,
-          storage_path:path,
-          mime_type:'image/jpeg',
-          file_size_bytes:blob.size,
-          display_order:30
-        });
+      const insertedByOrder=new Map((insertedQuestions||[]).map(q=>[Number(q.question_order),q]));
+      const createdSolutionPaths=[];
+      try{
+        const solutionRows=[];
+        for(let i=0;i<bulkAssessmentSolutionPdfPages.length;i++){
+          const page=bulkAssessmentSolutionPdfPages[i];
+          const q=insertedByOrder.get(Number(dbRows[i].question_order));
+          if(!q)throw Error(`Could not find the newly inserted question for solution page ${i+1}.`);
+          const path=`${teacher.id}/${aid}/q${q.question_order}-solution-${crypto.randomUUID()}.jpg`;
+          const blob=await (await fetch(page.image_data)).blob();
+          const {error:ue}=await sb.storage.from('school-question-solutions').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+          if(ue)throw ue;
+          createdSolutionPaths.push(path);
+          const {data:pu}=sb.storage.from('school-question-solutions').getPublicUrl(path);
+          solutionRows.push({
+            question_id:q.id,
+            solution_type:'file',
+            title:`Solution Image ${i+1}`,
+            file_name:`solution-page-${i+1}.jpg`,
+            file_url:pu.publicUrl,
+            storage_path:path,
+            mime_type:'image/jpeg',
+            file_size_bytes:blob.size,
+            display_order:30
+          });
+        }
+        const {error:se}=await sb.from('school_question_solutions').insert(solutionRows);
+        if(se)throw se;
+      }catch(solutionError){
+        for(const path of createdSolutionPaths){try{await sb.storage.from('school-question-solutions').remove([path]);}catch(_){}}
+        throw Error('Questions were uploaded, but the solution images could not be saved: '+solutionError.message);
       }
-      const {error:se}=await sb.from('school_question_solutions').insert(solutionRows);
-      if(se)throw se;
     }
 
     alert(`${dbRows.length} question(s) added successfully${bulkAssessmentSolutionPdfPages.length?` with ${bulkAssessmentSolutionPdfPages.length} solution image(s)`:''}.`);
-    bulkAssessmentRows=[];bulkAssessmentPdfPages=[];bulkAssessmentPdfMeta={};bulkAssessmentSolutionPdfPages=[];
+    bulkAssessmentRows=[];bulkAssessmentPdfPages=[];bulkAssessmentSolutionPdfPages=[];bulkAssessmentPdfMeta={};
     await load(); editQuestions(aid);
   }catch(e){
     alert('Could not add questions: '+e.message);
