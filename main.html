@@ -124,7 +124,19 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .qp-evs-mcq-column{padding:0 5mm}
 .qp-evs-mcq-column + .qp-evs-mcq-column{border-left:1px solid #777}
 .qp-evs-passage-wrap{width:100%;display:block;break-before:page;page-break-before:always}
-.qp-evs-passage-wrap .jnvst-passage,.qp-evs-passage-wrap .jnvst-question{break-inside:avoid;page-break-inside:avoid}.qp-evs-passage-single{width:100%;display:block}
+.qp-evs-passage-wrap:last-child{break-after:auto;page-break-after:auto}
+.qp-evs-passage-layout{display:block}
+.qp-evs-passage-text{border:1px solid #555;padding:7px 9px;margin:0 0 7px;font-size:10.5pt;line-height:1.35;column-count:2;column-gap:12mm;column-rule:1px solid #777;break-inside:avoid;page-break-inside:avoid}
+.qp-evs-passage-text .qp-passage-number,.qp-evs-passage-text .qp-passage-title{column-span:all}
+.qp-evs-passage-question-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0;align-items:start;border-top:1px solid #999;border-bottom:1px solid #999}
+.qp-evs-passage-question-column{min-width:0;padding:0 5mm}
+.qp-evs-passage-question-column + .qp-evs-passage-question-column{border-left:1px solid #777}
+.qp-evs-passage-question-column .jnvst-question{break-inside:avoid;page-break-inside:avoid;margin-bottom:6px}
+.qp-evs-passage-question-column .jnvst-qrow{gap:4px}
+.qp-evs-passage-question-column .jnvst-qnum{min-width:22px}
+.qp-evs-passage-question-column .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
+.qp-evs-passage-question-column .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
+.qp-evs-passage-question-column .jnvst-qtext{font-size:9.5pt;line-height:1.18}
 .qp-evs-mcq-column{min-width:0}
 .qp-evs-mcq-column .evs-mcq-question{break-inside:avoid;page-break-inside:avoid;margin-bottom:6px}
 .qp-evs-mcq-column .evs-mcq-question .jnvst-qrow{gap:4px}
@@ -928,7 +940,9 @@ function qpBuildArithmeticHtml(rows){
   return pages.join('');
 }
 function qpBuildEVSHtml(rows){
-  // EVS direct MCQs use two columns. Passage text and its five questions are always single-column.
+  // EVS MCQs and EVS passage sets both use a two-column printable layout.
+  // The passage text itself flows in two columns, followed by its five
+  // questions in two columns. Each passage set starts on a fresh page.
   const mcqs=(rows||[]).filter(q=>!qpIsPassage(q));
   const passageRows=(rows||[]).filter(q=>qpIsPassage(q));
   const pages=[];
@@ -939,7 +953,28 @@ function qpBuildEVSHtml(rows){
     const right=chunk.slice(leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
     pages.push(`<div class="qp-evs-mcq-page"><div class="qp-evs-mcq-columns"><div class="qp-evs-mcq-column">${left}</div><div class="qp-evs-mcq-column">${right}</div></div></div>`);
   }
-  if(passageRows.length)pages.push(`<div class="qp-evs-passage-wrap"><div class="qp-evs-passage-single">${qpBuildPassageHtml(passageRows)}</div></div>`);
+  const groups=qpPassageGroups(passageRows);
+  groups.forEach((g,index)=>{
+    const title=qpNorm(g.title)||'Passage';
+    const text=g.text||'';
+    const qs=(g.questions||[]);
+    const leftCount=Math.ceil(qs.length/2);
+    const left=qs.slice(0,leftCount).map(q=>qpHtmlQuestion(q)).join('');
+    const right=qs.slice(leftCount).map(q=>qpHtmlQuestion(q)).join('');
+    pages.push(`<div class="qp-evs-passage-wrap">
+      <div class="qp-evs-passage-layout">
+        <div class="qp-evs-passage-text">
+          <div class="qp-passage-number">Passage ${index+1}</div>
+          <div class="qp-passage-title">${esc(title)}</div>
+          <div>${jnvstPdfEscape(text)}</div>
+        </div>
+        <div class="qp-evs-passage-question-columns">
+          <div class="qp-evs-passage-question-column">${left}</div>
+          <div class="qp-evs-passage-question-column">${right}</div>
+        </div>
+      </div>
+    </div>`);
+  });
   return pages.join('');
 }
 function qpBuildPassageHtml(rows){
