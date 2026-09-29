@@ -123,7 +123,8 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .qp-evs-mcq-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0;align-items:start;border-top:1px solid #999;border-bottom:1px solid #999}
 .qp-evs-mcq-column{padding:0 5mm}
 .qp-evs-mcq-column + .qp-evs-mcq-column{border-left:1px solid #777}
-.qp-evs-passage-wrap{width:100%;display:block;break-before:page;page-break-before:always}
+.qp-evs-passage-wrap{width:100%;display:block;break-before:auto;page-break-before:auto}
+.qp-evs-passage-wrap.qp-evs-passage-next{break-before:page;page-break-before:always}
 .qp-evs-passage-wrap:last-child{break-after:auto;page-break-after:auto}
 .qp-evs-passage-layout{display:block}
 .qp-evs-passage-text{border:1px solid #555;padding:7px 9px;margin:0 0 7px;font-size:10.5pt;line-height:1.35;column-count:2;column-gap:12mm;column-rule:1px solid #777;break-inside:avoid;page-break-inside:avoid}
@@ -149,8 +150,8 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Teacher Question Paper Generator: allow the content to flow naturally across
    printed pages. The footer is kept in normal document flow so it can never
    overlap the final question. */
-.qp-paper-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:8mm 12mm 10mm;margin:0 auto;background:#fff;page-break-after:always}
-.qp-paper-page:last-child{page-break-after:auto}
+.qp-paper-page{width:210mm;min-height:0;box-sizing:border-box;padding:8mm 12mm 10mm;margin:0 auto;background:#fff;page-break-after:auto;break-after:auto}
+.qp-paper-page:last-child{page-break-after:auto;break-after:auto}
 .qp-paper-footer{position:static!important;display:grid;grid-template-columns:auto auto 1fr auto;gap:3px 8px;align-items:center;margin-top:6mm;border-top:1px solid #999;padding-top:3px;font-size:8.2pt;line-height:1.2;break-inside:avoid;page-break-inside:avoid}.qp-paper-footer span:nth-child(5){grid-column:1/-1;text-align:center;font-size:7.8pt;font-weight:600;color:#334155}
 .qp-passage-number{text-align:center;font-weight:700;font-size:11pt;margin-bottom:2px}
 .qp-passage-title{text-align:center;font-weight:700;font-size:11pt;margin-bottom:4px}
@@ -159,6 +160,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .qp-footer-copy{display:block;text-align:center;margin-top:2px;font-size:8pt;font-weight:600;color:#334155}
 
 @page{size:A4;margin:0}
+.qp-content-no-break{break-after:auto!important;page-break-after:auto!important}
 @media print{.qp-paper-page{padding-top:8mm!important;padding-bottom:10mm!important}.qp-paper-footer{position:static!important;display:grid!important;grid-template-columns:auto auto 1fr auto!important;gap:3px 8px!important}.qp-paper-footer span:nth-child(5){grid-column:1/-1!important;text-align:center!important}}
 
 .omr-result-card{border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#ffffff)}
@@ -922,15 +924,16 @@ function qpHtmlQuestion(q,variant='default'){
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}${opts}</div></div></div>`;
 }
 function qpBuildArithmeticHtml(rows){
-  // Arithmetic is deliberately rendered as two explicit columns. This keeps
-  // Q1..Q10 on the left and Q11..Q20 on the right for each 20-question set.
-  // For larger sets, every next 20 questions starts a fresh printable page.
+  // Render each 20-question block as a real printable page. The final block
+  // does not force an extra page when the normal question-paper footer follows.
   const pages=[];
+  const totalPages=Math.ceil(rows.length/20);
   for(let start=0;start<rows.length;start+=20){
     const chunk=rows.slice(start,start+20);
     const left=chunk.slice(0,10).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
     const right=chunk.slice(10,20).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
-    pages.push(`<div class="qp-arithmetic-page">
+    const isLast=start+20>=rows.length;
+    pages.push(`<div class="qp-arithmetic-page${isLast?' qp-content-no-break':''}">
       <div class="qp-arithmetic-columns">
         <div class="qp-arithmetic-column">${left}</div>
         <div class="qp-arithmetic-column">${right}</div>
@@ -940,9 +943,10 @@ function qpBuildArithmeticHtml(rows){
   return pages.join('');
 }
 function qpBuildEVSHtml(rows){
-  // EVS MCQs and EVS passage sets both use a two-column printable layout.
-  // The passage text itself flows in two columns, followed by its five
-  // questions in two columns. Each passage set starts on a fresh page.
+  // EVS MCQs use two columns. Passage text and its five questions also use
+  // two columns, but each passage starts on a fresh page only after the first.
+  // No internal block is allowed to create an unnecessary blank page before
+  // the normal question-paper footer.
   const mcqs=(rows||[]).filter(q=>!qpIsPassage(q));
   const passageRows=(rows||[]).filter(q=>qpIsPassage(q));
   const pages=[];
@@ -951,7 +955,8 @@ function qpBuildEVSHtml(rows){
     const leftCount=Math.ceil(chunk.length/2);
     const left=chunk.slice(0,leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
     const right=chunk.slice(leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
-    pages.push(`<div class="qp-evs-mcq-page"><div class="qp-evs-mcq-columns"><div class="qp-evs-mcq-column">${left}</div><div class="qp-evs-mcq-column">${right}</div></div></div>`);
+    const isLastMcq=!passageRows.length && start+15>=mcqs.length;
+    pages.push(`<div class="qp-evs-mcq-page${isLastMcq?' qp-content-no-break':''}"><div class="qp-evs-mcq-columns"><div class="qp-evs-mcq-column">${left}</div><div class="qp-evs-mcq-column">${right}</div></div></div>`);
   }
   const groups=qpPassageGroups(passageRows);
   groups.forEach((g,index)=>{
@@ -959,9 +964,10 @@ function qpBuildEVSHtml(rows){
     const text=g.text||'';
     const qs=(g.questions||[]);
     const leftCount=Math.ceil(qs.length/2);
-    const left=qs.slice(0,leftCount).map(q=>qpHtmlQuestion(q)).join('');
-    const right=qs.slice(leftCount).map(q=>qpHtmlQuestion(q)).join('');
-    pages.push(`<div class="qp-evs-passage-wrap">
+    const left=qs.slice(0,leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
+    const right=qs.slice(leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
+    const isLast=index===groups.length-1;
+    pages.push(`<div class="qp-evs-passage-wrap${index>0?' qp-evs-passage-next':''}${isLast?' qp-content-no-break':''}">
       <div class="qp-evs-passage-layout">
         <div class="qp-evs-passage-text">
           <div class="qp-passage-number">Passage ${index+1}</div>
