@@ -129,6 +129,16 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .fee-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin:14px 0}.fee-stat{margin:0}.fee-stat strong{display:block;font-size:25px;margin-top:6px;color:#172554}.fee-balance{border:2px solid #fde68a;background:#fffbeb}.fee-message{border:2px solid #bfdbfe;background:#eff6ff;white-space:pre-wrap;line-height:1.55}.fee-status{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}.fee-paid{background:#dcfce7;color:#166534}.fee-partially-paid{background:#fef3c7;color:#92400e}.fee-unpaid{background:#fee2e2;color:#991b1b}.fee-no-fee-setup{background:#e2e8f0;color:#475569}.fee-status.fee-no-fee-setup{font-size:11px}
 .table-wrap{overflow:auto}.table-wrap table{width:100%;border-collapse:collapse}.table-wrap th,.table-wrap td{padding:9px 10px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}.table-wrap th{background:#f8fafc;font-weight:800;white-space:nowrap}
 @media(max-width:700px){.fee-summary-grid{grid-template-columns:1fr 1fr}.table-wrap{font-size:13px}.fee-stat strong{font-size:21px}}
+
+/* Mock question-bank image preview */
+.mock-question-preview-cell{width:150px;min-width:150px;text-align:center;vertical-align:middle}
+.mock-question-thumb{display:block;width:130px;height:82px;object-fit:contain;margin:0 auto;border:1px solid #dbe3ee;border-radius:8px;background:#fff;cursor:zoom-in;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.mock-question-thumb:hover{box-shadow:0 0 0 2px rgba(37,99,235,.18)}
+.mock-question-preview-empty{display:inline-flex;width:130px;height:82px;align-items:center;justify-content:center;border:1px dashed #cbd5e1;border-radius:8px;color:#64748b;font-size:12px;background:#f8fafc}
+.mock-image-lightbox{position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}
+.mock-image-lightbox img{max-width:min(1100px,96vw);max-height:90vh;width:auto;height:auto;object-fit:contain;background:#fff;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.mock-image-lightbox .mock-image-title{position:absolute;top:14px;left:20px;color:#fff;font-weight:600;font-size:14px}
+.mock-image-lightbox .mock-image-close{position:absolute;top:10px;right:16px;color:#fff;font-size:32px;line-height:1;background:transparent;border:0;cursor:pointer}
 </style>
 </head>
 <body><div id="app"></div>
@@ -603,12 +613,28 @@ function renderMockBankManager(){
     </div>
     <div class="card">
       <div class="small muted" style="margin-bottom:10px">Edit any question, change its answer, update the passage, add/replace an image, or deactivate/delete it. Deactivated questions are not used when generating a new test.</div>
-      <div style="overflow:auto"><table><thead><tr><th>#</th><th>Medium</th><th>Part</th><th>Topic</th><th>Question</th><th>Passage</th><th>Image</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${esc(mockBankDisplayLanguage(q.language))}</td><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc(q.topic||'—')}</td><td>${esc((q.question_text||'[PDF/image question]').slice(0,100))}</td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40)||'—')}</td><td>${q.image_url?'Yes':'No'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="9">No questions match the selected filters.</td></tr>'}</tbody></table></div>
+      <div style="overflow:auto"><table><thead><tr><th>#</th><th>Medium</th><th>Part</th><th>Topic</th><th>Question</th><th>Passage</th><th>Preview</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${esc(mockBankDisplayLanguage(q.language))}</td><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc(q.topic||'—')}</td><td>${esc((q.question_text||'[PDF/image question]').slice(0,100))}</td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40)||'—')}</td><td class="mock-question-preview-cell">${q.image_url?`<img class="mock-question-thumb" src="${esc(q.image_url)}" alt="Question ${i+1} preview" loading="lazy" onclick="openMockQuestionImage('${esc(q.image_url)}','Question ${i+1}')" title="Click to enlarge">`:'<span class="mock-question-preview-empty">No image</span>'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="9">No questions match the selected filters.</td></tr>'}</tbody></table></div>
     </div>
     <div class="card" style="background:#f8fafc"><h3>Availability & Set Validation</h3>${MOCK_PLAN.map(x=>{const c=counts[x.part]||0;const complete=x.unit==='passage'?Object.entries(groups).filter(([k,g])=>k.startsWith(x.part+'::')&&g===(x.passageCount||x.count)).length:Math.floor(c/x.count);const remainder=x.unit==='passage'?c-(complete*(x.passageCount||x.count)):c%x.count;return `<div class="small" style="padding:6px 0"><b>${esc(x.label)}</b>: ${c} active · ${complete} complete set(s) of ${x.count}${remainder?' · '+remainder+' question(s) not in a complete set':' · ready'}</div>`}).join('')}</div>
     <div class="actions"><button onclick="mockBulkUpload()">Bulk Upload</button><button onclick="generateMockTestPage()">Generate Test</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div>
   </div>`);
 }
+
+function openMockQuestionImage(url,title){
+  if(!url)return;
+  const old=document.getElementById('mockQuestionImageLightbox'); if(old)old.remove();
+  const box=document.createElement('div');
+  box.id='mockQuestionImageLightbox';
+  box.className='mock-image-lightbox';
+  box.setAttribute('role','dialog');
+  box.setAttribute('aria-label',title||'Question image preview');
+  box.innerHTML=`<div class="mock-image-title">${esc(title||'Question image preview')}</div><button type="button" class="mock-image-close" aria-label="Close preview">×</button><img src="${esc(url)}" alt="${esc(title||'Question image preview')}">`;
+  const close=()=>box.remove();
+  box.addEventListener('click',e=>{if(e.target===box||e.target.classList.contains('mock-image-close'))close();});
+  document.addEventListener('keydown',function handler(e){if(e.key==='Escape'){close();document.removeEventListener('keydown',handler);}}, {once:true});
+  document.body.appendChild(box);
+}
+
 async function mockBankSummary(){
   const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
   if(error)return alert(error.message); mockBankCache=data||[]; mockBankFilters={medium:'',part:'',topic:'',passage:'',status:'active',search:''}; renderMockBankManager();
