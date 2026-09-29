@@ -107,41 +107,43 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Arithmetic Question Paper: fixed two-column JNVST-style layout */
 .qp-arithmetic-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-arithmetic-page:last-child{break-after:auto;page-break-after:auto}
-.qp-arithmetic-columns{display:block;column-count:2;column-gap:0;column-fill:auto;border-top:1px solid #999;border-bottom:1px solid #999}
-.qp-arithmetic-columns .arithmetic-question{break-inside:avoid;page-break-inside:avoid;break-before:auto;page-break-before:auto;margin:0 5mm 6px}
-.qp-arithmetic-columns .arithmetic-question .jnvst-qrow{gap:4px}
-.qp-arithmetic-columns .arithmetic-question .jnvst-qnum{min-width:22px}
-.qp-arithmetic-columns .arithmetic-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
-.qp-arithmetic-columns .arithmetic-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
-.qp-arithmetic-columns .arithmetic-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
+.qp-arithmetic-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0;align-items:stretch;border-top:1px solid #999;border-bottom:1px solid #999}
+.qp-arithmetic-column{min-width:0;padding:0 5mm}
+.qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777}
+.qp-arithmetic-column .arithmetic-question{break-inside:avoid;page-break-inside:avoid;break-before:auto;page-break-before:auto;margin-bottom:6px}
+.qp-arithmetic-column .arithmetic-question .jnvst-qrow{gap:4px}
+.qp-arithmetic-column .arithmetic-question .jnvst-qnum{min-width:22px}
+.qp-arithmetic-column .arithmetic-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
+.qp-arithmetic-column .arithmetic-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
+.qp-arithmetic-column .arithmetic-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
 @media print{.qp-arithmetic-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
 /* EVS MCQ Question Paper: two-column layout for each 15-MCQ block */
 .qp-evs-mcq-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-evs-mcq-page:last-child{break-after:auto;page-break-after:auto}
-.qp-evs-mcq-columns{display:block;column-count:2;column-gap:0;column-fill:auto;border-top:1px solid #999;border-bottom:1px solid #999}
-.qp-evs-mcq-columns .evs-mcq-question{margin:0 5mm 6px}
+.qp-evs-mcq-flow{column-count:2;column-gap:0;column-rule:1px solid #777;border-top:1px solid #999;border-bottom:1px solid #999;widows:2;orphans:2}
+.qp-evs-mcq-flow .evs-mcq-question{padding:0 5mm}
 .qp-evs-passage-wrap{width:100%;display:block;break-before:auto;page-break-before:auto}
 .qp-evs-passage-wrap.qp-evs-passage-next{break-before:page;page-break-before:always}
 .qp-evs-passage-wrap:last-child{break-after:auto;page-break-after:auto}
 .qp-evs-passage-layout{display:block}
 .qp-evs-passage-text{border:1px solid #555;padding:7px 9px;margin:0 0 7px;font-size:10.5pt;line-height:1.35;column-count:2;column-gap:12mm;column-rule:1px solid #777;break-inside:avoid;page-break-inside:avoid}
 .qp-evs-passage-text .qp-passage-number,.qp-evs-passage-text .qp-passage-title{column-span:all}
-.qp-evs-passage-question-columns{display:block;column-count:2;column-gap:0;column-fill:auto;border-top:1px solid #999;border-bottom:1px solid #999}
-.qp-evs-passage-question-columns .jnvst-question{margin:0 5mm 6px}
+.qp-evs-passage-question-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0;align-items:start;border-top:1px solid #999;border-bottom:1px solid #999}
+.qp-evs-passage-question-column{min-width:0;padding:0 5mm}
+.qp-evs-passage-question-column + .qp-evs-passage-question-column{border-left:1px solid #777}
 .qp-evs-passage-question-column .jnvst-question{break-inside:avoid;page-break-inside:avoid;margin-bottom:6px}
 .qp-evs-passage-question-column .jnvst-qrow{gap:4px}
 .qp-evs-passage-question-column .jnvst-qnum{min-width:22px}
 .qp-evs-passage-question-column .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
 .qp-evs-passage-question-column .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
 .qp-evs-passage-question-column .jnvst-qtext{font-size:9.5pt;line-height:1.18}
-.qp-evs-mcq-column{min-width:0}
-.qp-evs-mcq-column .evs-mcq-question{break-inside:avoid;page-break-inside:avoid;break-before:auto;page-break-before:auto;margin-bottom:6px}
-.qp-evs-mcq-column .evs-mcq-question .jnvst-qrow{gap:4px}
-.qp-evs-mcq-column .evs-mcq-question .jnvst-qnum{min-width:22px}
-.qp-evs-mcq-column .evs-mcq-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
-.qp-evs-mcq-column .evs-mcq-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
-.qp-evs-mcq-column .evs-mcq-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
-@media print{.qp-evs-mcq-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-evs-mcq-page:last-child{break-after:auto!important;page-break-after:auto!important}}
+.qp-evs-mcq-flow .evs-mcq-question{break-inside:avoid;page-break-inside:avoid;break-before:auto;page-break-before:auto;margin-bottom:6px}
+.qp-evs-mcq-flow .evs-mcq-question .jnvst-qrow{gap:4px}
+.qp-evs-mcq-flow .evs-mcq-question .jnvst-qnum{min-width:22px}
+.qp-evs-mcq-flow .evs-mcq-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
+.qp-evs-mcq-flow .evs-mcq-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
+.qp-evs-mcq-flow .evs-mcq-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
+@media print{.qp-evs-mcq-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-evs-mcq-flow{break-inside:auto!important;page-break-inside:auto!important}}
 .jnvst-small{font-size:9pt}
 /* Teacher Question Paper Generator: allow the content to flow naturally across
    printed pages. The footer is kept in normal document flow so it can never
@@ -920,25 +922,35 @@ function qpHtmlQuestion(q,variant='default'){
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}${opts}</div></div></div>`;
 }
 function qpBuildArithmeticHtml(rows){
-  // Use a real CSS multi-column flow instead of a grid. A grid containing all
-  // 20 questions can be treated as one unbreakable box by the browser and gets
-  // pushed to page 2, leaving the header alone on page 1. Multi-column flow
-  // allows the questions to start immediately below the header and continue
-  // naturally across printed pages.
-  return `<div class="qp-arithmetic-page"><div class="qp-arithmetic-columns">${(rows||[]).map(q=>qpHtmlQuestion(q,'arithmetic')).join('')}</div></div>`;
+  // Render 20-question blocks as two-column content that flows naturally with the header.
+  // Do not force a page break before the first block; the browser may fragment the block across pages as needed.
+  const pages=[];
+  const totalPages=Math.ceil(rows.length/20);
+  for(let start=0;start<rows.length;start+=20){
+    const chunk=rows.slice(start,start+20);
+    const left=chunk.slice(0,10).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
+    const right=chunk.slice(10,20).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
+    const isLast=start+20>=rows.length;
+    pages.push(`<div class="qp-arithmetic-page${isLast?' qp-content-no-break':''}">
+      <div class="qp-arithmetic-columns">
+        <div class="qp-arithmetic-column">${left}</div>
+        <div class="qp-arithmetic-column">${right}</div>
+      </div>
+    </div>`);
+  }
+  return pages.join('');
 }
 function qpBuildEVSHtml(rows){
-  // EVS MCQs use two columns. Passage text and its five questions also use
-  // two columns. Content flows naturally so the first page is never left blank.
+  // EVS MCQs must remain in two columns, but the column container itself must
+  // be fragmentable by the print engine. A CSS grid containing all 15 MCQs
+  // was treated as one unbreakable block, so the whole EVS section moved to
+  // page 2 and left page 1 with only the header. Use CSS multi-columns so
+  // questions can flow from page 1 to page 2 naturally.
   const mcqs=(rows||[]).filter(q=>!qpIsPassage(q));
   const passageRows=(rows||[]).filter(q=>qpIsPassage(q));
   const pages=[];
-  for(let start=0;start<mcqs.length;start+=15){
-    const chunk=mcqs.slice(start,start+15);
-    const leftCount=Math.ceil(chunk.length/2);
-    const ordered=chunk.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
-    const isLastMcq=!passageRows.length && start+15>=mcqs.length;
-    pages.push(`<div class="qp-evs-mcq-page${isLastMcq?' qp-content-no-break':''}"><div class="qp-evs-mcq-columns">${ordered}</div></div>`);
+  if(mcqs.length){
+    pages.push(`<div class="qp-evs-mcq-page"><div class="qp-evs-mcq-flow">${mcqs.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('')}</div></div>`);
   }
   const groups=qpPassageGroups(passageRows);
   groups.forEach((g,index)=>{
@@ -946,7 +958,8 @@ function qpBuildEVSHtml(rows){
     const text=g.text||'';
     const qs=(g.questions||[]);
     const leftCount=Math.ceil(qs.length/2);
-    const ordered=qs.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
+    const left=qs.slice(0,leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
+    const right=qs.slice(leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
     const isLast=index===groups.length-1;
     pages.push(`<div class="qp-evs-passage-wrap${index>0?' qp-evs-passage-next':''}${isLast?' qp-content-no-break':''}">
       <div class="qp-evs-passage-layout">
@@ -955,7 +968,10 @@ function qpBuildEVSHtml(rows){
           <div class="qp-passage-title">${esc(title)}</div>
           <div>${jnvstPdfEscape(text)}</div>
         </div>
-        <div class="qp-evs-passage-question-columns">${ordered}</div>
+        <div class="qp-evs-passage-question-columns">
+          <div class="qp-evs-passage-question-column">${left}</div>
+          <div class="qp-evs-passage-question-column">${right}</div>
+        </div>
       </div>
     </div>`);
   });
