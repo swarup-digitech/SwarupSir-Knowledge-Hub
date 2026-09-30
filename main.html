@@ -44,6 +44,13 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
   .result-summary{gap:12px;font-size:14px}
   .answer-pill{min-width:32px;height:32px}
 }
+
+.student-profile-avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #dbeafe;background:#eff6ff;display:block}
+.student-profile-avatar.small{width:42px;height:42px;border-width:2px}
+.profile-card{max-width:720px;margin:0 auto}
+.profile-photo-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.profile-photo-actions{display:flex;gap:8px;flex-wrap:wrap}
+.profile-divider{border:0;border-top:1px solid #e5e7eb;margin:24px 0}
 .danger{background:#dc2626!important;color:#fff!important}.student-review-option{padding:10px 12px;margin:6px 0;border:1px solid #e5e7eb;border-radius:8px;background:#fff}.student-review-option.student-review-selected-wrong{border-color:#dc2626;background:#fef2f2;color:#991b1b}.student-review-option.student-review-selected-correct,.student-review-option.student-review-correct{border-color:#16a34a;background:#f0fdf4;color:#166534}.student-review-option .student-review-mark{float:right;font-weight:700}.student-review-summary{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:14px}.student-review-summary .student-review-your{color:#dc2626;font-weight:700}.student-review-summary .student-review-key{color:#166534;font-weight:700}.result-controls{margin:18px 0;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc}.result-controls select{width:auto;min-width:150px;margin:0}.result-student{margin-top:16px;padding:16px;border:1px solid #dbe3ee;border-radius:14px}.result-student-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.result-student-head h3{margin:0 0 4px}.result-questions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.result-question{display:grid;grid-template-columns:42px 1fr 32px;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px}.result-answer{display:flex;gap:14px;flex-wrap:wrap;font-size:14px}.result-score{display:flex;gap:10px;align-items:center}.result-score b{font-size:22px}.result-score span{padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700}@media(max-width:700px){.result-questions{grid-template-columns:1fr}}
 .hint-btn{background:#fff7ed!important;color:#c2410c!important;border:1px solid #fdba74!important;padding:7px 11px!important;border-radius:8px!important;font-size:13px!important;font-weight:700}.hint-box{margin:10px 0 14px;padding:12px 14px;border-left:4px solid #f59e0b;background:#fffbeb;color:#78350f;border-radius:8px;white-space:pre-wrap;line-height:1.5}.editor-tabs{display:flex;gap:8px;margin:18px 0 0;border-bottom:1px solid #dbe3ee;overflow-x:auto}.editor-tab{border:0!important;background:#f1f5f9!important;color:#475569!important;border-radius:10px 10px 0 0!important;padding:11px 16px!important;font-weight:800!important;white-space:nowrap}.editor-tab.active{background:#2563eb!important;color:#fff!important}.editor-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0}.editor-toolbar.bottom{margin-top:8px;border-top:1px solid #e5e7eb}.edit-q-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.edit-q-head h3{margin:0}.option-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}.edit-q-card label{display:block;margin:10px 0 6px;font-weight:700}.edit-q-card input,.edit-q-card textarea,.edit-q-card select{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font:inherit}.edit-q-card textarea{min-height:90px;resize:vertical}.question-save-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px dashed #cbd5e1}.save-state{font-size:13px;font-weight:800}.save-state.saved{color:#15803d}.save-state.error{color:#dc2626}@media(max-width:700px){.choice-list{grid-template-columns:1fr}.choice-text{font-size:16px}.option-grid{grid-template-columns:1fr}.editor-toolbar{align-items:stretch}.editor-toolbar button{width:100%}}.edit-q-card{border:1px solid #dbe3ee;border-radius:12px;padding:16px;margin:12px 0;background:#f8fafc}.edit-q-card textarea{min-height:80px;resize:vertical}.hint-label{font-weight:700;color:#92400e}.solution-video-label{font-weight:700;color:#1d4ed8}.solution-video-box{margin:10px 0 14px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px}.solution-video{width:100%;aspect-ratio:16/9;border:0;border-radius:10px;background:#111}.install-banner{position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;display:none;max-width:560px;margin:auto;background:#fff;border:1px solid #dbe3ee;border-radius:16px;padding:16px;box-shadow:0 12px 40px #0000001a}.install-banner.show{display:block}.install-banner-row{display:flex;gap:12px;align-items:center}.install-icon{width:52px;height:52px;border-radius:12px;flex:0 0 auto}.install-banner h3{margin:0 0 4px}.install-banner p{margin:0}.install-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.install-actions button{flex:1;min-width:120px}
 
@@ -194,6 +201,9 @@ let current=null,profile=null,active=null,answers=[],videoDone=false;
 let studentRefreshTimer=null, studentDashboardSnapshot=null;
 let bulkStudents=[], importedQuestions=[], importedAnswers={}, importedExplanations={}, importedSingleExcel=false, importedForNewAssignment=false, importedSolutionPdfPages=[];
 let newAssignmentDraft=null;
+let assignmentBankCache=[];
+let assignmentBankSelected=new Set();
+let assignmentBankFilters={part:'',topic:'',language:'',search:''};
 let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
@@ -213,7 +223,9 @@ function goBack(){
   }catch{}
   location.replace(getHomeHref());
 }
-const header=(t,showBack=true)=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${showBack?`<button class="secondary" onclick="goBack()">← Back</button>`:""}<h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button>${profile?.role==="student"?`<button class="secondary" onclick="location.href='/main.html?mode=student&portal=SUBSCRIPTION'">💳 Subscription</button>`:""}<button class="secondary" onclick="logout()">Logout</button></div></div>`;
+function studentDisplayName(){return profile?.display_name||studentDisplayName();}
+function studentPhotoUrl(){return profile?.photo_url||"";}
+const header=(t,showBack=true)=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${showBack?`<button class="secondary" onclick="goBack()">← Back</button>`:""}<h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button>${profile?.role==="student"?`<button class="secondary" onclick="location.href='/main.html?mode=student&portal=SUBSCRIPTION'">💳 Subscription</button><button class="secondary" onclick="studentProfilePage()">👤 Profile</button>`:""}<button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
 const STUDENT_PROFILE_CACHE_PREFIX="skh_student_profile_v1_";
 function getCachedStudentProfile(userId){
@@ -233,7 +245,7 @@ function cacheStudentProfile(p){
 function renderStudentDashboardLoading(){
   render(`<div class="wrap">${header("Student Dashboard",false)}
     <div class="card">
-      <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
+      <h2>Welcome, ${esc(studentDisplayName())}</h2>
       <p class="muted">Loading your assignments and results…</p>
       <div class="success small" style="margin-top:12px">Your dashboard will appear as soon as your latest data is ready.</div>
     </div>
@@ -266,6 +278,7 @@ async function init(){
     const cached=getCachedStudentProfile(current.id);
     if(cached?.role==="student"){
       profile=cached;
+      if(portal==="PROFILE") return studentProfilePage();
       if(portal==="SUBSCRIPTION") return studentSubscription();
       if(String(profile.course||"").toUpperCase()==="SCHOOL"){
         if(portal==="SCHOOL_ASSIGNMENTS") return studentHome();
@@ -284,6 +297,7 @@ async function init(){
 
     profile=p;
     cacheStudentProfile(p);
+    if(portal==="PROFILE") return studentProfilePage();
     if(portal==="SUBSCRIPTION") return studentSubscription();
 
     const course=String(p.course||"").trim().toUpperCase();
@@ -1551,7 +1565,7 @@ function setMockAnswer(id,opt){window.mockExam.answers[id]=opt;renderMockExam();
 async function persistMockAnswer(id,opt){try{const {error}=await sb.from('mock_test_answers').upsert({attempt_id:window.mockExam.attempt.id,question_id:id,selected_option:opt},{onConflict:'attempt_id,question_id'});if(error)throw error}catch(e){alert('Could not save answer: '+e.message)}}
 function mockMove(d){window.mockExam.index=Math.min(window.mockExam.qs.length-1,Math.max(0,window.mockExam.index+d));renderMockExam()}function mockJump(i){window.mockExam.index=i;renderMockExam()}
 function confirmExitMockTest(){if(confirm('Exit the test? Your saved answers and timer will remain, so you can resume before the deadline.'))studentMockTests()}
-async function submitMockAttempt(attemptId,auto=false){try{clearInterval(mockTimerHandle);const {data:attempt,error:ae}=await sb.from('mock_test_attempts').select('*').eq('id',attemptId).eq('student_id',current.id).single();if(ae)throw ae;if(attempt.status==='submitted')return viewMockResult(attemptId);const {data:qs,error:qe}=await sb.from('mock_test_questions').select('id,question_number,section_code,part_code,correct_option,marks').eq('mock_test_id',attempt.mock_test_id).order('question_number');if(qe)throw qe;const {data:ans,error:ane}=await sb.from('mock_test_answers').select('*').eq('attempt_id',attemptId);if(ane)throw ane;const amap=new Map((ans||[]).map(x=>[x.question_id,x.selected_option]));let score=0;const section={};(qs||[]).forEach(q=>{const ok=amap.get(q.id)===q.correct_option;if(ok)score+=Number(q.marks||1.25);if(!section[q.section_code])section[q.section_code]={correct:0,questions:0,marks:0};section[q.section_code].questions++;if(ok){section[q.section_code].correct++;section[q.section_code].marks+=Number(q.marks||1.25)}});const percentage=score;const {error}=await sb.from('mock_test_attempts').update({status:'submitted',submitted_at:new Date().toISOString(),score,percentage,section_results:section}).eq('id',attemptId);if(error)throw error;window.mockExam=null;if(auto)alert('Time is over. Your Mock Test was submitted automatically.');return viewMockResult(attemptId)}catch(e){alert('Could not submit test: '+(e.message||e))}}
+async function submitMockAttempt(attemptId,auto=false){try{clearInterval(mockTimerHandle);const {data:attempt,error:ae}=await sb.from('mock_test_attempts').select('*').eq('id',attemptId).eq('student_id',current.id).single();if(ae)throw ae;if(attempt.status==='submitted')return viewMockResult(attemptId);const {data:qs,error:qe}=await sb.from('mock_test_questions').select('id,bank_question_id,question_number,section_code,part_code,correct_option,marks').eq('mock_test_id',attempt.mock_test_id).order('question_number');if(qe)throw qe;const {data:ans,error:ane}=await sb.from('mock_test_answers').select('*').eq('attempt_id',attemptId);if(ane)throw ane;const amap=new Map((ans||[]).map(x=>[x.question_id,x.selected_option]));let score=0;const section={};(qs||[]).forEach(q=>{const ok=amap.get(q.id)===q.correct_option;if(ok)score+=Number(q.marks||1.25);if(!section[q.section_code])section[q.section_code]={correct:0,questions:0,marks:0};section[q.section_code].questions++;if(ok){section[q.section_code].correct++;section[q.section_code].marks+=Number(q.marks||1.25)}});const percentage=score;const perfRows=(qs||[]).map(q=>({mock_question_id:q.bank_question_id||null,is_correct:amap.get(q.id)===q.correct_option})).filter(x=>x.mock_question_id);if(perfRows.length){const {error:pe}=await sb.rpc('record_student_question_results',{p_student_id:current.id,p_results:perfRows});if(pe)console.warn('Could not record question performance:',pe.message);}const {error}=await sb.from('mock_test_attempts').update({status:'submitted',submitted_at:new Date().toISOString(),score,percentage,section_results:section}).eq('id',attemptId);if(error)throw error;window.mockExam=null;if(auto)alert('Time is over. Your Mock Test was submitted automatically.');return viewMockResult(attemptId)}catch(e){alert('Could not submit test: '+(e.message||e))}}
 async function viewMockResult(attemptId){
   try{
     const data=await loadStudentMockResult(attemptId);const {attempt:a,test,rows,subjects}=data;const answered=rows.filter(q=>q.is_answered).length;
@@ -3249,9 +3263,10 @@ async function newAssignment(){
   <div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div>
  </div>
  <label>Title</label><input id="at"><label>Subject</label><select id="asub"><option value="">Select Subject</option>${jnvstSubjects.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea>
- <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Add questions manually below, or use the bulk question uploader for PDF / Excel files.</p><div class="actions"><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div class="small muted" style="margin-top:8px">Bulk upload supports PDF + Answer Key, PDF image-per-page, Excel + separate Answer Key, and Complete Excel with questions, options, answer and optional explanation.</div></div><h3>Manual MCQs</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Use questions already stored in the Mock Test Question Bank, upload new questions, or add MCQs manually. You can combine methods in one assignment.</p><div class="actions"><button type="button" onclick="openAssignmentQuestionBank()">📚 Select From Mock Question Bank</button><button type="button" onclick="openAssignmentMistakeBank()">🎯 Student Mistakes</button><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div id="assignmentBankPicker" style="display:none;margin-top:12px"></div><div id="assignmentSelectedBankSummary" class="small muted" style="margin-top:8px">No question-bank questions selected.</div><div class="small muted" style="margin-top:8px">Question-bank selections are copied into this assignment as a snapshot, so later edits to the bank do not change an existing assignment.</div></div><h3>Manual / Uploaded Questions</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
  window._newAssignmentClasses=classes;
  if(newAssignmentDraft){
+   restoreAssignmentBankSelection(newAssignmentDraft.selectedBankQuestionIds||[]);
    const d=newAssignmentDraft;
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
    document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";
@@ -3267,6 +3282,7 @@ async function newAssignment(){
    if(d.selectedStudentsByClass){Object.entries(d.selectedStudentsByClass).forEach(([cid,ids])=>ids.forEach(id=>{const cb=document.querySelector(`.newassign-student[data-class-id="${cid}"][value="${id}"]`);if(cb)cb.checked=true}))}
    else if(d.assignMode==="students"){(d.selectedStudents||[]).forEach(id=>{const cb=document.querySelector(`.newassign-student[value="${id}"]`);if(cb)cb.checked=true})}
  }else{
+   assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentMistakeSelected.clear();assignmentMistakeCache=[];assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};
    addQ();addQ();
    await (schoolTeacherMode?refreshSchoolAssignmentSubgroups():refreshJnvstAssignmentGroups());
    if(!schoolTeacherMode)document.querySelector('.newassign-class')?.click();
@@ -3372,6 +3388,113 @@ function selectAllAssignmentStudents(value){document.querySelectorAll(".assignme
 function toggleAssignmentStudents(){const mode=document.querySelector('input[name="assignMode"]:checked')?.value;if(mode==="students")loadAssignmentStudents(document.getElementById("ac")?.value);else{const box=document.getElementById("studentPicker");if(box)box.innerHTML='<div class="small muted">The assignment will be given to all students in the selected class.</div>'}}
 async function getStudentsForAssignment(classId){const {data:members,error}=await sb.from("class_students").select("student_id").eq("class_id",classId);if(error)throw error;if(document.querySelector('input[name="assignMode"]:checked')?.value==="students")return [...document.querySelectorAll(".assignment-student:checked")].map(x=>x.value);return (members||[]).map(x=>x.student_id)}
 async function assignStudentsToAssignment(assignmentId,classId){const studentIds=await getStudentsForAssignment(classId);if(!studentIds.length)throw new Error("No students were selected or this class has no students.");const rows=[...new Set(studentIds)].map(student_id=>({assignment_id:assignmentId,student_id}));const {error}=await sb.from("assignment_students").insert(rows);if(error)throw error;return rows.length}
+function assignmentBankSubjectParts(){
+ const name=String(document.getElementById('asub')?.value||'').trim().toUpperCase();
+ if(name.includes('MAT')||name.includes('MENTAL')) return {parts:['MAT_PATTERN','MAT_SERIES','MAT_GEOMETRICAL','MAT_MIRROR','MAT_EMBEDDED'],languages:['COMMON']};
+ if(name.includes('EVS')||name.includes('ENVIRONMENT')) return {parts:['EVS_MCQ','EVS_PASSAGE'],languages:['ASSAMESE','ENGLISH']};
+ if(name.includes('ARITH')) return {parts:['ARITHMETIC'],languages:['ASSAMESE','ENGLISH']};
+ if(name.includes('LANG')) return {parts:['LANGUAGE_PASSAGE'],languages:['ASSAMESE','ENGLISH']};
+ return {parts:[],languages:['COMMON','ASSAMESE','ENGLISH']};
+}
+function assignmentBankRows(){
+ const f=assignmentBankFilters; const search=String(f.search||'').trim().toLowerCase(); const meta=assignmentBankSubjectParts();
+ return (assignmentBankCache||[]).filter(q=>{
+   if(q.active===false)return false;
+   if(meta.parts.length && !meta.parts.includes(String(q.part_code||'').toUpperCase()))return false;
+   if(f.part && String(q.part_code||'').toUpperCase()!==String(f.part).toUpperCase())return false;
+   if(f.language && String(q.language||'').toUpperCase()!==String(f.language).toUpperCase())return false;
+   if(f.topic && String(q.topic||'')!==String(f.topic))return false;
+   if(search){const hay=[q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.topic,q.part_code,q.language,q.passage_title,q.passage_id].map(v=>String(v??'')).join(' ').toLowerCase();if(!hay.includes(search))return false;}
+   return true;
+ });
+}
+function assignmentBankSelectedSummary(){
+ const box=document.getElementById('assignmentSelectedBankSummary'); if(!box)return;
+ const n=assignmentBankSelected.size;
+ box.innerHTML=n?`<b>${n}</b> question${n===1?'':'s'} selected from the Mock Test Question Bank. <button type="button" class="secondary" onclick="clearAssignmentBankSelection()">Clear selection</button>`:'No question-bank questions selected.';
+}
+function assignmentBankToggle(id,checked){if(checked)assignmentBankSelected.add(id);else assignmentBankSelected.delete(id);assignmentBankSelectedSummary();renderAssignmentBankRows();}
+function assignmentBankSelectAllVisible(value){assignmentBankRows().forEach(q=>value?assignmentBankSelected.add(q.id):assignmentBankSelected.delete(q.id));assignmentBankSelectedSummary();renderAssignmentBankRows();}
+function clearAssignmentBankSelection(){assignmentBankSelected.clear();assignmentBankSelectedSummary();renderAssignmentBankRows();}
+function assignmentBankPartOptions(){
+ const meta=assignmentBankSubjectParts();
+ return meta.parts.map(x=>({value:x,label:x==='EVS_MCQ'?'EVS — MCQ':x==='EVS_PASSAGE'?'EVS — Passage':x==='LANGUAGE_PASSAGE'?'Language — Passage':x.replace(/^MAT_/,'MAT — ').replace('_',' ')}));
+}
+function renderAssignmentBankRows(){
+ const box=document.getElementById('assignmentBankRows'); if(!box)return;
+ const rows=assignmentBankRows();
+ box.innerHTML=rows.length?rows.slice(0,500).map((q,i)=>`<label style="display:flex;gap:10px;align-items:flex-start;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin:5px 0;background:${assignmentBankSelected.has(q.id)?'#eff6ff':'#fff'};cursor:pointer"><input type="checkbox" style="width:auto;margin-top:4px" ${assignmentBankSelected.has(q.id)?'checked':''} onchange="assignmentBankToggle('${q.id}',this.checked)"><span style="flex:1;min-width:0">${q.image_url?`<img src="${esc(q.image_url)}" style="width:105px;height:70px;object-fit:contain;border:1px solid #cbd5e1;border-radius:6px;float:right;margin-left:8px;background:#fff" onclick="event.preventDefault();openMockQuestionImage('${esc(q.image_url)}','Question preview')">`:''}<b>${esc(q.question_text||'[IMAGE QUESTION]')}</b><div class="small muted" style="margin-top:3px">${esc(q.part_code||'')} · ${esc(q.topic||'')} · ${mockBankDisplayLanguage(q.language)}${q.passage_title?` · ${esc(q.passage_title)}`:''}</div></span></label>`).join(''):`<div class="notice">No active questions match the selected filters. Choose another subject/filter or add questions to the Mock Test Question Bank first.</div>`;
+ const countNote=rows.length>500?` Showing first 500 of ${rows.length}. Use filters/search to narrow the list.`:'';
+ const note=document.getElementById('assignmentBankCount');if(note)note.textContent=`${rows.length} matching question(s).${countNote}`;
+}
+function renderAssignmentBankPicker(){
+ const box=document.getElementById('assignmentBankPicker'); if(!box)return;
+ const meta=assignmentBankSubjectParts(); const parts=assignmentBankPartOptions();
+ const topics=[...new Set(assignmentBankCache.filter(q=>!meta.parts.length||meta.parts.includes(String(q.part_code||'').toUpperCase())).map(q=>String(q.topic||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ box.innerHTML=`<div class="card" style="border:2px solid #2563eb;background:#f8fbff"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">📚 Mock Test Question Bank</h3><div class="small muted">Only questions belonging to the selected assignment subject are shown.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentBankPicker').style.display='none'">Close</button></div><div class="grid" style="margin-top:10px"><div><label>Part</label><select id="abfPart" onchange="assignmentBankFilters.part=this.value;assignmentBankFilters.topic='';renderAssignmentBankPicker()"><option value="">All parts</option>${parts.map(p=>`<option value="${esc(p.value)}" ${assignmentBankFilters.part===p.value?'selected':''}>${esc(p.label)}</option>`).join('')}</select></div><div><label>Language</label><select id="abfLang" onchange="assignmentBankFilters.language=this.value;renderAssignmentBankPicker()"><option value="">All languages</option>${meta.languages.map(l=>`<option value="${l}" ${assignmentBankFilters.language===l?'selected':''}>${mockBankDisplayLanguage(l)}</option>`).join('')}</select></div><div><label>Topic</label><select id="abfTopic" onchange="assignmentBankFilters.topic=this.value;renderAssignmentBankPicker()"><option value="">All topics</option>${topics.map(t=>`<option value="${esc(t)}" ${assignmentBankFilters.topic===t?'selected':''}>${esc(t)}</option>`).join('')}</select></div><div><label>Search</label><input id="abfSearch" value="${esc(assignmentBankFilters.search)}" placeholder="Search question..." oninput="assignmentBankFilters.search=this.value;renderAssignmentBankRows()"></div></div><div class="actions" style="margin:8px 0"><button type="button" class="secondary" onclick="assignmentBankSelectAllVisible(true)">Select all visible</button><button type="button" class="secondary" onclick="assignmentBankSelectAllVisible(false)">Clear visible</button><span id="assignmentBankCount" class="small muted"></span></div><div id="assignmentBankRows" style="max-height:520px;overflow:auto;padding-right:3px"></div><div class="actions" style="margin-top:10px"><button type="button" onclick="confirmAssignmentBankSelection()">✓ Use Selected Questions</button></div></div>`;
+ renderAssignmentBankRows();
+}
+async function openAssignmentQuestionBank(){
+ const box=document.getElementById('assignmentBankPicker');if(!box)return;
+ const subject=document.getElementById('asub')?.value||'';if(!subject)return alert('Select the assignment subject first.');
+ box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading Mock Test Question Bank…</span></div>';
+ const {data,error}=await sb.from('mock_question_bank').select('id,section_code,part_code,question_text,option_a,option_b,option_c,option_d,correct_option,passage_text,image_url,passage_id,passage_title,question_order,topic,language,active,created_at').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false});
+ if(error){box.innerHTML=`<div class="notice">Could not load the Mock Test Question Bank: ${esc(error.message)}</div>`;return;}
+ assignmentBankCache=data||[];assignmentBankFilters={part:'',topic:'',language:'',search:''};renderAssignmentBankPicker();assignmentBankSelectedSummary();
+}
+function confirmAssignmentBankSelection(){assignmentBankSelectedSummary();const box=document.getElementById('assignmentBankPicker');if(box)box.style.display='none';}
+function restoreAssignmentBankSelection(ids){assignmentBankSelected=new Set((ids||[]).filter(Boolean));assignmentBankSelectedSummary();}
+
+let assignmentMistakeCache=[];
+let assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};
+let assignmentMistakeSelected=new Set();
+async function assignmentMistakeRecipients(){
+  const classIds=[...document.querySelectorAll('.newassign-class:checked')].map(x=>x.value);
+  const selected=[...document.querySelectorAll('.newassign-student:checked')].map(x=>x.value);
+  if(selected.length)return [...new Set(selected)];
+  if(!classIds.length)return [];
+  const {data,error}=await sb.from('class_students').select('student_id').in('class_id',classIds);
+  if(error)throw error;
+  return [...new Set((data||[]).map(x=>x.student_id).filter(Boolean))];
+}
+function assignmentMistakeRows(){
+  const f=assignmentMistakeFilters, search=String(f.search||'').trim().toLowerCase();
+  const meta=assignmentBankSubjectParts();
+  return (assignmentMistakeCache||[]).filter(x=>{
+    const q=x.question;if(!q||q.active===false)return false;
+    if(meta.parts.length&&!meta.parts.includes(String(q.part_code||'').toUpperCase()))return false;
+    if(f.part&&String(q.part_code||'').toUpperCase()!==String(f.part).toUpperCase())return false;
+    if(f.topic&&String(q.topic||'')!==String(f.topic))return false;
+    if(Number(x.wrong_count||0)<Number(f.minWrong||1))return false;
+    if(search){const hay=[q.question_text,q.topic,q.part_code,q.passage_title,q.passage_id].map(v=>String(v??'')).join(' ').toLowerCase();if(!hay.includes(search))return false;}
+    return true;
+  });
+}
+function assignmentMistakeSelectedSummary(){const box=document.getElementById('assignmentMistakeSummary');if(!box)return;box.innerHTML=assignmentMistakeSelected.size?`<b>${assignmentMistakeSelected.size}</b> mistake question${assignmentMistakeSelected.size===1?'':'s'} selected. <button type="button" class="secondary" onclick="clearAssignmentMistakeSelection()">Clear</button>`:'No mistake questions selected.';}
+function assignmentMistakeToggle(id,on){if(on){assignmentMistakeSelected.add(id);assignmentBankSelected.add(id)}else{assignmentMistakeSelected.delete(id);assignmentBankSelected.delete(id)}assignmentMistakeSelectedSummary();assignmentBankSelectedSummary();renderAssignmentMistakeRows();}
+function assignmentMistakeSelectAllVisible(on){assignmentMistakeRows().forEach(x=>on?assignmentMistakeSelected.add(x.question.id):assignmentMistakeSelected.delete(x.question.id));assignmentMistakeRows().forEach(x=>on?assignmentBankSelected.add(x.question.id):assignmentBankSelected.delete(x.question.id));assignmentMistakeSelectedSummary();assignmentBankSelectedSummary();renderAssignmentMistakeRows();}
+function clearAssignmentMistakeSelection(){assignmentMistakeSelected.clear();assignmentBankSelectedSummary();assignmentMistakeSelectedSummary();renderAssignmentMistakeRows();}
+function renderAssignmentMistakeRows(){
+ const box=document.getElementById('assignmentMistakeRows');if(!box)return;const rows=assignmentMistakeRows();
+ box.innerHTML=rows.length?rows.slice(0,500).map(x=>{const q=x.question,id=q.id;return `<label style="display:flex;gap:10px;align-items:flex-start;padding:9px;border:1px solid #e2e8f0;border-radius:8px;margin:5px 0;background:${assignmentMistakeSelected.has(id)?'#fff7ed':'#fff'};cursor:pointer"><input type="checkbox" style="width:auto;margin-top:4px" ${assignmentMistakeSelected.has(id)?'checked':''} onchange="assignmentMistakeToggle('${id}',this.checked)"><span style="flex:1;min-width:0">${q.image_url?`<img src="${esc(q.image_url)}" style="width:105px;height:70px;object-fit:contain;border:1px solid #cbd5e1;border-radius:6px;float:right;margin-left:8px;background:#fff" onclick="event.preventDefault();openMockQuestionImage('${esc(q.image_url)}','Question preview')">`:''}<b>${esc(q.question_text||'[IMAGE QUESTION]')}</b><div class="small muted" style="margin-top:3px">${esc(q.part_code||'')} · ${esc(q.topic||'')} · Wrong <b>${Number(x.wrong_count||0)}</b> time${Number(x.wrong_count||0)===1?'':'s'} · Attempts ${Number(x.attempt_count||0)}</div></span></label>`}).join(''):'<div class="notice">No mistake questions match the selected filters. Students must have attempted questions linked to the Mock Test Question Bank.</div>';
+ const note=document.getElementById('assignmentMistakeCount');if(note)note.textContent=`${rows.length} matching question(s).`;
+}
+async function openAssignmentMistakeBank(){
+ const box=document.getElementById('assignmentBankPicker');if(!box)return;let studentIds=[];try{studentIds=await assignmentMistakeRecipients()}catch(e){return alert('Could not load assignment students: '+(e.message||e))}
+ if(!studentIds.length)return alert('Select the students/classes for this assignment first, then open Student Mistakes.');
+ box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading student mistakes…</span></div>';
+ const {data:perf,error}=await sb.from('student_question_performance').select('student_id,mock_question_id,attempt_count,wrong_count,correct_count,last_wrong_at,last_correct_at').in('student_id',studentIds).gt('wrong_count',0).order('wrong_count',{ascending:false});
+ if(error){box.innerHTML=`<div class="notice">Could not load student mistakes: ${esc(error.message)}</div>`;return;}
+ const ids=[...new Set((perf||[]).map(x=>x.mock_question_id).filter(Boolean))];if(!ids.length){box.innerHTML='<div class="card"><b>No mistake questions found.</b><p class="muted">These students have no recorded wrong answers from Mock Test Question Bank questions yet.</p></div>';return;}
+ const {data:qs,error:qe}=await sb.from('mock_question_bank').select('id,part_code,topic,question_text,image_url,passage_title,active').in('id',ids).eq('teacher_id',current.id);
+ if(qe){box.innerHTML=`<div class="notice">Could not load mistake questions: ${esc(qe.message)}</div>`;return;}
+ const by=new Map();(perf||[]).forEach(x=>{const prev=by.get(x.mock_question_id)||{wrong_count:0,attempt_count:0,correct_count:0};prev.wrong_count+=Number(x.wrong_count||0);prev.attempt_count+=Number(x.attempt_count||0);prev.correct_count+=Number(x.correct_count||0);by.set(x.mock_question_id,prev)});
+ assignmentMistakeCache=(qs||[]).map(q=>({...by.get(q.id),question:q}));assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};assignmentMistakeSelected=new Set([...assignmentBankSelected].filter(id=>ids.includes(id)));
+ const meta=assignmentBankSubjectParts();const parts=meta.parts.map(x=>({value:x,label:x==='EVS_MCQ'?'EVS — MCQ':x==='EVS_PASSAGE'?'EVS — Passage':x==='LANGUAGE_PASSAGE'?'Language — Passage':x.replace(/^MAT_/,'MAT — ').replace('_',' ')}));
+ const topics=[...new Set(assignmentMistakeCache.map(x=>String(x.question.topic||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ box.innerHTML=`<div class="card" style="border:2px solid #f59e0b;background:#fffaf0"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">🎯 Student Mistake Bank</h3><div class="small muted">Questions answered wrongly by the selected students. Selecting one adds the original Mock Question Bank question to this assignment.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentBankPicker').style.display='none'">Close</button></div><div class="grid" style="margin-top:10px"><div><label>Minimum Wrong Count</label><select id="amfWrong" onchange="assignmentMistakeFilters.minWrong=this.value;renderAssignmentMistakeRows()"><option value="1">Wrong ≥ 1</option><option value="2">Wrong ≥ 2</option><option value="3">Wrong ≥ 3</option><option value="5">Wrong ≥ 5</option></select></div><div><label>Part</label><select id="amfPart" onchange="assignmentMistakeFilters.part=this.value;renderAssignmentMistakeRows()"><option value="">All parts</option>${parts.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('')}</select></div><div><label>Topic</label><select id="amfTopic" onchange="assignmentMistakeFilters.topic=this.value;renderAssignmentMistakeRows()"><option value="">All topics</option>${topics.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div><div><label>Search</label><input id="amfSearch" placeholder="Search question/topic..." oninput="assignmentMistakeFilters.search=this.value;renderAssignmentMistakeRows()"></div></div><div class="actions" style="margin:8px 0"><button type="button" class="secondary" onclick="assignmentMistakeSelectAllVisible(true)">Select all visible</button><button type="button" class="secondary" onclick="assignmentMistakeSelectAllVisible(false)">Clear visible</button><span id="assignmentMistakeCount" class="small muted"></span></div><div id="assignmentMistakeRows" style="max-height:520px;overflow:auto;padding-right:3px"></div><div id="assignmentMistakeSummary" class="small muted" style="margin-top:8px"></div><div class="actions" style="margin-top:10px"><button type="button" onclick="document.getElementById('assignmentBankPicker').style.display='none';assignmentMistakeSelectedSummary();assignmentBankSelectedSummary()">✓ Use Selected Mistakes</button></div></div>`;
+ renderAssignmentMistakeRows();assignmentMistakeSelectedSummary();
+}
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
 async function saveAssignment(){
  const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";
@@ -3417,11 +3540,21 @@ async function saveAssignment(){
  }else{
    qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
  }
+ // Add selected Mock Test Question Bank questions as immutable assignment snapshots.
+ if(assignmentBankSelected.size){
+   const selectedIds=[...assignmentBankSelected];
+   const {data:bankRows,error:be}=await sb.from('mock_question_bank').select('id,question_text,option_a,option_b,option_c,option_d,correct_option,passage_text,image_url,topic,language,passage_id,passage_title,question_order').eq('teacher_id',current.id).in('id',selectedIds);
+   if(be){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load selected Question Bank questions: '+be.message)}
+   const byId=new Map((bankRows||[]).map(x=>[x.id,x]));
+   selectedIds.forEach(id=>{const q=byId.get(id);if(!q)return;qs.push({assignment_id:a.id,question_text:q.image_url?'[IMAGE QUESTION]':(q.question_text||''),option_a:q.image_url?'Option A':q.option_a,option_b:q.image_url?'Option B':q.option_b,option_c:q.image_url?'Option C':q.option_c,option_d:q.image_url?'Option D':q.option_d,correct_option:q.correct_option,question_order:qs.length+1,image_url:q.image_url||null,explanation:null,source_mock_question_id:q.id});});
+ }
+ // Ensure a stable order and do not let mixed-source questions collide on question_order.
+ qs=qs.map((q,i)=>({...q,question_order:i+1}));
  if(!qs.length){await sb.from("assignments").delete().eq("id",a.id);return alert("Add at least one question.")}
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}
  try{const rows=recipientInfo.studentIds.map(student_id=>({assignment_id:a.id,student_id}));const {error:re}=await sb.from("assignment_students").insert(rows);if(re)throw re}catch(e){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
  alert(`${type==="video"?"Video":"No-video"} assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);
- importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];
+ importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};
  teacherHome()
 }
 
@@ -3437,7 +3570,8 @@ function startBulkImportFromNewAssignment(){
   title:document.getElementById("at")?.value||"",
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
-  description:document.getElementById("adesc")?.value||""
+  description:document.getElementById("adesc")?.value||"",
+  selectedBankQuestionIds:[...assignmentBankSelected]
  };
  importedForNewAssignment=true;
  bulkImportMCQs();
@@ -4139,7 +4273,7 @@ async function schoolStudentAssessments(){
 
   render(`<div class="wrap">${header("📝 My Assessments")}
     <div class="card">
-      <h2>Welcome, ${esc(profile?.full_name||"Student")}</h2>
+      <h2>Welcome, ${esc(studentDisplayName())}</h2>
       <p class="muted">Roll No: <b>${esc(profile?.roll_no||"")}</b> &nbsp; | &nbsp; School Course</p>
     </div>
     <div id="school-assessments-only-content">
@@ -4424,6 +4558,179 @@ async function schoolStudentHome(){
   }
 }
 
+
+async function callStudentFunction(body){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session?.access_token) throw new Error("Your session has expired. Please log in again.");
+  const res=await fetch(`${SUPABASE_URL}/functions/v1/${CREATE_STUDENT_FN}`,{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "apikey":SUPABASE_KEY,
+      "Authorization":`Bearer ${session.access_token}`
+    },
+    body:JSON.stringify(body)
+  });
+  const j=await res.json().catch(()=>({}));
+  if(!res.ok||j.error) throw new Error(j.error||"Request failed.");
+  return j;
+}
+
+async function studentProfilePage(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+  try{
+    const {data:p,error}=await sb.from("profiles")
+      .select("id,full_name,display_name,roll_no,course,photo_url")
+      .eq("id",current.id).single();
+    if(error) throw error;
+    profile={...profile,...p};
+    cacheStudentProfile(profile);
+  }catch(e){
+    render(`<div class="wrap">${header("My Profile")}<div class="card">${message("Could not load your profile: "+(e.message||String(e)))}</div></div>`);
+    return;
+  }
+
+  const photo=studentPhotoUrl();
+  render(`<div class="wrap">${header("My Profile")}
+    <div class="card profile-card">
+      <div class="profile-photo-row">
+        ${photo
+          ? `<img id="profilePhotoPreview" class="student-profile-avatar" src="${esc(photo)}" alt="Profile photo">`
+          : `<div id="profilePhotoPreview" class="student-profile-avatar" style="display:grid;place-items:center;font-size:36px">👤</div>`}
+        <div>
+          <h2 style="margin-bottom:6px">Profile Photo</h2>
+          <p class="muted small">JPG, PNG or WEBP. Maximum 2 MB.</p>
+          <input id="profilePhotoFile" type="file" accept="image/jpeg,image/png,image/webp" onchange="previewStudentPhoto(event)">
+          <div class="profile-photo-actions">
+            <button onclick="uploadStudentPhoto()">Upload Photo</button>
+            ${photo?`<button class="secondary" onclick="removeStudentPhoto()">Remove Photo</button>`:""}
+          </div>
+        </div>
+      </div>
+
+      <hr class="profile-divider">
+
+      <h2>Personal Details</h2>
+      <label>Display Name</label>
+      <input id="profileDisplayName" value="${esc(profile?.display_name||profile?.full_name||"")}" maxlength="80" placeholder="Enter your display name">
+      <p class="muted small">This is the name shown on your student dashboard. Your original registered name is not changed.</p>
+
+      <label>Roll No.</label>
+      <input value="${esc(profile?.roll_no||"")}" readonly>
+      <label>Course</label>
+      <input value="${esc(profile?.course||"")}" readonly>
+      <button onclick="saveStudentDisplayName()">Save Profile</button>
+      <div id="profileSaveMsg"></div>
+
+      <hr class="profile-divider">
+
+      <h2>Change Password</h2>
+      <p class="muted">Enter your current password and choose a new password of at least 6 characters.</p>
+      <label>Current Password</label>
+      <input id="profileCurrentPassword" type="password" autocomplete="current-password">
+      <label>New Password</label>
+      <input id="profileNewPassword" type="password" autocomplete="new-password">
+      <label>Confirm New Password</label>
+      <input id="profileConfirmPassword" type="password" autocomplete="new-password">
+      <button onclick="changeStudentPassword()">Change Password</button>
+      <div id="passwordSaveMsg"></div>
+    </div>
+  </div>`);
+}
+
+function previewStudentPhoto(ev){
+  const file=ev.target.files?.[0];
+  if(!file)return;
+  if(file.size>2*1024*1024){
+    alert("Photo must be 2 MB or smaller.");
+    ev.target.value="";
+    return;
+  }
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){
+    alert("Please select a JPG, PNG or WEBP image.");
+    ev.target.value="";
+    return;
+  }
+  const reader=new FileReader();
+  reader.onload=()=> {
+    const el=document.getElementById("profilePhotoPreview");
+    if(el){
+      if(el.tagName==="IMG") el.src=reader.result;
+      else {
+        const img=document.createElement("img");
+        img.id="profilePhotoPreview";
+        img.className="student-profile-avatar";
+        img.alt="Profile photo";
+        img.src=reader.result;
+        el.replaceWith(img);
+      }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadStudentPhoto(){
+  const file=document.getElementById("profilePhotoFile")?.files?.[0];
+  if(!file){alert("Please choose a photo first.");return;}
+  if(file.size>2*1024*1024){alert("Photo must be 2 MB or smaller.");return;}
+  try{
+    const reader=new FileReader();
+    const base64=await new Promise((resolve,reject)=>{
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>reject(new Error("Could not read the image."));
+      reader.readAsDataURL(file);
+    });
+    await callStudentFunction({action:"uploadStudentPhoto",base64,mime_type:file.type});
+    const {data:p}=await sb.from("profiles").select("*").eq("id",current.id).single();
+    if(p){profile=p;cacheStudentProfile(p);}
+    studentProfilePage();
+  }catch(e){
+    alert(e.message||String(e));
+  }
+}
+
+async function removeStudentPhoto(){
+  if(!confirm("Remove your profile photo?"))return;
+  try{
+    await callStudentFunction({action:"removeStudentPhoto"});
+    const {data:p}=await sb.from("profiles").select("*").eq("id",current.id).single();
+    if(p){profile=p;cacheStudentProfile(p);}
+    studentProfilePage();
+  }catch(e){alert(e.message||String(e));}
+}
+
+async function saveStudentDisplayName(){
+  const input=document.getElementById("profileDisplayName");
+  const msg=document.getElementById("profileSaveMsg");
+  const displayName=String(input?.value||"").trim();
+  if(!displayName){msg.innerHTML=message("Display name cannot be empty.");return;}
+  if(displayName.length>80){msg.innerHTML=message("Display name is too long.");return;}
+  try{
+    const j=await callStudentFunction({action:"updateStudentProfile",display_name:displayName});
+    profile={...profile,display_name:j.display_name};
+    cacheStudentProfile(profile);
+    msg.innerHTML=message("Profile saved successfully.",true);
+  }catch(e){msg.innerHTML=message(e.message||String(e));}
+}
+
+async function changeStudentPassword(){
+  const msg=document.getElementById("passwordSaveMsg");
+  const currentPassword=String(document.getElementById("profileCurrentPassword")?.value||"");
+  const newPassword=String(document.getElementById("profileNewPassword")?.value||"");
+  const confirmPassword=String(document.getElementById("profileConfirmPassword")?.value||"");
+  if(!currentPassword||!newPassword||!confirmPassword){msg.innerHTML=message("Please fill all password fields.");return;}
+  if(newPassword.length<6){msg.innerHTML=message("New password must contain at least 6 characters.");return;}
+  if(newPassword!==confirmPassword){msg.innerHTML=message("New password and confirmation do not match.");return;}
+  if(newPassword===currentPassword){msg.innerHTML=message("New password must be different from the current password.");return;}
+  try{
+    await callStudentFunction({action:"changeStudentPassword",current_password:currentPassword,new_password:newPassword});
+    document.getElementById("profileCurrentPassword").value="";
+    document.getElementById("profileNewPassword").value="";
+    document.getElementById("profileConfirmPassword").value="";
+    msg.innerHTML=message("Password changed successfully.",true);
+  }catch(e){msg.innerHTML=message(e.message||String(e));}
+}
+
 async function studentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
 
@@ -4527,7 +4834,7 @@ async function studentHome(){
         <button onclick="studentOmrResult()">View OMR Result</button>
       </div>
     </div>
-    <div class="card"><h2>Welcome, ${esc(profile.full_name)}</h2>
+    <div class="card"><h2>Welcome, ${esc(studentDisplayName())}</h2>
       <p class="muted">New and not-submitted assignments are highlighted automatically.</p>
       <div class="notice small"><b>Submission rule:</b> A score of 80% or more completes the assignment successfully. If your score is below 80%, you must redo the assessment; it becomes available again automatically after 3 hours. During the waiting period, you can view your result, answers and answer key. Your teacher can also re-assign it for a new attempt.</div>
     </div>
@@ -4555,7 +4862,7 @@ async function studentOmrResult(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   revokeStudentOmrUrl();
 
-  const name=profile?.full_name||"Student";
+  const name=studentDisplayName();
   const roll=profile?.roll_no||"";
   render(`<div class="wrap">${header("OMR Test Result")}
     <div class="card omr-result-card">
@@ -4823,6 +5130,9 @@ async function submitQuiz(autoSubmit=false){
       await sb.from("attempts").delete().eq("id",attempt.id);
       throw e;
     }
+
+    const perfRows=active.questions.map((q,i)=>({mock_question_id:q.source_mock_question_id||null,is_correct:answers[i]===q.correct_option})).filter(x=>x.mock_question_id);
+    if(perfRows.length){const {error:pe}=await sb.rpc('record_student_question_results',{p_student_id:current.id,p_results:perfRows});if(pe)console.warn('Could not record question performance:',pe.message);}
 
     const submissionPct=active.questions.length?Math.round(score*100/active.questions.length):0;
     window.quizSubmitting=false;
