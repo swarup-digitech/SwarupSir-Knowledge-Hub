@@ -3263,7 +3263,28 @@ async function newAssignment(){
   <div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div>
  </div>
  <label>Title</label><input id="at"><label>Subject</label><select id="asub"><option value="">Select Subject</option>${jnvstSubjects.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select><div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea>
- <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3><p class="small muted">Use questions already stored in the Mock Test Question Bank, upload new questions, or add MCQs manually. You can combine methods in one assignment.</p><div class="actions"><button type="button" onclick="openAssignmentQuestionBank()">📚 Select From Mock Question Bank</button><button type="button" onclick="openAssignmentMistakeBank()">🎯 Student Mistakes</button><button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button><button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button></div><div id="assignmentBankPicker" style="display:none;margin-top:12px"></div><div id="assignmentSelectedBankSummary" class="small muted" style="margin-top:8px">No question-bank questions selected.</div><div class="small muted" style="margin-top:8px">Question-bank selections are copied into this assignment as a snapshot, so later edits to the bank do not change an existing assignment.</div></div><h3>Manual / Uploaded Questions</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
+ <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3>
+<p class="small muted">Choose how you want to add questions. You can combine questions from the Mock Test Question Bank with uploaded or manually entered questions.</p>
+<div class="grid" style="margin-top:10px">
+  <div class="card" style="margin:0;border:2px solid #2563eb;background:#eff6ff">
+    <h4 style="margin:0 0 6px">📚 Mock Test Question Bank</h4>
+    <p class="small muted" style="min-height:38px">Reuse questions already stored in your central Mock Test Question Bank.</p>
+    <button type="button" onclick="openAssignmentQuestionBank()" style="width:100%">📚 Select From Question Bank</button>
+  </div>
+  <div class="card" style="margin:0;border:2px solid #f59e0b;background:#fffaf0">
+    <h4 style="margin:0 0 6px">🎯 Student Mistakes</h4>
+    <p class="small muted" style="min-height:38px">Select questions previously answered wrongly by the assigned students.</p>
+    <button type="button" onclick="openAssignmentMistakeBank()" style="width:100%">🎯 Select Student Mistakes</button>
+  </div>
+</div>
+<div class="actions" style="margin-top:10px">
+  <button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button>
+  <button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button>
+</div>
+<div id="assignmentBankPicker" style="display:none;margin-top:12px"></div>
+<div id="assignmentSelectedBankSummary" class="small muted" style="margin-top:8px">No question-bank questions selected.</div>
+<div class="small muted" style="margin-top:8px">Question-bank selections are copied into this assignment as a snapshot, so later edits to the bank do not change an existing assignment.</div>
+</div><h3>Manual / Uploaded Questions</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
  window._newAssignmentClasses=classes;
  if(newAssignmentDraft){
    restoreAssignmentBankSelection(newAssignmentDraft.selectedBankQuestionIds||[]);
@@ -3436,7 +3457,7 @@ function renderAssignmentBankPicker(){
 }
 async function openAssignmentQuestionBank(){
  const box=document.getElementById('assignmentBankPicker');if(!box)return;
- const subject=document.getElementById('asub')?.value||'';if(!subject)return alert('Select the assignment subject first.');
+ const subject=document.getElementById('asub')?.value||'';if(!subject){const s=document.getElementById('asub');s?.focus();return alert('Please select the assignment subject first. The Question Bank will then show the matching questions.');}
  box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading Mock Test Question Bank…</span></div>';
  const {data,error}=await sb.from('mock_question_bank').select('id,section_code,part_code,question_text,option_a,option_b,option_c,option_d,correct_option,passage_text,image_url,passage_id,passage_title,question_order,topic,language,active,created_at').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false});
  if(error){box.innerHTML=`<div class="notice">Could not load the Mock Test Question Bank: ${esc(error.message)}</div>`;return;}
