@@ -223,7 +223,7 @@ function goBack(){
   }catch{}
   location.replace(getHomeHref());
 }
-function studentDisplayName(){return profile?.display_name||studentDisplayName();}
+function studentDisplayName(){return String(profile?.display_name||profile?.name||profile?.full_name||profile?.student_name||profile?.roll_no||"Student").trim()||"Student";}
 function studentPhotoUrl(){return profile?.photo_url||"";}
 const header=(t,showBack=true)=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${showBack?`<button class="secondary" onclick="goBack()">← Back</button>`:""}<h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button>${profile?.role==="student"?`<button class="secondary" onclick="location.href='/main.html?mode=student&portal=SUBSCRIPTION'">💳 Subscription</button><button class="secondary" onclick="studentProfilePage()">👤 Profile</button>`:""}<button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
