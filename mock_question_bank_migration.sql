@@ -19,6 +19,10 @@ create table if not exists public.mock_question_bank (
   source_type text,
   question_order integer,
   source_question_no integer,
+  marks numeric,
+  cognitive_level text,
+  difficulty text,
+  explanation text,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );

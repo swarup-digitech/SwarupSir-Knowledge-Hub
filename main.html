@@ -3798,10 +3798,15 @@ function generateSchoolAssignmentQbSelection(){
  for(const q of fixed){const g=assignmentSchoolQbGroup(q);if(g&&usedGroups.has(g))return alert(`Only one fixed question can belong to Variation Group ${q.variation_group}.`);selected.push(q);usedIds.add(q.id);if(g)usedGroups.add(g)}
  for(const g of fixedGroups){if(usedGroups.has(g))return alert(`Variation Group ${g} is already represented by a fixed question.`);const pool=allowed.filter(q=>assignmentSchoolQbGroup(q)===g&&!usedIds.has(q.id));if(!pool.length)return alert(`No usable question is available in fixed Variation Group ${g}.`);const q=pool[Math.floor(Math.random()*pool.length)];selected.push(q);usedIds.add(q.id);usedGroups.add(g)}
  if(selected.length>total)return alert(`Fixed selections already contain ${selected.length} questions, which exceeds the requested ${total}.`);
- const pool=allowed.filter(q=>!usedIds.has(q.id)&&(!assignmentSchoolQbGroup(q)||!usedGroups.has(assignmentSchoolQbGroup(q))));
+ // For JNVST, a variation group is an explicit teacher constraint, not a reason to
+ // make otherwise independent bank questions mutually exclusive. This is especially
+ // important for image-based MAT questions, where many imported questions may share
+ // legacy/blank variation metadata. School-course generation keeps the stricter rule.
+ const enforceRandomVariation = assignmentSchoolQbMode!=='JNVST';
+ const pool=allowed.filter(q=>!usedIds.has(q.id)&&(!enforceRandomVariation||!assignmentSchoolQbGroup(q)||!usedGroups.has(assignmentSchoolQbGroup(q))));
  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
- for(const q of pool){if(selected.length>=total)break;const g=assignmentSchoolQbGroup(q);if(g&&usedGroups.has(g))continue;selected.push(q);usedIds.add(q.id);if(g)usedGroups.add(g)}
- if(selected.length<total)return alert(`Only ${selected.length} unique questions can be selected under the current lesson and variation-group constraints. Add more questions, select more lessons, or reduce the total.`);
+ for(const q of pool){if(selected.length>=total)break;const g=assignmentSchoolQbGroup(q);if(enforceRandomVariation&&g&&usedGroups.has(g))continue;selected.push(q);usedIds.add(q.id);if(enforceRandomVariation&&g)usedGroups.add(g)}
+ if(selected.length<total)return alert(`Only ${selected.length} unique questions are available in the selected lessons. Add more questions, select more lessons, or reduce the total.`);
  assignmentSchoolQbSelected={ids:selected.map(q=>q.id),total,lang:document.getElementById('asqbLang')?.value||'EN',subject:assignmentSchoolQbSubject,subject_name:assignmentSchoolQbSubjectName,medium:assignmentSchoolQbMedium,course_type:assignmentSchoolQbMode};
  const out=document.getElementById('asqbSelectedList');if(out)out.innerHTML=`<div class="success"><b>${selected.length} questions selected.</b> Fixed questions/groups are preserved; remaining questions were randomly selected without reusing a variation group.</div><ol>${selected.map(q=>`<li style="margin:4px 0">${assignmentSchoolQbEsc(assignmentSchoolQbQuestionText(q,assignmentSchoolQbSelected.lang).slice(0,220))}<span class="small muted"> — ${assignmentSchoolQbEsc(assignmentSchoolQbLessonLabel(assignmentSchoolQbQuestionLessonId(q)))}${q.topic?' · '+assignmentSchoolQbEsc(q.topic):''}${q.variation_group?' · '+assignmentSchoolQbEsc(q.variation_group):''}</span></li>`).join('')}</ol>`;
  assignmentSchoolQbRenderSummary();
