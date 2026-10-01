@@ -2582,11 +2582,105 @@ function manageJnvstClasses(){
  const subjects=jnvstSubjects||[];
  return render(`<div class="wrap">${header("Manage JNVST Groups & Subjects")}
   <div class="card"><div class="notice"><b>Assignment structure:</b> Main Group → Sub-group(s) → Students. JNVST-VI and JNVST-IX are fixed main groups. You may create additional main groups, sub-groups and subjects.</div>
-   <div class="actions" style="margin-top:12px"><button onclick="newJnvstMainGroup()">+ Create Main Group</button><button onclick="newJnvstSubject()">+ Create Subject</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
+   <div class="actions" style="margin-top:12px"><button onclick="newJnvstMainGroup()">+ Create Main Group</button><button onclick="newJnvstSubject()">+ Create Subject</button><button onclick="jnvstLessonBulkUpload()">↑ Bulk Upload Lessons / Sub-lessons</button><button class="secondary" onclick="downloadJnvstLessonTemplate()">↓ Excel Template</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
   </div>
   <div class="card"><h2>📚 Main Groups & Sub-groups</h2>${mainCards||"<div class='notice'>No groups found.</div>"}</div>
   <div class="card"><h2>📖 Subjects, Lessons & Sub-lessons</h2><div class="notice">Create the teaching hierarchy <b>Subject → Lesson → Sub-lesson</b>. This is the JNVST categorization layer for the Question Bank. Existing Chapter/Subchapter and Topic fields are preserved.</div>${subjects.length?subjects.map(x=>{const ls=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===x.id);const roots=ls.filter(l=>!l.parent_lesson_id);const renderLesson=(l,depth=0)=>{const kids=ls.filter(k=>k.parent_lesson_id===l.id);return `<div class="student-card" style="margin:${depth?6:8}px 0 0 ${depth*24}px;background:${depth?'#f8fafc':'#fff'}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b>${esc(l.lesson_code||'')}</b> ${esc(l.lesson_name)}${l.description?`<div class="small muted">${esc(l.description)}</div>`:''}<div class="small muted">${kids.length?kids.length+' sub-lesson(s)':''}</div></div><div class="actions"><button class="secondary" onclick="editJnvstLesson('${l.id}')">✎ Edit</button><button class="secondary" onclick="newJnvstLesson('${x.id}','${l.id}')">+ Sub-lesson</button><button class="danger" onclick="deleteJnvstLesson('${l.id}')">Delete</button></div></div>${kids.map(k=>renderLesson(k,depth+1)).join('')}</div>`};return `<div class="student-card" style="background:#eff6ff;border:1px solid #bfdbfe"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>${esc(x.name)}</b>${x.description?`<div class="small muted">${esc(x.description)}</div>`:''}</div><div class="actions"><button onclick="newJnvstLesson('${x.id}','')">+ Create Lesson</button><button class="danger" onclick="deleteJnvstSubject('${x.id}')">Delete Subject</button></div></div><div style="margin-top:8px">${roots.length?roots.map(l=>renderLesson(l,0)).join(''):'<div class="muted small">No lessons yet. Create the first lesson.</div>'}</div></div>`}).join(""):"<div class='muted'>No subjects. Create one to use it in assignments.</div>"}</div>
  </div>`);
+}
+function downloadJnvstLessonTemplate(){
+ try{
+  if(typeof XLSX==='undefined')return alert('Excel library is not loaded. Please refresh the page and try again.');
+  const wb=XLSX.utils.book_new();
+  const rows=[
+   ['Subject Name','Lesson Code','Lesson Name','Parent Lesson Code','Description'],
+   ['Arithmetic','1','Number System','','Numbers, place value and related concepts'],
+   ['Arithmetic','1.1','Place Value','1','Place value and face value'],
+   ['Arithmetic','1.2','Roman Numerals','1','Roman numeral basics'],
+   ['Arithmetic','2','Fractions','','Fractions and their operations'],
+   ['Arithmetic','2.1','Like Fractions','2','Addition and subtraction of like fractions'],
+   ['EVS','1','Family and Friends','','Sample EVS lesson'],
+   ['EVS','1.1','Relationships','1','Sub-lesson example']
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:22},{wch:16},{wch:34},{wch:22},{wch:48}];
+  XLSX.utils.book_append_sheet(wb,ws,'Lessons');
+  const ins=XLSX.utils.aoa_to_sheet([
+   ['JNVST Lesson / Sub-lesson Bulk Upload — Instructions'],
+   ['1. Subject Name must exactly match an existing JNVST Subject in Manage JNVST Groups & Subjects.'],
+   ['2. Lesson Code must be unique within the Subject. Examples: 1, 1.1, 1.2, 2, 2.1.'],
+   ['3. Leave Parent Lesson Code blank for a top-level Lesson.'],
+   ['4. For a Sub-lesson, enter the Lesson Code of its parent in Parent Lesson Code.'],
+   ['5. The parent may be in the same Excel file and is processed before its children.'],
+   ['6. Existing lesson codes are not duplicated. The preview will report conflicts before saving.'],
+   ['7. Existing Question Bank categories (Chapter, Subchapter, Topic, Subject, Medium, etc.) are not changed.'],
+   ['8. After creating the hierarchy, edit Question Bank questions and assign JNVST Subject + Lesson/Sub-lesson.'],
+   ['9. Use the Bulk Upload button only for JNVST Subject → Lesson → Sub-lesson categorization.']
+  ]);
+  ins['!cols']=[{wch:110}];XLSX.utils.book_append_sheet(wb,ins,'Instructions');
+  XLSX.writeFile(wb,'JNVST_Lesson_Sublesson_Bulk_Upload_Template.xlsx');
+ }catch(e){alert('Could not create template: '+(e.message||e))}
+}
+let jnvstLessonBulkRows=[];
+function jnvstLessonBulkUpload(){
+ jnvstLessonBulkRows=[];
+ render(`<div class="wrap">${header('Bulk Upload JNVST Lessons / Sub-lessons')}
+  <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
+   <h2 style="margin:0;color:#1d4ed8">↑ Bulk Upload Lessons / Sub-lessons</h2>
+   <p class="muted">Upload an Excel file to create the JNVST teaching hierarchy <b>Subject → Lesson → Sub-lesson</b>. Existing Question Bank categories are preserved.</p>
+   <div class="actions"><button class="secondary" onclick="downloadJnvstLessonTemplate()">↓ Download Excel Template</button><button class="secondary" onclick="manageJnvstClasses()">← Back</button></div>
+  </div>
+  <div class="card">
+   <label>Excel File (.xlsx / .xls)</label>
+   <input id="jnvstLessonExcel" type="file" accept=".xlsx,.xls" onchange="readJnvstLessonExcel(event)">
+   <div id="jnvstLessonBulkPreview" class="small muted" style="margin-top:10px">No file selected.</div>
+  </div>
+  <div class="card"><h3>Required columns</h3><p><b>Subject Name, Lesson Code, Lesson Name</b><br>Optional: <b>Parent Lesson Code, Description</b></p>
+   <div class="notice small">Top-level lessons have a blank Parent Lesson Code. Sub-lessons must use the Lesson Code of their parent. The system validates the complete file before inserting anything.</div>
+  </div>
+  <div class="actions"><button id="jnvstLessonImportBtn" disabled onclick="saveJnvstLessonBulk()">✓ Validate & Import</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div>
+ </div>`);
+}
+function jnvstNormHeader(v){return String(v??'').trim().toLowerCase().replace(/[_\s-]+/g,' ')}
+function jnvstGetCell(row,names){const keys=Object.keys(row||{});for(const n of names){const k=keys.find(x=>jnvstNormHeader(x)===jnvstNormHeader(n));if(k!==undefined)return String(row[k]??'').trim()}return ''}
+function readJnvstLessonExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById('jnvstLessonBulkPreview'),btn=document.getElementById('jnvstLessonImportBtn');
+ if(!box)return;btn.disabled=true;jnvstLessonBulkRows=[];
+ const r=new FileReader();r.onload=e=>{try{
+  const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames.find(n=>jnvstNormHeader(n)==='lessons')||wb.SheetNames[0]];const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+  if(!raw.length){box.innerHTML=message('The Excel sheet contains no data.');return}
+  jnvstLessonBulkRows=raw.map((row,i)=>({row:i+2,subject:jnvstGetCell(row,['Subject Name','Subject']),code:jnvstGetCell(row,['Lesson Code','Code']),name:jnvstGetCell(row,['Lesson Name','Lesson','Name']),parentCode:jnvstGetCell(row,['Parent Lesson Code','Parent Code','Parent Lesson']),description:jnvstGetCell(row,['Description'])}));
+  const errors=[];const warnings=[];const subjectMap=new Map((jnvstSubjects||[]).map(x=>[String(x.name||'').trim().toLowerCase(),x]));const existing=new Map((jnvstSubjectLessons||[]).map(x=>[`${x.subject_id}|${String(x.lesson_code||'').trim().toLowerCase()}`,x]));const fileCodes=new Set();
+  jnvstLessonBulkRows.forEach(x=>{
+   if(!x.subject)errors.push(`Row ${x.row}: Subject Name is required.`);else if(!subjectMap.has(x.subject.toLowerCase()))errors.push(`Row ${x.row}: Subject "${x.subject}" does not exist. Create it first.`);
+   if(!x.code)errors.push(`Row ${x.row}: Lesson Code is required.`);if(!x.name)errors.push(`Row ${x.row}: Lesson Name is required.`);
+   if(x.code&&!/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(x.code))errors.push(`Row ${x.row}: Invalid Lesson Code "${x.code}".`);
+   const key=x.subject.toLowerCase()+'|'+x.code.toLowerCase();if(x.code&&fileCodes.has(key))errors.push(`Row ${x.row}: Duplicate Lesson Code ${x.code} in this file.`);if(x.code)fileCodes.add(key);
+   if(subjectMap.has(x.subject.toLowerCase())&&x.code&&existing.has(`${subjectMap.get(x.subject.toLowerCase()).id}|${x.code.toLowerCase()}`))warnings.push(`Row ${x.row}: ${x.subject} / ${x.code} already exists and will be skipped.`);
+  });
+  const bySubjectCode=new Map(jnvstLessonBulkRows.filter(x=>x.subject&&x.code).map(x=>[x.subject.toLowerCase()+'|'+x.code.toLowerCase(),x]));
+  jnvstLessonBulkRows.forEach(x=>{if(x.parentCode){const k=x.subject.toLowerCase()+'|'+x.parentCode.toLowerCase();if(!bySubjectCode.has(k)&&!([...existing.values()].some(l=>{const sub=(jnvstSubjects||[]).find(s=>s.id===l.subject_id);return sub&&String(sub.name).trim().toLowerCase()===x.subject.toLowerCase()&&String(l.lesson_code).trim().toLowerCase()===x.parentCode.toLowerCase()})))errors.push(`Row ${x.row}: Parent Lesson Code "${x.parentCode}" was not found for subject ${x.subject}.`)}});
+  if(errors.length){box.innerHTML=message(`<b>Validation failed.</b><br>${errors.slice(0,30).map(esc).join('<br>')}${errors.length>30?`<br>…and ${errors.length-30} more.`:''}`);return}
+  box.innerHTML=message(`<b>${jnvstLessonBulkRows.length} row(s) loaded.</b><br>${warnings.length?warnings.slice(0,12).map(esc).join('<br>')+'<br>':''}Ready to import. Existing lesson codes will be skipped; new lessons will be inserted parent-first.`,true);btn.disabled=!jnvstLessonBulkRows.length;
+ }catch(err){box.innerHTML=message('Could not read Excel: '+(err.message||err));}}
+ r.readAsArrayBuffer(file);
+}
+async function saveJnvstLessonBulk(){
+ if(!jnvstLessonBulkRows.length)return alert('Choose an Excel file first.');
+ const subjectMap=new Map((jnvstSubjects||[]).map(x=>[String(x.name||'').trim().toLowerCase(),x]));const existing=new Map((jnvstSubjectLessons||[]).map(x=>[`${x.subject_id}|${String(x.lesson_code||'').trim().toLowerCase()}`,x]));
+ let pending=jnvstLessonBulkRows.map(x=>({...x,subjectObj:subjectMap.get(x.subject.toLowerCase())})).filter(x=>x.subjectObj&&!existing.has(`${x.subjectObj.id}|${x.code.toLowerCase()}`));
+ const created=[];const failed=[];
+ // Parent-first insertion: repeatedly insert rows whose parent is already in DB or has just been created.
+ let guard=0;while(pending.length&&guard++<pending.length+5){let progress=0;for(const x of [...pending]){let parentId=null;if(x.parentCode){const parent=jnvstLessonBulkRows.find(r=>r.subject.toLowerCase()===x.subject.toLowerCase()&&r.code.toLowerCase()===x.parentCode.toLowerCase());const existingParent=parent?existing.get(`${x.subjectObj.id}|${x.parentCode.toLowerCase()}`):null;const newParent=parent?created.find(c=>c.subject_id===x.subjectObj.id&&String(c.lesson_code).toLowerCase()===x.parentCode.toLowerCase()):null;parentId=existingParent?.id||newParent?.id;if(!parentId)continue;}
+   const {data,error}=await sb.from('jnvst_subject_lessons').insert({teacher_id:current.id,subject_id:x.subjectObj.id,parent_lesson_id:parentId,lesson_code:x.code,lesson_name:x.name,description:x.description||null}).select('*').single();
+   if(error){failed.push(`Row ${x.row}: ${error.message}`);pending=pending.filter(y=>y!==x);progress++;continue;}
+   created.push(data);existing.set(`${x.subjectObj.id}|${x.code.toLowerCase()}`,data);pending=pending.filter(y=>y!==x);progress++;
+  }
+  if(!progress)break;
+ }
+ pending.forEach(x=>failed.push(`Row ${x.row}: Could not resolve parent lesson "${x.parentCode}".`));
+ if(created.length){jnvstSubjectLessons=[...(jnvstSubjectLessons||[]),...created];}
+ alert(`Bulk import complete.\n\nCreated: ${created.length}\nSkipped existing: ${jnvstLessonBulkRows.length-created.length-failed.length}\nFailed: ${failed.length}${failed.length?'\n\n'+failed.slice(0,10).join('\n'):''}`);
+ if(failed.length)document.getElementById('jnvstLessonBulkPreview').innerHTML=message(failed.slice(0,30).map(esc).join('<br>'));else await manageJnvstClasses();
 }
 async function newJnvstMainGroup(){
  render(`<div class="wrap">${header("Create JNVST Main Group")}<div class="card"><label>Main Group Name</label><input id="jnvstMainName" placeholder="e.g. JNVST-V (Foundation)"><label>Description</label><textarea id="jnvstMainDesc" placeholder="Optional description"></textarea><div class="actions"><button onclick="saveJnvstMainGroup()">Create Main Group</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`);
