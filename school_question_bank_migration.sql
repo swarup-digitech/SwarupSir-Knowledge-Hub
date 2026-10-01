@@ -14,7 +14,8 @@ create table if not exists public.school_question_bank_chapters (
 create table if not exists public.school_question_bank_questions (
   id uuid primary key default gen_random_uuid(),
   teacher_id uuid not null references public.profiles(id) on delete cascade,
-  chapter_id uuid not null references public.school_question_bank_chapters(id) on delete restrict,
+  course_type text not null default 'SCHOOL' check (course_type in ('JNVST','SCHOOL')),
+  chapter_id uuid references public.school_question_bank_chapters(id) on delete restrict,
   question_text_en text,
   question_text_as text,
   question_type text not null check (question_type in ('MCQ','Short','Long')),
@@ -56,6 +57,7 @@ create table if not exists public.school_question_bank_options (
 create index if not exists idx_qb_questions_teacher on public.school_question_bank_questions(teacher_id);
 create index if not exists idx_qb_questions_chapter on public.school_question_bank_questions(chapter_id);
 create index if not exists idx_qb_questions_subject_medium on public.school_question_bank_questions(teacher_id,subject,medium);
+create index if not exists idx_qb_questions_teacher_course on public.school_question_bank_questions(teacher_id,course_type,created_at desc);
 create index if not exists idx_qb_blocks_question on public.school_question_bank_blocks(question_id,block_order);
 create index if not exists idx_qb_options_question on public.school_question_bank_options(question_id,display_order);
 

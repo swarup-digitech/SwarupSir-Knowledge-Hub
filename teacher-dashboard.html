@@ -842,14 +842,12 @@ function gpToggleFixed(id,on){if(on)gpFixedIds.add(id);else gpFixedIds.delete(id
 
 function qbEsc(s){return esc(s)}
 async function loadQuestionBank(){
-  const [{data:ch,error:ce},{data:q,error:qe},{data:sr,error:se},{data:lr,error:le}]=await Promise.all([
+  const [{data:ch,error:ce},{data:q,error:qe}]=await Promise.all([
     sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id).order('chapter_code').order('chapter_name'),
-    sb.from('school_question_bank_questions').select('*').eq('teacher_id',teacher.id).order('created_at',{ascending:false}),
-    sb.from('jnvst_subjects').select('*').eq('teacher_id',teacher.id).order('name'),
-    sb.from('jnvst_subject_lessons').select('*').eq('teacher_id',teacher.id).order('lesson_code').order('lesson_name')
+    sb.from('school_question_bank_questions').select('*').eq('teacher_id',teacher.id).eq('course_type','SCHOOL').order('created_at',{ascending:false})
   ]);
-  if(ce) throw ce;if(qe) throw qe;if(se||le) throw (se||le);
-  qbChapters=ch||[];qbQuestions=q||[];qbJnvstSubjects=sr||[];qbJnvstLessons=lr||[];
+  if(ce) throw ce;if(qe) throw qe;
+  qbChapters=ch||[];qbQuestions=q||[];qbJnvstSubjects=[];qbJnvstLessons=[];
 }
 function qbChapterCode(c){return String(c?.chapter_code||c?.chapter_number||'').trim()}
 function qbChapterParent(c){return qbChapters.find(x=>x.id===c?.parent_chapter_id)||null}
@@ -890,7 +888,7 @@ function qbRenderTable(){
   const allowed=ch?qbDescendantIds(ch):null; const rows=qbQuestions.filter(q=>{const hay=`${q.question_text_en||''} ${q.question_text_as||''} ${q.topic||''} ${q.variation_group||''}`.toLowerCase();return (!s||hay.includes(s))&&(!subj||String(q.subject||'').trim().toLowerCase()===subj)&&(!med||String(q.medium||'').trim().toUpperCase()===med)&&(!allowed||allowed.has(q.chapter_id))&&(!lv||q.cognitive_level===lv)});
   const html=`<div class="small muted" style="margin-bottom:8px">${rows.length} question(s)</div>
   <div style="overflow:auto"><table><thead><tr><th>#</th><th>Question</th><th>Subject / Medium</th><th>Chapter / Lesson / Topic</th><th>Variation Group</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>Difficulty</th><th>Actions</th></tr></thead><tbody>
-  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${qbEsc((q.question_text_en||q.question_text_as||'').slice(0,160))}${q.has_images?' 🖼️':''}</td><td><b>${qbEsc(q.subject||'—')}</b><div class="small muted">${qbEsc(q.medium||'—')}</div>${q.jnvst_subject_id?`<div class="small" style="color:#1d4ed8">JNVST: ${qbEsc((qbJnvstSubjects||[]).find(x=>x.id===q.jnvst_subject_id)?.name||'—')}</div>`:''}</td><td>${qbChapterDisplay(qbChapters.find(c=>c.id===q.chapter_id))}${q.topic?`<div class="small muted">Topic: ${qbEsc(q.topic)}</div>`:''}${q.jnvst_lesson_id?`<div class="small" style="color:#1d4ed8">Lesson: ${qbEsc((qbJnvstLessons||[]).find(x=>x.id===q.jnvst_lesson_id)?.lesson_name||'—')}</div>`:''}</td><td>${q.variation_group?`<span class="tag">${qbEsc(q.variation_group)}</span>`:'—'}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
+  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${qbEsc((q.question_text_en||q.question_text_as||'').slice(0,160))}${q.has_images?' 🖼️':''}</td><td><b>${qbEsc(q.subject||'—')}</b><div class="small muted">${qbEsc(q.medium||'—')}</div></td><td>${qbChapterDisplay(qbChapters.find(c=>c.id===q.chapter_id))}${q.topic?`<div class="small muted">Topic: ${qbEsc(q.topic)}</div>`:''}</td><td>${q.variation_group?`<span class="tag">${qbEsc(q.variation_group)}</span>`:'—'}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
   </tbody></table></div>`;
   document.getElementById('qbTable').innerHTML=html;
 }
@@ -1032,7 +1030,7 @@ async function qbEnsureChapter(row,defaultId,cache){
 }
 function qbBulkOptionObjects(r){return ['A','B','C','D'].map(L=>({label:L,en:r['option'+L+'En'],as:r['option'+L+'As']})).filter(o=>o.en||o.as)}
 async function qbInsertBulkRow(r,chapter,blocksToUpload=[],sourceFingerprint=null){
-  const q={teacher_id:teacher.id,chapter_id:chapter.id,subject:r.subject||null,medium:r.medium||null,question_text_en:r.english||'',question_text_as:r.assamese||'',question_type:r.questionType,marks:r.marks,cognitive_level:r.cognitiveLevel,difficulty:r.difficulty,variation_group:r.variationGroup||null,topic:r.topic||null,explanation:r.explanation||'',correct_answer:r.correctAnswer||null,has_images:!!r.image,source_fingerprint:sourceFingerprint||null};
+  const q={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:chapter.id,subject:r.subject||null,medium:r.medium||null,question_text_en:r.english||'',question_text_as:r.assamese||'',question_type:r.questionType,marks:r.marks,cognitive_level:r.cognitiveLevel,difficulty:r.difficulty,variation_group:r.variationGroup||null,topic:r.topic||null,explanation:r.explanation||'',correct_answer:r.correctAnswer||null,has_images:!!r.image,source_fingerprint:sourceFingerprint||null};
   const {data,error}=await sb.from('school_question_bank_questions').insert(q).select().single();
   if(error){if(error.code==='23505'&&sourceFingerprint)return {duplicate:true};throw error;}
   const blocks=[];
@@ -1096,15 +1094,10 @@ async function qbEditor(id=null){
   const q=id?qbQuestions.find(x=>x.id===id):null;
   qbEditorBlocks=[];qbEditorOptions=[];
   const ch=qbChapters.length?qbChapters[0].id:'';
-  const [{data:subjectRows,error:se},{data:lessonRows,error:le}]=await Promise.all([sb.from('jnvst_subjects').select('*').eq('teacher_id',teacher.id).order('name'),sb.from('jnvst_subject_lessons').select('*').eq('teacher_id',teacher.id).order('lesson_code').order('lesson_name')]);
-  if(se||le)return alert('Could not load JNVST Subject/Lesson catalogue. Run JNVST_SUBJECT_LESSON_CATEGORY_MIGRATION.sql first. '+(se||le).message);
-  qbJnvstSubjects=subjectRows||[];qbJnvstLessons=lessonRows||[];
   document.getElementById('app').innerHTML=`${header(id?'Edit Question':'Add Question')}
   <div class="card">
-   <div class="notice"><b>JNVST categorization:</b> Subject → Lesson → Sub-lesson. Your existing Chapter/Subchapter, Topic, Subject, Medium and Variation Group fields remain available.</div>
+   <div class="notice"><b>School Course Question Bank:</b> Subject → Chapter → Subchapter → Topic. JNVST Course uses a separate Question Bank in the JNVST Teacher Dashboard.</div>
    <div class="grid">
-    <div><label>JNVST Subject</label><select id="qbJnvstSubject" onchange="qbRefreshJnvstLessonOptions()">${qbJnvstSubjectOptions(q?.jnvst_subject_id||'')}</select></div>
-    <div><label>JNVST Lesson / Sub-lesson</label><select id="qbJnvstLesson" data-selected="${qbEsc(q?.jnvst_lesson_id||'')}">${qbJnvstLessonOptions(q?.jnvst_subject_id||'',q?.jnvst_lesson_id||'')}</select></div>
     <div><label>Chapter / Subchapter</label><select id="qbChapter">${qbChapterOptions(q?.chapter_id||ch,false)}</select></div>
     <div><label>Question Type</label><select id="qbType" onchange="qbTypeChanged()">${QB_TYPES.map(t=>`<option ${(q?.question_type||'MCQ')===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div><label>Marks</label><select id="qbMarks">${QB_MARKS.map(m=>`<option ${Number(q?.marks||2)===m?'selected':''}>${m}</option>`).join('')}</select></div>
@@ -1297,7 +1290,7 @@ async function qbSave(){
   if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
   const type=document.getElementById('qbType').value;
   if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return alert('MCQ needs at least 2 options and exactly one correct answer.');
-  const payload={teacher_id:teacher.id,chapter_id:document.getElementById('qbChapter').value,jnvst_subject_id:document.getElementById('qbJnvstSubject')?.value||null,jnvst_lesson_id:document.getElementById('qbJnvstLesson')?.value||null,subject:document.getElementById('qbSubject')?.value.trim()||null,medium:document.getElementById('qbMedium')?.value||null,question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||null,topic:document.getElementById('qbTopic')?.value.trim()||null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
+  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,subject:document.getElementById('qbSubject')?.value.trim()||null,medium:document.getElementById('qbMedium')?.value||null,question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||null,topic:document.getElementById('qbTopic')?.value.trim()||null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
   try{
     let qid=qbEditingId;
     if(qid){const {error}=await sb.from('school_question_bank_questions').update(payload).eq('id',qid).eq('teacher_id',teacher.id);if(error)throw error;await sb.from('school_question_bank_blocks').delete().eq('question_id',qid);await sb.from('school_question_bank_options').delete().eq('question_id',qid);}

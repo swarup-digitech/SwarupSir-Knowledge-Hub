@@ -120,3 +120,24 @@ drop function if exists private.reset_low_score_submissions();
 
 -- Existing students: set Roll No values as needed, for example:
 -- update public.profiles set roll_no = '1' where id = 'STUDENT-UUID-HERE';
+
+-- 99. Separate JNVST and School Course Question Banks.
+alter table public.school_question_bank_questions
+  add column if not exists course_type text not null default 'SCHOOL';
+alter table public.school_question_bank_questions
+  drop constraint if exists school_question_bank_questions_course_type_check;
+alter table public.school_question_bank_questions
+  add constraint school_question_bank_questions_course_type_check
+  check (course_type in ('JNVST','SCHOOL'));
+alter table public.school_question_bank_questions alter column chapter_id drop not null;
+
+-- Classify existing questions that already have the JNVST categorization columns.
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='school_question_bank_questions' and column_name='jnvst_subject_id') then
+    execute $sql$update public.school_question_bank_questions set course_type='JNVST' where jnvst_subject_id is not null or jnvst_lesson_id is not null$sql$;
+  end if;
+end $$;
+
+create index if not exists idx_qb_questions_teacher_course
+  on public.school_question_bank_questions(teacher_id, course_type, created_at desc);
