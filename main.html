@@ -444,6 +444,7 @@ async function logout(){
 let mockBankRows=[];
 let mockPdfRows=[];
 let mockAnswerKey={};
+let mockPdfMeta={};
 const MOCK_PLAN=[
  {section:'MAT',part:'MAT_PATTERN',label:'MAT — Pattern Completion',count:4,upload:'pdf',unit:'questions'},
  {section:'MAT',part:'MAT_SERIES',label:'MAT — Figure Series Completion',count:4,upload:'pdf',unit:'questions'},
@@ -563,7 +564,7 @@ function mockTestManagement(){
 function mockBulkUpload(){mockBankRows=[];mockPdfRows=[];mockAnswerKey={};render(`<div class="wrap">${header("Bulk Upload Mock Test Questions")}<div class="card">
  <div class="notice"><b>Flexible bulk-upload rule:</b> Upload any number of complete sets. For each question bank, the uploaded quantity must be a <b>multiple of the required questions per set</b>. For passage banks, one passage group is one set and all 5 linked questions must stay together.</div>
  <div class="grid"><div class="card" style="border:2px solid #2563eb"><span class="tag">EXCEL</span><h3>EVS, Language & Arithmetic</h3><p class="small muted">Select the language for EVS, Arithmetic and Language. MAT is common to both languages.</p><label>Question Language</label><select id="mockUploadLanguage"><option value="ASSAMESE">Assamese</option><option value="ENGLISH">English</option></select><label>Excel file</label><input type="file" id="mockExcelFile" accept=".xlsx,.xls" onchange="readMockQuestionExcel(event)"><div id="mockExcelPreview"></div></div>
- <div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + ANSWER KEY</span><h3>MAT & Arithmetic</h3><p class="small muted">One complete question per PDF page. Upload any number of pages, but the page count for the selected bank must be a multiple of its required set size.</p><label>Question Language</label><select id="mockPdfLanguage"><option value="COMMON">Common (MAT)</option><option value="ASSAMESE">Assamese (Arithmetic)</option><option value="ENGLISH">English (Arithmetic)</option></select><label>Part</label><select id="mockPdfPart" onchange="mockPdfPartChanged()">${MOCK_PLAN.filter(x=>x.upload==='pdf').map(x=>`<option value="${x.part}">${esc(x.label)} — ${x.count} per set</option>`).join("")}</select><label>Questions PDF</label><input id="mockPdfFile" type="file" accept=".pdf" onchange="readMockQuestionPdf(event)"><label>Answer Key Excel</label><input id="mockAnswerFile" type="file" accept=".xlsx,.xls" onchange="readMockAnswerExcel(event)"><div id="mockPdfPreview"></div></div></div>
+ <div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + ANSWER KEY</span><h3>MAT & Arithmetic</h3><p class="small muted">One complete question per PDF page. Upload any number of pages, but the page count for the selected bank must be a multiple of its required set size.</p><label>Question Language</label><select id="mockPdfLanguage"><option value="COMMON">Common (MAT)</option><option value="ASSAMESE">Assamese (Arithmetic)</option><option value="ENGLISH">English (Arithmetic)</option></select><label>Part</label><select id="mockPdfPart" onchange="mockPdfPartChanged()">${MOCK_PLAN.filter(x=>x.upload==='pdf').map(x=>`<option value="${x.part}">${esc(x.label)} — ${x.count} per set</option>`).join("")}</select><label>Questions PDF</label><input id="mockPdfFile" type="file" accept=".pdf" onchange="readMockQuestionPdf(event)"><label>MAT Answer & Metadata Excel</label><input id="mockAnswerFile" type="file" accept=".xlsx,.xls" onchange="readMockAnswerExcel(event)"><div id="mockPdfPreview"></div></div></div>
  <div class="card" style="background:#f8fafc"><h3>📊 Excel Format & Demo Files</h3><p class="small muted">Use <b>Questions</b> for normal MCQs. For passages, you may use a local Passage ID/No. or simply provide the questions in groups of 5. Permanent Set IDs and Passage IDs are generated automatically; you never need to maintain them manually.</p><div class="actions"><button class="secondary" onclick="downloadMockExcelTemplate()">Download Blank Excel Template</button><button class="secondary" onclick="downloadMockAnswerTemplate()">Download Blank Answer Key</button></div></div>
  <div class="card" style="background:#f8fafc"><h3>📄 PDF Format & Demo Files</h3><p class="small muted">For MAT and image-based Arithmetic, one complete question must occupy one PDF page. Arithmetic can also be uploaded through Excel. The answer-key Question No. follows PDF page order.</p><div class="actions"></div></div>
  <div class="notice small"><b>Examples:</b> MAT Pattern Completion needs 4 per set → upload 4, 8, 12, 16… pages. Arithmetic needs 20 per set → upload 20, 40, 60… pages. EVS MCQ needs 15 per set → upload 15, 30, 45… questions. A passage bank needs complete 5-question groups.</div>
@@ -580,13 +581,75 @@ function readMockQuestionExcel(ev){const file=ev.target.files?.[0];if(!file)retu
  const passageParts=new Set(['EVS_PASSAGE','LANGUAGE_PASSAGE']);const groups={};mockBankRows.forEach((x,i)=>{const part=String(x.part||'').trim().toUpperCase().replace(/\s+/g,'_');if(passageParts.has(part)){const g=x.passage_id||`AUTO_${Math.floor(i/5)+1}`;(groups[part+'::'+g]??=[]).push(x)}});
  document.getElementById('mockExcelPreview').innerHTML=message(`Loaded ${mockBankRows.length} question(s). Set/Passage IDs will be generated automatically when saved. ${Object.keys(groups).length} local passage group(s) detected. ${bad.length?bad.length+' row(s) need correction.':'All parts and answer keys look valid.'}`,!bad.length)+`<div class="small muted">${mockBankRows.slice(0,10).map(x=>`${x.row}. ${esc(mockPartLabel(x.part))} ${x.passage_id?`[local group ${esc(x.passage_id)}] `:''}${esc((x.question||'[image]').slice(0,80))} — ${esc(x.answer||'MISSING')}`).join('<br>')}${mockBankRows.length>10?'<br>…':''}</div>`;
  }catch(err){document.getElementById('mockExcelPreview').innerHTML=message('Could not read Excel: '+err.message)}};r.readAsArrayBuffer(file)}
-function readMockAnswerExcel(ev){const file=ev.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});mockAnswerKey={};rows.forEach(x=>{const n=Number(x['Question No']??x['Question Number']??x.No??x.Number);const a=String(x['Correct Option']??x.Answer??x.Correct??'').trim().toUpperCase();if(Number.isInteger(n)&&n>0&&['A','B','C','D'].includes(a))mockAnswerKey[n]=a});document.getElementById('mockPdfPreview').innerHTML=message(`Loaded ${Object.keys(mockAnswerKey).length} answer keys.`,true)}catch(err){document.getElementById('mockPdfPreview').innerHTML=message('Could not read answer key: '+err.message)}};r.readAsArrayBuffer(file)}
+function readMockAnswerExcel(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const r=new FileReader();r.onload=e=>{try{
+   const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+   if(!rows.length)throw new Error('MAT Metadata Excel contains no data rows.');
+   const norm=v=>String(v??'').trim();
+   const key=v=>norm(v).toLowerCase().replace(/[_\s.-]+/g,' ');
+   const get=(row,names)=>{for(const n of names){const k=Object.keys(row).find(k=>key(k)===key(n));if(k!==undefined)return norm(row[k]);}return ''};
+   const partNorm=v=>typeof mockNormalizePart==='function'?mockNormalizePart(v):norm(v).toUpperCase().replace(/\s+/g,'_').replace(/-+/g,'_');
+   mockPdfMeta={};mockAnswerKey={};
+   const errors=[];const seen=new Set();
+   rows.forEach((row,i)=>{
+     const excelRow=i+2;
+     const pageText=get(row,['Question No','Question Number','Page No','Page Number','No','Number']);
+     const page=Number(pageText);
+     const correct=get(row,['Correct Option','Correct Answer','Answer']).toUpperCase();
+     const part=partNorm(get(row,['Part','Part Code','MAT Part']));
+     const topic=get(row,['Topic','Lesson / Topic','Lesson Topic']);
+     const marksText=get(row,['Marks','Mark']);
+     const marks=Number(marksText);
+     const cognitive=get(row,['Cognitive Level','Cognitive_Level']);
+     const difficulty=get(row,['Difficulty']);
+     const explanation=get(row,['Explanation','Answer / Explanation']);
+     if(!Number.isInteger(page)||page<1)errors.push(`Row ${excelRow}: Question No must be a positive integer.`);
+     else if(seen.has(page))errors.push(`Row ${excelRow}: duplicate Question No ${page}.`);
+     else seen.add(page);
+     if(!['A','B','C','D'].includes(correct))errors.push(`Row ${excelRow}: Correct Option must be A, B, C or D.`);
+     if(!['MAT_PATTERN','MAT_SERIES','MAT_GEOMETRICAL','MAT_MIRROR','MAT_EMBEDDED'].includes(part))errors.push(`Row ${excelRow}: invalid MAT Part '${part}'.`);
+     if(!topic)errors.push(`Row ${excelRow}: Topic is required.`);
+     if(!Number.isFinite(marks)||marks<=0)errors.push(`Row ${excelRow}: Marks must be a positive number.`);
+     if(cognitive&&!['Knowledge','Understanding','Application','HOTS'].includes(cognitive))errors.push(`Row ${excelRow}: Cognitive_Level must be Knowledge, Understanding, Application or HOTS.`);
+     if(difficulty&&!['Easy','Medium','Hard'].includes(difficulty))errors.push(`Row ${excelRow}: Difficulty must be Easy, Medium or Hard.`);
+     if(Number.isInteger(page)&&page>0){
+       mockPdfMeta[page]={page,part,topic,marks,cognitiveLevel:cognitive||null,difficulty:difficulty||null,explanation:explanation||null,correctAnswer:correct};
+       mockAnswerKey[page]=correct;
+     }
+   });
+   if(errors.length)throw new Error(errors.slice(0,20).join(' | ')+(errors.length>20?` | … ${errors.length-20} more error(s)`:''));
+   document.getElementById('mockPdfPreview').innerHTML=message(`Loaded ${Object.keys(mockPdfMeta).length} MAT metadata row(s): answer key + Part + Topic + Marks. Cognitive Level, Difficulty and Explanation are optional.`,true);
+ }catch(err){mockPdfMeta={};mockAnswerKey={};document.getElementById('mockPdfPreview').innerHTML=message('Could not read MAT Metadata Excel: '+err.message)}};r.readAsArrayBuffer(file)
+}
 async function getMockPdfJs(){const mod=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');mod.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';return mod}
 async function readMockQuestionPdf(ev){const file=ev.target.files?.[0];if(!file)return;const box=document.getElementById('mockPdfPreview');box.innerHTML=message('Reading PDF pages and preparing cropped previews…',true);try{const part=document.getElementById('mockPdfPart')?.value;const plan=mockPlanByPart[part];if(!plan)throw new Error('Choose a valid MAT or Arithmetic part.');const buf=await file.arrayBuffer(),pdfjs=await getMockPdfJs(),pdf=await pdfjs.getDocument({data:buf}).promise;mockPdfRows=[];for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),base=page.getViewport({scale:1}),scale=Math.min(2.2,Math.max(1.4,1600/base.width)),vp=page.getViewport({scale});const c=document.createElement('canvas'),ctx=c.getContext('2d',{alpha:false});c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);await page.render({canvasContext:ctx,viewport:vp}).promise;const cropped=cropWhiteMargins(c);mockPdfRows.push({page:p,image_data:cropped.toDataURL('image/jpeg',0.9)});}box.innerHTML=message(`Prepared ${mockPdfRows.length} cropped question page(s) for ${plan.label}. ${Object.keys(mockAnswerKey).length} answer keys loaded.`,true)}catch(e){box.innerHTML=message('PDF processing failed: '+(e.message||e))}}
 async function uploadMockImage(dataUrl,path){const blob=await (await fetch(dataUrl)).blob();const {error}=await sb.storage.from('mock-question-images').upload(path,blob,{contentType:'image/jpeg',upsert:false});if(error)throw error;const {data}=sb.storage.from('mock-question-images').getPublicUrl(path);return data.publicUrl}
 async function uploadMockFile(file,path){const {error}=await sb.storage.from('mock-question-images').upload(path,file,{upsert:false});if(error)throw error;const {data}=sb.storage.from('mock-question-images').getPublicUrl(path);return data.publicUrl}
 function downloadMockExcelTemplate(){const wb=XLSX.utils.book_new();const q=XLSX.utils.aoa_to_sheet([['Section','Part','Topic','Local Passage No. (optional)','Question Order','Question','A','B','C','D','Answer','Image URL'],['EVS','EVS_MCQ','Environment','','1','Sample question','Option A','Option B','Option C','Option D','A',''],['EVS','EVS_PASSAGE','Comprehension','1','1','Question 1','Option A','Option B','Option C','Option D','B',''],['EVS','EVS_PASSAGE','Comprehension','1','2','Question 2','Option A','Option B','Option C','Option D','A',''],['LANGUAGE','LANGUAGE_PASSAGE','Reading Comprehension','1','1','Question 1','Option A','Option B','Option C','Option D','C',''],['ARITHMETIC','ARITHMETIC','Arithmetic','','1','Sample arithmetic question','Option A','Option B','Option C','Option D','D','']]);const p=XLSX.utils.aoa_to_sheet([['Local Passage No.','Passage Title','Passage'],['1','Passage 1','Paste the full passage here.'],['2','Passage 2','Paste the full passage here.']]);XLSX.utils.book_append_sheet(wb,q,'Questions');XLSX.utils.book_append_sheet(wb,p,'Passages');XLSX.writeFile(wb,'mock_question_bank_template.xlsx')}
-function downloadMockAnswerTemplate(){const ws=XLSX.utils.aoa_to_sheet([['Question No','Correct Option'],[1,'A'],[2,'B']]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Answer Key');XLSX.writeFile(wb,'mock_answer_key_template.xlsx')}
+function downloadMockAnswerTemplate(){
+ const ws=XLSX.utils.aoa_to_sheet([
+  ['Question No','Correct Option','Part','Topic','Marks','Cognitive_Level','Difficulty','Explanation'],
+  [1,'A','MAT_PATTERN','Pattern Completion',1,'','',''],
+  [2,'B','MAT_PATTERN','Pattern Completion',1,'','',''],
+  [3,'C','MAT_SERIES','Figure Series',1,'','',''],
+  [4,'D','MAT_GEOMETRICAL','Geometrical Figure Completion',1,'','',''],
+  [5,'A','MAT_MIRROR','Mirror & Water Imaging',1,'','',''],
+  [6,'B','MAT_EMBEDDED','Embedded Figure',1,'','','']
+ ]);
+ const ins=XLSX.utils.aoa_to_sheet([
+  ['JNVST MAT PDF + Metadata Upload'],
+  ['Required: Question No, Correct Option, Part, Topic, Marks'],
+  ['Question No must match the PDF page number exactly.'],
+  ['Part values: MAT_PATTERN, MAT_SERIES, MAT_GEOMETRICAL, MAT_MIRROR, MAT_EMBEDDED'],
+  ['Cognitive_Level is optional: Knowledge, Understanding, Application, HOTS'],
+  ['Difficulty is optional: Easy, Medium, Hard'],
+  ['Explanation is optional.'],
+  ['One PDF page = one image-based MAT question.'],
+  ['The uploader crops unnecessary white margins automatically.']
+ ]);
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'MAT Metadata');XLSX.utils.book_append_sheet(wb,ins,'Instructions');XLSX.writeFile(wb,'JNVST_MAT_PDF_Metadata_Template.xlsx')
+}
 async function mockNextIds(part,language,count,kind){const {data,error}=await sb.from('mock_question_bank').select('set_id,passage_id').eq('teacher_id',current.id).eq('part_code',part).eq('language',language);if(error)throw error;const prefixMap={MAT_PATTERN:'PAT',MAT_SERIES:'SER',MAT_GEOMETRICAL:'GEO',MAT_MIRROR:'MIR',MAT_EMBEDDED:'EMB',EVS_MCQ:language==='ENGLISH'?'EVS-E':'EVS-A',ARITHMETIC:language==='ENGLISH'?'AR-E':'AR-A',EVS_PASSAGE:language==='ENGLISH'?'EVS-E-P':'EVS-A-P',LANGUAGE_PASSAGE:language==='ENGLISH'?'L-E':'L-A'};const prefix=prefixMap[part]||part;const field=kind==='passage'?'passage_id':'set_id';let max=0;for(const r of (data||[])){const m=String(r[field]||'').match(/(\d+)$/);if(m)max=Math.max(max,Number(m[1]))}return Array.from({length:count},(_,i)=>`${prefix}-${String(max+i+1).padStart(3,'0')}`)}
 async function saveMockBulkUploads(){try{let savedExcel=0,savedPdf=0;const cleanPart=p=>String(p||'').trim().toUpperCase().replace(/\s+/g,'_');const excelByPart={};mockBankRows.forEach(x=>{const part=cleanPart(x.part);(excelByPart[part] ||= []).push(x)});
  for(const [part,items] of Object.entries(excelByPart)){const plan=mockPlanByPart[part];if(!plan||!['excel','excel_or_pdf'].includes(plan.upload))throw new Error(`${part||'Unknown Part'} is not an Excel-upload part.`);if(items.some(x=>!['A','B','C','D'].includes(x.answer)))throw new Error(`${plan.label}: every question must have a valid answer A/B/C/D.`);
@@ -901,7 +964,7 @@ async function questionPaperGeneratorPage(){
     <div id="qpSubjectSummary" class="success" style="margin-bottom:12px">Select a subject.</div>
     <div id="qpCommonPanel"></div><div id="qpQuestionsPanel" class="card" style="display:none"></div><div id="qpPassagesPanel" class="card" style="display:none"></div><div id="qpSpecialPanel"></div>
     <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">🗂 Previously Generated Question Papers</h2><p class="muted small" style="margin:6px 0 0">Generated papers and their answer keys are saved with the exact selected questions and generation date/time.</p></div><button class="secondary" onclick="loadGeneratedQuestionPaperHistory()">↻ Refresh</button></div><div id="qpGeneratedHistory" style="margin-top:12px"><p class="muted">Loading…</p></div></div>
-    <div class="card"><div id="qpSummary" class="success">The generated paper will keep mandatory questions and randomly fill the remaining slots.</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download Answer Key Excel</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
+    <div class="card"><div id="qpSummary" class="success">The generated paper will keep mandatory questions and randomly fill the remaining slots.</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download MAT Answer & Metadata Excel</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
   </div>`);
   qpRenderGeneratorMode();
   loadGeneratedQuestionPaperHistory();
@@ -935,7 +998,7 @@ function qpPrepareRows(){
   }
   throw new Error('Unsupported subject.');
 }
-function downloadSelectedAnswerKeyExcel(){try{const rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');const serial=qpCurrentSetSerial();const setCode=document.getElementById('qpSetCode')?.value||qpState.setCode||'A';const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const wb=XLSX.utils.book_new();const info=[['Question Set Serial No.',serial],['Question Paper Set',`SET ${setCode}`],['Paper Title',title],['Subject',qpSubject()],['Language',qpCurrentLanguage()],['Generated On',new Date().toLocaleString('en-IN')],['Selection Mode',qpIsCommonMode()?'Common / MAT — 5 Parts':qpState.mode==='passages'?'Passage Sets':'Mandatory + Random Questions'],['Total Questions',rows.length],['Total Marks',rows.length],['Passage Sets',[...new Set(rows.map(q=>q._passageGroup||q.passage_id).filter(Boolean))].length]];const wsInfo=XLSX.utils.aoa_to_sheet(info);wsInfo['A1'].s={font:{bold:true}};wsInfo['B1'].s={font:{bold:true,color:{rgb:'17365D'}}};XLSX.utils.book_append_sheet(wb,wsInfo,'Paper Info');const answerRows=qpBuildAnswerRows(rows);const ws=XLSX.utils.json_to_sheet(answerRows);XLSX.utils.book_append_sheet(wb,ws,'Answer Key');const footer=XLSX.utils.aoa_to_sheet([['Question Set Serial No.',serial],['Question Paper Set',`SET ${setCode}`],[],['(c)Swarup Sir, Ph: 98643-90279'],['Classroom OMR Exam Question Paper. Copy-wright materials.']]);XLSX.utils.book_append_sheet(wb,footer,'Credits');XLSX.writeFile(wb,`answer-key-${serial}.xlsx`);}catch(e){alert('Could not create Answer Key Excel: '+(e.message||e))}}
+function downloadSelectedAnswerKeyExcel(){try{const rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');const serial=qpCurrentSetSerial();const setCode=document.getElementById('qpSetCode')?.value||qpState.setCode||'A';const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const wb=XLSX.utils.book_new();const info=[['Question Set Serial No.',serial],['Question Paper Set',`SET ${setCode}`],['Paper Title',title],['Subject',qpSubject()],['Language',qpCurrentLanguage()],['Generated On',new Date().toLocaleString('en-IN')],['Selection Mode',qpIsCommonMode()?'Common / MAT — 5 Parts':qpState.mode==='passages'?'Passage Sets':'Mandatory + Random Questions'],['Total Questions',rows.length],['Total Marks',rows.length],['Passage Sets',[...new Set(rows.map(q=>q._passageGroup||q.passage_id).filter(Boolean))].length]];const wsInfo=XLSX.utils.aoa_to_sheet(info);wsInfo['A1'].s={font:{bold:true}};wsInfo['B1'].s={font:{bold:true,color:{rgb:'17365D'}}};XLSX.utils.book_append_sheet(wb,wsInfo,'Paper Info');const answerRows=qpBuildAnswerRows(rows);const ws=XLSX.utils.json_to_sheet(answerRows);XLSX.utils.book_append_sheet(wb,ws,'Answer Key');const footer=XLSX.utils.aoa_to_sheet([['Question Set Serial No.',serial],['Question Paper Set',`SET ${setCode}`],[],['(c)Swarup Sir, Ph: 98643-90279'],['Classroom OMR Exam Question Paper. Copy-wright materials.']]);XLSX.utils.book_append_sheet(wb,footer,'Credits');XLSX.writeFile(wb,`answer-key-${serial}.xlsx`);}catch(e){alert('Could not create MAT Answer & Metadata Excel: '+(e.message||e))}}
 
 function qpBuildCommonHtml(rows){
   const out=[];let current='';
@@ -3860,14 +3923,14 @@ async function bulkImportMCQs(){
    <span class="tag">METHOD 1</span><h3>PDF + Excel Answer Key</h3>
    <p class="small muted">PDF: one question per page. Excel: Question No + Correct Option + Explanation (optional).</p>
    <label>Questions PDF</label><input id="qpdf" type="file" accept=".pdf" onchange="readMCQPdf(event)">
-   <label>Answer Key Excel</label><input id="akey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)"><div class="small muted">Columns: <b>Question No</b>, <b>Correct Option</b>, <b>Explanation</b> (optional)</div>
+   <label>MAT Answer & Metadata Excel</label><input id="akey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)"><div class="small muted">Columns: <b>Question No</b>, <b>Correct Option</b>, <b>Explanation</b> (optional)</div>
   </div>
   <div class="card" style="border:2px solid #16a34a;background:#f7fff9">
    <span class="tag" style="background:#dcfce7;color:#166534">METHOD 2 — RECOMMENDED FOR ASSAMESE</span>
    <h3>PDF — Image per Page</h3>
    <p class="small muted">Each page becomes an image. No OCR is used, so Assamese text, special symbols, fractions and mathematical notation remain visually correct.</p>
    <label>Questions PDF</label><input id="imagePdf" type="file" accept=".pdf" onchange="readImagePdf(event)">
-   <label>Answer Key Excel (optional)</label><input id="imageAkey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
+   <label>MAT Answer & Metadata Excel (optional)</label><input id="imageAkey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
    <label style="margin-top:12px">Solution PDF (optional — 1 solution page per question)</label><input id="imageSolutionPdf" type="file" accept=".pdf" onchange="readImageSolutionPdf(event)">
    <div class="small muted" style="margin-top:5px">Each solution PDF page becomes a cropped image. Page 1 → Question 1, Page 2 → Question 2, etc. The solution PDF must have the same number of pages as the Questions PDF.</div>
    <div id="imageSolutionPreview"></div>
@@ -3876,9 +3939,9 @@ async function bulkImportMCQs(){
   <div class="card" style="border:2px solid #7c3aed;background:#faf7ff">
    <span class="tag" style="background:#ede9fe;color:#6d28d9">METHOD 3</span>
    <h3>Excel Questions + Separate Answer Key</h3>
-   <p class="small muted">Questions Excel contains the question and options. A separate Answer Key Excel contains Correct Option + Explanation (optional).</p>
+   <p class="small muted">Questions Excel contains the question and options. A separate MAT Answer & Metadata Excel contains Correct Option + Explanation (optional).</p>
    <label>Questions Excel</label><input id="qexcel" type="file" accept=".xlsx,.xls" onchange="readQuestionExcel(event)">
-   <label>Answer Key Excel</label><input id="qexcelKey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
+   <label>MAT Answer & Metadata Excel</label><input id="qexcelKey" type="file" accept=".xlsx,.xls" onchange="readAnswerExcel(event)">
    <div class="notice small">Questions columns: <b>Question No, Question, Option A, Option B, Option C, Option D</b>. Answer Key columns: <b>Question No, Correct Option, Explanation</b>.</div>
   </div>
   <div class="card" style="border:2px solid #ea580c;background:#fffaf5">
@@ -3989,7 +4052,7 @@ function readQuestionExcel(ev){
   const norm=v=>String(v??"").trim(),find=(row,names)=>{for(const n of names){if(row[n]!==undefined)return norm(row[n])}return ""};
   importedQuestions=rows.map((x,i)=>({page:i+1,question:find(x,["Question","Question Text","question_text"]),A:find(x,["Option A","A"]),B:find(x,["Option B","B"]),C:find(x,["Option C","C"]),D:find(x,["Option D","D"]),image_mode:false})).filter(q=>q.question||q.A||q.B||q.C||q.D);
   if(!importedQuestions.length)throw new Error("No question rows found.");
-  document.getElementById("mcqPreview").innerHTML=message(`Loaded ${importedQuestions.length} questions from Excel. Now load the separate Answer Key Excel.`,true);
+  document.getElementById("mcqPreview").innerHTML=message(`Loaded ${importedQuestions.length} questions from Excel. Now load the separate MAT Answer & Metadata Excel.`,true);
  }catch(err){document.getElementById("mcqPreview").innerHTML=message("Could not read Questions Excel: "+err.message)}};r.readAsArrayBuffer(file)
 }
 
@@ -5532,7 +5595,7 @@ init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start<
     });
   };
   window.readMockArithmeticExcel=function(ev){const file=ev.target.files?.[0];if(!file)return;mockReadRows(file,wb=>{const ws=wb.Sheets[wb.SheetNames.find(n=>String(n).toLowerCase()==='questions')||wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''}),get=(row,names)=>{for(const n of names){const k=Object.keys(row).find(k=>String(k).trim().toLowerCase().replace(/[_\s-]+/g,' ')===String(n).trim().toLowerCase().replace(/[_\s-]+/g,' '));if(k!==undefined)return String(row[k]??'').trim()}return ''};const items=rows.map((row,i)=>({row:i+2,section:'ARITHMETIC',part:'ARITHMETIC',set_id:get(row,['Set ID','Set','Group ID']),question_order:Number(get(row,['Question Order','Question No','Question Number','Order']))||i+1,language:(document.getElementById('mockUploadLanguage')?.value||'ASSAMESE'),question:get(row,['Question','Question Text']),A:get(row,['A','Option A']),B:get(row,['B','Option B']),C:get(row,['C','Option C']),D:get(row,['D','Option D']),answer:get(row,['Answer','Correct Option']).toUpperCase(),passage:'',passage_id:'',passage_title:'',image_url:get(row,['Image URL','Question Image URL'])})).filter(x=>x.question||x.image_url);mockBankRows=mockBankRows.concat(items);const box=document.getElementById('mockExcelPreview');if(box)box.innerHTML+=message(`Loaded ${items.length} Arithmetic question(s) from Excel.`,true)})};
-  window.mockBulkUpload=function(){mockBankRows=[];mockPdfRows=[];mockAnswerKey={};render(`<div class="wrap">${header('Bulk Upload Mock Test Questions')}<div class="card"><div class="notice"><b>JNVST bulk-upload rules:</b> MAT = 4 per set; EVS MCQ = 15 per set; EVS passage = 5 linked questions; Arithmetic = 20 per set (Excel or PDF); Language = any number of complete 5-question passage groups. PDF questions are cropped to remove unnecessary white space.</div><div class="grid"><div class="card" style="border:2px solid #2563eb"><span class="tag">EXCEL</span><h3>EVS, Language & Arithmetic</h3><p class="small muted">Use the standard Questions + Passages sheets. For EVS_PASSAGE and LANGUAGE_PASSAGE, Local Passage No. is required on every question row; the same number must be used on exactly 5 question rows. The Passages sheet must contain that number with its title and complete passage. Arithmetic can also be uploaded here.</p><label>Question Language</label><select id="mockUploadLanguage"><option value="ASSAMESE">Assamese</option><option value="ENGLISH">English</option></select><label>Question-bank Excel</label><input type="file" id="mockExcelFile" accept=".xlsx,.xls" onchange="readMockQuestionExcel(event)"><label>Arithmetic Excel (optional separate file)</label><input type="file" id="mockArithmeticExcelFile" accept=".xlsx,.xls" onchange="readMockArithmeticExcel(event)"><div id="mockExcelPreview"></div></div><div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + KEY</span><h3>MAT & Image-based Arithmetic</h3><p class="small muted">One question per PDF page. Upload exactly 4, 8, 12… pages for MAT and 20, 40, 60… for Arithmetic. The answer-key Excel follows PDF page number.</p><label>Question Language</label><select id="mockPdfLanguage"><option value="COMMON">Common (MAT)</option><option value="ASSAMESE">Assamese (Arithmetic)</option><option value="ENGLISH">English (Arithmetic)</option></select><label>PDF Part</label><select id="mockPdfPart" onchange="mockPdfPartChanged()">${MOCK_PLAN.filter(x=>x.upload==='pdf'||x.upload==='excel_or_pdf').map(x=>`<option value="${x.part}">${esc(x.label)} — ${x.count} per set</option>`).join('')}</select><label>Questions PDF</label><input id="mockPdfFile" type="file" accept=".pdf" onchange="readMockQuestionPdf(event)"><label>Answer Key Excel</label><input id="mockAnswerFile" type="file" accept=".xlsx,.xls" onchange="readMockAnswerExcel(event)"><div id="mockPdfPreview"></div></div></div><div class="card" style="background:#f8fafc"><h3>Templates</h3><p class="small muted">Questions columns: Section, Part, Local Passage No. (required for EVS/LANGUAGE passages), Question Order, Question, A, B, C, D, Answer, Image URL. Permanent Set IDs and Passage IDs are generated automatically.</p><div class="actions"><button class="secondary" onclick="downloadMockExcelTemplate()">Download Excel Template</button><button class="secondary" onclick="downloadMockAnswerTemplate()">Download Answer Key Template</button></div></div><div class="notice small">Before saving, the system validates counts, passage groups, Local Passage No., Question Order 1–5, passage title/text, answer keys and active duplicates. Complete passage groups are assigned stable Passage IDs so later tests can reuse them safely.</div><div class="actions"><button onclick="saveMockBulkUploads()">Validate & Save</button><button class="secondary" onclick="mockTestManagement()">← Back</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div></div></div>`)};
+  window.mockBulkUpload=function(){mockBankRows=[];mockPdfRows=[];mockAnswerKey={};mockPdfMeta={};render(`<div class="wrap">${header('Bulk Upload Mock Test Questions')}<div class="card"><div class="notice"><b>JNVST bulk-upload rules:</b> MAT = 4 per set; EVS MCQ = 15 per set; EVS passage = 5 linked questions; Arithmetic = 20 per set (Excel or PDF); Language = any number of complete 5-question passage groups. PDF questions are cropped to remove unnecessary white space.</div><div class="grid"><div class="card" style="border:2px solid #2563eb"><span class="tag">EXCEL</span><h3>EVS, Language & Arithmetic</h3><p class="small muted">Use the standard Questions + Passages sheets. For EVS_PASSAGE and LANGUAGE_PASSAGE, Local Passage No. is required on every question row; the same number must be used on exactly 5 question rows. The Passages sheet must contain that number with its title and complete passage. Arithmetic can also be uploaded here.</p><label>Question Language</label><select id="mockUploadLanguage"><option value="ASSAMESE">Assamese</option><option value="ENGLISH">English</option></select><label>Question-bank Excel</label><input type="file" id="mockExcelFile" accept=".xlsx,.xls" onchange="readMockQuestionExcel(event)"><label>Arithmetic Excel (optional separate file)</label><input type="file" id="mockArithmeticExcelFile" accept=".xlsx,.xls" onchange="readMockArithmeticExcel(event)"><div id="mockExcelPreview"></div></div><div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + KEY</span><h3>MAT & Image-based Arithmetic</h3><p class="small muted">For MAT, use one question per PDF page. The MAT Metadata Excel maps each PDF page to Question No, Part, Topic, Marks and Correct Option. Cognitive Level, Difficulty and Explanation are optional. Unnecessary white space is cropped automatically.</p><label>Question Language</label><select id="mockPdfLanguage"><option value="COMMON">Common (MAT)</option><option value="ASSAMESE">Assamese (Arithmetic)</option><option value="ENGLISH">English (Arithmetic)</option></select><label>PDF Part (used for Arithmetic; MAT Part comes from the Excel)</label><select id="mockPdfPart" onchange="mockPdfPartChanged()">${MOCK_PLAN.filter(x=>x.upload==='pdf'||x.upload==='excel_or_pdf').map(x=>`<option value="${x.part}">${esc(x.label)} — ${x.count} per set</option>`).join('')}</select><label>Questions PDF</label><input id="mockPdfFile" type="file" accept=".pdf" onchange="readMockQuestionPdf(event)"><label>MAT Answer & Metadata Excel</label><input id="mockAnswerFile" type="file" accept=".xlsx,.xls" onchange="readMockAnswerExcel(event)"><div id="mockPdfPreview"></div></div></div><div class="card" style="background:#f8fafc"><h3>Templates</h3><p class="small muted">MAT PDF columns: Question No, Correct Option, Part, Topic, Marks, Cognitive_Level (optional), Difficulty (optional), Explanation (optional). Permanent Set IDs and Passage IDs are generated automatically.</p><div class="actions"><button class="secondary" onclick="downloadMockExcelTemplate()">Download Excel Template</button><button class="secondary" onclick="downloadMockAnswerTemplate()">Download MAT Metadata Template</button></div></div><div class="notice small">Before saving, the system validates counts, passage groups, Local Passage No., Question Order 1–5, passage title/text, answer keys and active duplicates. Complete passage groups are assigned stable Passage IDs so later tests can reuse them safely.</div><div class="actions"><button onclick="saveMockBulkUploads()">Validate & Save</button><button class="secondary" onclick="mockTestManagement()">← Back</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div></div></div>`)};
   window.downloadMockExcelTemplate=function(){
     const wb=XLSX.utils.book_new();
     const q=[
@@ -5706,24 +5769,54 @@ init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start<
       }
 
       if(mockPdfRows.length){
-        const part=cleanPart(document.getElementById('mockPdfPart').value),plan=mockPlanByPart[part];
-        if(!plan||!['pdf','excel_or_pdf'].includes(plan.upload))throw new Error('PDF upload is available only for MAT and Arithmetic.');
-        if(mockPdfRows.length%plan.count!==0)throw new Error(`${plan.label}: PDF has ${mockPdfRows.length} pages; required multiple is ${plan.count}.`);
-        const missing=mockPdfRows.map(x=>x.page).filter(n=>!mockAnswerKey[n]);
-        if(missing.length)throw new Error('Missing answer key for PDF page(s): '+missing.join(', '));
-        const extra=Object.keys(mockAnswerKey).map(Number).filter(n=>n>mockPdfRows.length);
-        if(extra.length)throw new Error('Answer key contains question/page number(s) beyond the PDF: '+extra.join(', '));
-        const lang=plan.section==='MAT'?'COMMON':(document.getElementById('mockPdfLanguage')?.value||'ASSAMESE');
-        const ids=await window.mockNextIds(part,lang,mockPdfRows.length/plan.count,'set');
-        for(let i=0;i<mockPdfRows.length;i++){
-          const x=mockPdfRows[i],path=`${current.id}/${crypto.randomUUID()}.jpg`,url=await uploadMockImage(x.image_data,path);
-          const {error}=await sb.from('mock_question_bank').insert({
-            teacher_id:current.id,section_code:plan.section,part_code:part,language:lang,
-            set_id:ids[Math.floor(i/plan.count)],question_order:(i%plan.count)+1,
-            correct_option:mockAnswerKey[x.page],image_url:url,source_type:'pdf',source_question_no:x.page
-          });
-          if(error)throw error;
-          savedPdf++;
+        const selectedPart=cleanPart(document.getElementById('mockPdfPart')?.value),selectedPlan=mockPlanByPart[selectedPart];
+        if(!selectedPlan||!['pdf','excel_or_pdf'].includes(selectedPlan.upload))throw new Error('PDF upload is available only for MAT and Arithmetic.');
+        if(selectedPlan.section==='MAT'){
+          if(!Object.keys(mockPdfMeta).length)throw new Error('Upload the MAT Answer & Metadata Excel first.');
+          const missing=mockPdfRows.map(x=>x.page).filter(n=>!mockPdfMeta[n]);
+          if(missing.length)throw new Error('Missing metadata for PDF page(s): '+missing.join(', '));
+          const extra=Object.keys(mockPdfMeta).map(Number).filter(n=>n>mockPdfRows.length);
+          if(extra.length)throw new Error('MAT Metadata Excel contains Question No(s) not present in this PDF: '+extra.join(', '));
+          const byPart={};
+          mockPdfRows.forEach(x=>{const m=mockPdfMeta[x.page];(byPart[m.part] ||= []).push(x);});
+          const partNames=Object.keys(byPart);
+          if(!partNames.length)throw new Error('No MAT questions found in the metadata Excel.');
+          for(const [matPart,pages] of Object.entries(byPart)){
+            const matPlan=mockPlanByPart[matPart];
+            if(!matPlan||matPlan.section!=='MAT')throw new Error(`Invalid MAT Part in metadata: ${matPart}`);
+            if(pages.length%4!==0)throw new Error(`${matPlan.label}: ${pages.length} question(s); each MAT part must contain a multiple of 4 questions.`);
+            const ids=await window.mockNextIds(matPart,'COMMON',pages.length/4,'set');
+            for(let i=0;i<pages.length;i++){
+              const x=pages[i],m=mockPdfMeta[x.page],setId=ids[Math.floor(i/4)],path=`${current.id}/${crypto.randomUUID()}.jpg`,url=await uploadMockImage(x.image_data,path);
+              const {error}=await sb.from('mock_question_bank').insert({
+                teacher_id:current.id,section_code:'MAT',part_code:matPart,topic:m.topic,language:'COMMON',
+                set_id:setId,question_order:(i%4)+1,correct_option:m.correctAnswer,marks:m.marks,
+                cognitive_level:m.cognitiveLevel,difficulty:m.difficulty,explanation:m.explanation,
+                question_text:null,option_a:null,option_b:null,option_c:null,option_d:null,
+                image_url:url,source_type:'pdf',source_question_no:x.page
+              });
+              if(error)throw error;
+              savedPdf++;
+            }
+          }
+        }else{
+          if(mockPdfRows.length%selectedPlan.count!==0)throw new Error(`${selectedPlan.label}: PDF has ${mockPdfRows.length} pages; required multiple is ${selectedPlan.count}.`);
+          const missing=mockPdfRows.map(x=>x.page).filter(n=>!mockAnswerKey[n]);
+          if(missing.length)throw new Error('Missing answer key for PDF page(s): '+missing.join(', '));
+          const extra=Object.keys(mockAnswerKey).map(Number).filter(n=>n>mockPdfRows.length);
+          if(extra.length)throw new Error('Answer key contains question/page number(s) beyond the PDF: '+extra.join(', '));
+          const lang=selectedPlan.section==='MAT'?'COMMON':(document.getElementById('mockPdfLanguage')?.value||'ASSAMESE');
+          const ids=await window.mockNextIds(selectedPart,lang,mockPdfRows.length/selectedPlan.count,'set');
+          for(let i=0;i<mockPdfRows.length;i++){
+            const x=mockPdfRows[i],path=`${current.id}/${crypto.randomUUID()}.jpg`,url=await uploadMockImage(x.image_data,path);
+            const {error}=await sb.from('mock_question_bank').insert({
+              teacher_id:current.id,section_code:selectedPlan.section,part_code:selectedPart,language:lang,
+              set_id:ids[Math.floor(i/selectedPlan.count)],question_order:(i%selectedPlan.count)+1,
+              correct_option:mockAnswerKey[x.page],image_url:url,source_type:'pdf',source_question_no:x.page
+            });
+            if(error)throw error;
+            savedPdf++;
+          }
         }
       }
 

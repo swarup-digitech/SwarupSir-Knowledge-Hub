@@ -147,7 +147,11 @@ alter table public.mock_question_bank
   add column if not exists subject_id uuid,
   add column if not exists lesson_id uuid,
   add column if not exists variation_group text,
-  add column if not exists is_fixed boolean not null default false;
+  add column if not exists is_fixed boolean not null default false,
+  add column if not exists marks numeric,
+  add column if not exists cognitive_level text,
+  add column if not exists difficulty text,
+  add column if not exists explanation text;
 
 do $$
 begin

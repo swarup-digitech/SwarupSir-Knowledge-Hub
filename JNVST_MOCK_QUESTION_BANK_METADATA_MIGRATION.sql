@@ -5,7 +5,11 @@ ALTER TABLE public.mock_question_bank
   ADD COLUMN IF NOT EXISTS subject_id uuid,
   ADD COLUMN IF NOT EXISTS lesson_id uuid,
   ADD COLUMN IF NOT EXISTS variation_group text,
-  ADD COLUMN IF NOT EXISTS is_fixed boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS is_fixed boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS marks numeric,
+  ADD COLUMN IF NOT EXISTS cognitive_level text,
+  ADD COLUMN IF NOT EXISTS difficulty text,
+  ADD COLUMN IF NOT EXISTS explanation text;
 
 DO $$
 BEGIN
