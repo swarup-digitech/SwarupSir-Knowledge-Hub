@@ -209,6 +209,9 @@ let assignmentSchoolQbChapters=[];
 let assignmentSchoolQbBlocks=[];
 let assignmentSchoolQbOptions=[];
 let assignmentSchoolQbSelected=null;
+let assignmentSchoolQbSubject='';
+let assignmentSchoolQbSubjectName='';
+let assignmentSchoolQbMedium='';
 let assignmentSchoolQbLessons=new Set();
 let assignmentSchoolQbFixedQuestions=new Set();
 let assignmentSchoolQbFixedGroups=new Set();
@@ -263,6 +266,7 @@ function renderStudentDashboardLoading(){
 const MAIN_GROUPS=["JNVST-VI (Class-IV)","JNVST-IX (Class IX)"];
 const SUB_GROUPS=["Mental Ability","EVS","Arithmetic","Language"];
 let jnvstSubjects=[];
+let jnvstSubjectLessons=[];
 const groupLabel=a=>a?.main_group&&a?.sub_group?`${esc(a.main_group)} · ${esc(a.sub_group)}`:"Not grouped";
 const groupBadge=a=>a?.main_group&&a?.sub_group?`<span class="tag">${groupLabel(a)}</span>`:`<span class="tag" style="background:#f1f5f9;color:#64748b">Not grouped</span>`;
 function embed(v){if(v.includes("youtube.com/embed/"))return v;let m=v.match(/[?&]v=([^&]+)/)||v.match(/youtu\.be\/([^?]+)/);return m?"https://www.youtube.com/embed/"+m[1]:v}
@@ -1974,14 +1978,16 @@ async function importFeeExcel(confirmImport=false){
 
 async function teacherHome(){
  if(schoolTeacherMode){ location.replace("teacher-dashboard.html"); return; }
- let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje}]=await Promise.all([
+ let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje},{data:lessonRows,error:lje}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
    sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
    sb.from("profiles").select("*").eq("role","student").order("full_name"),
-   sb.from("jnvst_subjects").select("*").eq("teacher_id",current.id).order("name")
+   sb.from("jnvst_subjects").select("*").eq("teacher_id",current.id).order("name"),
+   sb.from("jnvst_subject_lessons").select("*").eq("teacher_id",current.id).order("lesson_code").order("lesson_name")
  ]);
- if(sje) return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard",false)}<div class="card">${message("Please run JNVST_GROUP_SUBJECT_MANAGEMENT.sql in Supabase first. "+sje.message)}</div></div>`);
+ if(sje||lje) return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard",false)}<div class="card">${message("Please run JNVST_GROUP_SUBJECT_MANAGEMENT.sql and JNVST_SUBJECT_LESSON_CATEGORY_MIGRATION.sql in Supabase first. "+(sje||lje).message)}</div></div>`);
  jnvstSubjects=subjectRows||[];
+ jnvstSubjectLessons=lessonRows||[];
  if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
  try{
   allClasses=await ensureJnvstBaseClasses(allClasses||[]);
@@ -2579,7 +2585,7 @@ function manageJnvstClasses(){
    <div class="actions" style="margin-top:12px"><button onclick="newJnvstMainGroup()">+ Create Main Group</button><button onclick="newJnvstSubject()">+ Create Subject</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
   </div>
   <div class="card"><h2>📚 Main Groups & Sub-groups</h2>${mainCards||"<div class='notice'>No groups found.</div>"}</div>
-  <div class="card"><h2>📖 Subjects</h2>${subjects.length?subjects.map(x=>`<div class="student-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>${esc(x.name)}</b>${x.description?`<div class="small muted">${esc(x.description)}</div>`:""}</div><button class="danger" onclick="deleteJnvstSubject('${x.id}')">Delete</button></div></div>`).join(""):"<div class='muted'>No subjects. Create one to use it in assignments.</div>"}</div>
+  <div class="card"><h2>📖 Subjects, Lessons & Sub-lessons</h2><div class="notice">Create the teaching hierarchy <b>Subject → Lesson → Sub-lesson</b>. This is the JNVST categorization layer for the Question Bank. Existing Chapter/Subchapter and Topic fields are preserved.</div>${subjects.length?subjects.map(x=>{const ls=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===x.id);const roots=ls.filter(l=>!l.parent_lesson_id);const renderLesson=(l,depth=0)=>{const kids=ls.filter(k=>k.parent_lesson_id===l.id);return `<div class="student-card" style="margin:${depth?6:8}px 0 0 ${depth*24}px;background:${depth?'#f8fafc':'#fff'}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b>${esc(l.lesson_code||'')}</b> ${esc(l.lesson_name)}${l.description?`<div class="small muted">${esc(l.description)}</div>`:''}<div class="small muted">${kids.length?kids.length+' sub-lesson(s)':''}</div></div><div class="actions"><button class="secondary" onclick="editJnvstLesson('${l.id}')">✎ Edit</button><button class="secondary" onclick="newJnvstLesson('${x.id}','${l.id}')">+ Sub-lesson</button><button class="danger" onclick="deleteJnvstLesson('${l.id}')">Delete</button></div></div>${kids.map(k=>renderLesson(k,depth+1)).join('')}</div>`};return `<div class="student-card" style="background:#eff6ff;border:1px solid #bfdbfe"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>${esc(x.name)}</b>${x.description?`<div class="small muted">${esc(x.description)}</div>`:''}</div><div class="actions"><button onclick="newJnvstLesson('${x.id}','')">+ Create Lesson</button><button class="danger" onclick="deleteJnvstSubject('${x.id}')">Delete Subject</button></div></div><div style="margin-top:8px">${roots.length?roots.map(l=>renderLesson(l,0)).join(''):'<div class="muted small">No lessons yet. Create the first lesson.</div>'}</div></div>`}).join(""):"<div class='muted'>No subjects. Create one to use it in assignments.</div>"}</div>
  </div>`);
 }
 async function newJnvstMainGroup(){
@@ -2620,6 +2626,36 @@ async function saveJnvstSubject(){
  const {data,error}=await sb.from("jnvst_subjects").insert({teacher_id:current.id,name,description}).select("*").single();
  if(error)return alert(error.message);
  jnvstSubjects.push(data);await teacherHome();setTimeout(manageJnvstClasses,200);
+}
+async function newJnvstLesson(subjectId,parentId=''){
+ const subject=(jnvstSubjects||[]).find(x=>x.id===subjectId);if(!subject)return alert('Subject not found.');
+ const parent=parentId?(jnvstSubjectLessons||[]).find(x=>x.id===parentId):null;
+ render(`<div class="wrap">${header(parent?'Create JNVST Sub-lesson':'Create JNVST Lesson')}<div class="card"><div class="tag">Subject: ${esc(subject.name)}${parent?` · Parent Lesson: ${esc(parent.lesson_name)}`:''}</div><label>Lesson / Sub-lesson Code</label><input id="jnvstLessonCode" placeholder="e.g. 1, 1.1, 1.2"><label>Lesson / Sub-lesson Name</label><input id="jnvstLessonName" placeholder="e.g. Addition of Fractions"><label>Description</label><textarea id="jnvstLessonDesc" placeholder="Optional description"></textarea><div class="actions"><button onclick="saveJnvstLesson('${subjectId}','${parentId||''}')">Create</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`);
+}
+async function saveJnvstLesson(subjectId,parentId=''){
+ const code=document.getElementById('jnvstLessonCode')?.value.trim(),name=document.getElementById('jnvstLessonName')?.value.trim(),description=document.getElementById('jnvstLessonDesc')?.value.trim()||null;
+ if(!code||!name)return alert('Enter both lesson code and lesson name.');
+ if(!/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(code))return alert('Use a simple lesson code such as 1, 1.1 or 1.2.');
+ const exists=(jnvstSubjectLessons||[]).find(x=>x.subject_id===subjectId&&String(x.lesson_code||'').trim().toLowerCase()===code.toLowerCase());if(exists)return alert('This lesson code already exists under the selected subject.');
+ const {data,error}=await sb.from('jnvst_subject_lessons').insert({teacher_id:current.id,subject_id:subjectId,parent_lesson_id:parentId||null,lesson_code:code,lesson_name:name,description}).select('*').single();
+ if(error)return alert(error.message);jnvstSubjectLessons.push(data);await teacherHome();setTimeout(manageJnvstClasses,200);
+}
+async function editJnvstLesson(id){
+ const l=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!l)return alert('Lesson not found.');
+ render(`<div class="wrap">${header('Edit JNVST Lesson')}<div class="card"><label>Lesson / Sub-lesson Code</label><input id="jnvstLessonCode" value="${esc(l.lesson_code||'')}"><label>Lesson / Sub-lesson Name</label><input id="jnvstLessonName" value="${esc(l.lesson_name||'')}"><label>Description</label><textarea id="jnvstLessonDesc">${esc(l.description||'')}</textarea><div class="actions"><button onclick="updateJnvstLesson('${id}')">Save Changes</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`);
+}
+async function updateJnvstLesson(id){
+ const l=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!l)return;
+ const code=document.getElementById('jnvstLessonCode')?.value.trim(),name=document.getElementById('jnvstLessonName')?.value.trim(),description=document.getElementById('jnvstLessonDesc')?.value.trim()||null;
+ if(!code||!name)return alert('Enter both lesson code and lesson name.');
+ const dup=(jnvstSubjectLessons||[]).find(x=>x.id!==id&&x.subject_id===l.subject_id&&String(x.lesson_code||'').trim().toLowerCase()===code.toLowerCase());if(dup)return alert('This lesson code already exists under the subject.');
+ const {data,error}=await sb.from('jnvst_subject_lessons').update({lesson_code:code,lesson_name:name,description}).eq('id',id).eq('teacher_id',current.id).select('*').single();if(error)return alert(error.message);jnvstSubjectLessons=jnvstSubjectLessons.map(x=>x.id===id?data:x);await teacherHome();setTimeout(manageJnvstClasses,200);
+}
+async function deleteJnvstLesson(id){
+ const l=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!l)return;
+ const children=(jnvstSubjectLessons||[]).filter(x=>x.parent_lesson_id===id);if(children.length)return alert(`Cannot delete this lesson because it has ${children.length} sub-lesson(s). Delete or move the sub-lessons first.`);
+ const {data:used,error}=await sb.from('school_question_bank_questions').select('id').eq('teacher_id',current.id).eq('jnvst_lesson_id',id).limit(1);if(error)return alert(error.message);if((used||[]).length)return alert('This lesson is assigned to one or more Question Bank questions. Re-categorize those questions first.');
+ if(!confirm(`Delete lesson "${l.lesson_name}"?`))return;const {error:de}=await sb.from('jnvst_subject_lessons').delete().eq('id',id).eq('teacher_id',current.id);if(de)return alert(de.message);jnvstSubjectLessons=jnvstSubjectLessons.filter(x=>x.id!==id);await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function deleteJnvstSubject(id){
  const subject=(jnvstSubjects||[]).find(x=>x.id===id);if(!subject)return;
@@ -3296,7 +3332,7 @@ async function newAssignment(){
  window._newAssignmentClasses=classes;
  if(newAssignmentDraft){
    restoreAssignmentBankSelection(newAssignmentDraft.selectedBankQuestionIds||[]);
-   if(newAssignmentDraft.schoolQbSelection){assignmentSchoolQbSelected={...newAssignmentDraft.schoolQbSelection};}
+   if(newAssignmentDraft.schoolQbSelection){assignmentSchoolQbSelected={...newAssignmentDraft.schoolQbSelection};const savedSub=newAssignmentDraft.schoolQbSelection.subject||'';const savedObj=(jnvstSubjects||[]).find(x=>x.id===savedSub)|| (jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(savedSub).trim().toLowerCase());assignmentSchoolQbSubject=savedObj?.id||'';assignmentSchoolQbSubjectName=savedObj?.name||newAssignmentDraft.schoolQbSelection.subject_name||savedSub;assignmentSchoolQbMedium=newAssignmentDraft.schoolQbSelection.medium||'';}
    const d=newAssignmentDraft;
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
    document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";
@@ -3312,7 +3348,7 @@ async function newAssignment(){
    if(d.selectedStudentsByClass){Object.entries(d.selectedStudentsByClass).forEach(([cid,ids])=>ids.forEach(id=>{const cb=document.querySelector(`.newassign-student[data-class-id="${cid}"][value="${id}"]`);if(cb)cb.checked=true}))}
    else if(d.assignMode==="students"){(d.selectedStudents||[]).forEach(id=>{const cb=document.querySelector(`.newassign-student[value="${id}"]`);if(cb)cb.checked=true})}
  }else{
-   assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentSchoolQbSelected=null;assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentMistakeSelected.clear();assignmentMistakeCache=[];assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};
+   assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentSchoolQbSelected=null;assignmentSchoolQbSubject='';assignmentSchoolQbMedium='';assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentMistakeSelected.clear();assignmentMistakeCache=[];assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};
    addQ();addQ();
    await (schoolTeacherMode?refreshSchoolAssignmentSubgroups():refreshJnvstAssignmentGroups());
    if(!schoolTeacherMode)document.querySelector('.newassign-class')?.click();
@@ -3528,22 +3564,37 @@ async function openAssignmentMistakeBank(){
 
 function assignmentSchoolQbEsc(v){return esc(v==null?'':String(v))}
 function assignmentSchoolQbJs(v){return JSON.stringify(String(v==null?'':v))}
-function assignmentSchoolQbLessonLabel(id){const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return '—';const p=assignmentSchoolQbChapters.find(x=>x.id===c.parent_chapter_id);return `${c.chapter_code||c.chapter_number||''}. ${c.chapter_name}${p?' (Lesson/Subchapter of '+(p.chapter_code||p.chapter_number||'')+')':''}`}
-function assignmentSchoolQbAllowed(){if(!assignmentSchoolQbLessons.size)return assignmentSchoolQbQuestions;const ids=new Set();assignmentSchoolQbLessons.forEach(id=>{const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return; if(!c.parent_chapter_id){const d=new Set([id]);let changed=true;while(changed){changed=false;assignmentSchoolQbChapters.forEach(x=>{if(x.parent_chapter_id&&d.has(x.parent_chapter_id)&&!d.has(x.id)){d.add(x.id);changed=true;}})}d.forEach(x=>ids.add(x));}else ids.add(id)});return assignmentSchoolQbQuestions.filter(q=>ids.has(q.chapter_id))}
+function assignmentSchoolQbLessonLabel(id){const jl=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(jl){const p=(jnvstSubjectLessons||[]).find(x=>x.id===jl.parent_lesson_id);return `${jl.lesson_code||''} ${jl.lesson_name}${p?' (Sub-lesson of '+(p.lesson_code||'')+')':''}`}const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return '—';const p=assignmentSchoolQbChapters.find(x=>x.id===c.parent_chapter_id);return `${c.chapter_code||c.chapter_number||''}. ${c.chapter_name}${p?' (Lesson/Subchapter of '+(p.chapter_code||p.chapter_number||'')+')':''}`}
+function assignmentSchoolQbSubjectMatches(q){
+ const subject=(jnvstSubjects||[]).find(x=>x.id===assignmentSchoolQbSubject);
+ if(!subject)return false;
+ if(q.jnvst_subject_id)return String(q.jnvst_subject_id)===String(subject.id);
+ return String(q.subject||'').trim().toLowerCase()===String(subject.name||'').trim().toLowerCase();
+}
+function assignmentSchoolQbMediumMatches(q){const m=String(q.medium||'').trim().toUpperCase(), wanted=String(assignmentSchoolQbMedium||'').trim().toUpperCase();if(!wanted)return false;if(wanted==='BOTH')return m==='BOTH'||m==='ENGLISH_ASSAMESE'||m==='BILINGUAL'||m==='ENGLISH + ASSAMESE'||m==='ENGLISH+ASSAMESE';return m===wanted}
+function assignmentSchoolQbBaseFiltered(){if(!assignmentSchoolQbSubject||!assignmentSchoolQbMedium)return [];return assignmentSchoolQbQuestions.filter(q=>assignmentSchoolQbSubjectMatches(q)&&assignmentSchoolQbMediumMatches(q))}
+function assignmentSchoolQbJnvstDescendantIds(rootId){const ids=new Set([rootId]);let changed=true;while(changed){changed=false;(jnvstSubjectLessons||[]).forEach(x=>{if(x.parent_lesson_id&&ids.has(x.parent_lesson_id)&&!ids.has(x.id)){ids.add(x.id);changed=true;}})}return ids}
+function assignmentSchoolQbAllowed(){const base=assignmentSchoolQbBaseFiltered();if(!assignmentSchoolQbLessons.size)return base;const jnvstIds=new Set((jnvstSubjectLessons||[]).map(x=>x.id));const selectedJnvst=[...assignmentSchoolQbLessons].filter(id=>jnvstIds.has(id));if(selectedJnvst.length){const ids=new Set();selectedJnvst.forEach(id=>assignmentSchoolQbJnvstDescendantIds(id).forEach(x=>ids.add(x)));return base.filter(q=>q.jnvst_lesson_id&&ids.has(q.jnvst_lesson_id))}const ids=new Set();assignmentSchoolQbLessons.forEach(id=>{const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return;if(!c.parent_chapter_id){const d=new Set([id]);let changed=true;while(changed){changed=false;assignmentSchoolQbChapters.forEach(x=>{if(x.parent_chapter_id&&d.has(x.parent_chapter_id)&&!d.has(x.id)){d.add(x.id);changed=true;}})}d.forEach(x=>ids.add(x));}else ids.add(id)});return base.filter(q=>ids.has(q.chapter_id))}
 function assignmentSchoolQbGroup(q){return String(q.variation_group||'').trim().toLowerCase()||null}
 function assignmentSchoolQbRenderBuilder(){
  const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
- const lessons=[...assignmentSchoolQbChapters].sort((a,b)=>String(a.chapter_code||a.chapter_number||'').localeCompare(String(b.chapter_code||b.chapter_number||''),undefined,{numeric:true}));
+ const subjects=(jnvstSubjects||[]).filter(x=>String(x.name||'').trim());
+ const subjectOptions=subjects.length?subjects.map(x=>`<option value="${assignmentSchoolQbEsc(x.id)}" ${assignmentSchoolQbSubject===x.id?'selected':''}>${assignmentSchoolQbEsc(x.name)}</option>`).join(''):`<option value="" ${!assignmentSchoolQbSubject?'selected':''}>Select Subject</option>`;
+ const jnvstLessons=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===assignmentSchoolQbSubject);
+ const legacyLessons=[...assignmentSchoolQbChapters].filter(c=>assignmentSchoolQbBaseFiltered().some(q=>q.chapter_id===c.id)).sort((a,b)=>String(a.chapter_code||a.chapter_number||'').localeCompare(String(b.chapter_code||b.chapter_number||''),undefined,{numeric:true}));
+ const lessons=jnvstLessons.length?jnvstLessons:legacyLessons;
+ const lessonLabel=l=>jnvstLessons.length?`${l.lesson_code||''} ${l.lesson_name}`:`${l.chapter_code||l.chapter_number||''}. ${l.chapter_name}`;
  const allowed=assignmentSchoolQbAllowed();
  const groups=[...new Set(allowed.map(q=>assignmentSchoolQbGroup(q)).filter(Boolean))].sort();
- const fixedRows=allowed.filter(q=>assignmentSchoolQbFixedQuestions.has(q.id));
- box.innerHTML=`<div class="card" style="border:2px solid #16a34a;background:#f7fff9"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">🧩 Assignment from School Question Bank</h3><div class="small muted">Choose lessons/topics, mandatory questions/groups, then let the system fill the remaining questions randomly.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentSchoolQbBuilder').style.display='none'">Close</button></div>
- <div class="grid" style="margin-top:12px"><div><label>Total Questions</label><input id="asqbTotal" type="number" min="1" value="${assignmentSchoolQbSelected?.total||10}" onchange="assignmentSchoolQbRenderSummary()"></div><div><label>Question Language</label><select id="asqbLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">English + Assamese</option></select></div></div>
- <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">1. Select Lessons / Topics</h4><div class="small muted" style="margin-bottom:7px">Selecting a main chapter includes its subchapters. A subchapter can be selected independently.</div><div style="max-height:220px;overflow:auto">${lessons.map(c=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbLessons.has(c.id)?'checked':''} onchange="assignmentSchoolQbLessonToggle('${c.id}',this.checked)"> <b>${assignmentSchoolQbEsc(c.chapter_code||c.chapter_number||'')}</b> ${assignmentSchoolQbEsc(c.chapter_name)} ${c.parent_chapter_id?'<span class="small muted">(Lesson/Subchapter)</span>':'<span class="small muted">(Chapter)</span>'}</label>`).join('')}</div></div>
- <div class="grid"><div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">2. Fixed Questions</h4><div class="small muted">These questions must appear. Questions from their variation groups are excluded from the remaining pool.</div><input id="asqbFixedSearch" placeholder="Search fixed questions..." oninput="assignmentSchoolQbRenderFixed()"><div id="asqbFixedList" style="max-height:300px;overflow:auto;margin-top:7px"></div></div>
- <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">3. Fixed Question Groups</h4><div class="small muted">For each selected group, exactly one random variation is included.</div><div id="asqbGroupList" style="max-height:300px;overflow:auto;margin-top:7px">${groups.length?groups.map(g=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbFixedGroups.has(g)?'checked':''} onchange="assignmentSchoolQbGroupToggle(${assignmentSchoolQbJs(g)},this.checked)"> <b>${assignmentSchoolQbEsc(g)}</b> <span class="small muted">(${allowed.filter(q=>assignmentSchoolQbGroup(q)===g).length} variations)</span></label>`).join(''):'<div class="muted">No variation groups in the selected lessons.</div>'}</div></div></div>
- <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">4. Generate Selection</h4><div id="asqbSummary" class="small muted">Set the total and constraints, then generate.</div><div class="actions"><button type="button" onclick="generateSchoolAssignmentQbSelection()">🎲 Generate Assignment Questions</button><button type="button" class="secondary" onclick="assignmentSchoolQbClearSelection()">Clear Generated Selection</button></div><div id="asqbSelectedList" style="margin-top:8px"></div></div></div>`;
- assignmentSchoolQbRenderFixed();assignmentSchoolQbRenderSummary();
+ const ready=!!assignmentSchoolQbSubject&&!!assignmentSchoolQbMedium;
+ box.innerHTML=`<div class="card" style="border:2px solid #16a34a;background:#f7fff9"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">🧩 Assignment from School Question Bank</h3><div class="small muted">Select Subject + Medium first. Only matching questions, lessons/topics and variation groups are then available.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentSchoolQbBuilder').style.display='none'">Close</button></div>
+ <div class="grid" style="margin-top:12px"><div><label>Subject</label><select id="asqbSubject" onchange="assignmentSchoolQbSubject=this.value;assignmentSchoolQbSubjectName=(jnvstSubjects.find(x=>x.id===this.value)||{}).name||'';const a=document.getElementById('asub');if(a&&assignmentSchoolQbSubjectName)a.value=assignmentSchoolQbSubjectName;assignmentSchoolQbLessons.clear();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()"><option value="">Select Subject</option>${subjectOptions}</select></div><div><label>Medium</label><select id="asqbMedium" onchange="assignmentSchoolQbMedium=this.value;assignmentSchoolQbLessons.clear();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()"><option value="">Select Medium</option><option value="ENGLISH" ${assignmentSchoolQbMedium==='ENGLISH'?'selected':''}>English</option><option value="ASSAMESE" ${assignmentSchoolQbMedium==='ASSAMESE'?'selected':''}>Assamese</option><option value="BOTH" ${assignmentSchoolQbMedium==='BOTH'?'selected':''}>English + Assamese</option></select></div><div><label>Total Questions</label><input id="asqbTotal" type="number" min="1" value="${assignmentSchoolQbSelected?.total||10}" onchange="assignmentSchoolQbRenderSummary()"></div><div><label>Question Language</label><select id="asqbLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">English + Assamese</option></select></div></div>
+ ${!ready?'<div class="notice" style="margin-top:10px"><b>Select Subject and Medium.</b> Questions will not be displayed until both are selected.</div>':`<div class="success" style="margin-top:10px"><b>${allowed.length}</b> matching question(s) available for <b>${assignmentSchoolQbEsc(assignmentSchoolQbSubjectName||((jnvstSubjects||[]).find(x=>x.id===assignmentSchoolQbSubject)||{}).name||'')}</b> / <b>${assignmentSchoolQbEsc(assignmentSchoolQbMedium)}</b>.</div>`}
+ ${ready?`<div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">1. Select Lessons / Topics</h4><div class="small muted" style="margin-bottom:7px">Selecting a main chapter includes its subchapters. A lesson/topic can be selected independently.</div><div style="max-height:220px;overflow:auto">${lessons.length?lessons.map(c=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbLessons.has(c.id)?'checked':''} onchange="assignmentSchoolQbLessonToggle('${c.id}',this.checked)"> <b>${assignmentSchoolQbEsc(c.lesson_code||c.chapter_code||c.chapter_number||'')}</b> ${assignmentSchoolQbEsc(c.lesson_name||c.chapter_name)} ${c.parent_lesson_id||c.parent_chapter_id?'<span class="small muted">(Sub-lesson)</span>':'<span class="small muted">(Lesson)</span>'}</label>`).join(''):'<div class="muted">No lessons/sub-lessons contain questions for this Subject + Medium. Use Manage JNVST Groups & Subjects to create lessons and edit existing questions to assign them.</div>'}</div></div>
+ <div class="grid"><div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">2. Fixed Questions</h4><div class="small muted">These must appear. Their entire variation group is excluded from the remaining random pool.</div><input id="asqbFixedSearch" placeholder="Search fixed questions / topic / group..." oninput="assignmentSchoolQbRenderFixed()"><div id="asqbFixedList" style="max-height:300px;overflow:auto;margin-top:7px"></div></div>
+ <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">3. Fixed Question Groups</h4><div class="small muted">Select a group to include exactly one random variation from that group.</div><div id="asqbGroupList" style="max-height:300px;overflow:auto;margin-top:7px">${groups.length?groups.map(g=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbFixedGroups.has(g)?'checked':''} onchange="assignmentSchoolQbGroupToggle(${assignmentSchoolQbJs(g)},this.checked)"> <b>${assignmentSchoolQbEsc(g)}</b> <span class="small muted">(${allowed.filter(q=>assignmentSchoolQbGroup(q)===g).length} variations)</span></label>`).join(''):'<div class="muted">No variation/fixed groups in the selected scope.</div>'}</div></div></div>
+ <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">4. Generate Selection</h4><div id="asqbSummary" class="small muted">Set the total and constraints, then generate.</div><div class="actions"><button type="button" onclick="generateSchoolAssignmentQbSelection()">🎲 Generate Assignment Questions</button><button type="button" class="secondary" onclick="assignmentSchoolQbClearSelection()">Clear Generated Selection</button></div><div id="asqbSelectedList" style="margin-top:8px"></div></div>`:''}</div>`;
+ if(ready){assignmentSchoolQbRenderFixed();assignmentSchoolQbRenderSummary();}
 }
 function assignmentSchoolQbLessonToggle(id,on){if(on)assignmentSchoolQbLessons.add(id);else assignmentSchoolQbLessons.delete(id);assignmentSchoolQbFixedQuestions=new Set([...assignmentSchoolQbFixedQuestions].filter(x=>assignmentSchoolQbAllowed().some(q=>q.id===x)));assignmentSchoolQbFixedGroups=new Set([...assignmentSchoolQbFixedGroups].filter(g=>assignmentSchoolQbAllowed().some(q=>assignmentSchoolQbGroup(q)===g)));assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()}
 function assignmentSchoolQbFixedToggle(id,on){if(on)assignmentSchoolQbFixedQuestions.add(id);else assignmentSchoolQbFixedQuestions.delete(id);assignmentSchoolQbSelected=null;assignmentSchoolQbRenderFixed();assignmentSchoolQbRenderSummary()}
@@ -3564,7 +3615,7 @@ function generateSchoolAssignmentQbSelection(){
  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
  for(const q of pool){if(selected.length>=total)break;const g=assignmentSchoolQbGroup(q);if(g&&usedGroups.has(g))continue;selected.push(q);usedIds.add(q.id);if(g)usedGroups.add(g)}
  if(selected.length<total)return alert(`Only ${selected.length} unique questions can be selected under the current lesson and variation-group constraints. Add more questions, select more lessons, or reduce the total.`);
- assignmentSchoolQbSelected={ids:selected.map(q=>q.id),total,lang:document.getElementById('asqbLang')?.value||'EN'};
+ assignmentSchoolQbSelected={ids:selected.map(q=>q.id),total,lang:document.getElementById('asqbLang')?.value||'EN',subject:assignmentSchoolQbSubject,subject_name:assignmentSchoolQbSubjectName,medium:assignmentSchoolQbMedium};
  const out=document.getElementById('asqbSelectedList');if(out)out.innerHTML=`<div class="success"><b>${selected.length} questions selected.</b> Fixed questions/groups are preserved; remaining questions were randomly selected without reusing a variation group.</div><ol>${selected.map(q=>`<li style="margin:4px 0">${assignmentSchoolQbEsc(assignmentSchoolQbQuestionText(q,assignmentSchoolQbSelected.lang).slice(0,220))}<span class="small muted"> — ${assignmentSchoolQbEsc(assignmentSchoolQbLessonLabel(q.chapter_id))}${q.topic?' · '+assignmentSchoolQbEsc(q.topic):''}${q.variation_group?' · '+assignmentSchoolQbEsc(q.variation_group):''}</span></li>`).join('')}</ol>`;
  assignmentSchoolQbRenderSummary();
 }
@@ -3572,7 +3623,7 @@ async function openSchoolAssignmentQbBuilder(){
  const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Question Bank…</span></div>';
  const [{data:q,error:qe},{data:c,error:ce}]=await Promise.all([sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false}),sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name')]);
  if(qe||ce){box.innerHTML=`<div class="notice">Could not load School Question Bank: ${assignmentSchoolQbEsc((qe||ce).message)}</div>`;return;}
- assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions=new Set();assignmentSchoolQbFixedGroups=new Set();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});
+ assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];const initialSubjectName=document.getElementById('asub')?.value||'';const initialSubject=(jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(initialSubjectName).trim().toLowerCase());assignmentSchoolQbSubject=initialSubject?.id||'';assignmentSchoolQbSubjectName=initialSubject?.name||initialSubjectName;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions=new Set();assignmentSchoolQbFixedGroups=new Set();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
 async function saveAssignment(){
@@ -3623,7 +3674,7 @@ async function saveAssignment(){
  // Add generated School Question Bank questions as immutable assignment snapshots.
  if(assignmentSchoolQbSelected?.ids?.length){
    const ids=assignmentSchoolQbSelected.ids;
-   const {data:bankRows,error:be}=await sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,question_type,marks,correct_answer,explanation,variation_group,chapter_id,topic,has_images').eq('teacher_id',current.id).in('id',ids);
+   const {data:bankRows,error:be}=await sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,question_type,marks,correct_answer,explanation,variation_group,chapter_id,topic,subject,medium,has_images,jnvst_subject_id,jnvst_lesson_id').eq('teacher_id',current.id).in('id',ids);
    if(be){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load School Question Bank questions: '+be.message)}
    const {data:opts,error:oe}=await sb.from('school_question_bank_options').select('question_id,display_order,option_label,option_text_en,option_text_as,is_correct').in('question_id',ids).order('display_order');
    if(oe){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load Question Bank options: '+oe.message)}
@@ -3633,7 +3684,7 @@ async function saveAssignment(){
    (opts||[]).forEach(o=>{if(!optMap.has(o.question_id))optMap.set(o.question_id,[]);optMap.get(o.question_id).push(o)});
    (blocks||[]).forEach(b=>{if(!blockMap.has(b.question_id))blockMap.set(b.question_id,[]);blockMap.get(b.question_id).push(b)});
    const lang=assignmentSchoolQbSelected.lang||'EN';
-   ids.forEach(id=>{const q=byId.get(id);if(!q)return;const bs=blockMap.get(id)||[];const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();const text=textFromBlocks||assignmentSchoolQbQuestionText(q,lang);const os=optMap.get(id)||[];const labelMap={};os.forEach(o=>labelMap[o.option_label]=o);const getOpt=l=>{const o=labelMap[l];if(!o)return '';return lang==='AS'?(o.option_text_as||o.option_text_en||''):lang==='BOTH'?[o.option_text_en,o.option_text_as].filter(Boolean).join(' / '):(o.option_text_en||o.option_text_as||'')};const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;qs.push({assignment_id:a.id,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:getOpt('A'),option_b:getOpt('B'),option_c:getOpt('C'),option_d:getOpt('D'),correct_option:q.correct_answer,question_order:qs.length+1,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id,source_topic:q.topic||null});});
+   ids.forEach(id=>{const q=byId.get(id);if(!q)return;const bs=blockMap.get(id)||[];const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();const text=textFromBlocks||assignmentSchoolQbQuestionText(q,lang);const os=optMap.get(id)||[];const labelMap={};os.forEach(o=>labelMap[o.option_label]=o);const getOpt=l=>{const o=labelMap[l];if(!o)return '';return lang==='AS'?(o.option_text_as||o.option_text_en||''):lang==='BOTH'?[o.option_text_en,o.option_text_as].filter(Boolean).join(' / '):(o.option_text_en||o.option_text_as||'')};const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;qs.push({assignment_id:a.id,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:getOpt('A'),option_b:getOpt('B'),option_c:getOpt('C'),option_d:getOpt('D'),correct_option:q.correct_answer,question_order:qs.length+1,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id,source_topic:q.topic||null,source_subject:q.subject||null,source_medium:q.medium||null});});
  }
  // Add selected Mock Test Question Bank questions as immutable assignment snapshots.
  if(assignmentBankSelected.size){
@@ -3649,7 +3700,7 @@ async function saveAssignment(){
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}
  try{const rows=recipientInfo.studentIds.map(student_id=>({assignment_id:a.id,student_id}));const {error:re}=await sb.from("assignment_students").insert(rows);if(re)throw re}catch(e){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
  alert(`${type==="video"?"Video":"No-video"} assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);
- importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentSchoolQbSelected=null;assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();
+ importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentSchoolQbSelected=null;assignmentSchoolQbSubject='';assignmentSchoolQbMedium='';assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();
  teacherHome()
 }
 
@@ -3666,7 +3717,7 @@ function startBulkImportFromNewAssignment(){
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
   description:document.getElementById("adesc")?.value||"",
-  selectedBankQuestionIds:[...assignmentBankSelected], schoolQbSelection:assignmentSchoolQbSelected ? {...assignmentSchoolQbSelected} : null
+  selectedBankQuestionIds:[...assignmentBankSelected], schoolQbSelection:assignmentSchoolQbSelected ? {...assignmentSchoolQbSelected,subject:assignmentSchoolQbSubject,medium:assignmentSchoolQbMedium} : null
  };
  importedForNewAssignment=true;
  bulkImportMCQs();
