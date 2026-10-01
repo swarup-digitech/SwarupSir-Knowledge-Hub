@@ -204,6 +204,14 @@ let newAssignmentDraft=null;
 let assignmentBankCache=[];
 let assignmentBankSelected=new Set();
 let assignmentBankFilters={part:'',topic:'',language:'',search:''};
+let assignmentSchoolQbQuestions=[];
+let assignmentSchoolQbChapters=[];
+let assignmentSchoolQbBlocks=[];
+let assignmentSchoolQbOptions=[];
+let assignmentSchoolQbSelected=null;
+let assignmentSchoolQbLessons=new Set();
+let assignmentSchoolQbFixedQuestions=new Set();
+let assignmentSchoolQbFixedGroups=new Set();
 let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
@@ -3269,7 +3277,7 @@ async function newAssignment(){
   <div class="card" style="margin:0;border:2px solid #2563eb;background:#eff6ff">
     <h4 style="margin:0 0 6px">📚 Mock Test Question Bank</h4>
     <p class="small muted" style="min-height:38px">Reuse questions already stored in your central Mock Test Question Bank.</p>
-    <button type="button" onclick="openAssignmentQuestionBank()" style="width:100%">📚 Select From Question Bank</button>
+    <button type="button" onclick="openAssignmentQuestionBank()" style="width:100%">📚 Select From Question Bank</button><button type="button" class="secondary" onclick="openSchoolAssignmentQbBuilder()" style="width:100%;margin-top:7px">🧩 Build Assignment from Lessons</button>
   </div>
   <div class="card" style="margin:0;border:2px solid #f59e0b;background:#fffaf0">
     <h4 style="margin:0 0 6px">🎯 Student Mistakes</h4>
@@ -3281,13 +3289,14 @@ async function newAssignment(){
   <button type="button" onclick="startBulkImportFromNewAssignment()">↑ Upload Question File (PDF / Excel)</button>
   <button type="button" class="secondary" onclick="addQ()">+ Add MCQ manually</button>
 </div>
-<div id="assignmentBankPicker" style="display:none;margin-top:12px"></div>
+<div id="assignmentBankPicker" style="display:none;margin-top:12px"></div><div id="assignmentSchoolQbBuilder" style="display:none;margin-top:12px"></div>
 <div id="assignmentSelectedBankSummary" class="small muted" style="margin-top:8px">No question-bank questions selected.</div>
 <div class="small muted" style="margin-top:8px">Question-bank selections are copied into this assignment as a snapshot, so later edits to the bank do not change an existing assignment.</div>
 </div><h3>Manual / Uploaded Questions</h3><div id="qs"></div><div class="actions" style="margin-top:15px"><button onclick="saveAssignment()">Save & Assign</button><button class="secondary" onclick="schoolTeacherMode?location.href='teacher-dashboard.html':teacherHome()">Cancel</button></div></div></div>`);
  window._newAssignmentClasses=classes;
  if(newAssignmentDraft){
    restoreAssignmentBankSelection(newAssignmentDraft.selectedBankQuestionIds||[]);
+   if(newAssignmentDraft.schoolQbSelection){assignmentSchoolQbSelected={...newAssignmentDraft.schoolQbSelection};}
    const d=newAssignmentDraft;
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
    document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";
@@ -3303,7 +3312,7 @@ async function newAssignment(){
    if(d.selectedStudentsByClass){Object.entries(d.selectedStudentsByClass).forEach(([cid,ids])=>ids.forEach(id=>{const cb=document.querySelector(`.newassign-student[data-class-id="${cid}"][value="${id}"]`);if(cb)cb.checked=true}))}
    else if(d.assignMode==="students"){(d.selectedStudents||[]).forEach(id=>{const cb=document.querySelector(`.newassign-student[value="${id}"]`);if(cb)cb.checked=true})}
  }else{
-   assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentMistakeSelected.clear();assignmentMistakeCache=[];assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};
+   assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentSchoolQbSelected=null;assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentMistakeSelected.clear();assignmentMistakeCache=[];assignmentMistakeFilters={minWrong:1,part:'',topic:'',search:''};
    addQ();addQ();
    await (schoolTeacherMode?refreshSchoolAssignmentSubgroups():refreshJnvstAssignmentGroups());
    if(!schoolTeacherMode)document.querySelector('.newassign-class')?.click();
@@ -3516,9 +3525,59 @@ async function openAssignmentMistakeBank(){
  box.innerHTML=`<div class="card" style="border:2px solid #f59e0b;background:#fffaf0"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">🎯 Student Mistake Bank</h3><div class="small muted">Questions answered wrongly by the selected students. Selecting one adds the original Mock Question Bank question to this assignment.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentBankPicker').style.display='none'">Close</button></div><div class="grid" style="margin-top:10px"><div><label>Minimum Wrong Count</label><select id="amfWrong" onchange="assignmentMistakeFilters.minWrong=this.value;renderAssignmentMistakeRows()"><option value="1">Wrong ≥ 1</option><option value="2">Wrong ≥ 2</option><option value="3">Wrong ≥ 3</option><option value="5">Wrong ≥ 5</option></select></div><div><label>Part</label><select id="amfPart" onchange="assignmentMistakeFilters.part=this.value;renderAssignmentMistakeRows()"><option value="">All parts</option>${parts.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('')}</select></div><div><label>Topic</label><select id="amfTopic" onchange="assignmentMistakeFilters.topic=this.value;renderAssignmentMistakeRows()"><option value="">All topics</option>${topics.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div><div><label>Search</label><input id="amfSearch" placeholder="Search question/topic..." oninput="assignmentMistakeFilters.search=this.value;renderAssignmentMistakeRows()"></div></div><div class="actions" style="margin:8px 0"><button type="button" class="secondary" onclick="assignmentMistakeSelectAllVisible(true)">Select all visible</button><button type="button" class="secondary" onclick="assignmentMistakeSelectAllVisible(false)">Clear visible</button><span id="assignmentMistakeCount" class="small muted"></span></div><div id="assignmentMistakeRows" style="max-height:520px;overflow:auto;padding-right:3px"></div><div id="assignmentMistakeSummary" class="small muted" style="margin-top:8px"></div><div class="actions" style="margin-top:10px"><button type="button" onclick="document.getElementById('assignmentBankPicker').style.display='none';assignmentMistakeSelectedSummary();assignmentBankSelectedSummary()">✓ Use Selected Mistakes</button></div></div>`;
  renderAssignmentMistakeRows();assignmentMistakeSelectedSummary();
 }
+
+function assignmentSchoolQbEsc(v){return esc(v==null?'':String(v))}
+function assignmentSchoolQbJs(v){return JSON.stringify(String(v==null?'':v))}
+function assignmentSchoolQbLessonLabel(id){const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return '—';const p=assignmentSchoolQbChapters.find(x=>x.id===c.parent_chapter_id);return `${c.chapter_code||c.chapter_number||''}. ${c.chapter_name}${p?' (Lesson/Subchapter of '+(p.chapter_code||p.chapter_number||'')+')':''}`}
+function assignmentSchoolQbAllowed(){if(!assignmentSchoolQbLessons.size)return assignmentSchoolQbQuestions;const ids=new Set();assignmentSchoolQbLessons.forEach(id=>{const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return; if(!c.parent_chapter_id){const d=new Set([id]);let changed=true;while(changed){changed=false;assignmentSchoolQbChapters.forEach(x=>{if(x.parent_chapter_id&&d.has(x.parent_chapter_id)&&!d.has(x.id)){d.add(x.id);changed=true;}})}d.forEach(x=>ids.add(x));}else ids.add(id)});return assignmentSchoolQbQuestions.filter(q=>ids.has(q.chapter_id))}
+function assignmentSchoolQbGroup(q){return String(q.variation_group||'').trim().toLowerCase()||null}
+function assignmentSchoolQbRenderBuilder(){
+ const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
+ const lessons=[...assignmentSchoolQbChapters].sort((a,b)=>String(a.chapter_code||a.chapter_number||'').localeCompare(String(b.chapter_code||b.chapter_number||''),undefined,{numeric:true}));
+ const allowed=assignmentSchoolQbAllowed();
+ const groups=[...new Set(allowed.map(q=>assignmentSchoolQbGroup(q)).filter(Boolean))].sort();
+ const fixedRows=allowed.filter(q=>assignmentSchoolQbFixedQuestions.has(q.id));
+ box.innerHTML=`<div class="card" style="border:2px solid #16a34a;background:#f7fff9"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">🧩 Assignment from School Question Bank</h3><div class="small muted">Choose lessons/topics, mandatory questions/groups, then let the system fill the remaining questions randomly.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentSchoolQbBuilder').style.display='none'">Close</button></div>
+ <div class="grid" style="margin-top:12px"><div><label>Total Questions</label><input id="asqbTotal" type="number" min="1" value="${assignmentSchoolQbSelected?.total||10}" onchange="assignmentSchoolQbRenderSummary()"></div><div><label>Question Language</label><select id="asqbLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">English + Assamese</option></select></div></div>
+ <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">1. Select Lessons / Topics</h4><div class="small muted" style="margin-bottom:7px">Selecting a main chapter includes its subchapters. A subchapter can be selected independently.</div><div style="max-height:220px;overflow:auto">${lessons.map(c=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbLessons.has(c.id)?'checked':''} onchange="assignmentSchoolQbLessonToggle('${c.id}',this.checked)"> <b>${assignmentSchoolQbEsc(c.chapter_code||c.chapter_number||'')}</b> ${assignmentSchoolQbEsc(c.chapter_name)} ${c.parent_chapter_id?'<span class="small muted">(Lesson/Subchapter)</span>':'<span class="small muted">(Chapter)</span>'}</label>`).join('')}</div></div>
+ <div class="grid"><div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">2. Fixed Questions</h4><div class="small muted">These questions must appear. Questions from their variation groups are excluded from the remaining pool.</div><input id="asqbFixedSearch" placeholder="Search fixed questions..." oninput="assignmentSchoolQbRenderFixed()"><div id="asqbFixedList" style="max-height:300px;overflow:auto;margin-top:7px"></div></div>
+ <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">3. Fixed Question Groups</h4><div class="small muted">For each selected group, exactly one random variation is included.</div><div id="asqbGroupList" style="max-height:300px;overflow:auto;margin-top:7px">${groups.length?groups.map(g=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbFixedGroups.has(g)?'checked':''} onchange="assignmentSchoolQbGroupToggle(${assignmentSchoolQbJs(g)},this.checked)"> <b>${assignmentSchoolQbEsc(g)}</b> <span class="small muted">(${allowed.filter(q=>assignmentSchoolQbGroup(q)===g).length} variations)</span></label>`).join(''):'<div class="muted">No variation groups in the selected lessons.</div>'}</div></div></div>
+ <div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">4. Generate Selection</h4><div id="asqbSummary" class="small muted">Set the total and constraints, then generate.</div><div class="actions"><button type="button" onclick="generateSchoolAssignmentQbSelection()">🎲 Generate Assignment Questions</button><button type="button" class="secondary" onclick="assignmentSchoolQbClearSelection()">Clear Generated Selection</button></div><div id="asqbSelectedList" style="margin-top:8px"></div></div></div>`;
+ assignmentSchoolQbRenderFixed();assignmentSchoolQbRenderSummary();
+}
+function assignmentSchoolQbLessonToggle(id,on){if(on)assignmentSchoolQbLessons.add(id);else assignmentSchoolQbLessons.delete(id);assignmentSchoolQbFixedQuestions=new Set([...assignmentSchoolQbFixedQuestions].filter(x=>assignmentSchoolQbAllowed().some(q=>q.id===x)));assignmentSchoolQbFixedGroups=new Set([...assignmentSchoolQbFixedGroups].filter(g=>assignmentSchoolQbAllowed().some(q=>assignmentSchoolQbGroup(q)===g)));assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()}
+function assignmentSchoolQbFixedToggle(id,on){if(on)assignmentSchoolQbFixedQuestions.add(id);else assignmentSchoolQbFixedQuestions.delete(id);assignmentSchoolQbSelected=null;assignmentSchoolQbRenderFixed();assignmentSchoolQbRenderSummary()}
+function assignmentSchoolQbGroupToggle(g,on){if(on)assignmentSchoolQbFixedGroups.add(g);else assignmentSchoolQbFixedGroups.delete(g);assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()}
+function assignmentSchoolQbRenderFixed(){const box=document.getElementById('asqbFixedList');if(!box)return;const s=(document.getElementById('asqbFixedSearch')?.value||'').toLowerCase();const rows=assignmentSchoolQbAllowed().filter(q=>{const text=`${q.question_text_en||''} ${q.question_text_as||''} ${q.topic||''} ${q.variation_group||''}`.toLowerCase();return !s||text.includes(s)}).slice(0,300);box.innerHTML=rows.length?rows.map(q=>`<label style="display:block;padding:6px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbFixedQuestions.has(q.id)?'checked':''} onchange="assignmentSchoolQbFixedToggle('${q.id}',this.checked)"> <b>${assignmentSchoolQbEsc((q.question_text_en||q.question_text_as||'').slice(0,170))}</b><div class="small muted">${assignmentSchoolQbEsc(assignmentSchoolQbLessonLabel(q.chapter_id))}${q.topic?' · Topic: '+assignmentSchoolQbEsc(q.topic):''}${q.variation_group?' · Group: '+assignmentSchoolQbEsc(q.variation_group):''}</div></label>`).join(''):'<div class="muted">No questions in the selected lessons.</div>'}
+function assignmentSchoolQbRenderSummary(){const box=document.getElementById('asqbSummary');if(!box)return;const total=Number(document.getElementById('asqbTotal')?.value||0);const fixed=assignmentSchoolQbQuestions.filter(q=>assignmentSchoolQbFixedQuestions.has(q.id));const groups=new Set(fixed.map(assignmentSchoolQbGroup).filter(Boolean));box.textContent=`Total: ${total} · Fixed questions: ${fixed.length} · Fixed groups: ${assignmentSchoolQbFixedGroups.size} · Remaining random questions: ${Math.max(0,total-fixed.length-assignmentSchoolQbFixedGroups.size)}`}
+function assignmentSchoolQbClearSelection(){assignmentSchoolQbSelected=null;const x=document.getElementById('asqbSelectedList');if(x)x.innerHTML='';assignmentSchoolQbRenderSummary()}
+function assignmentSchoolQbQuestionText(q,lang){if(lang==='AS')return q.question_text_as||q.question_text_en||'';if(lang==='BOTH')return [q.question_text_en,q.question_text_as].filter(Boolean).join('\n');return q.question_text_en||q.question_text_as||''}
+function generateSchoolAssignmentQbSelection(){
+ const total=Number(document.getElementById('asqbTotal')?.value||0);if(!total||total<1)return alert('Enter a valid total number of questions.');
+ const allowed=assignmentSchoolQbAllowed();if(!allowed.length)return alert('Select at least one lesson/chapter with available questions.');
+ const fixed=allowed.filter(q=>assignmentSchoolQbFixedQuestions.has(q.id));const fixedGroups=[...assignmentSchoolQbFixedGroups];
+ const usedIds=new Set();const usedGroups=new Set();const selected=[];
+ for(const q of fixed){const g=assignmentSchoolQbGroup(q);if(g&&usedGroups.has(g))return alert(`Only one fixed question can belong to Variation Group ${q.variation_group}.`);selected.push(q);usedIds.add(q.id);if(g)usedGroups.add(g)}
+ for(const g of fixedGroups){if(usedGroups.has(g))return alert(`Variation Group ${g} is already represented by a fixed question.`);const pool=allowed.filter(q=>assignmentSchoolQbGroup(q)===g&&!usedIds.has(q.id));if(!pool.length)return alert(`No usable question is available in fixed Variation Group ${g}.`);const q=pool[Math.floor(Math.random()*pool.length)];selected.push(q);usedIds.add(q.id);usedGroups.add(g)}
+ if(selected.length>total)return alert(`Fixed selections already contain ${selected.length} questions, which exceeds the requested ${total}.`);
+ const pool=allowed.filter(q=>!usedIds.has(q.id)&&(!assignmentSchoolQbGroup(q)||!usedGroups.has(assignmentSchoolQbGroup(q))));
+ for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
+ for(const q of pool){if(selected.length>=total)break;const g=assignmentSchoolQbGroup(q);if(g&&usedGroups.has(g))continue;selected.push(q);usedIds.add(q.id);if(g)usedGroups.add(g)}
+ if(selected.length<total)return alert(`Only ${selected.length} unique questions can be selected under the current lesson and variation-group constraints. Add more questions, select more lessons, or reduce the total.`);
+ assignmentSchoolQbSelected={ids:selected.map(q=>q.id),total,lang:document.getElementById('asqbLang')?.value||'EN'};
+ const out=document.getElementById('asqbSelectedList');if(out)out.innerHTML=`<div class="success"><b>${selected.length} questions selected.</b> Fixed questions/groups are preserved; remaining questions were randomly selected without reusing a variation group.</div><ol>${selected.map(q=>`<li style="margin:4px 0">${assignmentSchoolQbEsc(assignmentSchoolQbQuestionText(q,assignmentSchoolQbSelected.lang).slice(0,220))}<span class="small muted"> — ${assignmentSchoolQbEsc(assignmentSchoolQbLessonLabel(q.chapter_id))}${q.topic?' · '+assignmentSchoolQbEsc(q.topic):''}${q.variation_group?' · '+assignmentSchoolQbEsc(q.variation_group):''}</span></li>`).join('')}</ol>`;
+ assignmentSchoolQbRenderSummary();
+}
+async function openSchoolAssignmentQbBuilder(){
+ const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Question Bank…</span></div>';
+ const [{data:q,error:qe},{data:c,error:ce}]=await Promise.all([sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false}),sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name')]);
+ if(qe||ce){box.innerHTML=`<div class="notice">Could not load School Question Bank: ${assignmentSchoolQbEsc((qe||ce).message)}</div>`;return;}
+ assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions=new Set();assignmentSchoolQbFixedGroups=new Set();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
 async function saveAssignment(){
  const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";
+ if(assignmentSchoolQbSelected?.ids?.length && (importedQuestions.length || document.querySelectorAll('.q').length || assignmentBankSelected.size)) return alert('The lesson-based Question Bank generator is already selecting the assignment questions. Clear manually uploaded/manual questions and Mock Test Question Bank selections before saving this generated assignment.');
  const videoUrl=type==="video"?(document.getElementById("av")?.value.trim()||""):null;
  if(!at.value.trim())return alert("Enter an assignment title.");
  if(type==="video"&&!videoUrl)return alert("Enter the YouTube video URL for this video assignment.");
@@ -3561,6 +3620,21 @@ async function saveAssignment(){
  }else{
    qs=[...document.querySelectorAll(".q")].map((b,i)=>({assignment_id:a.id,question_text:b.querySelector(".qt").value.trim(),option_a:b.querySelector(".oa").value,option_b:b.querySelector(".ob").value,option_c:b.querySelector(".oc").value,option_d:b.querySelector(".od").value,correct_option:b.querySelector(".co").value,question_order:i+1})).filter(q=>q.question_text);
  }
+ // Add generated School Question Bank questions as immutable assignment snapshots.
+ if(assignmentSchoolQbSelected?.ids?.length){
+   const ids=assignmentSchoolQbSelected.ids;
+   const {data:bankRows,error:be}=await sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,question_type,marks,correct_answer,explanation,variation_group,chapter_id,topic,has_images').eq('teacher_id',current.id).in('id',ids);
+   if(be){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load School Question Bank questions: '+be.message)}
+   const {data:opts,error:oe}=await sb.from('school_question_bank_options').select('question_id,display_order,option_label,option_text_en,option_text_as,is_correct').in('question_id',ids).order('display_order');
+   if(oe){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load Question Bank options: '+oe.message)}
+   const {data:blocks,error:be2}=await sb.from('school_question_bank_blocks').select('question_id,block_order,block_type,text_en,text_as,image_url').in('question_id',ids).order('block_order');
+   if(be2){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load Question Bank content: '+be2.message)}
+   const byId=new Map((bankRows||[]).map(x=>[x.id,x])), optMap=new Map(), blockMap=new Map();
+   (opts||[]).forEach(o=>{if(!optMap.has(o.question_id))optMap.set(o.question_id,[]);optMap.get(o.question_id).push(o)});
+   (blocks||[]).forEach(b=>{if(!blockMap.has(b.question_id))blockMap.set(b.question_id,[]);blockMap.get(b.question_id).push(b)});
+   const lang=assignmentSchoolQbSelected.lang||'EN';
+   ids.forEach(id=>{const q=byId.get(id);if(!q)return;const bs=blockMap.get(id)||[];const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();const text=textFromBlocks||assignmentSchoolQbQuestionText(q,lang);const os=optMap.get(id)||[];const labelMap={};os.forEach(o=>labelMap[o.option_label]=o);const getOpt=l=>{const o=labelMap[l];if(!o)return '';return lang==='AS'?(o.option_text_as||o.option_text_en||''):lang==='BOTH'?[o.option_text_en,o.option_text_as].filter(Boolean).join(' / '):(o.option_text_en||o.option_text_as||'')};const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;qs.push({assignment_id:a.id,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:getOpt('A'),option_b:getOpt('B'),option_c:getOpt('C'),option_d:getOpt('D'),correct_option:q.correct_answer,question_order:qs.length+1,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id,source_topic:q.topic||null});});
+ }
  // Add selected Mock Test Question Bank questions as immutable assignment snapshots.
  if(assignmentBankSelected.size){
    const selectedIds=[...assignmentBankSelected];
@@ -3575,7 +3649,7 @@ async function saveAssignment(){
  const {error:e}=await sb.from("questions").insert(qs);if(e){await sb.from("assignments").delete().eq("id",a.id);return alert(e.message)}
  try{const rows=recipientInfo.studentIds.map(student_id=>({assignment_id:a.id,student_id}));const {error:re}=await sb.from("assignment_students").insert(rows);if(re)throw re}catch(e){await sb.from("questions").delete().eq("assignment_id",a.id);await sb.from("assignments").delete().eq("id",a.id);return alert("Assignment could not be assigned: "+e.message)}
  alert(`${type==="video"?"Video":"No-video"} assignment created and assigned to ${studentCount} student${studentCount===1?"":"s"}.`);
- importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};
+ importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentBankFilters={part:'',topic:'',language:'',search:''};assignmentSchoolQbSelected=null;assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();
  teacherHome()
 }
 
@@ -3592,7 +3666,7 @@ function startBulkImportFromNewAssignment(){
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
   description:document.getElementById("adesc")?.value||"",
-  selectedBankQuestionIds:[...assignmentBankSelected]
+  selectedBankQuestionIds:[...assignmentBankSelected], schoolQbSelection:assignmentSchoolQbSelected ? {...assignmentSchoolQbSelected} : null
  };
  importedForNewAssignment=true;
  bulkImportMCQs();
