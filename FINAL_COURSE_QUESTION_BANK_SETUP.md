@@ -4,54 +4,61 @@
 
 ### JNVST Course
 - Subject -> Lesson -> Sub-lesson -> Topic
-- Medium
-- Variation / Fixed Question Group
-- Used by JNVST Teacher Dashboard and JNVST `Build Assignment from Lesson`.
-- Stored with `course_type = 'JNVST'`.
+- Medium (`COMMON` for MAT, `ENGLISH`, `ASSAMESE`)
+- Variation Group
+- Fixed Question metadata
+- Used by the JNVST Teacher Dashboard and JNVST New Assignment generator
+- **Stored in `public.mock_question_bank`**
+- JNVST metadata columns: `subject_id`, `lesson_id`, `variation_group`, `is_fixed`
 
 ### School Course
 - Subject -> Chapter -> Subchapter -> Topic
 - Medium
 - Variation Group
-- Used by School Teacher Dashboard and School Course assignments.
-- Stored with `course_type = 'SCHOOL'`.
+- Used by the School Teacher Dashboard and School Course assignments
+- **Stored in `public.school_question_bank_questions`**
+- Uses `course_type = 'SCHOOL'` for the School Course UI.
 
-The two banks are filtered by `course_type` and are not displayed in each other's management screens.
+The two systems are logically separate. JNVST assignment generation does not query the School Question Bank, and School assignment generation does not query the JNVST `mock_question_bank`.
 
-## Supabase
-Run `COURSE_QUESTION_BANK_SEPARATION_MIGRATION.sql` once after the existing question-bank and JNVST lesson migrations.
+## Supabase migrations
 
-It:
-1. Adds `course_type`.
-2. Classifies existing questions with JNVST subject/lesson metadata as JNVST.
-3. Keeps other existing questions as School Course.
-4. Allows JNVST questions to have no School Course chapter.
+The existing database already contains the JNVST Subject -> Lesson -> Sub-lesson tables and the JNVST `mock_question_bank` metadata columns.
 
-Alternatively, use the updated `complete_database_migrations.sql` for the combined feature migrations.
+For a fresh/repeatable setup, use:
 
-## JNVST lesson bulk upload
-Use `JNVST_Lesson_Sublesson_Bulk_Upload_Template.xlsx` from the JNVST Teacher Dashboard.
+1. `JNVST_MOCK_QUESTION_BANK_METADATA_MIGRATION.sql` — adds JNVST metadata and indexes to `mock_question_bank`.
+2. `SCHOOL_COURSE_SEPARATION_SAFE_MIGRATION.sql` — adds the School `course_type` discriminator used by the School Question Bank UI.
+3. `JNVST_ASSIGNMENT_GENERATOR_SUPPORT.sql` — adds assignment filtering indexes and an optional read-only RPC.
+
+Do **not** use the old JNVST implementation in `school_question_bank_questions` as the JNVST source. The current application uses `mock_question_bank` for JNVST.
 
 ## JNVST question bulk upload
+
 Use `JNVST_Question_Bank_Bulk_Upload_Template.xlsx`.
 
 Required mapping:
 - Subject Name must match an existing JNVST Subject.
 - Lesson Code must match an existing JNVST Lesson/Sub-lesson.
-- Medium: ENGLISH / ASSAMESE / BOTH.
-- Variation Group is optional and groups similar questions.
+- Medium: `COMMON`, `ENGLISH`, or `ASSAMESE`.
+- Variation Group is optional.
+- Fixed Question: `YES` or `NO`.
 
-## School Course
-Use `Question_Bank_Chapter_Bulk_Upload_Template.xlsx` and the School Teacher Dashboard Question Bank tools.
+The uploader writes to `mock_question_bank` only.
 
-## Assignment generation
-JNVST assignment generation:
+## JNVST assignment generation
+
 1. Select JNVST Subject.
 2. Select Medium.
-3. Select Lesson/Sub-lesson.
-4. Select Fixed Questions.
-5. Select Fixed Question Groups.
-6. Fill the remaining count randomly.
-7. Exclude already selected questions and used variation groups.
+3. Only matching JNVST questions become available.
+4. Select Lesson/Sub-lesson.
+5. Select Fixed Questions.
+6. Select Fixed Question Groups (Variation Groups).
+7. Fill the remaining count randomly.
+8. Exclude already selected questions.
+9. Exclude all other questions in a used variation group.
+10. Validate that the requested total can actually be satisfied.
 
-School Course assignment generation uses the School Question Bank and Chapter/Subchapter hierarchy separately.
+## School Course
+
+School Course continues to use the existing Chapter/Subchapter/Topic hierarchy and its existing question-bank tables. No School Course chapter/subchapter/topic data is replaced by the JNVST hierarchy.

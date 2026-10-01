@@ -141,3 +141,31 @@ end $$;
 
 create index if not exists idx_qb_questions_teacher_course
   on public.school_question_bank_questions(teacher_id, course_type, created_at desc);
+
+-- 100. JNVST Assignment Generator metadata on the dedicated JNVST mock bank.
+alter table public.mock_question_bank
+  add column if not exists subject_id uuid,
+  add column if not exists lesson_id uuid,
+  add column if not exists variation_group text,
+  add column if not exists is_fixed boolean not null default false;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname='fk_mock_question_bank_jnvst_subject') then
+    alter table public.mock_question_bank
+      add constraint fk_mock_question_bank_jnvst_subject
+      foreign key (subject_id) references public.jnvst_subjects(id) on delete set null;
+  end if;
+  if not exists (select 1 from pg_constraint where conname='fk_mock_question_bank_jnvst_lesson') then
+    alter table public.mock_question_bank
+      add constraint fk_mock_question_bank_jnvst_lesson
+      foreign key (lesson_id) references public.jnvst_subject_lessons(id) on delete set null;
+  end if;
+end $$;
+
+create index if not exists idx_mqb_jnvst_assignment_filter
+  on public.mock_question_bank(subject_id, lesson_id, language, active);
+create index if not exists idx_mqb_variation_group
+  on public.mock_question_bank(variation_group);
+create index if not exists idx_mqb_fixed
+  on public.mock_question_bank(is_fixed);
