@@ -76,3 +76,12 @@ Question No | Correct Option | Explanation
 
 For PDF image-per-page import, each PDF page becomes one question image. White page margins are
 trimmed automatically before the image is stored for display.
+
+VERSION 34 - JNVST SUBJECT -> LESSON -> SUB-LESSON CATEGORIZATION
+-----------------------------------------------------------------
+Run JNVST_SUBJECT_LESSON_CATEGORY_MIGRATION.sql after JNVST_GROUP_SUBJECT_MANAGEMENT.sql.
+Teachers can create lessons and sub-lessons under each JNVST subject. Question Bank questions
+retain their existing Chapter/Subchapter, Topic, Subject, Medium, Cognitive Level, Difficulty
+and Variation Group fields, and can additionally be assigned a JNVST Subject and Lesson/Sub-lesson.
+The JNVST New Assignment builder uses the JNVST hierarchy for lesson selection while preserving
+legacy Chapter/Subchapter filtering for older questions.

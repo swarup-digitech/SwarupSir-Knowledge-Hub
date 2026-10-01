@@ -21,6 +21,8 @@ create table if not exists public.school_question_bank_questions (
   marks integer not null check (marks > 0),
   cognitive_level text not null check (cognitive_level in ('Knowledge','Understanding','Application','HOTS')),
   difficulty text not null default 'Medium' check (difficulty in ('Easy','Medium','Hard')),
+  subject text,
+  medium text,
   variation_group text,
   explanation text,
   has_images boolean not null default false,
@@ -53,6 +55,7 @@ create table if not exists public.school_question_bank_options (
 
 create index if not exists idx_qb_questions_teacher on public.school_question_bank_questions(teacher_id);
 create index if not exists idx_qb_questions_chapter on public.school_question_bank_questions(chapter_id);
+create index if not exists idx_qb_questions_subject_medium on public.school_question_bank_questions(teacher_id,subject,medium);
 create index if not exists idx_qb_blocks_question on public.school_question_bank_blocks(question_id,block_order);
 create index if not exists idx_qb_options_question on public.school_question_bank_options(question_id,display_order);
 
