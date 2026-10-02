@@ -2862,22 +2862,101 @@ function jnvstMathPreview(value){
  return esc(s).replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]').replace(/\$\$(.*?)\$\$/gs,'\\[$1\\]');
 }
 function jnvstRefreshMathPreview(id,value){const el=document.getElementById(id);if(!el)return;el.innerHTML=jnvstMathPreview(value);if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([el]).catch(()=>{});}
-let jnvstMathTargetId='';
-function jnvstOpenMathEditor(targetId){
- const target=document.getElementById(targetId);if(!target)return alert('The selected question field is not available.');
- jnvstMathTargetId=targetId;
- const old=target.value||'';let initial=old;
- const m=old.match(/^\\\((.*)\\\)$/s);if(m)initial=m[1];
- let modal=document.getElementById('jnvstMathModal');if(modal)modal.remove();
- modal=document.createElement('div');modal.id='jnvstMathModal';modal.className='jnvst-math-modal';
- modal.innerHTML=`<div class="jnvst-math-dialog" onclick="event.stopPropagation()"><h3 style="margin:0">∑ Mathematics Equation Editor</h3><div class="small muted">Use the visual keyboard or type directly. Insert the finished expression into the selected question/option field.</div><math-field id="jnvstMathField" virtual-keyboard-mode="onfocus" smart-mode="true"></math-field><div class="jnvst-math-presets"><button type="button" onclick="jnvstMathPreset('\\frac{a}{b}')">Fraction</button><button type="button" onclick="jnvstMathPreset('x^{2}')">Power</button><button type="button" onclick="jnvstMathPreset('\\sqrt{x}')">Square Root</button><button type="button" onclick="jnvstMathPreset('\\sqrt[3]{x}')">Cube Root</button><button type="button" onclick="jnvstMathPreset('\\times')">×</button><button type="button" onclick="jnvstMathPreset('\\div')">÷</button><button type="button" onclick="jnvstMathPreset('\\pi')">π</button><button type="button" onclick="jnvstMathPreset('\\le')">≤</button><button type="button" onclick="jnvstMathPreset('\\ge')">≥</button></div><div id="jnvstMathLivePreview" class="eq-preview"></div><div class="actions"><button type="button" onclick="jnvstInsertMath()">Insert Equation</button><button type="button" class="secondary" onclick="jnvstCloseMathEditor()">Cancel</button></div></div>`;
- modal.onclick=()=>jnvstCloseMathEditor();document.body.appendChild(modal);
- const mf=document.getElementById('jnvstMathField');if(mf){mf.value=initial;mf.addEventListener('input',()=>jnvstUpdateMathLivePreview());setTimeout(()=>{mf.focus();jnvstUpdateMathLivePreview()},80)}
+let jnvstMathEditorState={target:null,start:0,end:0};
+function jnvstCloseMathEditor(){
+ const m=document.getElementById('jnvstMathModal');
+ if(m)m.remove();
+ try{window.mathVirtualKeyboard?.hide?.()}catch(e){}
+ jnvstMathEditorState={target:null,start:0,end:0};
 }
-function jnvstMathPreset(v){const mf=document.getElementById('jnvstMathField');if(!mf)return;mf.insert(v);mf.focus();jnvstUpdateMathLivePreview()}
-function jnvstUpdateMathLivePreview(){const mf=document.getElementById('jnvstMathField'),p=document.getElementById('jnvstMathLivePreview');if(!mf||!p)return;p.textContent='\\('+mf.value+'\\)';if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([p]).catch(()=>{})}
-function jnvstInsertMath(){const mf=document.getElementById('jnvstMathField'),target=document.getElementById(jnvstMathTargetId);if(!mf||!target)return;const latex=String(mf.value||'').trim();if(!latex)return alert('Enter an equation first.');const before=target.value||'';const spacer=before&&!/[\\s]$/.test(before)?' ':'';target.value=before+spacer+'\\('+latex+'\\)';target.dispatchEvent(new Event('input',{bubbles:true}));jnvstCloseMathEditor()}
-function jnvstCloseMathEditor(){const m=document.getElementById('jnvstMathModal');if(m)m.remove();jnvstMathTargetId='';}
+function jnvstOpenMathEditor(targetId){
+ const target=document.getElementById(targetId);
+ if(!target)return alert('The selected question field is not available.');
+ jnvstCloseMathEditor();
+ const start=Number.isFinite(target.selectionStart)?target.selectionStart:target.value.length;
+ const end=Number.isFinite(target.selectionEnd)?target.selectionEnd:target.value.length;
+ jnvstMathEditorState={target,start,end};
+ const modal=document.createElement('div');
+ modal.id='jnvstMathModal';
+ modal.className='jnvst-math-modal';
+ modal.innerHTML=`<div class="jnvst-math-dialog" onclick="event.stopPropagation()">
+   <h3 style="margin:0">∑ Mathematics Equation Editor</h3>
+   <div class="small muted">Enter only the mathematical expression here. Normal Assamese/English question text stays outside the equation editor. Select an existing expression in the question before opening this editor to replace/edit it.</div>
+   <math-field id="jnvstMathField" smart-mode="on" smart-superscript="on" letter-shape-style="tex" math-virtual-keyboard-policy="auto"></math-field>
+   <div class="jnvst-math-presets">
+    <button type="button" onclick="jnvstMathPreset('frac')">Fraction</button>
+    <button type="button" onclick="jnvstMathPreset('sqrt')">Square Root</button>
+    <button type="button" onclick="jnvstMathPreset('power')">Power</button>
+    <button type="button" onclick="jnvstMathPreset('cube')">Cube Root</button>
+    <button type="button" onclick="jnvstMathPreset('times')">×</button>
+    <button type="button" onclick="jnvstMathPreset('div')">÷</button>
+    <button type="button" onclick="jnvstMathPreset('pi')">π</button>
+    <button type="button" onclick="jnvstMathPreset('le')">≤</button>
+    <button type="button" onclick="jnvstMathPreset('ge')">≥</button>
+   </div>
+   <div id="jnvstMathLivePreview" class="eq-preview"></div>
+   <div class="actions">
+    <button type="button" onclick="jnvstInsertMath()">Insert Equation</button>
+    <button type="button" class="secondary" onclick="jnvstCloseMathEditor()">Cancel</button>
+   </div>
+  </div>`;
+ modal.onclick=()=>jnvstCloseMathEditor();
+ document.body.appendChild(modal);
+ const init=()=>{
+   const mf=document.getElementById('jnvstMathField');
+   if(!mf)return;
+   const selected=target.value.slice(start,end).trim();
+   // Only load an existing expression when the selected text is already a single math token.
+   if(selected.startsWith('\\(')&&selected.endsWith('\\)')) mf.value=selected.slice(2,-2);
+   else if(selected.startsWith('$$')&&selected.endsWith('$$')) mf.value=selected.slice(2,-2);
+   else mf.value='';
+   mf.addEventListener('input',()=>jnvstUpdateMathLivePreview());
+   setTimeout(()=>{try{mf.focus()}catch(e){};jnvstUpdateMathLivePreview()},80);
+ };
+ if(customElements?.whenDefined)customElements.whenDefined('math-field').then(init).catch(init);
+ else init();
+}
+function jnvstMathPreset(name){
+ const mf=document.getElementById('jnvstMathField');if(!mf)return;
+ const cmds={
+  frac:'\\frac{#0}{#?}',
+  sqrt:'\\sqrt{#0}',
+  power:'^{#?}',
+  cube:'\\sqrt[3]{#0}',
+  times:'\\times ',
+  div:'\\div ',
+  pi:'\\pi ',
+  le:'\\le ',
+  ge:'\\ge '
+ };
+ try{mf.executeCommand(['insert',cmds[name]||'']);}catch(e){try{mf.insert(cmds[name]||'')}catch(_){}}
+ try{mf.focus()}catch(e){}
+ jnvstUpdateMathLivePreview();
+}
+function jnvstUpdateMathLivePreview(){
+ const mf=document.getElementById('jnvstMathField'),p=document.getElementById('jnvstMathLivePreview');
+ if(!mf||!p)return;
+ p.textContent='\\('+(mf.value||'')+'\\)';
+ if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([p]).catch(()=>{});
+}
+function jnvstInsertMath(){
+ const mf=document.getElementById('jnvstMathField');
+ const state=jnvstMathEditorState||{};
+ const target=state.target;
+ if(!mf||!target)return;
+ const latex=String(mf.value||'').trim();
+ if(!latex)return alert('Enter a mathematical expression first.');
+ const insertion='\\('+latex+'\\)';
+ const start=Math.max(0,Math.min(Number(state.start)||0,target.value.length));
+ const end=Math.max(start,Math.min(Number(state.end)||start,target.value.length));
+ target.focus();
+ if(typeof target.setRangeText==='function')target.setRangeText(insertion,start,end,'end');
+ else target.value=target.value.slice(0,start)+insertion+target.value.slice(end);
+ target.dispatchEvent(new Event('input',{bubbles:true}));
+ target.dispatchEvent(new Event('change',{bubbles:true}));
+ jnvstCloseMathEditor();
+ target.focus();
+}
 function jnvstPreviewEditImage(input){const box=document.getElementById('jqImagePreview'),file=input.files?.[0];if(!box||!file)return;if(!file.type.startsWith('image/')){input.value='';return alert('Please select an image file.');}if(file.size>10*1024*1024){input.value='';return alert('Image size must be 10 MB or less.');}const url=URL.createObjectURL(file);box.innerHTML=`<img class="jnvst-editor-image" src="${url}" alt="New question image"><div class="small muted">New image selected.</div>`;const rm=document.getElementById('jqRemoveImage');if(rm)rm.checked=false;}
 async function jnvstQbSaveEditRich(){
  const id=jnvstQbEditingId;if(!id)return;
