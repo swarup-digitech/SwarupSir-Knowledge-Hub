@@ -1025,9 +1025,10 @@ function qpBuildCommonHtml(rows){
 }
 function qpHtmlQuestion(q,variant='default'){
   const hasImage=!!qpNorm(q.image_url);
+  const questionText=(q.question_text && String(q.question_text).trim()!=='[IMAGE QUESTION]')?String(q.question_text).trim():'';
   const opts=hasImage?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
   const imageClass=variant==='arithmetic'?'jnvst-question-image arithmetic-question-image':'jnvst-question-image';
-  return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}${opts}</div></div></div>`;
+  return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
 function qpBuildArithmeticHtml(rows){
   // Render 20-question blocks as two-column content that flows naturally with the header.
