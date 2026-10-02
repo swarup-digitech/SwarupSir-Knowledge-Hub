@@ -168,8 +168,20 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .qp-footer-copy{display:block;text-align:center;margin-top:2px;font-size:8pt;font-weight:600;color:#334155}
 
 @page{size:A4;margin:0}
+/* Question-paper print reset: prevent the browser's default body margin/overflow from
+   creating an empty leading page. The first paper container must always start on page 1. */
+html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!important;width:210mm!important;min-height:297mm!important;background:#fff!important}
+.qp-paper-page{break-before:auto!important;page-break-before:auto!important;break-after:auto!important;page-break-after:auto!important;orphans:2;widows:2}
+.jnvst-paper>.qp-paper-page:first-child{break-before:auto!important;page-break-before:auto!important;margin-top:0!important}
 .qp-content-no-break{break-after:auto!important;page-break-after:auto!important}
-@media print{.qp-paper-page{padding-top:8mm!important;padding-bottom:10mm!important}.qp-paper-footer{position:static!important;display:grid!important;grid-template-columns:auto auto 1fr auto!important;gap:3px 8px!important}.qp-paper-footer span:nth-child(5){grid-column:1/-1!important;text-align:center!important}}
+@media print{
+  html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!important;width:210mm!important;min-height:297mm!important;overflow:visible!important}
+  .jnvst-paper{display:block!important;margin:0!important;padding:0!important}
+  .qp-paper-page{width:210mm!important;min-height:0!important;margin:0!important;padding:8mm 12mm 10mm!important;box-sizing:border-box!important;break-before:auto!important;page-break-before:auto!important;break-after:auto!important;page-break-after:auto!important}
+  .jnvst-paper>.qp-paper-page:first-child{break-before:auto!important;page-break-before:auto!important}
+  .qp-paper-footer{position:static!important;display:grid!important;grid-template-columns:auto auto 1fr auto!important;gap:3px 8px!important}
+  .qp-paper-footer span:nth-child(5){grid-column:1/-1!important;text-align:center!important}
+}
 
 .omr-result-card{border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#ffffff)}
 .omr-result-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -1248,7 +1260,7 @@ function qpOpenSavedPaper(record,includeAnswers){
   const w=window.open('','_blank','width=1100,height=900');
   if(!w)return alert('Please allow pop-ups for the saved paper preview.');
   const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
-  w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}@media print{.no-print{display:none}}</style></head><body><div class="no-print" style="padding:10px"><button onclick="window.print()">Print / Save as PDF</button></div>${body}</body></html>`);w.document.close();
+  w.document.open();w.document.write(`<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}@media print{.no-print{display:none}}</style><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="no-print" style="padding:10px"><button id="printPaperBtn" disabled>Preparing mathematics…</button></div>${body}<script>window.addEventListener('load',async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;await window.MathJax?.typesetPromise?.();}catch(e){console.error(e);}const imgs=[...document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));const b=document.getElementById('printPaperBtn');if(b){b.disabled=false;b.textContent='Print / Save as PDF';b.onclick=()=>window.print();}});<\/script></body></html>`);w.document.close();
 }
 async function loadGeneratedQuestionPaperHistory(){
   const el=document.getElementById('qpGeneratedHistory');if(!el)return;
@@ -1278,7 +1290,7 @@ async function generateSelectedQuestionPaper(){
     loadGeneratedQuestionPaperHistory();
     const body=`<div class="qp-paper-page"><div class="jnvst-topline"><span><span class="qp-set-serial">Serial No.: ${esc(serial)}</span><span class="qp-set-serial" style="margin-left:6px">SET ${esc(setCode)}</span></span><span>Exam Date: ${new Date().toLocaleDateString('en-IN')}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR'S KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div></div><table class="jnvst-fields"><tr><td class="label">Name</td><td>&nbsp;</td><td class="label">Roll No.</td><td>&nbsp;</td></tr><tr><td class="label">Time</td><td>________________</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option. Questions containing images already include their options where applicable.</div>${qpIsCommonMode()?qpBuildCommonHtml(rows):qpSubject()==='EVS'?qpBuildEVSHtml(rows):qpState.mode==='passages'?qpBuildPassageHtml(rows):qpSubject()==='ARITHMETIC'?qpBuildArithmeticHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="qp-paper-footer"><span>Serial No.: ${esc(serial)}</span><span>SET ${esc(setCode)}</span><span>(c)Swarup Sir, Ph: 98643-90279</span><span>Page</span><span>Classroom OMR Exam Question Paper. Copy-wright materials.</span></div></div>`;
     const answerBlock=includeAnswers?`<div class="jnvst-page"><div class="jnvst-section-head">ANSWER KEY — TEACHER COPY</div><table class="jnvst-marks-table"><thead><tr><th>Q.No.</th><th>Answer</th><th>Topic</th></tr></thead><tbody>${rows.map(q=>`<tr><td>${q._number}</td><td><b>${esc(q.correct_option)}</b></td><td>${esc(qpTopicLabel(q))}</td></tr>`).join('')}</tbody></table></div>`:'';
-    w.document.open();w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body><div class="jnvst-paper">${body}${answerBlock}</div></body></html>`);w.document.close();await new Promise(r=>setTimeout(r,400));const imgs=[...w.document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));w.focus();w.print();
+    w.document.open();w.document.write(`<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="jnvst-paper">${body}${answerBlock}</div><script>window.addEventListener('load',async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;await window.MathJax?.typesetPromise?.();}catch(e){console.error('MathJax typeset failed',e);}const imgs=[...document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));document.documentElement.classList.add('math-ready');window.focus();setTimeout(()=>window.print(),150);});<\/script></body></html>`);w.document.close();
   }catch(e){alert('Could not generate Question Paper: '+(e.message||e));}
 }
 async function editMockQuestion(id){const {data:q,error}=await sb.from('mock_question_bank').select('*').eq('id',id).eq('teacher_id',current.id).single();if(error)return alert(error.message);const plan=mockPlanByPart[q.part_code];render(`<div class="wrap">${header('Edit Mock Question')}<div class="card"><label>Part / Question Bank</label><select id="emqPart">${MOCK_PLAN.filter(x=>x.upload===q.source_type||x.upload==='excel'||x.upload==='pdf').map(x=>`<option value="${x.part}" ${x.part===q.part_code?'selected':''}>${esc(x.label)}</option>`).join('')}</select><label>Topic</label><input id="emqTopic" value="${esc(q.topic||mockPartLabel(q.part_code))}"><label>Question</label><textarea id="emqQuestion" rows="5">${esc(q.question_text||'')}</textarea><div class="grid"><div><label>Option A</label><input id="emqA" value="${esc(q.option_a||'')}"></div><div><label>Option B</label><input id="emqB" value="${esc(q.option_b||'')}"></div><div><label>Option C</label><input id="emqC" value="${esc(q.option_c||'')}"></div><div><label>Option D</label><input id="emqD" value="${esc(q.option_d||'')}"></div></div><label>Question Language</label><select id="emqLanguage"><option value="COMMON" ${q.language==='COMMON'?'selected':''}>Common (MAT)</option><option value="ASSAMESE" ${q.language==='ASSAMESE'?'selected':''}>Assamese</option><option value="ENGLISH" ${q.language==='ENGLISH'?'selected':''}>English</option></select><label>Correct Answer</label><select id="emqAnswer"><option ${q.correct_option==='A'?'selected':''}>A</option><option ${q.correct_option==='B'?'selected':''}>B</option><option ${q.correct_option==='C'?'selected':''}>C</option><option ${q.correct_option==='D'?'selected':''}>D</option></select><label>Passage Title (optional)</label><input id="emqPassageTitle" value="${esc(q.passage_title||'')}"><label>Passage (optional)</label><textarea id="emqPassage" rows="7">${esc(q.passage_text||'')}</textarea><label>Image (optional — add/replace later)</label><input id="emqImage" type="file" accept="image/*"><div>${q.image_url?`<img src="${esc(q.image_url)}" style="max-width:100%;max-height:400px;border:1px solid #dbe3ee;border-radius:10px"><p class="small muted">Current image will remain unless a new image is selected.</p>`:'<p class="small muted">No image attached.</p>'}</div><div class="actions"><button onclick="saveMockQuestionEdit('${q.id}')">Save Changes</button><button class="secondary" onclick="mockBankSummary()">Cancel</button></div></div></div>`)}
@@ -1438,8 +1450,21 @@ const JNVST_PDF_DIRECTIONS={
   LANGUAGE:"There are four passages in this Section. Each passage is followed by five questions. Read each passage carefully and answer the questions that follow. For each question, four probable answers as (A), (B), (C) and (D) are given. Only one out of these is correct. Choose the correct answer and darken the circle in the OMR Answer Sheet against the number corresponding to the question."
 };
 
+function jnvstPdfMathHtml(v){
+  let s=String(v??'');
+  if(!s)return '';
+  // Normalize all common teacher/Excel formats before inserting into the paper.
+  // MathJax 3 does not treat single-dollar delimiters as math by default, so
+  // convert $...$ / $$...$$ to the explicit \( ... \) / \[ ... \] forms.
+  s=s.replace(/\$\$(.*?)\$\$/gs,'\\[$1\\]');
+  s=s.replace(/(?<!\\)\$(?!\$)(.*?)(?<!\\)\$/gs,'\\($1\\)');
+  s=s.replace(/\\\$/g,'$');
+  s=jnvstNormalizeMathText(s);
+  const safe=esc(s).replace(/\n/g,'<br>');
+  return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
+}
 function jnvstPdfEscape(v){
-  return esc(String(v??'')).replace(/\n/g,'<br>');
+  return jnvstPdfMathHtml(v);
 }
 function jnvstPdfOption(q,o){
   const v=q?.['option_'+o.toLowerCase()];

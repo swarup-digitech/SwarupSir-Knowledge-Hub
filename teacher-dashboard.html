@@ -1143,8 +1143,17 @@ async function qbEditor(id=null){
 function qbTypeChanged(){const t=document.getElementById('qbType')?.value;const c=document.getElementById('qbOptionsCard');if(c)c.style.display=t==='MCQ'?'block':'none';}
 function qbAddTextBlock(){qbEditorBlocks.push({id:null,block_type:'TEXT',text_en:'',text_as:''});qbRenderBlocks()}
 function qbAddImageBlock(){const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;try{const path=`${teacher.id}/${crypto.randomUUID()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from('school-question-bank-images').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});if(error)throw error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);qbEditorBlocks.push({id:null,block_type:'IMAGE',image_url:u.publicUrl,image_width:70,alt_text:f.name});qbRenderBlocks()}catch(e){alert('Image upload failed: '+e.message)}};input.click()}
+function qbMathHtml(text){
+  let s=String(text??'');
+  if(!s)return '';
+  s=s.replace(/\$\$(.*?)\$\$/gs,'\\[$1\\]');
+  s=s.replace(/(?<!\\)\$(?!\$)(.*?)(?<!\\)\$/gs,'\\($1\\)');
+  s=s.replace(/\\\$/g,'$');
+  const safe=qbEsc(s).replace(/\n/g,'<br>');
+  return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
+}
 function qbMathPreview(text){
-  const safe=qbEsc(text||'').replace(/\n/g,'<br>');
+  const safe=qbMathHtml(text);
   return safe||'<span class="muted">Equation/text preview will appear here.</span>';
 }
 function qbRefreshMathPreview(id,text){
@@ -1460,12 +1469,8 @@ function qbOpenPrintWindow(title,body,extraCss=''){
   .paper{border:1px solid #777;padding:10mm 9mm 8mm;min-height:260mm}.header{text-align:center;border-bottom:2px solid #111;padding-bottom:7px;margin-bottom:10px}.brand{font-size:22px;font-weight:700;letter-spacing:.3px;margin-bottom:12px}.meta-row{display:grid;grid-template-columns:1.25fr .75fr 1.35fr;gap:12px;text-align:left;font-size:14px;margin:5px 0}.meta-row.bottom{grid-template-columns:1fr 1fr}.meta b{font-weight:700}.section{background:#e7e7e7;text-align:center;font-size:19px;font-weight:700;padding:5px 8px;margin:10px 0 7px;border-top:1px solid #ccc;border-bottom:1px solid #ccc}.section-line{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:4px 0 9px}.section-line .total{font-weight:700}.instruction{font-weight:700;margin:4px 0 9px}.q{break-inside:avoid;page-break-inside:avoid;margin:0 0 10px;display:grid;grid-template-columns:34px 1fr 28px;gap:6px;align-items:start}.q-num{font-weight:700}.q-body{min-width:0}.q-marks{text-align:right;font-weight:700}.q-block{margin:0 0 5px;white-space:pre-wrap}.q-image{text-align:center;margin:7px 0}.q-image img{max-width:100%;height:auto;display:inline-block}.opts{display:grid;grid-template-columns:1fr 1fr;column-gap:26px;row-gap:4px;margin-top:5px;padding-left:10px}.option{break-inside:avoid}.section-a-q{margin-bottom:9px}.section-a-total{text-align:right;font-weight:700}.end{text-align:center;font-weight:700;margin:16px 0 7px}.footer{border-top:1px solid #777;padding-top:5px;display:flex;justify-content:space-between;font-size:11px}.key-q{break-inside:avoid;page-break-inside:avoid;display:grid;grid-template-columns:34px 1fr 28px;gap:7px;margin:0 0 12px}.key-num,.key-marks{font-weight:700}.key-marks{text-align:right}.key-answer-text{margin-top:4px;white-space:pre-wrap}.muted{color:#666}.key-section{background:#e7e7e7;text-align:center;font-weight:700;padding:5px;margin:12px 0 8px}.key-header-note{font-size:12px;color:#444;margin-bottom:10px}
   ${extraCss}
   @media print{.no-print{display:none}.paper{border:0;padding:0;min-height:auto}body{font-size:13px}}
-  </style></head><body><div class="no-print"><button onclick="window.print()">Print / Save as PDF</button></div>${body}</body></html>`);
+  </style><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="no-print"><button id="printBtn" disabled>Preparing mathematics…</button></div>${body}<script>window.addEventListener('load',async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;await window.MathJax?.typesetPromise?.();}catch(e){console.error('MathJax:',e);}try{const imgs=[...document.images];await Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})));}catch(e){console.error('Image loading:',e);}const b=document.getElementById('printBtn');if(b){b.disabled=false;b.textContent='Print / Save as PDF';b.onclick=()=>window.print();}});<\/script></body></html>`);
   w.document.close();
-  const mj=w.document.createElement('script');
-  mj.src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
-  mj.onload=()=>{try{w.MathJax?.typesetPromise?.()}catch(e){}};
-  w.document.head.appendChild(mj);
   return w;
 }
 function previewQuestionPaper(){
@@ -1478,7 +1483,9 @@ function previewQuestionPaper(){
     const bs=p.blocks.filter(b=>b.question_id===q.id).sort((a,b)=>a.block_order-b.block_order);
     const os=p.opts.filter(o=>o.question_id===q.id).sort((a,b)=>a.display_order-b.display_order);
     const blocks=bs.map(b=>b.block_type==='IMAGE'?`<div class="q-image"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'') }" style="width:${Math.min(100,Number(b.image_width||70))}%"></div>`:`<div class="q-block">${p.lang==='AS'?qbEsc(b.text_as||''):p.lang==='BOTH'?`${qbEsc(b.text_en||'')}${b.text_en&&b.text_as?'<br>':''}${qbEsc(b.text_as||'')}`:qbEsc(b.text_en||'')}</div>`).join('');
-    const options=q.question_type==='MCQ'?`<div class="opts">${os.map(o=>`<div class="option"><b>${qbEsc(o.option_label)}.</b> ${p.lang==='AS'?qbEsc(o.option_text_as||''):p.lang==='BOTH'?`${qbEsc(o.option_text_en||'')}${o.option_text_en&&o.option_text_as?'<br>':''}${qbEsc(o.option_text_as||'')}`:qbEsc(o.option_text_en||'')}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" style="max-width:70%;height:auto;margin-top:3px">`:''}</div>`).join('')}</div>`:'';
+    const isMcq=String(q.question_type||'').trim().toUpperCase()==='MCQ';
+    const optionText=(o)=>p.lang==='AS'?(o.option_text_as||o.option_text_en||''):p.lang==='BOTH'?`${o.option_text_en||''}${o.option_text_en&&o.option_text_as?'<br>':''}${o.option_text_as||''}`:(o.option_text_en||o.option_text_as||'');
+    const options=isMcq?`<div class="opts">${os.map((o,i)=>`<div class="option"><b>${qbEsc(o.option_label||String.fromCharCode(65+i))}.</b>${optionText(o)?` ${qbEsc(optionText(o))}`:''}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" alt="Option ${qbEsc(o.option_label||String.fromCharCode(65+i))}" style="max-width:100%;height:auto;max-height:180px;margin-top:3px;object-fit:contain">`:''}</div>`).join('')}</div>`:'';
     return `<div class="q ${sectionA?'section-a-q':''}"><div class="q-num">${num}.</div><div class="q-body">${blocks}${options}</div><div class="q-marks">${sectionA?'':`<b>${Number(q.marks||0)}</b>`}</div></div>`;
   };
   let num=1;
