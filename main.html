@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script>
+<script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
@@ -198,6 +199,7 @@ html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!importan
 .mock-question-thumb{display:block;width:130px;height:82px;object-fit:contain;margin:0 auto;border:1px solid #dbe3ee;border-radius:8px;background:#fff;cursor:zoom-in;box-shadow:0 1px 2px rgba(15,23,42,.08)}
 .mock-question-thumb:hover{box-shadow:0 0 0 2px rgba(37,99,235,.18)}
 .mock-question-preview-empty{display:inline-flex;width:130px;height:82px;align-items:center;justify-content:center;border:1px dashed #cbd5e1;border-radius:8px;color:#64748b;font-size:12px;background:#f8fafc}
+.mock-bank-question-text{line-height:1.45;white-space:normal;overflow-wrap:anywhere}.mock-bank-options{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:14px;line-height:1.4}.mock-bank-option{min-width:0}.mock-bank-option-label{font-weight:700;margin-right:4px}@media(max-width:800px){.mock-bank-options{grid-template-columns:1fr}}
 .mock-image-lightbox{position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}
 .mock-image-lightbox img{max-width:min(1100px,96vw);max-height:90vh;width:auto;height:auto;object-fit:contain;background:#fff;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .mock-image-lightbox .mock-image-title{position:absolute;top:14px;left:20px;color:#fff;font-weight:600;font-size:14px}
@@ -774,16 +776,14 @@ function renderMockBankManager(){
     </div>
     <div class="card">
       <div class="small muted" style="margin-bottom:10px">Edit any question, change its answer, update the passage, add/replace an image, or deactivate/delete it. Deactivated questions are not used when generating a new test.</div>
-      <div style="overflow:auto"><table><thead><tr><th>#</th><th>Medium</th><th>Part</th><th>Topic</th><th>Question</th><th>Passage</th><th>Preview</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map((q,i)=>`<tr><td>${i+1}</td><td>${esc(mockBankDisplayLanguage(q.language))}</td><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc(q.topic||'—')}</td><td style="min-width:260px;max-width:420px"><div class="mock-bank-question-text">${jnvstMathPreview((q.question_text||'[PDF/image question]').slice(0,160))}</div></td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40)||'—')}</td><td class="mock-question-preview-cell">${q.image_url?`<img class="mock-question-thumb" src="${esc(q.image_url)}" alt="Question ${i+1} preview" loading="lazy" onclick="openMockQuestionImage('${esc(q.image_url)}','Question ${i+1}')" title="Click to enlarge">`:'<span class="mock-question-preview-empty">No image</span>'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="9">No questions match the selected filters.</td></tr>'}</tbody></table></div>
+      <div style="overflow:auto"><table><thead><tr><th>#</th><th>Medium</th><th>Part</th><th>Topic</th><th>Question</th><th>Passage</th><th>Preview</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map((q,i)=>{const rawQ=String(q.question_text||'').trim();const shownQ=rawQ||'[PDF/image question]';const optionRows=['A','B','C','D'].map(o=>{const v=q['option_'+o.toLowerCase()];return v!=null&&String(v).trim()?`<div class="mock-bank-option"><span class="mock-bank-option-label">${o}.</span>${jnvstMathPreview(String(v))}</div>`:''}).filter(Boolean).join('');return `<tr><td>${i+1}</td><td>${esc(mockBankDisplayLanguage(q.language))}</td><td>${esc(mockPartLabel(q.part_code))}</td><td>${esc(q.topic||'—')}</td><td style="min-width:300px;max-width:480px"><div class="mock-bank-question-text">${jnvstMathPreview(shownQ.slice(0,300))}</div>${optionRows?`<div class="mock-bank-options">${optionRows}</div>`:''}</td><td>${esc((q.passage_title||q.passage_id||'').slice(0,40)||'—')}</td><td class="mock-question-preview-cell">${q.image_url?`<img class="mock-question-thumb" src="${esc(q.image_url)}" alt="Question ${i+1} preview" loading="lazy" onclick="openMockQuestionImage('${esc(q.image_url)}','Question ${i+1}')" title="Click to enlarge">`:'<span class="mock-question-preview-empty">No image</span>'}</td><td>${q.active===false?'Inactive':'Active'}</td><td><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></td></tr>`}).join('')||'<tr><td colspan="9">No questions match the selected filters.</td></tr>'}</tbody></table></div>
     </div>
     <div class="card" style="background:#f8fafc"><h3>Availability & Set Validation</h3>${MOCK_PLAN.map(x=>{const c=counts[x.part]||0;const complete=x.unit==='passage'?Object.entries(groups).filter(([k,g])=>k.startsWith(x.part+'::')&&g===(x.passageCount||x.count)).length:Math.floor(c/x.count);const remainder=x.unit==='passage'?c-(complete*(x.passageCount||x.count)):c%x.count;return `<div class="small" style="padding:6px 0"><b>${esc(x.label)}</b>: ${c} active · ${complete} complete set(s) of ${x.count}${remainder?' · '+remainder+' question(s) not in a complete set':' · ready'}</div>`}).join('')}</div>
     <div class="actions"><button onclick="mockBulkUpload()">Bulk Upload</button><button onclick="generateMockTestPage()">Generate Test</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div>
   </div>`);
-  // The table is rendered dynamically. Re-typeset its mathematical expressions after every filter/render.
-  if(window.MathJax?.typesetPromise){
-    const table=document.querySelector('.mock-bank-question-text')?.closest('.card');
-    if(table)window.MathJax.typesetPromise([table]).catch(()=>{});
-  }
+  // The table is rendered dynamically. Wait for MathJax to load/initialize, then typeset all question and option math.
+  const table=document.querySelector('.mock-bank-question-text')?.closest('.card');
+  if(table)jnvstTypesetWhenReady([table]);
 }
 
 function openMockQuestionImage(url,title){
@@ -1341,7 +1341,7 @@ async function editMockQuestion(id){
 
    <div class="actions" style="margin-top:16px"><button onclick="saveMockQuestionEdit('${q.id}')">💾 Save Changes</button><button class="secondary" onclick="mockBankSummary()">Cancel</button></div>
   </div></div>`);
- if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+ jnvstTypesetWhenReady([document.getElementById('jnvstMathModal'),document.getElementById('jqQuestion')]);
 }
 function mockPreviewEditImage(input){const box=document.getElementById('emqImagePreview'),file=input.files?.[0];if(!box||!file)return;if(!file.type.startsWith('image/')){input.value='';return alert('Please select an image file.');}if(file.size>10*1024*1024){input.value='';return alert('Image size must be 10 MB or less.');}const url=URL.createObjectURL(file);box.innerHTML=`<img class="jnvst-editor-image" src="${url}" alt="New question image"><div class="small muted">New image selected.</div>`;const rm=document.getElementById('emqRemoveImage');if(rm)rm.checked=false;}
 async function saveMockQuestionEdit(id){try{const {data:q,error:qe}=await sb.from('mock_question_bank').select('*').eq('id',id).eq('teacher_id',current.id).single();if(qe)throw qe;let imageUrl=q.image_url||null;const file=document.getElementById('emqImage')?.files?.[0];const removeImage=!!document.getElementById('emqRemoveImage')?.checked;if(file){imageUrl=await uploadMockFile(file,`${current.id}/edited-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`)}else if(removeImage){imageUrl=null}const newPart=document.getElementById('emqPart').value;const newPlan=mockPlanByPart[newPart];const payload={section_code:newPlan.section,part_code:newPart,topic:document.getElementById('emqTopic').value.trim()||mockPartLabel(newPart),language:newPlan.section==='MAT'?'COMMON':document.getElementById('emqLanguage').value,question_text:document.getElementById('emqQuestion').value.trim()||null,option_a:document.getElementById('emqA').value.trim()||null,option_b:document.getElementById('emqB').value.trim()||null,option_c:document.getElementById('emqC').value.trim()||null,option_d:document.getElementById('emqD').value.trim()||null,correct_option:document.getElementById('emqAnswer').value,passage_title:document.getElementById('emqPassageTitle').value.trim()||null,passage_text:document.getElementById('emqPassage').value.trim()||null,image_url:imageUrl};const {error}=await sb.from('mock_question_bank').update(payload).eq('id',id).eq('teacher_id',current.id);if(error)throw error;alert('Question updated successfully.');mockBankSummary()}catch(e){alert('Could not update question: '+(e.message||e))}}
@@ -3023,7 +3023,16 @@ function jnvstMathPreview(value){
  s=jnvstNormalizeMathText(s);
  return esc(s).replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
-function jnvstRefreshMathPreview(id,value){const el=document.getElementById(id);if(!el)return;el.innerHTML=jnvstMathPreview(value);if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([el]).catch(()=>{});}
+async function jnvstTypesetWhenReady(elements){
+  const nodes=(elements||[]).filter(Boolean);
+  if(!nodes.length)return;
+  try{
+    for(let i=0;i<120 && !window.MathJax?.typesetPromise;i++) await new Promise(r=>setTimeout(r,50));
+    if(window.MathJax?.startup?.promise) await window.MathJax.startup.promise;
+    if(window.MathJax?.typesetPromise) await window.MathJax.typesetPromise(nodes);
+  }catch(e){console.warn('MathJax typesetting failed:',e);}
+}
+function jnvstRefreshMathPreview(id,value){const el=document.getElementById(id);if(!el)return;el.innerHTML=jnvstMathPreview(value);jnvstTypesetWhenReady([el]);}
 let jnvstMathEditorState={target:null,start:0,end:0};
 function jnvstCloseMathEditor(){
  const m=document.getElementById('jnvstMathModal');
