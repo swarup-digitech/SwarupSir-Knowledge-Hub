@@ -2898,7 +2898,7 @@ async function jnvstQbSaveEditRich(){
  }catch(e){alert('Could not save JNVST question: '+(e.message||e))}
 }
 async function jnvstQbSaveEdit(){return jnvstQbSaveEditRich()}
-function downloadJnvstQuestionTemplate(){if(typeof XLSX==='undefined')return alert('Excel library is not loaded.');const wb=XLSX.utils.book_new();const rows=[['Subject Name','Medium','Lesson Code','Topic','Variation Group','Fixed Question','Question Type','Marks','Cognitive Level','Difficulty','Question English','Question Assamese','Option A English','Option B English','Option C English','Option D English','Option A Assamese','Option B Assamese','Option C Assamese','Option D Assamese','Correct Answer','Explanation'],['Arithmetic','ENGLISH','1.1','Place Value','NUM-001','NO','MCQ',1,'Knowledge','Medium','Find the value of \frac{3}{4}+\frac{1}{2}.','','1000','500','50','5','','','','','A','']];const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map((_,i)=>({wch:i<6?18:i>10?28:20}));XLSX.utils.book_append_sheet(wb,ws,'JNVST Questions');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['JNVST Question Bulk Upload Instructions'],['Subject Name must exactly match an existing JNVST Subject.'],['Lesson Code must match an existing JNVST Lesson/Sub-lesson under that subject.'],['Medium: COMMON for MAT, ENGLISH or ASSAMESE for language-specific questions.'],['Use the same Variation Group for small-variation questions; assignment generation selects at most one per group.'],['Fixed Question: YES or NO. Fixed questions can be selected explicitly when generating an assignment.'],['Mathematics: You may enter LaTeX-style expressions directly in Question/Option/Explanation cells, e.g. \frac{3}{4}, x^2, \sqrt{16}, \times, \div. The system renders these as mathematical notation.'],['This upload writes to mock_question_bank only. It does not create or modify School Course questions.']]),'Instructions');XLSX.writeFile(wb,'JNVST_Question_Bank_Bulk_Upload_Template.xlsx')}
+function downloadJnvstQuestionTemplate(){if(typeof XLSX==='undefined')return alert('Excel library is not loaded.');const wb=XLSX.utils.book_new();const rows=[['Subject Name','Medium','Lesson Code','Topic','Variation Group','Fixed Question','Question Type','Marks','Cognitive Level','Difficulty','Question English','Question Assamese','Option A English','Option B English','Option C English','Option D English','Option A Assamese','Option B Assamese','Option C Assamese','Option D Assamese','Correct Answer','Explanation'],['Arithmetic','ENGLISH','1.1','Place Value','NUM-001','NO','MCQ',1,'Knowledge','Medium','Find the value of \frac{3}{4}+\frac{1}{2}.','','1000','500','50','5','','','','','A','']];const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map((_,i)=>({wch:i<6?18:i>10?28:20}));XLSX.utils.book_append_sheet(wb,ws,'JNVST Questions');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['JNVST Question Bulk Upload Instructions'],['Subject Name must exactly match an existing JNVST Subject.'],['Lesson Code must match an existing JNVST Lesson/Sub-lesson under that subject.'],['Medium may be COMMON, ENGLISH or ASSAMESE. If both Question English and Question Assamese are supplied, the importer automatically creates both linked language versions from the same Excel row.'],['Use the same Variation Group for small-variation questions; assignment generation selects at most one per group.'],['Fixed Question: YES or NO. Fixed questions can be selected explicitly when generating an assignment.'],['Mathematics: You may enter LaTeX-style expressions directly in Question/Option/Explanation cells, e.g. \frac{3}{4}, x^2, \sqrt{16}, \times, \div. The system renders these as mathematical notation.'],['This upload writes to mock_question_bank only. It does not create or modify School Course questions.']]),'Instructions');XLSX.writeFile(wb,'JNVST_Question_Bank_Bulk_Upload_Template.xlsx')}
 let jnvstQbBulkRows=[];
 function jnvstQuestionBulkUpload(){jnvstQbBulkRows=[];jnvstPdfRows=[];jnvstPdfMeta={};render(`<div class="wrap">${header('Bulk Upload JNVST Question Bank')}<div class="card"><div class="notice"><b>JNVST only.</b> This uploader writes to <b>mock_question_bank</b>. School Course Question Bank is not affected.</div><div class="actions"><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Download Excel Template</button><button class="secondary" onclick="downloadJnvstMatPdfTemplate()">⬇ MAT PDF + Excel Template</button><button class="secondary" onclick="jnvstQuestionBankHome()">← Back</button></div></div><div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + EXCEL</span><h3>🧩 Mental Ability (MAT) — Image Question Bulk Upload</h3><p class="small muted">Upload one PDF containing one complete MAT question per page and one Excel file containing the answer key and metadata. PDF page 1 = Question 1, page 2 = Question 2, etc. Unnecessary white margins are cropped automatically.</p><div class="grid"><div><label>JNVST Subject</label><select id="jnvstPdfSubject">${jnvstQbSubjectOptions('')}</select></div><div><label>Medium</label><select id="jnvstPdfMedium"><option value="COMMON">Common (MAT)</option></select></div><div><label>Lesson / Sub-lesson</label><select id="jnvstPdfLesson">${jnvstQbLessonOptions('','')}</select></div></div><label>Questions PDF</label><input id="jnvstPdfFile" type="file" accept=".pdf" onchange="readJnvstQuestionPdf(event)"><label>Answer Key & Metadata Excel</label><input id="jnvstPdfExcel" type="file" accept=".xlsx,.xls" onchange="readJnvstPdfMetadataExcel(event)"><div id="jnvstPdfPreview" class="small muted" style="margin-top:10px">No PDF or metadata file selected.</div><div class="actions"><button id="jnvstPdfImportBtn" disabled onclick="saveJnvstPdfBulk()">✓ Validate & Import PDF Questions</button></div></div><div class="card"><h3>📝 Text / MCQ Excel Bulk Upload</h3><div class="notice"><b>Mathematics supported:</b> You may type LaTeX-style equations directly in Excel cells, for example <code>\frac{3}{4}</code>, <code>x^2</code>, <code>\sqrt{16}</code>, <code>\times</code>, <code>\div</code>. Equations in Question, Options and Explanation are rendered as mathematics after upload.</div><label>Excel file (.xlsx / .xls)</label><input type="file" accept=".xlsx,.xls" onchange="readJnvstQuestionExcel(event)"><div id="jnvstQbBulkPreview" class="small muted" style="margin-top:10px">No file selected.</div><div id="jnvstQbBulkMathPreview" class="eq-preview" style="margin-top:10px"></div></div><div class="actions"><button id="jnvstQbImportBtn" disabled onclick="saveJnvstQuestionBulk()">✓ Validate & Import Excel Questions</button><button class="secondary" onclick="jnvstQuestionBankHome()">Cancel</button></div></div>`);document.getElementById('jnvstPdfSubject')?.addEventListener('change',e=>{const l=document.getElementById('jnvstPdfLesson');if(l)l.innerHTML=jnvstQbLessonOptions(e.target.value,'')})}
 let jnvstPdfRows=[],jnvstPdfMeta={};
@@ -2908,15 +2908,87 @@ function readJnvstPdfMetadataExcel(ev){const f=ev.target.files?.[0],box=document
 async function saveJnvstPdfBulk(){if(!jnvstPdfRows.length)return;const subject=document.getElementById('jnvstPdfSubject')?.value||'',lessonId=document.getElementById('jnvstPdfLesson')?.value||'',lang='COMMON';if(!subject||!lessonId)return alert('Select the JNVST Subject and Lesson/Sub-lesson first.');const subj=(jnvstSubjects||[]).find(s=>s.id===subject),lesson=(jnvstSubjectLessons||[]).find(l=>l.id===lessonId);if(!subj||!lesson)return alert('Selected Subject or Lesson could not be found.');const btn=document.getElementById('jnvstPdfImportBtn');if(btn)btn.disabled=true;let ok=0,skip=0;try{for(const x of jnvstPdfRows){const m=jnvstPdfMeta[x.page];const {data:dups,error:de}=await sb.from('mock_question_bank').select('id').eq('teacher_id',current.id).eq('subject_id',subj.id).eq('lesson_id',lesson.id).eq('language',lang).eq('source_question_no',x.page).eq('source_type','JNVST_PDF');if(de)throw de;if((dups||[]).length){skip++;continue}const path=`${current.id}/jnvst/${crypto.randomUUID()}.jpg`,url=await uploadMockImage(x.image_data,path);const {error}=await sb.from('mock_question_bank').insert({teacher_id:current.id,section_code:'MAT',part_code:m.part||'CUSTOM',question_text:'[IMAGE QUESTION]',option_a:'Option A',option_b:'Option B',option_c:'Option C',option_d:'Option D',correct_option:m.correct,source_type:'JNVST_PDF',source_question_no:x.page,image_url:url,active:true,subject_id:subj.id,lesson_id:lesson.id,language:lang,topic:m.topic,marks:m.marks,cognitive_level:m.cognitive,difficulty:m.difficulty,explanation:m.explanation});if(error)throw error;ok++}alert(`JNVST MAT PDF import complete. Added: ${ok}\nSkipped duplicates: ${skip}`);jnvstQuestionBankHome()}catch(e){alert('JNVST PDF import stopped: '+e.message);if(btn)btn.disabled=false}}
 function jnvstGetCell(row,names){const keys=Object.keys(row||{});for(const n of names){const k=keys.find(x=>String(x).trim().toLowerCase().replace(/[_\s-]+/g,' ')===String(n).trim().toLowerCase().replace(/[_\s-]+/g,' '));if(k!==undefined)return String(row[k]??'').trim()}return ''}
 function readJnvstQuestionExcel(ev){const f=ev.target.files?.[0],box=document.getElementById('jnvstQbBulkPreview'),btn=document.getElementById('jnvstQbImportBtn');if(!f||!box)return;btn.disabled=true;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames.find(n=>String(n).toLowerCase().includes('question'))||wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{defval:''});jnvstQbBulkRows=raw.map((x,i)=>({row:i+2,subject:jnvstGetCell(x,['Subject Name','Subject']),medium:jnvstGetCell(x,['Medium']).toUpperCase(),lessonCode:jnvstGetCell(x,['Lesson Code','Lesson']),topic:jnvstGetCell(x,['Topic']),group:jnvstGetCell(x,['Variation Group','Fixed Question Group']),fixed:jnvstGetCell(x,['Fixed Question','Is Fixed']).toUpperCase(),type:jnvstGetCell(x,['Question Type'])||'MCQ',marks:Number(jnvstGetCell(x,['Marks']))||1,cognitive:jnvstGetCell(x,['Cognitive Level'])||'Knowledge',difficulty:jnvstGetCell(x,['Difficulty'])||'Medium',en:jnvstNormalizeMathText(jnvstGetCell(x,['Question English','Question','English'])),as:jnvstNormalizeMathText(jnvstGetCell(x,['Question Assamese','Assamese'])),aen:jnvstNormalizeMathText(jnvstGetCell(x,['Option A English','A','Option A'])),ben:jnvstNormalizeMathText(jnvstGetCell(x,['Option B English','B','Option B'])),cen:jnvstNormalizeMathText(jnvstGetCell(x,['Option C English','C','Option C'])),den:jnvstNormalizeMathText(jnvstGetCell(x,['Option D English','D','Option D'])),aas:jnvstNormalizeMathText(jnvstGetCell(x,['Option A Assamese'])),bas:jnvstNormalizeMathText(jnvstGetCell(x,['Option B Assamese'])),cas:jnvstNormalizeMathText(jnvstGetCell(x,['Option C Assamese'])),das:jnvstNormalizeMathText(jnvstGetCell(x,['Option D Assamese'])),answer:jnvstGetCell(x,['Correct Answer','Answer']).toUpperCase(),explanation:jnvstNormalizeMathText(jnvstGetCell(x,['Explanation']))})).filter(x=>x.en||x.as);const subjMap=new Map((jnvstSubjects||[]).map(s=>[String(s.name).trim().toLowerCase(),s]));const errs=[];jnvstQbBulkRows.forEach(x=>{if(!subjMap.has(x.subject.toLowerCase()))errs.push(`Row ${x.row}: Subject not found: ${x.subject}`);const so=subjMap.get(x.subject.toLowerCase());if(so&&!jnvstSubjectLessons.some(l=>l.subject_id===so.id&&String(l.lesson_code).toLowerCase()===x.lessonCode.toLowerCase()))errs.push(`Row ${x.row}: Lesson Code ${x.lessonCode} not found under ${x.subject}`);if(!['COMMON','ENGLISH','ASSAMESE'].includes(x.medium))errs.push(`Row ${x.row}: Medium must be COMMON, ENGLISH or ASSAMESE.`);if(x.fixed&&!['YES','NO','TRUE','FALSE','1','0'].includes(x.fixed))errs.push(`Row ${x.row}: Fixed Question must be YES or NO.`);if(!['MCQ','Short','Long'].includes(x.type))errs.push(`Row ${x.row}: invalid Question Type.`);if(x.type==='MCQ'&&!['A','B','C','D'].includes(x.answer))errs.push(`Row ${x.row}: MCQ Correct Answer must be A/B/C/D.`)});box.innerHTML=errs.length?message(`<b>Validation failed.</b><br>${errs.slice(0,25).map(esc).join('<br>')}`):message(`<b>${jnvstQbBulkRows.length} question(s) ready.</b> All Subject/Lesson/Medium references are valid.`,true);btn.disabled=!!errs.length||!jnvstQbBulkRows.length}catch(err){box.innerHTML=message('Could not read Excel: '+err.message)}};r.readAsArrayBuffer(f)}
-function jnvstSectionFromSubject(name){
-  const s=String(name||'').trim().toUpperCase().replace(/[\s_-]+/g,'');
-  if(s==='MAT'||s.includes('MAT')) return 'MAT';
-  if(s==='EVS'||s.includes('ENVIRONMENT')||s.includes('ENVIRONMENTAL')) return 'EVS';
-  if(s==='ARITHMETIC'||s.includes('ARITHMETIC')||s==='MATH'||s==='MATHEMATICS') return 'ARITHMETIC';
-  if(s==='LANGUAGE'||s.includes('LANGUAGE')) return 'LANGUAGE';
-  return null;
+async function saveJnvstQuestionBulk(){
+ if(!jnvstQbBulkRows.length)return;
+ const subjMap=new Map((jnvstSubjects||[]).map(s=>[String(s.name).trim().toLowerCase(),s]));
+ const sectionForSubject=(name)=>{
+   const n=String(name||'').trim().toUpperCase().replace(/\s+/g,'_');
+   if(n==='MAT'||n.includes('MENTAL')||n.includes('ABILITY'))return 'MAT';
+   if(n==='EVS'||n.includes('ENVIRONMENT'))return 'EVS';
+   if(n==='ARITHMETIC'||n.includes('ARITHMETIC'))return 'ARITHMETIC';
+   if(n==='LANGUAGE'||n.includes('LANGUAGE'))return 'LANGUAGE';
+   return '';
+ };
+ const clean=(v)=>String(v??'').trim();
+ let ok=0,skip=0;
+ try{
+   const rows=[];
+   for(const r of jnvstQbBulkRows){
+     const subj=subjMap.get(r.subject.toLowerCase());
+     if(!subj)throw new Error(`Row ${r.row}: Subject not found: ${r.subject}`);
+     const lesson=(jnvstSubjectLessons||[]).find(l=>l.subject_id===subj.id&&String(l.lesson_code).toLowerCase()===r.lessonCode.toLowerCase());
+     if(!lesson)throw new Error(`Row ${r.row}: Lesson Code ${r.lessonCode} not found under ${r.subject}`);
+     const section=sectionForSubject(r.subject);
+     if(!section)throw new Error(`Row ${r.row}: Subject '${r.subject}' cannot be mapped to MAT, EVS, ARITHMETIC or LANGUAGE.`);
+     const languages=[];
+     // This template carries both versions in one row. Import both when present.
+     if(r.en)languages.push({language:'ENGLISH',question:r.en,a:r.aen,b:r.ben,c:r.cen,d:r.den});
+     if(r.as)languages.push({language:'ASSAMESE',question:r.as,a:r.aas,b:r.bas,c:r.cas,d:r.das});
+     // MAT remains a single common question if only one version is supplied.
+     if(section==='MAT' && languages.length){
+       const chosen=languages[0];
+       languages.length=0; languages.push({...chosen,language:'COMMON'});
+     }
+     if(!languages.length)throw new Error(`Row ${r.row}: At least one question language is required.`);
+     const pairId=crypto.randomUUID();
+     for(const v of languages){
+       rows.push({
+         teacher_id:current.id,
+         section_code:section,
+         part_code:section,
+         question_text:v.question,
+         option_a:v.a||null, option_b:v.b||null, option_c:v.c||null, option_d:v.d||null,
+         correct_option:r.type==='MCQ'?r.answer:'A',
+         explanation:r.explanation||null,
+         marks:r.marks||1,
+         cognitive_level:r.cognitive||null,
+         difficulty:r.difficulty||null,
+         source_type:'JNVST_BULK',
+         active:true,
+         subject_id:subj.id,
+         lesson_id:lesson.id,
+         language:v.language,
+         topic:r.topic||null,
+         variation_group:r.group||null,
+         is_fixed:['YES','TRUE','1'].includes(r.fixed),
+         language_pair_id:pairId
+       });
+     }
+   }
+
+   // Validate duplicates for every language before inserting anything.
+   const {data:old,error:oe}=await sb.from('mock_question_bank')
+     .select('id,question_text,option_a,option_b,option_c,option_d,subject_id,lesson_id,language')
+     .eq('teacher_id',current.id).eq('active',true);
+   if(oe)throw oe;
+   const seen=new Set((old||[]).map(q=>[q.subject_id,q.lesson_id,q.language,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d]
+     .map(v=>String(v||'').trim().toLowerCase()).join('¦')));
+   const fresh=[];
+   for(const r of rows){
+     const k=[r.subject_id,r.lesson_id,r.language,r.question_text,r.option_a,r.option_b,r.option_c,r.option_d]
+       .map(v=>String(v||'').trim().toLowerCase()).join('¦');
+     if(seen.has(k)){skip++;continue;}
+     seen.add(k);fresh.push(r);
+   }
+   if(!fresh.length)throw new Error('All uploaded language versions are already present in the question bank. No new questions were added.');
+   const {error}=await sb.from('mock_question_bank').insert(fresh);
+   if(error)throw error;
+   ok=fresh.length;
+   const logical=Math.ceil(ok/2);
+   alert(`JNVST import complete.\nAdded: ${ok} language record(s)\nLogical questions: ${logical}\nSkipped duplicates: ${skip}\n\nEnglish and Assamese versions from the same Excel row are linked automatically.`);
+   jnvstQuestionBankHome();
+ }catch(e){alert('JNVST import stopped: '+(e.message||e))}
 }
-async function saveJnvstQuestionBulk(){if(!jnvstQbBulkRows.length)return;const subjMap=new Map((jnvstSubjects||[]).map(s=>[String(s.name).trim().toLowerCase(),s]));let ok=0,skip=0;try{for(const r of jnvstQbBulkRows){const subj=subjMap.get(r.subject.toLowerCase());if(!subj)throw new Error(`Subject not found: ${r.subject}`);const section=jnvstSectionFromSubject(subj.name);if(!section)throw new Error(`Unsupported JNVST subject "${subj.name}". Subject must map to MAT, EVS, ARITHMETIC or LANGUAGE.`);const lesson=(jnvstSubjectLessons||[]).find(l=>l.subject_id===subj.id&&String(l.lesson_code).toLowerCase()===r.lessonCode.toLowerCase());if(!lesson)throw new Error(`Lesson Code ${r.lessonCode} not found under ${subj.name}.`);const {data:dups,error:de}=await sb.from('mock_question_bank').select('id').eq('teacher_id',current.id).eq('subject_id',subj.id).eq('lesson_id',lesson.id).eq('language',r.medium).eq('question_text',r.en||r.as||'');if(de)throw de;if((dups||[]).length){skip++;continue}const part=section==='MAT'?'CUSTOM':section;const {error}=await sb.from('mock_question_bank').insert({teacher_id:current.id,section_code:section,part_code:part,question_text:r.en||r.as||'',option_a:r.aen||r.aas||'',option_b:r.ben||r.bas||'',option_c:r.cen||r.cas||'',option_d:r.den||r.das||'',correct_option:r.type==='MCQ'?r.answer:'A',explanation:r.explanation||null,marks:r.marks||1,cognitive_level:r.cognitive||null,difficulty:r.difficulty||null,source_type:'JNVST_BULK',active:true,subject_id:subj.id,lesson_id:lesson.id,language:r.medium,topic:r.topic||null,variation_group:r.group||null,is_fixed:['YES','TRUE','1'].includes(r.fixed)});if(error)throw error;ok++}alert(`JNVST import complete. Added: ${ok}\nSkipped duplicates: ${skip}`);jnvstQuestionBankHome()}catch(e){alert('JNVST import stopped: '+e.message)}}
 async function newJnvstMainGroup(){
  render(`<div class="wrap">${header("Create JNVST Main Group")}<div class="card"><label>Main Group Name</label><input id="jnvstMainName" placeholder="e.g. JNVST-V (Foundation)"><label>Description</label><textarea id="jnvstMainDesc" placeholder="Optional description"></textarea><div class="actions"><button onclick="saveJnvstMainGroup()">Create Main Group</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`);
 }
