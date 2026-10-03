@@ -634,18 +634,20 @@ function qpValidateCommonCounts(showAlert=false){
 function qpRenderCommonPanel(){
   const box=document.getElementById('qpCommonPanel');if(!box)return;
   const rows=qpCommonPartRows();
-  box.innerHTML=`<div class="card" style="border:2px solid #7c3aed;background:#faf5ff">
+  box.innerHTML=`<div class="card qpc-common-panel" style="border:2px solid #7c3aed;background:#faf5ff">
     <h2>1. Common / MAT Question Paper</h2>
     <p class="muted">For each MAT part, choose the required number of questions. You can mark specific questions as <b>Mandatory</b>; all remaining questions will be selected randomly.</p>
-    <div class="grid">${rows.map(x=>{const current=Number(qpState.commonCounts[x.part]||4);return `<div class="assignment">
-      <b>${esc(x.heading)}</b><div class="small muted" style="margin:5px 0">Available: ${x.questions.length} · Mandatory: <span id="qpc_mand_${x.part}">${qpMandatoryIdsForPart(x.part).length}</span></div>
-      <label>Questions</label><input id="qpc_${x.part}" type="number" min="4" step="4" value="${current}" oninput="qpCommonCountChanged('${x.part}',this.value)">
-      <button class="secondary" style="margin-top:7px" onclick="qpToggleCommonPart('${x.part}')">Select Mandatory Questions</button>
-      <div id="qpc_questions_${x.part}" style="display:none;max-height:240px;overflow:auto;margin-top:8px"></div>
-      <div id="qpc_msg_${x.part}" class="small muted"></div>
+    <div class="qpc-part-grid">${rows.map(x=>{const current=Number(qpState.commonCounts[x.part]||4);return `<div class="qpc-part-card">
+      <div class="qpc-part-heading"><b>${esc(x.heading)}</b></div>
+      <div class="small muted qpc-part-meta">Available: ${x.questions.length} <span>•</span> Mandatory: <span id="qpc_mand_${x.part}">${qpMandatoryIdsForPart(x.part).length}</span></div>
+      <label class="qpc-count-label">Questions</label>
+      <input class="qpc-count-input" id="qpc_${x.part}" type="number" min="4" step="4" value="${current}" oninput="qpCommonCountChanged('${x.part}',this.value)">
+      <button type="button" class="qpc-mandatory-btn" onclick="qpToggleCommonPart('${x.part}')">☑ Select Mandatory Questions</button>
+      <div id="qpc_questions_${x.part}" class="qpc-mandatory-list" style="display:none"></div>
+      <div id="qpc_msg_${x.part}" class="small muted qpc-part-message"></div>
     </div>`}).join('')}</div>
-    <div id="qpCommonTotal" class="notice small" style="margin-top:12px"></div>
-    <div class="actions" style="margin-top:10px"><button class="secondary" onclick="qpCommonSelectMinimum()">Set 4 Each</button><button class="secondary" onclick="qpCommonSetMaximumAvailable()">Use Maximum Valid Count</button></div>
+    <div id="qpCommonTotal" class="notice small" style="margin-top:14px"></div>
+    <div class="actions" style="margin-top:12px"><button class="secondary" onclick="qpCommonSelectMinimum()">Set 4 Each</button><button class="secondary" onclick="qpCommonSetMaximumAvailable()">Use Maximum Valid Count</button></div>
   </div>`;
   rows.forEach(x=>qpRenderCommonQuestions(x.part));
   qpCommonRefreshSummary();
@@ -665,7 +667,10 @@ function teacherQuestionPreview(q, options={}){
 function qpRenderCommonQuestions(part){
   const wrap=document.getElementById(`qpc_questions_${part}`);if(!wrap)return;
   const rows=qpState.bank.filter(q=>String(q.part_code||'').toUpperCase()===part);
-  wrap.innerHTML=rows.length?rows.map(q=>`<label class="assignment" style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;padding:7px"><input type="checkbox" ${qpState.selected.has(q.id)?'checked':''} onchange="qpMandatoryChanged('${q.id}',this.checked)"><span style="flex:1;min-width:0">${teacherQuestionPreview(q)}<span class="muted small"> — ${esc(q.id)}</span></span></label>`).join(''):'<div class="muted">No questions available.</div>';
+  wrap.innerHTML=rows.length?rows.map(q=>`<label class="qpc-question-row">
+    <input type="checkbox" ${qpState.selected.has(q.id)?'checked':''} onchange="qpMandatoryChanged('${q.id}',this.checked)">
+    <span class="qpc-question-preview">${teacherQuestionPreview(q,{width:'170px',height:'125px'})}</span>
+  </label>`).join(''):'<div class="muted" style="padding:12px">No questions available.</div>';
 }
 function qpCommonRefreshSummary(){
   const total=qpCommonTotal();const valid=qpValidateCommonCounts(false);const el=document.getElementById('qpCommonTotal');
@@ -830,7 +835,11 @@ function qpBuildCommonHtml(rows){
 function qpHtmlQuestion(q,variant='default'){
   const hasImage=!!qpNorm(q.image_url);
   const questionText=(q.question_text && String(q.question_text).trim()!=='[IMAGE QUESTION]')?String(q.question_text).trim():'';
-  const opts=`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
+  // MAT image already contains the question figure and all answer figures/options.
+  // Do not append database option text beneath the image.
+  const isMat=String(q.section_code||'').toUpperCase()==='MAT' || String(q.part_code||'').toUpperCase().startsWith('MAT_') || variant==='mat';
+  const embeddedImageOptions=hasImage && isMat;
+  const opts=embeddedImageOptions?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
   const imageClass=variant==='arithmetic'?'jnvst-question-image arithmetic-question-image':'jnvst-question-image';
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
