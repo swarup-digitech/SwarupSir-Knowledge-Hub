@@ -6119,3 +6119,362 @@ init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start<
   };
   window.mockBuildSets=function(qs,plan){if(plan.unit==='passage'){const groups=new Map();(qs||[]).forEach(q=>{const pid=String(q.passage_id||'').trim();if(pid){if(!groups.has(pid))groups.set(pid,[]);groups.get(pid).push(q)}});return [...groups.entries()].filter(([,g])=>g.length===(plan.passageCount||plan.count)).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([pid,g],i)=>({number:i+1,label:`Passage ${pid}`,set_id:g[0].set_id||pid,questions:[...g].sort(mockSortQuestions)}))}const bySet=new Map();(qs||[]).forEach(q=>{const sid=String(q.set_id||'').trim();if(sid){if(!bySet.has(sid))bySet.set(sid,[]);bySet.get(sid).push(q)}});const explicit=[...bySet.entries()].filter(([,g])=>g.length===(plan.passageCount||plan.count)).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));if(explicit.length)return explicit.map(([sid,g],i)=>({number:i+1,label:`Set ${sid}`,set_id:sid,questions:[...g].sort(mockSortQuestions)}));const sorted=[...(qs||[])].sort(mockSortQuestions),sets=[];for(let i=0;i<sorted.length;i+=plan.count){const group=sorted.slice(i,i+plan.count);if(group.length===plan.count)sets.push({number:sets.length+1,label:`Set ${sets.length+1}`,set_id:`AUTO-${plan.part}-${sets.length+1}`,questions:group})}return sets};
 })();
+
+
+/* JNVST Mock Management — metadata + bilingual Excel + complete passage display upgrade */
+(function(){
+  const norm=v=>String(v??'').trim();
+  const key=v=>norm(v).toLowerCase().replace(/[_\s.-]+/g,' ');
+  const cell=(row,names)=>{for(const n of names){const k=Object.keys(row||{}).find(x=>key(x)===key(n));if(k!==undefined)return norm(row[k]);}return ''};
+  const partNorm=v=>typeof mockNormalizePart==='function'?mockNormalizePart(v):norm(v).toUpperCase().replace(/\s+/g,'_').replace(/-+/g,'_');
+  const boolVal=v=>['YES','TRUE','1','Y'].includes(norm(v).toUpperCase());
+  const uuid=()=>crypto.randomUUID();
+  const cleanMath=v=>typeof jnvstNormalizeMathText==='function'?jnvstNormalizeMathText(v):norm(v);
+
+  function metadataFromRow(row){
+    return {
+      subject:cell(row,['Subject Name','Subject']),
+      lessonCode:cell(row,['Lesson Code','Lesson','Lesson/Sub-lesson Code']),
+      topic:cell(row,['Topic']),
+      variationGroup:cell(row,['Variation Group','Fixed Question Group']),
+      fixed:cell(row,['Fixed Question','Fixed','Is Fixed']),
+      questionType:cell(row,['Question Type','Type'])||'MCQ',
+      marks:Number(cell(row,['Marks']))||1,
+      cognitive:cell(row,['Cognitive Level','Cognitive_Level'])||'Knowledge',
+      difficulty:cell(row,['Difficulty'])||'Medium'
+    };
+  }
+
+  function makeLangVersion(base,lang,passage){
+    const isEn=lang==='ENGLISH';
+    const q=isEn?base.en:base.as;
+    if(!q)return null;
+    return {
+      ...base,
+      language:base.section==='MAT'?'COMMON':lang,
+      question:cleanMath(q),
+      A:cleanMath(isEn?base.aen:base.aas),
+      B:cleanMath(isEn?base.ben:base.bas),
+      C:cleanMath(isEn?base.cen:base.cas),
+      D:cleanMath(isEn?base.den:base.das),
+      passage:passage?.text||base.passage||'',
+      passage_title:passage?.title||base.passage_title||''
+    };
+  }
+
+  window.readMockQuestionExcel=function(ev){
+    const file=ev.target.files?.[0]; if(!file)return;
+    mockReadRows(file,wb=>{
+      try{
+        const passageSheets=wb.SheetNames.filter(n=>key(n)==='passages');
+        const passages={};
+        if(passageSheets.length){
+          XLSX.utils.sheet_to_json(wb.Sheets[passageSheets[0]],{defval:''}).forEach((r,i)=>{
+            const id=cell(r,['Local Passage No.','Local Passage Number','Local Passage ID','Passage ID','PassageID','Passage No','Passage Number','ID'])||String(i+1);
+            const k=norm(id).toLowerCase();
+            const hasBilingual=Object.keys(r).some(h=>/assamese/i.test(String(h))) || Object.keys(r).some(h=>/passage (english|assamese)/i.test(String(h)));
+            passages[k]={
+              id, hasBilingual,
+              titleEn:cell(r,['Passage Title English','English Passage Title','Passage English Title'])||cell(r,['Passage Title','Title']),
+              textEn:cell(r,['Passage English','English Passage'])||cell(r,['Passage','Passage Text','Text']),
+              titleAs:cell(r,['Passage Title Assamese','Assamese Passage Title']),
+              textAs:cell(r,['Passage Assamese','Assamese Passage'])
+            };
+          });
+        }
+        const ws=wb.Sheets[wb.SheetNames.find(n=>key(n)==='questions')||wb.SheetNames[0]];
+        const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const fallbackLang=document.getElementById('mockUploadFallbackLanguage')?.value||'ASSAMESE';
+        mockBankRows=raw.map((r,i)=>{
+          const m=metadataFromRow(r);
+          const part=partNorm(cell(r,['Part','Part Code']));
+          const pid=cell(r,['Local Passage No.','Local Passage Number','Local Passage ID','Passage ID','PassageID','Passage No','Passage Number']);
+          const p=passages[norm(pid).toLowerCase()]||{};
+          const base={
+            row:i+2,section:cell(r,['Section']).toUpperCase(),part,
+            subject:m.subject,lessonCode:m.lessonCode,topic:m.topic,variationGroup:m.variationGroup,fixed:m.fixed,
+            questionType:m.questionType,marks:m.marks,cognitive:m.cognitive,difficulty:m.difficulty,
+            passage_id:pid,question_order:Number(cell(r,['Question Order','Question No','Question Number','Order']))||null,
+            en:cleanMath(cell(r,['Question English','English Question'])),
+            as:cleanMath(cell(r,['Question Assamese','Assamese Question'])),
+            aen:cleanMath(cell(r,['Option A English','A English'])),ben:cleanMath(cell(r,['Option B English','B English'])),cen:cleanMath(cell(r,['Option C English','C English'])),den:cleanMath(cell(r,['Option D English','D English'])),
+            aas:cleanMath(cell(r,['Option A Assamese','A Assamese'])),bas:cleanMath(cell(r,['Option B Assamese','B Assamese'])),cas:cleanMath(cell(r,['Option C Assamese','C Assamese'])),das:cleanMath(cell(r,['Option D Assamese','D Assamese'])),
+            answer:cell(r,['Correct Answer','Answer','Correct Option']).toUpperCase(),
+            explanation:cleanMath(cell(r,['Explanation'])),image_url:cell(r,['Image URL','Question Image URL']),
+            passage_title:cell(r,['Passage Title','Title'])||p.titleEn,
+            passage:p.textEn||cell(r,['Passage','Passage Text'])
+          };
+          // Legacy generic columns remain supported.
+          if(!base.en&&!base.as){
+            const generic=cleanMath(cell(r,['Question','Question Text']));
+            const ga=cleanMath(cell(r,['A','Option A'])),gb=cleanMath(cell(r,['B','Option B'])),gc=cleanMath(cell(r,['C','Option C'])),gd=cleanMath(cell(r,['D','Option D']));
+            if(generic){
+              if(fallbackLang==='ENGLISH'){base.en=generic;base.aen=ga;base.ben=gb;base.cen=gc;base.den=gd}
+              else {base.as=generic;base.aas=ga;base.bas=gb;base.cas=gc;base.das=gd}
+            }
+          }
+          base.passageVariants={
+            ENGLISH:{title:p.titleEn||base.passage_title,text:p.textEn||base.passage},
+            ASSAMESE:{title:p.hasBilingual?(p.titleAs||''):(p.titleEn||base.passage_title),text:p.hasBilingual?(p.textAs||''):(p.textEn||base.passage)}
+          };
+          return base;
+        }).filter(x=>x.en||x.as||x.image_url);
+
+        const issues=[];
+        mockBankRows.forEach(x=>{
+          if(!mockPlanByPart[x.part])issues.push(`Row ${x.row}: invalid Part '${x.part||''}'.`);
+          if(!x.subject)issues.push(`Row ${x.row}: Subject Name is required.`);
+          if(!x.lessonCode)issues.push(`Row ${x.row}: Lesson Code is required.`);
+          if(!['MCQ','Short','Long'].includes(x.questionType))issues.push(`Row ${x.row}: Question Type must be MCQ, Short or Long.`);
+          if(x.questionType==='MCQ'&&!['A','B','C','D'].includes(x.answer))issues.push(`Row ${x.row}: Correct Answer must be A/B/C/D.`);
+          if(!['Knowledge','Understanding','Application','HOTS'].includes(x.cognitive))issues.push(`Row ${x.row}: Cognitive Level must be Knowledge, Understanding, Application or HOTS.`);
+          if(!['Easy','Medium','Hard'].includes(x.difficulty))issues.push(`Row ${x.row}: Difficulty must be Easy, Medium or Hard.`);
+          if(x.part==='EVS_PASSAGE'||x.part==='LANGUAGE_PASSAGE'){
+            if(!x.passage_id)issues.push(`Row ${x.row}: Local Passage No. is required for passage questions.`);
+            if(!x.question_order)issues.push(`Row ${x.row}: Question Order 1–5 is required for passage questions.`);
+            if((x.en&&(!x.passageVariants.ENGLISH.text||!x.passageVariants.ENGLISH.title))||(x.as&&(!x.passageVariants.ASSAMESE.text||!x.passageVariants.ASSAMESE.title)))issues.push(`Row ${x.row}: matching language Passage Title and Passage text are required.`);
+          }
+        });
+        const passageGroups={};
+        mockBankRows.filter(x=>x.part==='EVS_PASSAGE'||x.part==='LANGUAGE_PASSAGE').forEach(x=>{const k=x.part+'::'+norm(x.passage_id).toLowerCase();(passageGroups[k]??=[]).push(x)});
+        Object.entries(passageGroups).forEach(([k,g])=>{const orders=g.map(x=>x.question_order).filter(Boolean);if(g.length!==5)issues.push(`${k}: must contain exactly 5 question rows in the uploaded language data.`);if(new Set(orders).size!==orders.length||orders.some(n=>n<1||n>5))issues.push(`${k}: Question Order must be exactly 1,2,3,4,5.`);});
+        document.getElementById('mockExcelPreview').innerHTML=message(`<b>${issues.length?'Validation issues found':'✓ Ready for bilingual import'}</b><br>Source rows: ${mockBankRows.length}. English and Assamese versions in the same row will be imported together and linked. ${issues.length?issues.slice(0,20).map(esc).join('<br>'): 'Passage groups are treated as complete 5-question entities.'}`,!issues.length)+`<div class="small muted" style="margin-top:8px">${mockBankRows.slice(0,12).map(x=>`${x.row}. ${esc(mockPartLabel(x.part))} · ${esc(x.subject||'')} · ${esc(x.lessonCode||'')} · ${esc(x.topic||'')} · ${x.passage_id?`Passage ${esc(x.passage_id)} Q${x.question_order||'?'} · `:''}${x.en?'EN ✓ ':''}${x.as?'AS ✓ ':''}${esc((x.en||x.as||'[image]').slice(0,70))}`).join('<br>')}${mockBankRows.length>12?'<br>…':''}</div>`;
+      }catch(err){document.getElementById('mockExcelPreview').innerHTML=message('Could not read Excel: '+(err.message||err))}
+    });
+  };
+
+  window.downloadMockExcelTemplate=function(){
+    const wb=XLSX.utils.book_new();
+    const q=[
+      ['Section','Part','Subject Name','Lesson Code','Topic','Variation Group','Fixed Question','Question Type','Marks','Cognitive Level','Difficulty','Local Passage No.','Question Order','Question English','Question Assamese','Option A English','Option A Assamese','Option B English','Option B Assamese','Option C English','Option C Assamese','Option D English','Option D Assamese','Correct Answer','Explanation','Image URL'],
+      ['EVS','EVS_MCQ','Environmental Studies','1','Plants','VG-001','NO','MCQ',1,'Knowledge','Easy','','1','What is a plant?','উদ্ভিদ কি?','Tree','গছ','Animal','প্ৰাণী','Rock','শিল','Water','পানী','A','', ''],
+      ['EVS','EVS_PASSAGE','Environmental Studies','2','Water','VG-002','NO','MCQ',1,'Understanding','Medium','P-001','1','English question 1','অসমীয়া প্ৰশ্ন 1','A','ক','B','খ','C','গ','D','ঘ','A','',''],
+      ['EVS','EVS_PASSAGE','Environmental Studies','2','Water','VG-002','NO','MCQ',1,'Understanding','Medium','P-001','2','English question 2','অসমীয়া প্ৰশ্ন 2','A','ক','B','খ','C','গ','D','ঘ','B','',''],
+      ['EVS','EVS_PASSAGE','Environmental Studies','2','Water','VG-002','NO','MCQ',1,'Understanding','Medium','P-001','3','English question 3','অসমীয়া প্ৰশ্ন 3','A','ক','B','খ','C','গ','D','ঘ','C','',''],
+      ['EVS','EVS_PASSAGE','Environmental Studies','2','Water','VG-002','NO','MCQ',1,'Understanding','Medium','P-001','4','English question 4','অসমীয়া প্ৰশ্ন 4','A','ক','B','খ','C','গ','D','ঘ','D','',''],
+      ['EVS','EVS_PASSAGE','Environmental Studies','2','Water','VG-002','NO','MCQ',1,'Understanding','Medium','P-001','5','English question 5','অসমীয়া প্ৰশ্ন 5','A','ক','B','খ','C','গ','D','ঘ','A','',''],
+      ['ARITHMETIC','ARITHMETIC','Arithmetic','3','Number System','','NO','MCQ',1,'Application','Medium','','1','Find the value of 2+2','2+2 ৰ মান উলিওৱা','3','৩','4','৪','5','৫','6','৬','B','','']
+    ];
+    const p=[
+      ['Local Passage No.','Passage Title English','Passage English','Passage Title Assamese','Passage Assamese'],
+      ['P-001','Water','This is the complete English passage. Replace with the full passage.','পানী','এইটো সম্পূৰ্ণ অসমীয়া passage। ইয়াত সম্পূৰ্ণ পাঠটো লিখক।']
+    ];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(q),'Questions');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(p),'Passages');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
+      ['Mock Test Bilingual Bulk Upload Instructions'],
+      ['One Excel file can contain both English and Assamese questions. Fill both language columns in the same row.'],
+      ['Subject Name and Lesson Code must match the existing JNVST Subject / Lesson hierarchy.'],
+      ['Lesson Code, Topic, Variation Group, Fixed Question, Question Type, Marks, Cognitive Level and Difficulty are stored with every Mock Test question.'],
+      ['For EVS_PASSAGE and LANGUAGE_PASSAGE, use one Local Passage No. on exactly 5 question rows and Question Order 1–5.'],
+      ['The Passages sheet should contain the matching English and Assamese passage title/text.'],
+      ['A bilingual passage creates two language versions, but each language version remains one complete 5-question passage entity.'],
+      ['For MAT, English/Assamese content is stored as one COMMON question.'],
+      ['Legacy single-language Question/A/B/C/D columns are still accepted; choose the fallback language on the upload screen.']
+    ]),'Instructions');
+    XLSX.writeFile(wb,'Mock_Test_Bilingual_Question_Bank_Template.xlsx');
+  };
+
+  window.mockBulkUpload=function(){
+    mockBankRows=[];mockPdfRows=[];mockAnswerKey={};mockPdfMeta={};
+    render(`<div class="wrap">${header('Bulk Upload Mock Test Questions')}<div class="card">
+      <div class="notice"><b>New bilingual upload:</b> One Excel file can contain <b>English + Assamese</b> questions at the same time, just like the JNVST Question Bank. For EVS and Language passages, the passage + exactly 5 questions is treated as <b>one complete entity</b>.</div>
+      <div class="grid">
+       <div class="card" style="border:2px solid #2563eb"><span class="tag">BILINGUAL EXCEL</span><h3>EVS, Language & Arithmetic</h3><p class="small muted">Use the Questions + Passages sheets. Fill English and Assamese columns in the same row. The system automatically creates linked language versions.</p><label>Legacy single-language fallback</label><select id="mockUploadFallbackLanguage"><option value="ASSAMESE">Assamese</option><option value="ENGLISH">English</option></select><div class="small muted">This is used only when an old file contains generic Question/A/B/C/D columns.</div><label>Question-bank Excel</label><input type="file" id="mockExcelFile" accept=".xlsx,.xls" onchange="readMockQuestionExcel(event)"><div id="mockExcelPreview"></div></div>
+       <div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + KEY</span><h3>MAT & Image-based Arithmetic</h3><p class="small muted">PDF upload remains available for image questions. MAT metadata supports Topic, Marks, Cognitive Level and Difficulty.</p><label>Question Language</label><select id="mockPdfLanguage"><option value="COMMON">Common (MAT)</option><option value="ASSAMESE">Assamese (Arithmetic)</option><option value="ENGLISH">English (Arithmetic)</option></select><label>PDF Part</label><select id="mockPdfPart" onchange="mockPdfPartChanged()">${MOCK_PLAN.filter(x=>x.upload==='pdf'||x.upload==='excel_or_pdf').map(x=>`<option value="${x.part}">${esc(x.label)} — ${x.count} per set</option>`).join('')}</select><div class="grid"><div><label>JNVST Subject</label><select id="mockJnvstPdfSubject" onchange="mockJnvstPdfSubjectChanged()"><option value="">Select Subject</option></select></div><div><label>Lesson / Sub-lesson</label><select id="mockJnvstPdfLesson"><option value="">Select Subject First</option></select></div></div><label>Questions PDF</label><input id="mockPdfFile" type="file" accept=".pdf" onchange="readMockQuestionPdf(event)"><label>MAT Answer & Metadata Excel</label><input id="mockAnswerFile" type="file" accept=".xlsx,.xls" onchange="readMockAnswerExcel(event)"><div id="mockPdfPreview"></div></div>
+      </div>
+      <div class="card" style="background:#f8fafc"><h3>Templates</h3><div class="actions"><button class="secondary" onclick="downloadMockExcelTemplate()">⬇ Bilingual Excel Template</button><button class="secondary" onclick="downloadMockAnswerTemplate()">⬇ MAT Metadata Template</button></div></div>
+      <div class="notice small"><b>EVS passage rule:</b> Every passage group must contain exactly 5 questions, ordered 1–5. English and Assamese versions are validated independently, so one bilingual passage still produces one complete English entity and one complete Assamese entity.</div>
+      <div class="actions"><button onclick="saveMockBulkUploads()">✓ Validate & Save</button><button class="secondary" onclick="mockTestManagement()">← Back</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div>
+    </div></div>`);
+    loadMockJnvstPdfSubjectOptions();
+  };
+
+  window.readMockAnswerExcel=function(ev){
+    const file=ev.target.files?.[0];if(!file)return;
+    const r=new FileReader();r.onload=e=>{try{
+      const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames.find(n=>String(n).toLowerCase().includes('metadata'))||wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!rows.length)throw new Error('MAT Metadata Excel contains no data rows.');
+      const get=(row,names)=>cell(row,names);const partOf=v=>partNorm(v);mockPdfMeta={};mockAnswerKey={};const errors=[],seen=new Set();
+      rows.forEach((row,i)=>{const rowNo=i+2,page=Number(get(row,['Question No','Question Number','Page No','Page Number','No','Number'])),correct=get(row,['Correct Option','Correct Answer','Answer']).toUpperCase(),part=partOf(get(row,['Part','Part Code','MAT Part'])),topic=get(row,['Topic','Lesson / Topic','Lesson Topic']),marks=Number(get(row,['Marks','Mark'])),cognitive=get(row,['Cognitive Level','Cognitive_Level']),difficulty=get(row,['Difficulty']),explanation=cleanMath(get(row,['Explanation','Answer / Explanation'])),variationGroup=get(row,['Variation Group','Fixed Question Group']),fixed=get(row,['Fixed Question','Fixed','Is Fixed']),questionType=get(row,['Question Type','Type'])||'MCQ';if(!Number.isInteger(page)||page<1)errors.push(`Row ${rowNo}: Question No must be a positive integer.`);else if(seen.has(page))errors.push(`Row ${rowNo}: duplicate Question No ${page}.`);else seen.add(page);if(!['A','B','C','D'].includes(correct))errors.push(`Row ${rowNo}: Correct Option must be A, B, C or D.`);if(!['MAT_PATTERN','MAT_SERIES','MAT_GEOMETRICAL','MAT_MIRROR','MAT_EMBEDDED'].includes(part))errors.push(`Row ${rowNo}: invalid MAT Part '${part}'.`);if(!topic)errors.push(`Row ${rowNo}: Topic is required.`);if(!Number.isFinite(marks)||marks<=0)errors.push(`Row ${rowNo}: Marks must be a positive number.`);if(cognitive&&!['Knowledge','Understanding','Application','HOTS'].includes(cognitive))errors.push(`Row ${rowNo}: invalid Cognitive Level.`);if(difficulty&&!['Easy','Medium','Hard'].includes(difficulty))errors.push(`Row ${rowNo}: invalid Difficulty.`);if(!['MCQ','Short','Long'].includes(questionType))errors.push(`Row ${rowNo}: invalid Question Type.`);if(Number.isInteger(page)&&page>0){mockPdfMeta[page]={page,part,topic,marks,cognitiveLevel:cognitive||null,difficulty:difficulty||null,explanation:explanation||null,correctAnswer:correct,variationGroup:variationGroup||null,isFixed:boolVal(fixed),questionType};mockAnswerKey[page]=correct;}});
+      if(errors.length)throw new Error(errors.slice(0,20).join(' | '));
+      document.getElementById('mockPdfPreview').innerHTML=message(`Loaded ${Object.keys(mockPdfMeta).length} MAT metadata row(s). Topic, Lesson metadata, marks, cognitive level, difficulty, variation and fixed status will be stored.`,true);
+    }catch(err){mockPdfMeta={};mockAnswerKey={};document.getElementById('mockPdfPreview').innerHTML=message('Could not read MAT Metadata Excel: '+err.message)}};r.readAsArrayBuffer(file);
+  };
+
+  window.downloadMockAnswerTemplate=function(){const ws=XLSX.utils.aoa_to_sheet([['Question No','Correct Option','Part','Topic','Marks','Cognitive Level','Difficulty','Variation Group','Fixed Question','Question Type','Explanation'],[1,'A','MAT_PATTERN','Pattern Completion',1,'Knowledge','Easy','VG-001','NO','MCQ','']]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'MAT Metadata');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['MAT PDF Metadata Instructions'],['Question No must match the PDF page number.'],['Part must be one of MAT_PATTERN, MAT_SERIES, MAT_GEOMETRICAL, MAT_MIRROR or MAT_EMBEDDED.'],['Topic, Marks and Correct Option are required.'],['Cognitive Level, Difficulty, Variation Group, Fixed Question, Question Type and Explanation are supported.'],['JNVST Subject and Lesson/Sub-lesson are selected on the upload screen.']]),'Instructions');XLSX.writeFile(wb,'Mock_Test_MAT_Metadata_Template.xlsx')};
+
+  window.saveMockBulkUploads=async function(){
+    if(!mockBankRows.length&&!mockPdfRows.length)return alert('Upload an Excel or PDF file first.');
+    try{
+      let saved=0;
+      const expanded=[];
+      const pairForSource=new Map();
+      for(const x of mockBankRows){
+        const plan=mockPlanByPart[x.part]; if(!plan)throw new Error(`Row ${x.row}: invalid Part ${x.part}.`);
+        const pair=pairForSource.get(x.row)||uuid(); pairForSource.set(x.row,pair);
+        const versions=[];
+        if(x.part.startsWith('MAT_')){
+          const v=makeLangVersion(x,'ENGLISH',x.passageVariants?.ENGLISH); if(v)versions.push(v);
+          if(!versions.length){const a=makeLangVersion(x,'ASSAMESE',x.passageVariants?.ASSAMESE);if(a)versions.push(a)}
+          versions.forEach(v=>v.language='COMMON');
+        }else{
+          const en=makeLangVersion(x,'ENGLISH',x.passageVariants?.ENGLISH); if(en)versions.push(en);
+          const as=makeLangVersion(x,'ASSAMESE',x.passageVariants?.ASSAMESE); if(as)versions.push(as);
+        }
+        if(!versions.length&&x.image_url){
+          versions.push({...x,language:x.part.startsWith('MAT_')?'COMMON':(document.getElementById('mockUploadFallbackLanguage')?.value||'ASSAMESE'),question:'',A:'',B:'',C:'',D:''});
+        }
+        versions.forEach(v=>expanded.push({...v,source_row:x.row,language_pair_id:pair}));
+      }
+      // Validate complete passage entities independently for each language.
+      for(const plan of MOCK_PLAN.filter(p=>p.unit==='passage')){
+        for(const lang of (plan.section==='MAT'?['COMMON']:['ENGLISH','ASSAMESE'])){
+          const rows=expanded.filter(x=>x.part===plan.part&&x.language===lang);
+          if(!rows.length)continue;
+          const groups=new Map();rows.forEach(x=>{const id=norm(x.passage_id);if(!id)throw new Error(`${plan.label} ${lang}: Local Passage No. is required.`);if(!groups.has(id))groups.set(id,[]);groups.get(id).push(x)});
+          for(const [pid,g] of groups){
+            if(g.length!==5)throw new Error(`${plan.label} ${lang} passage ${pid}: exactly 5 questions are required; found ${g.length}.`);
+            const ordered=[...g].sort((a,b)=>(a.question_order||0)-(b.question_order||0));
+            const orders=ordered.map(x=>x.question_order);if(new Set(orders).size!==5||orders.some(n=>n<1||n>5))throw new Error(`${plan.label} ${lang} passage ${pid}: Question Order must be 1,2,3,4,5.`);
+            const title=ordered[0].passage_title,text=ordered[0].passage;if(!title||!text)throw new Error(`${plan.label} ${lang} passage ${pid}: complete passage title and text are required.`);
+            ordered.forEach(x=>{if(norm(x.passage_title)!==norm(title)||norm(x.passage)!==norm(text))throw new Error(`${plan.label} ${lang} passage ${pid}: all five rows must use the same passage.`)});
+          }
+        }
+      }
+      // Resolve JNVST Subject + Lesson hierarchy.
+      const [{data:subjects,error:se},{data:lessons,error:le}]=await Promise.all([
+        sb.from('jnvst_subjects').select('id,name').eq('teacher_id',current.id),
+        sb.from('jnvst_subject_lessons').select('id,subject_id,lesson_code,lesson_name').eq('teacher_id',current.id)
+      ]);
+      if(se)throw se;if(le)throw le;
+      const subjectMap=new Map((subjects||[]).map(s=>[norm(s.name).toLowerCase(),s]));
+      const lessonMap=new Map((lessons||[]).map(l=>[`${l.subject_id}::${norm(l.lesson_code).toLowerCase()}`,l]));
+      const rows=[];
+      // Allocate stable set/passage IDs per part + language.
+      const expandedByPL={};expanded.forEach(x=>{const k=`${x.part}::${x.language}`;(expandedByPL[k]??=[]).push(x)});
+      for(const [pl,items] of Object.entries(expandedByPL)){
+        const [part,lang]=pl.split('::'),plan=mockPlanByPart[part];
+        const sourceGroups=plan.unit==='passage'?[...new Map(items.map(x=>[x.passage_id,x.passage_id])).values()]:[];
+        const groupCount=plan.unit==='passage'?sourceGroups.length:Math.floor(items.length/plan.count);
+        if(plan.unit==='questions'&&items.length%plan.count!==0)throw new Error(`${plan.label} ${lang}: upload quantity must be a multiple of ${plan.count}.`);
+        const ids=await mockNextIds(part,lang,groupCount,plan.unit==='passage'?'passage':'set');
+        const idMap=new Map();sourceGroups.forEach((g,i)=>idMap.set(g,ids[i]));
+        const sorted=[...items].sort((a,b)=>plan.unit==='passage'?(String(a.passage_id).localeCompare(String(b.passage_id))||(a.question_order-b.question_order)):((a.source_row-b.source_row)||(a.question_order-b.question_order)));
+        sorted.forEach((x,i)=>{
+          const subj=subjectMap.get(norm(x.subject).toLowerCase());
+          if(!subj)throw new Error(`Row ${x.source_row}: Subject '${x.subject}' not found in JNVST Subjects.`);
+          const lesson=lessonMap.get(`${subj.id}::${norm(x.lessonCode).toLowerCase()}`);
+          if(!lesson)throw new Error(`Row ${x.source_row}: Lesson Code '${x.lessonCode}' not found under '${x.subject}'.`);
+          const setId=plan.unit==='passage'?idMap.get(x.passage_id):ids[Math.floor(i/plan.count)];
+          rows.push({
+            teacher_id:current.id,section_code:plan.section,part_code:part,language:lang,set_id:setId,
+            subject_id:subj.id,lesson_id:lesson.id,lesson_code:x.lessonCode,topic:x.topic||plan.label,
+            variation_group:x.variationGroup||null,is_fixed:boolVal(x.fixed),question_type:x.questionType||'MCQ',marks:Number(x.marks)||1,
+            cognitive_level:x.cognitive||'Knowledge',difficulty:x.difficulty||'Medium',explanation:x.explanation||null,
+            question_text:x.question||null,option_a:x.A||null,option_b:x.B||null,option_c:x.C||null,option_d:x.D||null,correct_option:x.answer||'A',
+            passage_text:plan.unit==='passage'?(x.passage||null):null,passage_id:plan.unit==='passage'?setId:null,passage_title:plan.unit==='passage'?(x.passage_title||null):null,
+            image_url:x.image_url||null,source_type:'JNVST_BILINGUAL_BULK',source_question_no:x.source_row,question_order:plan.unit==='passage'?x.question_order:((i%plan.count)+1),language_pair_id:x.language_pair_id,active:true
+          });
+        });
+      }
+      if(rows.length){
+        const {data:old,error:oe}=await sb.from('mock_question_bank').select('subject_id,lesson_id,language,question_text,option_a,option_b,option_c,option_d').eq('teacher_id',current.id).eq('active',true);if(oe)throw oe;
+        const seen=new Set((old||[]).map(q=>[q.subject_id,q.lesson_id,q.language,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d].map(v=>String(v??'').trim().toLowerCase()).join('¦')));
+        const fresh=[];for(const r of rows){const k=[r.subject_id,r.lesson_id,r.language,r.question_text,r.option_a,r.option_b,r.option_c,r.option_d].map(v=>String(v??'').trim().toLowerCase()).join('¦');if(seen.has(k))throw new Error(`Duplicate question found for ${r.language}: ${r.question_text||'[image question]'}. Upload rejected so no incomplete passage/set is created.`);seen.add(k);fresh.push(r)}
+        const {error:ie}=await sb.from('mock_question_bank').insert(fresh);if(ie)throw ie;saved+=fresh.length;
+      }
+      if(mockPdfRows.length){
+        const selectedPart=partNorm(document.getElementById('mockPdfPart')?.value),plan=mockPlanByPart[selectedPart];
+        if(!plan||!['pdf','excel_or_pdf'].includes(plan.upload))throw new Error('PDF upload is available only for MAT and Arithmetic.');
+        if(plan.section==='MAT'){
+          if(!Object.keys(mockPdfMeta).length)throw new Error('Upload the MAT Answer & Metadata Excel first.');
+          const subjectId=document.getElementById('mockJnvstPdfSubject')?.value||'',lessonId=document.getElementById('mockJnvstPdfLesson')?.value||'';
+          if(!subjectId||!lessonId)throw new Error('Select the JNVST Subject and Lesson/Sub-lesson for MAT PDF questions.');
+          const lesson=(jnvstSubjectLessons||[]).find(l=>l.id===lessonId);
+          const missing=mockPdfRows.map(x=>x.page).filter(n=>!mockPdfMeta[n]);if(missing.length)throw new Error('Missing metadata for PDF page(s): '+missing.join(', '));
+          const byPart={};mockPdfRows.forEach(x=>{const m=mockPdfMeta[x.page];(byPart[m.part]??=[]).push(x)});
+          for(const [matPart,pages] of Object.entries(byPart)){const mp=mockPlanByPart[matPart];if(!mp||mp.section!=='MAT')throw new Error(`Invalid MAT Part in metadata: ${matPart}`);if(pages.length%4!==0)throw new Error(`${mp.label}: PDF questions must be a multiple of 4.`);const ids=await mockNextIds(matPart,'COMMON',pages.length/4,'set');for(let i=0;i<pages.length;i++){const x=pages[i],m=mockPdfMeta[x.page],path=`${current.id}/${uuid()}.jpg`,url=await uploadMockImage(x.image_data,path);const {error}=await sb.from('mock_question_bank').insert({teacher_id:current.id,section_code:'MAT',part_code:matPart,language:'COMMON',set_id:ids[Math.floor(i/4)],question_order:(i%4)+1,correct_option:m.correctAnswer,question_text:null,option_a:null,option_b:null,option_c:null,option_d:null,image_url:url,source_type:'pdf',source_question_no:x.page,subject_id:subjectId,lesson_id:lessonId,lesson_code:lesson?.lesson_code||null,topic:m.topic,variation_group:m.variationGroup,is_fixed:m.isFixed,question_type:m.questionType,marks:m.marks,cognitive_level:m.cognitiveLevel,difficulty:m.difficulty,explanation:m.explanation,active:true});if(error)throw error;saved++;}}
+        }else{
+          if(mockPdfRows.length%plan.count!==0)throw new Error(`${plan.label}: PDF has ${mockPdfRows.length} pages; required multiple is ${plan.count}.`);
+          const missing=mockPdfRows.map(x=>x.page).filter(n=>!mockAnswerKey[n]);if(missing.length)throw new Error('Missing answer key for PDF page(s): '+missing.join(', '));
+          const lang=document.getElementById('mockPdfLanguage')?.value||'ASSAMESE';const ids=await mockNextIds(selectedPart,lang,mockPdfRows.length/plan.count,'set');
+          const subjectId=document.getElementById('mockJnvstPdfSubject')?.value||'',lessonId=document.getElementById('mockJnvstPdfLesson')?.value||'',lesson=(jnvstSubjectLessons||[]).find(l=>l.id===lessonId);
+          for(let i=0;i<mockPdfRows.length;i++){const x=mockPdfRows[i],m=mockPdfMeta[x.page]||{},path=`${current.id}/${uuid()}.jpg`,url=await uploadMockImage(x.image_data,path);const {error}=await sb.from('mock_question_bank').insert({teacher_id:current.id,section_code:plan.section,part_code:selectedPart,language:lang,set_id:ids[Math.floor(i/plan.count)],question_order:(i%plan.count)+1,correct_option:mockAnswerKey[x.page],question_text:null,option_a:null,option_b:null,option_c:null,option_d:null,image_url:url,source_type:'pdf',source_question_no:x.page,subject_id:subjectId||null,lesson_id:lessonId||null,lesson_code:lesson?.lesson_code||null,topic:m.topic||plan.label,variation_group:m.variationGroup||null,is_fixed:!!m.isFixed,question_type:m.questionType||'MCQ',marks:m.marks||1,cognitive_level:m.cognitiveLevel||null,difficulty:m.difficulty||null,explanation:m.explanation||null,active:true});if(error)throw error;saved++;}
+        }
+      }
+      alert(`Upload complete. Added ${saved} question(s). English and Assamese versions were linked with Language Pair IDs; EVS/Language passages remain complete 5-question entities.`);mockTestManagement();
+    }catch(e){alert('Upload validation failed: '+(e.message||e))}
+  };
+
+  function optionHtml(q,label){const v=q?.['option_'+label.toLowerCase()];return v?`<div style="margin:4px 0"><b>(${label})</b> ${jnvstMathPreview(v)}</div>`:''}
+  function fullQuestionHtml(q,n){
+    const image=q?.image_url?`<img src="${esc(q.image_url)}" alt="Question image" loading="lazy" onclick="openMockQuestionImage('${esc(q.image_url)}','Question ${n||''} image')" style="max-width:220px;max-height:150px;object-fit:contain;border:1px solid #cbd5e1;border-radius:8px;padding:3px;background:#fff;cursor:zoom-in;margin:4px 0">`:'';
+    const text=q?.question_text&&q.question_text!=='[IMAGE QUESTION]'?jnvstMathPreview(q.question_text):'';
+    return `<div class="mock-full-question" style="margin:8px 0;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff"><div><b>Question ${n||''}</b></div>${image}${text?`<div style="margin:5px 0;line-height:1.5">${text}</div>`:''}<div style="margin-top:5px">${optionHtml(q,'A')}${optionHtml(q,'B')}${optionHtml(q,'C')}${optionHtml(q,'D')}</div></div>`;
+  }
+  function passageGroupHtml(group,actions=''){
+    const first=group.questions?.[0]||{};
+    return `<div class="mock-passage-group" style="border:2px solid #c7d2fe;border-radius:14px;padding:14px;margin:12px 0;background:#f8fafc"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><span class="tag">COMPLETE PASSAGE ENTITY</span><h3 style="margin:8px 0 4px">${esc(group.title||first.passage_title||'Passage')}</h3><div class="small muted">${esc(group.id||first.passage_id||'')} · ${group.questions.length} linked questions · ${esc(mockBankDisplayLanguage(first.language))}</div></div>${actions}</div><div style="margin:10px 0;padding:12px;border-radius:10px;background:#fff;border:1px solid #cbd5e1"><b>PASSAGE</b><div style="margin-top:7px;line-height:1.55">${jnvstMathPreview(group.text||first.passage_text||'')}</div></div>${group.questions.map((q,i)=>fullQuestionHtml(q,i+1)).join('')}</div>`;
+  }
+  function getPassageGroups(rows){const m=new Map();rows.filter(q=>q.passage_id).forEach(q=>{const id=String(q.passage_id);if(!m.has(id))m.set(id,[]);m.get(id).push(q)});return [...m.entries()].map(([id,qs])=>({id,questions:qs.sort(mockSortQuestions),title:qs[0]?.passage_title||`Passage ${id}`,text:qs.find(q=>q.passage_text)?.passage_text||''}));}
+
+  window.renderMockBankManager=function(){
+    const data=mockBankCache||[],rows=mockBankFilteredRows(),medium=mockBankMediumKey(mockBankFilters.medium),opts=mockBankDynamicOptions();
+    const passageRows=rows.filter(q=>q.passage_id&&['EVS_PASSAGE','LANGUAGE_PASSAGE'].includes(String(q.part_code||'').toUpperCase()));
+    const normalRows=rows.filter(q=>!q.passage_id||!['EVS_PASSAGE','LANGUAGE_PASSAGE'].includes(String(q.part_code||'').toUpperCase()));
+    const matchingPassageIds=new Set(passageRows.map(q=>String(q.passage_id)));
+    const passageRowsComplete=data.filter(q=>q.passage_id&&matchingPassageIds.has(String(q.passage_id))&&['EVS_PASSAGE','LANGUAGE_PASSAGE'].includes(String(q.part_code||'').toUpperCase()));
+    const groups=getPassageGroups(passageRowsComplete).filter(g=>g.questions.length===5);
+    const sel=(id,value,options,placeholder,onchange='')=>`<select id="${id}" ${onchange?`onchange="${onchange}"`:''}><option value="">${placeholder}</option>${options.map(v=>{const val=typeof v==='string'?v:v.value,label=typeof v==='string'?v:v.label;return `<option value="${esc(val)}" ${String(value)===String(val)?'selected':''}>${esc(label)}</option>`}).join('')}</select>`;
+    const filters=`<div class="card"><div class="notice small"><b>Passage rule:</b> EVS passage + its 5 questions is displayed and managed as one entity. The passage is always shown first, followed by all five questions and their options.</div><div class="grid" style="margin-top:12px"><div><label>Medium</label><select id="mbfMedium" onchange="mockBankMediumChanged(this.value)"><option value="">Select Medium</option><option value="COMMON" ${medium==='COMMON'?'selected':''}>Common (MAT)</option><option value="ENGLISH" ${medium==='ENGLISH'?'selected':''}>English</option><option value="ASSAMESE" ${medium==='ASSAMESE'?'selected':''}>Assamese</option></select></div><div><label>Part</label>${sel('mbfPart',mockBankFilters.part,opts.parts,'Select Part','mockBankPartChanged(this.value)')}</div><div style="${medium==='COMMON'?'display:none':'display:block'}"><label>Topic</label>${sel('mbfTopic',mockBankFilters.topic,opts.topics,'All Topics')}</div><div style="${medium==='COMMON'?'display:none':'display:block'}"><label>Passage</label>${sel('mbfPassage',mockBankFilters.passage,opts.passages,'All Passages')}</div><div><label>Status</label><select id="mbfStatus"><option value="active" ${mockBankFilters.status==='active'?'selected':''}>Active Only</option><option value="" ${!mockBankFilters.status?'selected':''}>All Questions</option><option value="inactive" ${mockBankFilters.status==='inactive'?'selected':''}>Inactive Only</option></select></div><div><label>Search</label><input id="mbfSearch" value="${esc(mockBankFilters.search)}" placeholder="Question, option, topic, passage..."></div></div><div class="actions"><button onclick="applyMockBankFilters()">🔎 Apply Filters</button><button class="secondary" onclick="resetMockBankFilters()">↺ Reset</button><span class="small muted">Showing <b>${rows.length}</b> bank row(s)</span></div></div>`;
+    const normalHtml=normalRows.map((q,i)=>`<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><span class="tag">${esc(mockBankDisplayLanguage(q.language))}</span> <b>${esc(mockPartLabel(q.part_code))}</b><div class="small muted">Lesson: ${esc(q.lesson_code||'—')} · Topic: ${esc(q.topic||'—')} · Variation: ${esc(q.variation_group||'—')} · Fixed: ${q.is_fixed?'Yes':'No'} · ${esc(q.question_type||'MCQ')} · ${q.marks??1} mark(s) · ${esc(q.cognitive_level||'—')} · ${esc(q.difficulty||'—')}</div></div><div class="actions"><button onclick="editMockQuestion('${q.id}')">Edit</button><button class="secondary" onclick="toggleMockQuestion('${q.id}',${q.active===false?'true':'false'})">${q.active===false?'Activate':'Deactivate'}</button><button class="danger" onclick="deleteMockQuestion('${q.id}')">Delete</button></div></div>${fullQuestionHtml(q,i+1)}</div>`).join('');
+    const passageHtml=groups.map(g=>passageGroupHtml(g,`<div class="actions"><button onclick="editMockPassageGroup('${g.id}','${g.questions[0].part_code}')">✎ Edit Passage</button><button class="secondary" onclick="toggleMockQuestion('${g.questions[0].id}',${g.questions.every(q=>q.active===false)?'true':'false'})">${g.questions.every(q=>q.active===false)?'Activate Group':'Deactivate Group'}</button><button class="danger" onclick="deleteMockQuestion('${g.questions[0].id}')">Delete Group</button></div>`)).join('');
+    render(`<div class="wrap">${header('Manage Mock Question Bank')}${filters}<div class="card"><h2>Complete Passage Entities</h2>${passageHtml||'<div class="muted">No complete passage groups match the selected filters.</div>'}</div><div class="card"><h2>Individual Questions</h2>${normalHtml||'<div class="muted">No individual questions match the selected filters.</div>'}</div><div class="card" style="background:#f8fafc"><h3>Availability & Set Validation</h3>${MOCK_PLAN.map(x=>{const c=data.filter(q=>q.active!==false&&q.part_code===x.part).length;const complete=x.unit==='passage'?getPassageGroups(data.filter(q=>q.active!==false&&q.part_code===x.part)).filter(g=>g.questions.length===(x.passageCount||x.count)).length:Math.floor(c/x.count);const remainder=x.unit==='passage'?c-(complete*(x.passageCount||x.count)):c%x.count;return `<div class="small" style="padding:6px 0"><b>${esc(x.label)}</b>: ${c} active · ${complete} complete set(s)${remainder?' · '+remainder+' question(s) outside complete sets':' · ready'}</div>`}).join('')}</div><div class="actions"><button onclick="mockBulkUpload()">Bulk Upload</button><button onclick="generateMockTestPage()">Generate Test</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>`);
+    if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+  };
+
+  window.editMockPassageGroup=async function(pid,part){
+    const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('part_code',part).eq('passage_id',pid).order('question_order');if(error)return alert(error.message);if(!data?.length)return alert('Passage group not found.');
+    const first=data[0];render(`<div class="wrap">${header('Edit Complete Passage Entity')}<div class="card"><div class="notice"><b>This passage is one entity containing 5 questions.</b> Saving here updates the passage title/text for all five linked questions.</div><label>Passage Title</label><input id="mpgTitle" value="${esc(first.passage_title||'')}"><label>Passage Text</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('mpgText')">∑ Equation Editor</button></div><textarea id="mpgText" rows="10" oninput="jnvstRefreshMathPreview('mpgPreview',this.value)">${esc(first.passage_text||'')}</textarea><div id="mpgPreview" class="eq-preview">${jnvstMathPreview(first.passage_text||'')}</div><h3 style="margin-top:18px">Linked Questions</h3>${data.map((q,i)=>fullQuestionHtml(q,i+1)).join('')}<div class="actions"><button onclick="saveMockPassageGroup('${pid}','${part}')">💾 Save Passage</button><button class="secondary" onclick="mockBankSummary()">Cancel</button></div></div></div>`);if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+  };
+  window.saveMockPassageGroup=async function(pid,part){const title=norm(document.getElementById('mpgTitle')?.value),text=norm(document.getElementById('mpgText')?.value);if(!title||!text)return alert('Passage title and passage text are required.');const {error}=await sb.from('mock_question_bank').update({passage_title:title,passage_text:text}).eq('teacher_id',current.id).eq('part_code',part).eq('passage_id',pid);if(error)return alert(error.message);alert('Passage and all five linked questions updated.');mockBankSummary();};
+
+  window.editMockQuestion=async function(id){
+    const {data:q,error}=await sb.from('mock_question_bank').select('*').eq('id',id).eq('teacher_id',current.id).single();if(error)return alert(error.message);
+    const subjectOptions=jnvstQbSubjectOptions?jnvstQbSubjectOptions(q.subject_id||''):'<option value="">Select Subject</option>';
+    const lessons=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===q.subject_id);
+    render(`<div class="wrap">${header('Edit Mock Question')}<div class="card"><div class="notice"><b>School-type Question Editor:</b> Use the same Equation Editor style as Edit JNVST Question. For passage questions, the linked passage remains available below.</div><div class="grid"><div><label>Part / Question Bank</label><select id="emqPart">${MOCK_PLAN.map(x=>`<option value="${x.part}" ${x.part===q.part_code?'selected':''}>${esc(x.label)}</option>`).join('')}</select></div><div><label>Medium</label><select id="emqLanguage"><option value="COMMON" ${q.language==='COMMON'?'selected':''}>Common (MAT)</option><option value="ENGLISH" ${q.language==='ENGLISH'?'selected':''}>English</option><option value="ASSAMESE" ${q.language==='ASSAMESE'?'selected':''}>Assamese</option></select></div><div><label>Subject</label><select id="emqSubject">${subjectOptions}</select></div><div><label>Lesson Code</label><select id="emqLesson">${lessons.map(l=>`<option value="${esc(l.id)}" ${l.id===q.lesson_id?'selected':''}>${esc(l.lesson_code||'')} — ${esc(l.lesson_name||'')}</option>`).join('')}</select></div><div><label>Topic</label><input id="emqTopic" value="${esc(q.topic||'')}" placeholder="Topic"></div><div><label>Variation Group</label><input id="emqVariation" value="${esc(q.variation_group||'')}" placeholder="VG-001"></div><div><label>Fixed Question</label><select id="emqFixed"><option value="false" ${!q.is_fixed?'selected':''}>No</option><option value="true" ${q.is_fixed?'selected':''}>Yes</option></select></div><div><label>Question Type</label><select id="emqType"><option value="MCQ" ${q.question_type==='MCQ'?'selected':''}>MCQ</option><option value="Short" ${q.question_type==='Short'?'selected':''}>Short</option><option value="Long" ${q.question_type==='Long'?'selected':''}>Long</option></select></div><div><label>Marks</label><input id="emqMarks" type="number" min="0" step="0.25" value="${Number(q.marks??1)}"></div><div><label>Cognitive Level</label><select id="emqCognitive"><option ${q.cognitive_level==='Knowledge'?'selected':''}>Knowledge</option><option ${q.cognitive_level==='Understanding'?'selected':''}>Understanding</option><option ${q.cognitive_level==='Application'?'selected':''}>Application</option><option ${q.cognitive_level==='HOTS'?'selected':''}>HOTS</option></select></div><div><label>Difficulty</label><select id="emqDifficulty"><option ${q.difficulty==='Easy'?'selected':''}>Easy</option><option ${q.difficulty==='Medium'?'selected':''}>Medium</option><option ${q.difficulty==='Hard'?'selected':''}>Hard</option></select></div></div><div class="jnvst-editor-section"><h3>1. Question Content</h3><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('emqQuestion')">∑ Equation Editor</button></div><textarea id="emqQuestion" rows="7" oninput="jnvstRefreshMathPreview('emqQuestionPreview',this.value)">${esc(q.question_text&&q.question_text!=='[IMAGE QUESTION]'?q.question_text:'')}</textarea><div id="emqQuestionPreview" class="eq-preview">${jnvstMathPreview(q.question_text||'')}</div><label>Question Image</label><input id="emqImage" type="file" accept="image/*" onchange="mockPreviewEditImage(this)"><div id="emqImagePreview" style="margin-top:8px">${q.image_url?`<img class="jnvst-editor-image" src="${esc(q.image_url)}" alt="Question image">`: '<div class="small muted">No question image attached.</div>'}</div>${q.image_url?'<label><input id="emqRemoveImage" type="checkbox" style="width:auto"> Remove current image</label>':''}</div><div class="jnvst-editor-section"><h3>2. Options & Correct Answer</h3><div class="grid">${['A','B','C','D'].map(o=>`<div><label>Option ${o}</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('emq${o}')">∑ Equation Editor</button></div><textarea id="emq${o}" rows="3" oninput="jnvstRefreshMathPreview('emq${o}Preview',this.value)">${esc(q['option_'+o.toLowerCase()]||'')}</textarea><div id="emq${o}Preview" class="eq-preview">${jnvstMathPreview(q['option_'+o.toLowerCase()]||'')}</div></div>`).join('')}</div><label>Correct Answer</label><select id="emqAnswer"><option value="A" ${q.correct_option==='A'?'selected':''}>A</option><option value="B" ${q.correct_option==='B'?'selected':''}>B</option><option value="C" ${q.correct_option==='C'?'selected':''}>C</option><option value="D" ${q.correct_option==='D'?'selected':''}>D</option></select></div><div class="jnvst-editor-section"><h3>3. Passage</h3><label>Passage Title</label><input id="emqPassageTitle" value="${esc(q.passage_title||'')}"><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('emqPassage')">∑ Equation Editor</button></div><textarea id="emqPassage" rows="8" oninput="jnvstRefreshMathPreview('emqPassagePreview',this.value)">${esc(q.passage_text||'')}</textarea><div id="emqPassagePreview" class="eq-preview">${jnvstMathPreview(q.passage_text||'')}</div></div><div class="actions"><button onclick="saveMockQuestionEdit('${q.id}')">💾 Save Changes</button><button class="secondary" onclick="mockBankSummary()">Cancel</button></div></div></div>`);
+    if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+  };
+
+  window.saveMockQuestionEdit=async function(id){
+    try{
+      const {data:q,error:qe}=await sb.from('mock_question_bank').select('*').eq('id',id).eq('teacher_id',current.id).single();if(qe)throw qe;
+      let imageUrl=q.image_url||null;const file=document.getElementById('emqImage')?.files?.[0];if(file)imageUrl=await uploadMockFile(file,`${current.id}/edited-${uuid()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);else if(document.getElementById('emqRemoveImage')?.checked)imageUrl=null;
+      const lessonId=document.getElementById('emqLesson')?.value||null;const lesson=(jnvstSubjectLessons||[]).find(l=>l.id===lessonId);const payload={section_code:mockPlanByPart[document.getElementById('emqPart').value].section,part_code:document.getElementById('emqPart').value,language:document.getElementById('emqLanguage').value,subject_id:document.getElementById('emqSubject').value||null,lesson_id:lessonId,lesson_code:lesson?.lesson_code||null,topic:norm(document.getElementById('emqTopic').value),variation_group:norm(document.getElementById('emqVariation').value)||null,is_fixed:document.getElementById('emqFixed').value==='true',question_type:document.getElementById('emqType').value,marks:Number(document.getElementById('emqMarks').value)||1,cognitive_level:document.getElementById('emqCognitive').value,difficulty:document.getElementById('emqDifficulty').value,question_text:norm(document.getElementById('emqQuestion').value)||null,option_a:norm(document.getElementById('emqA')?.value)||null,option_b:norm(document.getElementById('emqB')?.value)||null,option_c:norm(document.getElementById('emqC')?.value)||null,option_d:norm(document.getElementById('emqD')?.value)||null,correct_option:document.getElementById('emqAnswer').value,passage_title:norm(document.getElementById('emqPassageTitle').value)||null,passage_text:norm(document.getElementById('emqPassage').value)||null,image_url:imageUrl};
+      const {error}=await sb.from('mock_question_bank').update(payload).eq('id',id).eq('teacher_id',current.id);if(error)throw error;alert('Question updated successfully.');mockBankSummary();
+    }catch(e){alert('Could not update question: '+(e.message||e))}
+  };
+
+  window.toggleMockQuestion=async function(id,active){
+    const {data:q,error:qe}=await sb.from('mock_question_bank').select('id,part_code,passage_id').eq('id',id).eq('teacher_id',current.id).single();if(qe)return alert(qe.message);
+    if(q.passage_id){const {error}=await sb.from('mock_question_bank').update({active}).eq('teacher_id',current.id).eq('part_code',q.part_code).eq('passage_id',q.passage_id);if(error)return alert(error.message);return mockBankSummary();}
+    const {error}=await sb.from('mock_question_bank').update({active}).eq('id',id).eq('teacher_id',current.id);if(error)return alert(error.message);mockBankSummary();
+  };
+  window.deleteMockQuestion=async function(id){
+    const {data:q,error:qe}=await sb.from('mock_question_bank').select('id,part_code,passage_id').eq('id',id).eq('teacher_id',current.id).single();if(qe)return alert(qe.message);
+    if(q.passage_id){if(!confirm('This is part of a complete 5-question passage entity. Delete the entire passage and all 5 linked questions?'))return;const {error}=await sb.from('mock_question_bank').delete().eq('teacher_id',current.id).eq('part_code',q.part_code).eq('passage_id',q.passage_id);if(error)return alert(error.message);}else{if(!confirm('Delete this question from your question bank?'))return;const {error}=await sb.from('mock_question_bank').delete().eq('id',id).eq('teacher_id',current.id);if(error)return alert(error.message);}mockBankSummary();
+  };
+
+  // In the EVS/Language paper generator, show the complete passage before its five questions.
+  window.qpRefreshEVSPools=function(){
+    const search=qpNorm(document.getElementById('qpQuestionSearch')?.value).toLowerCase();
+    const mcqs=qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&String(q.section_code||'').toUpperCase()==='EVS').filter(q=>!search||[q.question_text,q.topic,q.part_code].some(v=>qpNorm(v).toLowerCase().includes(search)));
+    const ql=document.getElementById('qpEvsQuestionList');if(ql)ql.innerHTML=mcqs.length?mcqs.slice(0,400).map(q=>`<label class="assignment" style="display:flex;gap:8px;align-items:flex-start;margin:5px 0;padding:7px"><input type="checkbox" style="width:auto;margin-top:4px" ${qpState.selected.has(q.id)?'checked':''} onchange="qpMandatoryChanged('${q.id}',this.checked)"><span style="flex:1">${fullQuestionHtml(q,'')}<span class="muted small">Topic: ${esc(q.topic||'EVS')} · ${esc(q.lesson_code||'')}</span></span></label>`).join(''):'<div class="muted">No EVS MCQs found.</div>';
+    const pp=document.getElementById('qpPassageList');if(pp){const groups=qpPassageGroups(qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase()==='EVS_PASSAGE')).filter(g=>g.questions.length===5).filter(g=>!search||[g.id,g.title,g.text,...g.questions.map(q=>q.question_text)].some(v=>qpNorm(v).toLowerCase().includes(search)));pp.innerHTML=groups.length?groups.map(g=>`<div>${passageGroupHtml(g,`<label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" ${g.questions.some(q=>qpState.selected.has(q.id))?'checked':''} onchange="qpToggleMandatoryPassage('${g.id}',this.checked)"> <b>Use this complete passage entity</b></label>`)}</div>`).join(''):'<div class="muted">No complete EVS passage sets found.</div>';}
+    if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+  };
+  window.qpRenderPassages=function(){const wrap=document.getElementById('qpPassageList');if(!wrap)return;const part=document.getElementById('qpPassagePart')?.value||'ALL';const groups=qpPassageGroups(qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&(part==='ALL'||q.part_code===part))).filter(g=>g.questions.length===5);const search=qpNorm(document.getElementById('qpPassageSearch')?.value).toLowerCase();const rows=groups.filter(g=>!search||[g.id,g.title,g.text,...g.questions.map(q=>q.question_text)].some(v=>qpNorm(v).toLowerCase().includes(search)));wrap.innerHTML=rows.length?rows.map(g=>passageGroupHtml(g,`<label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" ${g.questions.some(q=>qpState.selected.has(q.id))?'checked':''} onchange="qpToggleMandatoryPassage('${g.id}',this.checked)"> <b>Select complete 5-question passage entity</b></label>`)).join(''):'<div class="muted">No complete passage sets found.</div>';if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});};
+})();
+
