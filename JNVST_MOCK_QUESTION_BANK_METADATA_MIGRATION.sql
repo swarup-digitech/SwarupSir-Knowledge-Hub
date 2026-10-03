@@ -105,3 +105,11 @@ WHERE table_schema='public'
     'language_pair_id','passage_id','passage_title','passage_text','question_order'
   )
 ORDER BY ordinal_position;
+-- Passage/bilingual columns used by the unified JNVST + Mock Test passage model.
+alter table public.mock_question_bank add column if not exists passage_id text;
+alter table public.mock_question_bank add column if not exists passage_title text;
+alter table public.mock_question_bank add column if not exists passage_text text;
+alter table public.mock_question_bank add column if not exists question_order integer;
+alter table public.mock_question_bank add column if not exists language_pair_id uuid;
+
+
