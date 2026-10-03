@@ -1304,7 +1304,16 @@ function jnvstPdfOption(q,o){
 // the database text options again would duplicate the answer choices.
 function jnvstPdfQuestion(q){
   const hasImage=!!String(q?.image_url||'').trim();
-  const opts=`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
+  // MAT / image-based questions contain the question figure AND all four
+  // answer figures inside the uploaded image. Do not print database option
+  // text underneath the image, otherwise the same options appear twice.
+  const part=String(q?.part_code||'').toUpperCase();
+  const section=String(q?.section_code||'').toUpperCase();
+  const isMAT=part.startsWith('MAT_') || section==='MAT';
+  const showTextOptions=!hasImage || !isMAT;
+  const opts=showTextOptions
+    ? `<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`
+    : '';
   return `<div class="jnvst-question">
     <div class="jnvst-qrow">
       <div class="jnvst-qnum">${q.question_number}.</div>
