@@ -6350,7 +6350,7 @@ init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start<
   window.mockBuildSets=function(qs,plan){if(plan.unit==='passage'){const groups=new Map();(qs||[]).forEach(q=>{const pid=String(q.passage_id||'').trim();if(pid){if(!groups.has(pid))groups.set(pid,[]);groups.get(pid).push(q)}});return [...groups.entries()].filter(([,g])=>g.length===(plan.passageCount||plan.count)).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([pid,g],i)=>({number:i+1,label:`Passage ${pid}`,set_id:g[0].set_id||pid,questions:[...g].sort(mockSortQuestions)}))}const bySet=new Map();(qs||[]).forEach(q=>{const sid=String(q.set_id||'').trim();if(sid){if(!bySet.has(sid))bySet.set(sid,[]);bySet.get(sid).push(q)}});const explicit=[...bySet.entries()].filter(([,g])=>g.length===(plan.passageCount||plan.count)).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));if(explicit.length)return explicit.map(([sid,g],i)=>({number:i+1,label:`Set ${sid}`,set_id:sid,questions:[...g].sort(mockSortQuestions)}));const sorted=[...(qs||[])].sort(mockSortQuestions),sets=[];for(let i=0;i<sorted.length;i+=plan.count){const group=sorted.slice(i,i+plan.count);if(group.length===plan.count)sets.push({number:sets.length+1,label:`Set ${sets.length+1}`,set_id:`AUTO-${plan.part}-${sets.length+1}`,questions:group})}return sets};
 })();
 </script>
-</body></html>
+<script>
 (function(){
   // JNVST Question Bank + Mock Test Management use the same passage entity model.
   const PASSAGE_TYPES=new Set(['EVS-PASSAGE','EVS_PASSAGE','LANGUAGE-PASSAGE','LANGUAGE_PASSAGE']);
@@ -6442,3 +6442,6 @@ init().catch(e=>render(`<div class="wrap"><div class="card"><h2>Unable to start<
     },0);
   };
 })();
+
+</script>
+</body></html>
