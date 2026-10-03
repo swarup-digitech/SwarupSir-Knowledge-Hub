@@ -1051,7 +1051,12 @@ function qpBuildCommonHtml(rows){
 function qpHtmlQuestion(q,variant='default'){
   const hasImage=!!qpNorm(q.image_url);
   const questionText=(q.question_text && String(q.question_text).trim()!=='[IMAGE QUESTION]')?String(q.question_text).trim():'';
-  const opts=`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
+  // MAT questions are image-based and the uploaded MAT image already contains
+  // the question figure AND all four answer figures/options. Never append the
+  // database option text underneath a MAT image.
+  const isMat=String(q.section_code||'').toUpperCase()==='MAT' || String(q.part_code||'').toUpperCase().startsWith('MAT_') || variant==='mat';
+  const embeddedImageOptions=hasImage && isMat;
+  const opts=embeddedImageOptions?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
   const imageClass=variant==='arithmetic'?'jnvst-question-image arithmetic-question-image':'jnvst-question-image';
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
