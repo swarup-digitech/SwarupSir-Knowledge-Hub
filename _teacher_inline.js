@@ -1781,6 +1781,12 @@ function qbPaperSortQuestions(questions){
   non.sort((a,b)=>Number(a.marks||0)-Number(b.marks||0)||codeCmp(qbPaperChapterCode(a),qbPaperChapterCode(b))||String(a.id).localeCompare(String(b.id)));
   return mcq.concat(non);
 }
+function qbSameBilingualText(en,as){
+  // True when the English and Assamese texts are identical (ignoring spacing/case),
+  // e.g. numbers, expressions and formulas such as "a = 5, b = -1" or "\\frac{5}{6}".
+  const n=v=>String(v??'').replace(/\s+/g,' ').trim().toLowerCase();
+  return n(en)!==''&&n(en)===n(as);
+}
 function qbPaperMedium(lang){return lang==='BOTH'?'Both':lang==='AS'?'Assamese':'English'}
 function qbPaperText(label,lang){
   if(lang==='AS') return label.as||'';
@@ -1791,7 +1797,7 @@ function qbModelAnswerHtml(q,idx,opts,lang){
   if(String(q.question_type||'').toUpperCase()==='MCQ'){
     const o=opts.find(x=>x.question_id===q.id&&x.is_correct);
     const ans=o?.option_label||q.correct_answer||'—';
-    const answerText=o?(lang==='AS'?qbMathHtml(o.option_text_as||''):lang==='BOTH'?`${qbMathHtml(o.option_text_en||'')}${o.option_text_en&&o.option_text_as?'<br>':''}${qbMathHtml(o.option_text_as||'')}`:qbMathHtml(o.option_text_en||'')):'';
+    const answerText=o?(lang==='AS'?qbMathHtml(o.option_text_as||''):lang==='BOTH'?(qbSameBilingualText(o.option_text_en,o.option_text_as)?qbMathHtml(o.option_text_en||''):`${qbMathHtml(o.option_text_en||'')}${o.option_text_en&&o.option_text_as?'<br>':''}${qbMathHtml(o.option_text_as||'')}`):qbMathHtml(o.option_text_en||'')):'';
     return `<div class="key-q"><div class="key-num">${idx}.</div><div><b>Answer: ${qbEsc(ans)}</b>${answerText?`<div class="key-answer-text">${answerText}</div>`:''}</div><div class="key-marks">${Number(q.marks||0)}</div></div>`;
   }
   const notes=q.explanation||q.model_answers||'';
@@ -2047,7 +2053,7 @@ async function previewQuestionPaper(){
     const imageBlocks=bs.filter(b=>b.block_type==='IMAGE').map(b=>`<div class="q-image"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'') }" style="width:${Math.min(100,Number(b.image_width||70))}%"></div>`).join('');
     const blocks=(textHtml?`<div class="q-block">${textHtml}</div>`:'')+imageBlocks;
     const isMcq=String(q.question_type||'').trim().toUpperCase()==='MCQ';
-    const optionText=(o)=>p.lang==='AS'?paperTextHtml(o.option_text_as||o.option_text_en||''):p.lang==='BOTH'?bilingualHtml(o.option_text_en,o.option_text_as):paperTextHtml(o.option_text_en||o.option_text_as||'');
+    const optionText=(o)=>p.lang==='AS'?paperTextHtml(o.option_text_as||o.option_text_en||''):p.lang==='BOTH'?(qbSameBilingualText(o.option_text_en,o.option_text_as)?paperTextHtml(o.option_text_en):bilingualHtml(o.option_text_en,o.option_text_as)):paperTextHtml(o.option_text_en||o.option_text_as||'');
     const options=isMcq?`<div class="opts">${os.map((o,i)=>`<div class="option"><b>${qbEsc(o.option_label||String.fromCharCode(65+i))}.</b>${optionText(o)?` ${optionText(o)}`:''}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" alt="Option ${qbEsc(o.option_label||String.fromCharCode(65+i))}" style="max-width:100%;height:auto;max-height:180px;margin-top:3px;object-fit:contain">`:''}</div>`).join('')}</div>`:'';
     return `<div class="q ${sectionA?'section-a-q':''}"><div class="q-num">${num}.</div><div class="q-body">${blocks}${options}</div><div class="q-marks">${sectionA?'':`<b>${Number(q.marks||0)}</b>`}</div></div>`;
   };
