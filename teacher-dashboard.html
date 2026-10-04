@@ -1716,16 +1716,23 @@ async function qbOpenPrintWindow(title,body,extraCss=''){
   // the already-typeset DOM into the print window.
   const stage=document.createElement('div');
   stage.id='qbPrintStage';
-  stage.style.cssText='position:fixed;left:-100000px;top:0;width:180mm;background:#fff;color:#111;z-index:-1;visibility:hidden;';
+  stage.style.cssText='position:fixed;left:-100000px;top:0;width:180mm;background:#fff;color:#111;z-index:2147483646;visibility:visible;opacity:0;pointer-events:none;';
   stage.innerHTML=body;
   document.body.appendChild(stage);
   try{
     await qbTypeset(stage);
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     const renderedBody=stage.innerHTML;
+    // Copy all live dashboard styles into the print window.  MathJax v3
+    // injects its CHTML rules dynamically, and filtering the <style> tags can
+    // accidentally omit required rules.  We deliberately do NOT load MathJax
+    // again in the print window: the mathematics is already converted to
+    // <mjx-container> elements above.
     const mathStyles=[...document.head.querySelectorAll('style')]
-      .filter(x=>/mjx-|MathJax|mathjax/i.test(x.textContent||''))
-      .map(x=>x.textContent||'').join('\n');
+      .map(x=>x.textContent||'').filter(Boolean).join('\n');
+    if(!renderedBody.includes('mjx-container') && /\\\(|\\\[/.test(body)){
+      throw new Error('MathJax completed without creating rendered mathematics.');
+    }
     const w=window.open('','_blank','width=1000,height=850');
     if(!w){stage.remove();alert('Allow pop-ups for the PDF preview.');return null;}
     const safeTitle=qbEsc(title);
@@ -1740,6 +1747,11 @@ async function qbOpenPrintWindow(title,body,extraCss=''){
       @media print{.no-print{display:none}.paper{border:0;padding:0;min-height:auto}body{font-size:13px}}
       </style></head><body><div class="no-print"><button id="printBtn">Print / Save as PDF</button></div>${renderedBody}<script>document.getElementById('printBtn')?.addEventListener('click',()=>window.print());<\/script></body></html>`);
     w.document.close();
+    // Give the new window one layout pass so copied MathJax SVG/HTML and fonts are ready before printing.
+    await new Promise(resolve=>{
+      const done=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,120)));
+      if(w.document.fonts?.ready) w.document.fonts.ready.then(done).catch(done); else done();
+    });
     stage.remove();
     return w;
   }catch(e){
@@ -1772,7 +1784,20 @@ async function previewQuestionPaper(){
   const qHtml=(q,num,sectionA=false)=>{
     const bs=p.blocks.filter(b=>b.question_id===q.id).sort((a,b)=>a.block_order-b.block_order);
     const os=p.opts.filter(o=>o.question_id===q.id).sort((a,b)=>a.display_order-b.display_order);
-    const blocks=bs.map(b=>b.block_type==='IMAGE'?`<div class="q-image"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'') }" style="width:${Math.min(100,Number(b.image_width||70))}%"></div>`:`<div class="q-block">${p.lang==='AS'?paperTextHtml(b.text_as||b.text_en||''):p.lang==='BOTH'?bilingualHtml(b.text_en,b.text_as):paperTextHtml(b.text_en||b.text_as||'')}</div>`).join('');
+    // IMPORTANT: the Question Bank's canonical question_text_en/question_text_as
+    // fields are the source of truth for paper text. Older block snapshots may
+    // contain text without the mathematical LaTeX even when the Question Bank
+    // itself displays the formula correctly. Use TEXT blocks only as a fallback
+    // when the canonical question text is empty; always preserve IMAGE blocks.
+    const canonicalText = p.lang==='AS'
+      ? (q.question_text_as||q.question_text_en||'')
+      : p.lang==='BOTH'
+        ? bilingualHtml(q.question_text_en||'',q.question_text_as||'')
+        : (q.question_text_en||q.question_text_as||'');
+    const fallbackText = bs.filter(b=>b.block_type==='TEXT').map(b=>p.lang==='AS'?(b.text_as||b.text_en||''):p.lang==='BOTH'?bilingualHtml(b.text_en||'',b.text_as||''):(b.text_en||b.text_as||'')).filter(Boolean).join('<br>');
+    const textHtml = canonicalText ? (p.lang==='BOTH' ? canonicalText : paperTextHtml(canonicalText)) : fallbackText;
+    const imageBlocks=bs.filter(b=>b.block_type==='IMAGE').map(b=>`<div class="q-image"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'') }" style="width:${Math.min(100,Number(b.image_width||70))}%"></div>`).join('');
+    const blocks=(textHtml?`<div class="q-block">${textHtml}</div>`:'')+imageBlocks;
     const isMcq=String(q.question_type||'').trim().toUpperCase()==='MCQ';
     const optionText=(o)=>p.lang==='AS'?paperTextHtml(o.option_text_as||o.option_text_en||''):p.lang==='BOTH'?bilingualHtml(o.option_text_en,o.option_text_as):paperTextHtml(o.option_text_en||o.option_text_as||'');
     const options=isMcq?`<div class="opts">${os.map((o,i)=>`<div class="option"><b>${qbEsc(o.option_label||String.fromCharCode(65+i))}.</b>${optionText(o)?` ${optionText(o)}`:''}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" alt="Option ${qbEsc(o.option_label||String.fromCharCode(65+i))}" style="max-width:100%;height:auto;max-height:180px;margin-top:3px;object-fit:contain">`:''}</div>`).join('')}</div>`:'';
