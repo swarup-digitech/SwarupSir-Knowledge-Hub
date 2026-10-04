@@ -1716,16 +1716,21 @@ async function qbOpenPrintWindow(title,body,extraCss=''){
   // the already-typeset DOM into the print window.
   const stage=document.createElement('div');
   stage.id='qbPrintStage';
-  stage.style.cssText='position:fixed;left:-100000px;top:0;width:180mm;background:#fff;color:#111;z-index:-1;visibility:hidden;';
+  stage.style.cssText='position:fixed;left:-100000px;top:0;width:180mm;background:#fff;color:#111;z-index:2147483646;visibility:visible;opacity:0;pointer-events:none;';
   stage.innerHTML=body;
   document.body.appendChild(stage);
   try{
     await qbTypeset(stage);
     await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     const renderedBody=stage.innerHTML;
+    // Copy the MathJax-generated CSS exactly as it exists in the live dashboard.
+    // Do not load MathJax again in the print window.
     const mathStyles=[...document.head.querySelectorAll('style')]
       .filter(x=>/mjx-|MathJax|mathjax/i.test(x.textContent||''))
       .map(x=>x.textContent||'').join('\n');
+    if(!renderedBody.includes('mjx-container') && /\\\(|\\\[/.test(body)){
+      throw new Error('MathJax completed without creating rendered mathematics.');
+    }
     const w=window.open('','_blank','width=1000,height=850');
     if(!w){stage.remove();alert('Allow pop-ups for the PDF preview.');return null;}
     const safeTitle=qbEsc(title);
@@ -1740,6 +1745,11 @@ async function qbOpenPrintWindow(title,body,extraCss=''){
       @media print{.no-print{display:none}.paper{border:0;padding:0;min-height:auto}body{font-size:13px}}
       </style></head><body><div class="no-print"><button id="printBtn">Print / Save as PDF</button></div>${renderedBody}<script>document.getElementById('printBtn')?.addEventListener('click',()=>window.print());<\/script></body></html>`);
     w.document.close();
+    // Give the new window one layout pass so copied MathJax SVG/HTML and fonts are ready before printing.
+    await new Promise(resolve=>{
+      const done=()=>requestAnimationFrame(()=>requestAnimationFrame(resolve));
+      if(w.document.fonts?.ready) w.document.fonts.ready.then(done).catch(done); else done();
+    });
     stage.remove();
     return w;
   }catch(e){
