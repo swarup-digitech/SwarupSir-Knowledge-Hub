@@ -418,7 +418,7 @@ async function doStudentLogin(){
     if(!res.ok||j.error)throw new Error(j.error||"Invalid Roll No or Password.");
     const {error:e}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
     if(e)throw e;
-    current=(await sb.auth.getUser()).data.user;
+    current={id:j.student_id};
     const {data:p,error:pe}=await sb.from("profiles").select("*").eq("id",current.id).single();
     if(pe||!p||p.role!=="student")throw new Error("This is not a student account.");
     profile=p;cacheStudentProfile(p);
