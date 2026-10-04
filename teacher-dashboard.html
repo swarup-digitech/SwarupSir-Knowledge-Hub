@@ -949,6 +949,26 @@ function qbRenderTable(){
   </tbody></table></div>`;
   document.getElementById('qbTable').innerHTML=html;
 }
+function qbDownloadExistingChapters(){
+  try{
+    if(typeof XLSX==='undefined') return alert('Excel library is not loaded. Please refresh the page and try again.');
+    const rows=(qbChapters||[]).slice().sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>{
+      const parent=c.parent_chapter_id ? qbChapters.find(x=>x.id===c.parent_chapter_id) : null;
+      return {
+        'Chapter No': qbChapterCode(c),
+        'Parent Chapter No': parent ? qbChapterCode(parent) : '',
+        'Chapter Name': c.chapter_name||'',
+        'Description': c.description||''
+      };
+    });
+    if(!rows.length) return alert('No chapters or subchapters are currently uploaded.');
+    const ws=XLSX.utils.json_to_sheet(rows,{header:['Chapter No','Parent Chapter No','Chapter Name','Description']});
+    ws['!cols']=[{wch:16},{wch:20},{wch:38},{wch:60}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Chapters');
+    XLSX.writeFile(wb,'School_Question_Bank_Chapters_Existing.xlsx');
+  }catch(e){alert('Could not create Excel file: '+e.message)}
+}
 function qbChapterManager(){
   loadQuestionBank().then(()=>{
     const parentOpts='<option value="">— Main Chapter —</option>'+qbChapters.filter(c=>!c.parent_chapter_id).sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>`<option value="${c.id}">${qbChapterCode(c)}. ${qbEsc(c.chapter_name)}</option>`).join('');
@@ -961,7 +981,7 @@ function qbChapterManager(){
       <button onclick="qbAddChapter()">Add Chapter / Subchapter</button></div>
       <div><h3>Existing Chapters</h3>${qbChapters.slice().sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>`<div class="student-card"><b>${qbChapterDisplay(c)}</b><div class="small muted">${qbEsc(c.description||'')}</div><button class="danger" style="margin-top:7px" onclick="qbDeleteChapter('${c.id}')">Delete</button></div>`).join('')||'<div class="muted">No chapters yet.</div>'}</div>
     </div></div>
-    <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Chapter/Subchapter Excel Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
+    <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><button class="secondary" onclick="qbDownloadExistingChapters()">⬇ Download Existing Chapters + Subchapters</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Blank Chapter/Subchapter Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
   }).catch(e=>alert(e.message));
 }
 async function qbAddChapter(){
@@ -984,7 +1004,7 @@ async function qbDeleteChapter(id){
 function qbBulkChapterUpload(){
   document.getElementById('app').innerHTML=`${header('📚 Question Bank — Bulk Chapter / Subchapter Upload')}
   <div class="card"><div class="notice"><b>Upload chapters and subchapters in Excel.</b> Use the supplied template. Use Chapter No such as <b>1</b>, <b>1.1</b>, <b>1.2</b>. Parent Chapter No is required for subchapters.</div>
-  <div class="actions" style="margin-top:10px"><a class="btn" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Download Chapter/Subchapter Template</a><button class="secondary" onclick="qbChapterManager()">📖 Chapter Manager</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div></div>
+  <div class="actions" style="margin-top:10px"><button onclick="qbDownloadExistingChapters()">⬇ Download Existing Chapters + Subchapters</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Blank Chapter/Subchapter Template</a><button class="secondary" onclick="qbChapterManager()">📖 Chapter Manager</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div></div>
   <div class="card"><h3>Excel File</h3><p class="small muted">Columns: <b>Chapter No</b>, <b>Parent Chapter No</b>, <b>Chapter Name</b>, <b>Description</b>.</p><input type="file" accept=".xlsx,.xls" onchange="qbReadChapterExcel(event)"><div id="qbChapterBulkPreview" style="margin-top:12px"></div></div>
   <div class="card"><h3>Duplicate Chapter/Subchapter Handling</h3><select id="qbChapterDuplicateAction"><option value="skip">Skip duplicates</option><option value="update">Update existing details</option><option value="stop">Stop if a duplicate is found</option></select><div id="qbChapterBulkStatus" style="margin-top:12px"></div><div class="actions" style="margin-top:12px"><button onclick="qbImportChapterExcel()">✅ Import Chapters</button><button class="secondary" onclick="qbChapterManager()">Cancel</button></div></div>`;
 }
