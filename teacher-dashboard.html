@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://jupefjdquakqsizapzbv.supabase.co"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
 .eq-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 7px}.eq-toolbar button{padding:7px 11px;font-size:13px}.eq-hint{font-size:12px;color:#64748b}.eq-preview{margin:6px 0 10px;padding:9px 11px;border:1px dashed #cbd5e1;border-radius:9px;background:#f8fafc;min-height:24px;white-space:normal}.math-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:99999;padding:15px}.math-modal-card{width:min(820px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.28)}.math-editor-input{display:block;width:100%;min-height:110px;font-size:22px;line-height:1.5;border:1px solid #cbd5e1;border-radius:10px;padding:12px;background:#fff;resize:vertical;font-family:Arial,sans-serif}.math-live-preview{margin-top:10px;min-height:55px;border:1px dashed #cbd5e1;border-radius:10px;padding:12px;background:#f8fafc;font-size:24px}.math-symbols{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.math-symbols button{padding:7px 10px;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:8px} .mathfield-shell{border:1px solid #cbd5e1;border-radius:12px;background:#fff;padding:4px;margin-top:10px;box-shadow:inset 0 1px 2px #00000008}.mathfield-shell math-field{display:block;width:100%;min-height:105px;padding:18px 14px;font-size:30px;border:0;outline:0;background:#fff;border-radius:10px;--selection-background-color:#dbeafe;--contains-highlight-background-color:#eff6ff;--caret-color:#2563eb}.mathfield-status{font-size:12px;color:#64748b;margin-top:7px}.mathfield-latex{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px dashed #cbd5e1;font-family:Consolas,monospace;font-size:13px;word-break:break-all}.math-modal-card.math-visual{width:min(900px,97vw)}.math-help{font-size:13px;color:#475569;margin:8px 0}.math-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
 const SUPABASE_URL='https://jupefjdquakqsizapzbv.supabase.co',SUPABASE_KEY='sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP',CREATE_STUDENT_FN='create-students';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let teacher=null,students=[],classes=[],groups=[],assessments=[],bulkRows=[];
@@ -1442,6 +1442,7 @@ async function generateBankPaper(){
   gpChapterRangeValues={};
   document.getElementById('app').innerHTML=`${header('📄 Generate Question Paper')}
   <div class="card"><div class="grid">
+   <div><label>Paper Title</label><input id="gpTitle" placeholder="e.g. Mathematics Unit Test"></div>
    <div><label>Class</label><input id="gpClass" placeholder="e.g. VI"></div>
    <div><label>Subject</label><input id="gpSubject" placeholder="e.g. Mathematics"></div>
    <div><label>Total Marks</label><input id="gpTotal" type="number" min="1" value="100" oninput="gpRecalc();gpRenderChapterRules()"></div>
@@ -1452,8 +1453,9 @@ async function generateBankPaper(){
   <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div><h3 style="margin:0">Chapter-wise Marks Range</h3><p class="small muted" style="margin:6px 0 0">Set the <b>minimum</b> and <b>maximum</b> marks to be selected from each chapter. Questions in subchapters are counted under their main chapter. Leave maximum blank for no upper limit.</p></div><div class="actions"><button class="secondary" onclick="gpDownloadChapterRangeTemplate()">⬇ Excel Template</button><button class="secondary" onclick="gpBulkChapterRangeUpload()">📥 Bulk Upload Excel</button></div></div><div id="gpChapterRangeBulkBox" style="margin-top:12px"></div><div style="overflow:auto"><table><thead><tr><th>Chapter</th><th>Minimum Marks</th><th>Maximum Marks</th></tr></thead><tbody id="gpChapterRules"></tbody></table></div><div id="gpChapterRuleScope" class="small muted" style="margin-top:8px"></div><div id="gpChapterMsg" class="small muted" style="margin-top:8px"></div></div>
   <div class="card"><h3>Fixed Questions — Must Be Included</h3><p class="small muted">Select any questions that must appear in the paper. Their marks count toward the total, chapter limits and cognitive distribution. The generator will reject the blueprint if fixed questions violate a hard constraint.</p><input id="gpFixedSearch" placeholder="Search question / chapter..." oninput="gpRefreshFixedList()"><div id="gpFixedCount" class="small muted" style="margin:7px 0">0 fixed question(s) selected.</div><div id="gpFixedList" style="max-height:420px;overflow:auto"></div></div>
   <div class="card"><h3>Optional Chapter Filter</h3><p class="small muted">Select <b>multiple chapters and/or subchapters</b>. If a main chapter is selected, all of its subchapters are included. If a subchapter is selected by itself, only that subchapter is eligible. When nothing is selected, all chapters are eligible.</p><div class="actions" style="margin:8px 0"><button class="secondary" onclick="gpSelectAllChapters()">☑ Select All Chapters</button><button class="secondary" onclick="gpClearChapterFilter()">Clear Filter</button></div><div id="gpChapterFilterSummary" class="notice small" style="margin-bottom:8px">No chapter filter selected — all chapters are eligible.</div><div id="gpChapterFilterList" style="max-height:360px;overflow:auto;padding:2px"></div><div style="margin-top:14px"><h3>Optional Question-Type Distribution</h3><div class="grid">${QB_TYPES.map((x,i)=>`<div><label>${x} %</label><input id="gpTypePct${i}" type="number" min="0" max="100" value="${i===0?100:0}" oninput="gpTypeMsg()"></div>`).join('')}</div><div id="gpTypeMsg" class="small muted"></div></div></div>
-  <div class="card"><h3>Generate</h3><p class="small muted">The generator enforces fixed questions, chapter minimum/maximum marks, variation groups (at most one question from each group), total marks, and the cognitive-level schema as closely as the available question marks permit.</p><div class="actions"><button onclick="gpGenerate()">⚙ Generate Paper</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div><div id="gpResult" style="margin-top:12px"></div></div>`;
-  gpRecalc();gpTypeMsg();gpRenderChapterFilter();gpRenderChapterRules();gpRefreshFixedList();
+  <div class="card"><h3>Generate</h3><p class="small muted">The generator enforces fixed questions, chapter minimum/maximum marks, variation groups (at most one question from each group), total marks, and the cognitive-level schema as closely as the available question marks permit.</p><div class="actions"><button onclick="gpGenerate()">⚙ Generate Paper</button><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div><div id="gpResult" style="margin-top:12px"></div></div>
+  <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div><h3 style="margin:0">📚 Previously Generated Question Papers</h3><p class="small muted" style="margin:6px 0 0">View, duplicate or delete papers generated earlier. Deleting a paper does <b>not</b> delete questions from the School Question Bank.</p></div><button class="secondary" onclick="loadPreviousSchoolGeneratedPapers()">🔄 Refresh</button></div><div id="previousSchoolGeneratedPapers" style="margin-top:12px"><div class="school-paper-history-empty muted">Loading previous papers…</div></div></div>`;
+  gpRecalc();gpTypeMsg();gpRenderChapterFilter();gpRenderChapterRules();gpRefreshFixedList();loadPreviousSchoolGeneratedPapers();
 }
 function gpCaptureChapterRangeValues(){gpRootChapters().forEach(c=>{const min=document.getElementById('gpMin_'+c.id),max=document.getElementById('gpMax_'+c.id);if(min||max)gpChapterRangeValues[c.id]={min:min?min.value:gpChapterRangeValues[c.id]?.min||0,max:max?max.value:gpChapterRangeValues[c.id]?.max||''};})}
 function gpRenderChapterRules(){const body=document.getElementById('gpChapterRules');if(!body)return;gpCaptureChapterRangeValues();const roots=gpRootChapters().filter(c=>gpChapterFilterIntersectsRoot(c.id));body.innerHTML=roots.length?roots.map(c=>{const v=gpChapterRangeValues[c.id]||{min:0,max:''};return `<tr><td><b>${qbEsc(qbChapterCode(c))}. ${qbEsc(c.chapter_name)}</b><div class="small muted">Includes selected subchapters</div></td><td><input id="gpMin_${c.id}" type="number" min="0" step="1" value="${v.min??0}" oninput="gpChapterRangeValues['${c.id}']={...(gpChapterRangeValues['${c.id}']||{}),min:this.value}" style="width:100px"></td><td><input id="gpMax_${c.id}" type="number" min="0" step="1" value="${v.max??''}" placeholder="No limit" oninput="gpChapterRangeValues['${c.id}']={...(gpChapterRangeValues['${c.id}']||{}),max:this.value}" style="width:110px"></td></tr>`}).join(''):'<tr><td colspan="3" class="muted">No chapters found for the current filter.</td></tr>';const note=document.getElementById('gpChapterRuleScope');if(note)note.textContent=gpSelectedChapterIds?.size?'Only chapter ranges belonging to the selected chapter scope are applied.':'All chapter ranges are available.';}
@@ -1518,9 +1520,132 @@ async function gpGenerate(){
   if(best.sum!==total||!best.chapterOk)return alert(`No paper satisfies all hard constraints. Best attempt: ${best.sum}/${total} marks; chapter minimum/maximum constraints were not all satisfied. Please widen a chapter range, reduce fixed questions, or add more suitable questions.`);
   const selected=best.selected,blocks=(await sb.from('school_question_bank_blocks').select('*').in('question_id',selected.map(q=>q.id)).order('block_order')).data||[],opts=(await sb.from('school_question_bank_options').select('*').in('question_id',selected.map(q=>q.id)).order('display_order')).data||[];
   const report=QB_LEVELS.map(level=>({level,target:targets[level],actual:best.levelMarks[level],diff:best.levelMarks[level]-targets[level]}));
-  window._generatedBankPaper={selected,blocks,opts,lang,total,report,chapterRules:rules,chapterMarks:best.chapterMarks,fixedIds:[...gpFixedIds],className:document.getElementById('gpClass').value||'',subject:document.getElementById('gpSubject').value||'',duration:document.getElementById('gpDuration').value||''};
-  const exactCog=best.cogErr<0.001;document.getElementById('gpResult').innerHTML=`<div class="success"><b>Paper generated successfully.</b> Selected ${selected.length} questions = ${best.sum} marks. ${report.map(r=>`${r.level}: ${r.actual}/${r.target.toFixed(2)}`).join(' | ')}${exactCog?'':'<br><span class="small">Cognitive targets were rounded to the nearest feasible mark combination.</span>'}</div><button onclick="previewBankPaper()">👁 PDF Options</button>`;
+  window._generatedBankPaper={selected,blocks,opts,lang,total,report,chapterRules:rules,chapterMarks:best.chapterMarks,fixedIds:[...gpFixedIds],title:document.getElementById('gpTitle')?.value.trim()||'School Question Paper',className:document.getElementById('gpClass').value||'',subject:document.getElementById('gpSubject').value||'',duration:document.getElementById('gpDuration').value||''};
+  const savedPaper=await saveSchoolGeneratedPaper(window._generatedBankPaper);
+  const exactCog=best.cogErr<0.001;document.getElementById('gpResult').innerHTML=`<div class="success"><b>Paper generated successfully.</b> Selected ${selected.length} questions = ${best.sum} marks.${savedPaper?` <b>Saved to Previous Papers.</b>`:' <span class="small">The paper could not be saved to history.</span>'} ${report.map(r=>`${r.level}: ${r.actual}/${r.target.toFixed(2)}`).join(' | ')}${exactCog?'':'<br><span class="small">Cognitive targets were rounded to the nearest feasible mark combination.</span>'}</div><button onclick="previewBankPaper()">👁 PDF Options</button>`;
+  loadPreviousSchoolGeneratedPapers();
 }
+async function saveSchoolGeneratedPaper(paper){
+  try{
+    if(!paper||!teacher?.id)return null;
+    const payload={
+      teacher_id:teacher.id,
+      course_type:'SCHOOL',
+      title:paper.title||'School Question Paper',
+      subject:paper.subject||null,
+      class_name:paper.className||null,
+      medium:paper.lang||'EN',
+      total_questions:Array.isArray(paper.selected)?paper.selected.length:0,
+      total_marks:Number(paper.total||0),
+      question_ids:Array.isArray(paper.selected)?paper.selected.map(q=>q.id).filter(Boolean):[],
+      paper_config:{
+        selected:paper.selected||[],
+        blocks:paper.blocks||[],
+        opts:paper.opts||[],
+        lang:paper.lang||'EN',
+        total:Number(paper.total||0),
+        report:paper.report||[],
+        chapterRules:paper.chapterRules||[],
+        chapterMarks:paper.chapterMarks||{},
+        fixedIds:paper.fixedIds||[],
+        title:paper.title||'School Question Paper',
+        className:paper.className||'',
+        subject:paper.subject||'',
+        duration:paper.duration||''
+      }
+    };
+    const {data,error}=await sb.from('school_generated_question_papers').insert(payload).select().single();
+    if(error){console.error('School generated paper save failed:',error);return null;}
+    return data;
+  }catch(e){console.error('School generated paper save failed:',e);return null;}
+}
+async function loadPreviousSchoolGeneratedPapers(){
+  const box=document.getElementById('previousSchoolGeneratedPapers');
+  if(!box||!teacher?.id)return;
+  box.innerHTML='<div class="school-paper-history-empty muted">Loading previous papers…</div>';
+  const {data,error}=await sb.from('school_generated_question_papers').select('*').eq('teacher_id',teacher.id).eq('course_type','SCHOOL').order('created_at',{ascending:false});
+  if(error){
+    box.innerHTML=`<div class="notice"><b>Could not load previous papers.</b><div class="small" style="margin-top:5px">${qbEsc(error.message)}</div><div class="small" style="margin-top:5px">Run the supplied School generated-paper migration in Supabase once.</div></div>`;
+    return;
+  }
+  if(!data?.length){
+    box.innerHTML='<div class="school-paper-history-empty muted">No question papers have been generated yet.</div>';
+    return;
+  }
+  box.innerHTML=data.map(p=>{
+    const d=p.created_at?new Date(p.created_at).toLocaleString('en-IN'):'—';
+    return `<div class="school-paper-history-row">
+      <div style="min-width:0;flex:1">
+        <div class="school-paper-history-title">${qbEsc(p.title||'School Question Paper')}</div>
+        <div class="small muted" style="margin-top:5px">${qbEsc(p.subject||'')} ${p.class_name?`· Class ${qbEsc(p.class_name)}`:''} · ${qbEsc(p.medium||'')} · ${Number(p.total_questions||0)} questions · ${Number(p.total_marks||0)} marks</div>
+        <div class="small muted" style="margin-top:3px">Generated: ${qbEsc(d)}</div>
+      </div>
+      <div class="actions school-paper-history-actions">
+        <button onclick="viewPreviousSchoolPaper('${p.id}')">👁 View</button>
+        <button class="secondary" onclick="duplicatePreviousSchoolPaper('${p.id}')">📋 Duplicate</button>
+        <button class="danger" onclick="deletePreviousSchoolPaper('${p.id}')">🗑 Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function getPreviousSchoolPaper(id){
+  const {data,error}=await sb.from('school_generated_question_papers').select('*').eq('id',id).eq('teacher_id',teacher.id).eq('course_type','SCHOOL').single();
+  if(error)throw error;
+  return data;
+}
+function restoreSchoolPaperSnapshot(p){
+  const cfg=p?.paper_config||{};
+  window._generatedBankPaper={
+    selected:Array.isArray(cfg.selected)?cfg.selected:[],
+    blocks:Array.isArray(cfg.blocks)?cfg.blocks:[],
+    opts:Array.isArray(cfg.opts)?cfg.opts:[],
+    lang:cfg.lang||p.medium||'EN',
+    total:Number(cfg.total??p.total_marks??0),
+    report:Array.isArray(cfg.report)?cfg.report:[],
+    chapterRules:Array.isArray(cfg.chapterRules)?cfg.chapterRules:[],
+    chapterMarks:cfg.chapterMarks||{},
+    fixedIds:Array.isArray(cfg.fixedIds)?cfg.fixedIds:[],
+    title:cfg.title||p.title||'School Question Paper',
+    className:cfg.className||p.class_name||'',
+    subject:cfg.subject||p.subject||'',
+    duration:cfg.duration||''
+  };
+}
+async function viewPreviousSchoolPaper(id){
+  try{const p=await getPreviousSchoolPaper(id);restoreSchoolPaperSnapshot(p);previewQuestionPaper();}
+  catch(e){alert('Could not load the question paper: '+e.message);}
+}
+async function duplicatePreviousSchoolPaper(id){
+  try{
+    const p=await getPreviousSchoolPaper(id);
+    const cfg=p.paper_config||{};
+    const payload={
+      teacher_id:teacher.id,
+      course_type:'SCHOOL',
+      title:'Copy of '+(p.title||'School Question Paper'),
+      subject:p.subject||null,
+      class_name:p.class_name||null,
+      medium:p.medium||'EN',
+      total_questions:Number(p.total_questions||0),
+      total_marks:Number(p.total_marks||0),
+      question_ids:Array.isArray(p.question_ids)?p.question_ids:[],
+      paper_config:cfg
+    };
+    const {error}=await sb.from('school_generated_question_papers').insert(payload);
+    if(error)throw error;
+    await loadPreviousSchoolGeneratedPapers();
+    alert('Question paper duplicated successfully.');
+  }catch(e){alert('Could not duplicate the question paper: '+e.message);}
+}
+async function deletePreviousSchoolPaper(id){
+  if(!confirm('Delete this generated question paper?\n\nThe questions in the School Question Bank will NOT be deleted.'))return;
+  try{
+    const {error}=await sb.from('school_generated_question_papers').delete().eq('id',id).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
+    if(error)throw error;
+    await loadPreviousSchoolGeneratedPapers();
+  }catch(e){alert('Could not delete the question paper: '+e.message);}
+}
+
 function bankBlockHtml(b,lang){
   if(b.block_type==='IMAGE')return `<div style="text-align:center;margin:8px 0"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'')}" style="max-width:100%;width:${Number(b.image_width||70)}%;height:auto;display:inline-block"></div>`;
   const text=lang==='AS'?b.text_as:(lang==='BOTH'?`${b.text_en||''}${b.text_en&&b.text_as?'\n':''}${b.text_as||''}`:b.text_en);
@@ -1598,7 +1723,7 @@ function previewQuestionPaper(){
   let num=1;
   const sectionA=mcqs.map(q=>qHtml(q,num++,true)).join('');
   const sectionB=others.map(q=>qHtml(q,num++,false)).join('');
-  const body=`<div class="paper"><div class="header"><div class="brand">SWARUP SIR'S KNOWLEDGE HUB</div><div class="meta-row"><div><b>Subject:</b> ${qbEsc(p.subject||'')}</div><div><b>Class:</b> ${qbEsc(p.className||'')}</div><div><b>Medium:</b> ${qbEsc(qbPaperMedium(p.lang))}</div></div><div class="meta-row bottom"><div><b>Time:</b> ${qbEsc(p.duration||'')}</div><div style="text-align:right"><b>Full Marks:</b> ${Number(p.total||0)}</div></div></div><div class="section">SECTION A</div><div class="section-line"><span>Choose the correct answer.</span><span class="total">1 × ${mcqs.length} = ${mcqMarks}</span></div>${sectionA}<div class="section">SECTION B</div><div class="instruction">Answer the following questions.</div>${sectionB}<div class="end">--- End of Question Paper ---</div><div class="footer"><span>(c) Swarup Sir's Knowledge Hub</span><span>Page <span class="pageNumber"></span></span></div></div>`;
+  const body=`<div class="paper"><div class="header"><div class="brand">SWARUP SIR'S KNOWLEDGE HUB</div>${p.title?`<div style="font-size:18px;font-weight:700;margin:-4px 0 10px">${qbEsc(p.title)}</div>`:''}<div class="meta-row"><div><b>Subject:</b> ${qbEsc(p.subject||'')}</div><div><b>Class:</b> ${qbEsc(p.className||'')}</div><div><b>Medium:</b> ${qbEsc(qbPaperMedium(p.lang))}</div></div><div class="meta-row bottom"><div><b>Time:</b> ${qbEsc(p.duration||'')}</div><div style="text-align:right"><b>Full Marks:</b> ${Number(p.total||0)}</div></div></div><div class="section">SECTION A</div><div class="section-line"><span>Choose the correct answer.</span><span class="total">1 × ${mcqs.length} = ${mcqMarks}</span></div>${sectionA}<div class="section">SECTION B</div><div class="instruction">Answer the following questions.</div>${sectionB}<div class="end">--- End of Question Paper ---</div><div class="footer"><span>(c) Swarup Sir's Knowledge Hub</span><span>Page <span class="pageNumber"></span></span></div></div>`;
   qbOpenPrintWindow('Question Paper',body);
 }
 function previewModelAnswerKey(){
@@ -1610,7 +1735,7 @@ function previewModelAnswerKey(){
   let num=1;
   const mcqRows=keyRows(mcqs,num);num+=mcqs.length;
   const otherRows=keyRows(others,num);
-  const body=`<div class="paper"><div class="header"><div class="brand">SWARUP SIR'S KNOWLEDGE HUB</div><div class="meta-row"><div><b>Subject:</b> ${qbEsc(p.subject||'')}</div><div><b>Class:</b> ${qbEsc(p.className||'')}</div><div><b>Medium:</b> ${qbEsc(qbPaperMedium(p.lang))}</div></div><div class="meta-row bottom"><div><b>Time:</b> ${qbEsc(p.duration||'')}</div><div style="text-align:right"><b>Full Marks:</b> ${Number(p.total||0)}</div></div></div><div class="section">MODEL ANSWER KEY</div><div class="key-header-note">Question numbering follows the generated question paper. MCQ answers are shown first; model answers/marking notes are shown for non-MCQ questions where available.</div>${mcqs.length?`<div class="key-section">SECTION A — MCQ</div>${mcqRows}`:''}${others.length?`<div class="key-section">SECTION B</div>${otherRows}`:''}<div class="end">--- End of Model Answer Key ---</div><div class="footer"><span>(c) Swarup Sir's Knowledge Hub</span><span>Model Answer Key</span></div></div>`;
+  const body=`<div class="paper"><div class="header"><div class="brand">SWARUP SIR'S KNOWLEDGE HUB</div>${p.title?`<div style="font-size:18px;font-weight:700;margin:-4px 0 10px">${qbEsc(p.title)}</div>`:''}<div class="meta-row"><div><b>Subject:</b> ${qbEsc(p.subject||'')}</div><div><b>Class:</b> ${qbEsc(p.className||'')}</div><div><b>Medium:</b> ${qbEsc(qbPaperMedium(p.lang))}</div></div><div class="meta-row bottom"><div><b>Time:</b> ${qbEsc(p.duration||'')}</div><div style="text-align:right"><b>Full Marks:</b> ${Number(p.total||0)}</div></div></div><div class="section">MODEL ANSWER KEY</div><div class="key-header-note">Question numbering follows the generated question paper. MCQ answers are shown first; model answers/marking notes are shown for non-MCQ questions where available.</div>${mcqs.length?`<div class="key-section">SECTION A — MCQ</div>${mcqRows}`:''}${others.length?`<div class="key-section">SECTION B</div>${otherRows}`:''}<div class="end">--- End of Model Answer Key ---</div><div class="footer"><span>(c) Swarup Sir's Knowledge Hub</span><span>Model Answer Key</span></div></div>`;
   qbOpenPrintWindow('Model Answer Key',body);
 }
 function previewBankPaper(){
