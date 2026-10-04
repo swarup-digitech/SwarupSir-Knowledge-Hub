@@ -841,7 +841,7 @@ function gpQuestionBlocks(q){return (qbBlocks||[]).filter(b=>b.question_id===q.i
 function gpQuestionSearchText(q){const bs=gpQuestionBlocks(q);return `${q.question_text_en||''} ${q.question_text_as||''} ${bs.filter(b=>b.block_type==='TEXT').map(b=>`${b.text_en||''} ${b.text_as||''}`).join(' ')} ${qbChapterCode(qbChapters.find(x=>x.id===q.chapter_id))} ${qbChapters.find(x=>x.id===q.chapter_id)?.chapter_name||''}`.toLowerCase()}
 function gpOpenQuestionImage(src){if(!src)return;let m=document.getElementById('gpQuestionImageModal');if(!m){m=document.createElement('div');m.id='gpQuestionImageModal';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out';m.onclick=()=>m.remove();document.body.appendChild(m)}m.innerHTML=`<div style="max-width:95vw;max-height:95vh;position:relative;cursor:default" onclick="event.stopPropagation()"><button type="button" onclick="document.getElementById('gpQuestionImageModal').remove()" style="position:absolute;right:-8px;top:-8px;width:36px;height:36px;border:0;border-radius:50%;font-size:22px;cursor:pointer;background:#fff">×</button><img src="${qbEsc(src)}" alt="Question image" style="max-width:95vw;max-height:90vh;object-fit:contain;background:#fff;border-radius:10px;padding:8px;box-shadow:0 10px 40px rgba(0,0,0,.35)"></div>`}
 function gpQuestionPreviewHtml(q){const bs=gpQuestionBlocks(q);const textBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||b.text_as||'').filter(Boolean);const imageBlocks=bs.filter(b=>b.block_type==='IMAGE'&&b.image_url);const text=(textBlocks.join('\n\n')||q.question_text_en||q.question_text_as||'').trim();return `<div style="margin-top:8px;padding:9px;border:1px solid #dbe3ee;border-radius:9px;background:#f8fafc">${imageBlocks.length?imageBlocks.map(b=>`<img src="${qbEsc(b.image_url)}" alt="Question image" loading="lazy" onclick="event.stopPropagation();gpOpenQuestionImage(this.src)" style="display:block;max-width:100%;width:${Math.min(100,Math.max(30,Number(b.image_width||70)))}%;max-height:220px;object-fit:contain;margin:5px auto;border:1px solid #cbd5e1;border-radius:7px;padding:3px;background:#fff;cursor:zoom-in" title="Click to enlarge">`).join(''):''}${text?`<div class="gp-fixed-preview-text" style="margin-top:${imageBlocks.length?'7px':'0'}">${qbMathHtml(text)}</div>`:''}${!text&&!imageBlocks.length?'<div class="small muted">Question preview is not available.</div>':''}</div>`}
-async function gpRefreshFixedList(){
+function gpRefreshFixedList(){
   const box=document.getElementById('gpFixedList');if(!box)return;
   const s=(document.getElementById('gpFixedSearch')?.value||'').toLowerCase().trim();
   const lang=document.getElementById('gpLang')?.value||'EN';
@@ -864,10 +864,7 @@ async function gpRefreshFixedList(){
   // explicitly typeset after the HTML is placed in the DOM. Without this,
   // expressions such as \(x_1,y_1\) remain visible as raw LaTeX.
   const root=document.getElementById('gpFixedList');
-  if(root){
-    await new Promise(r=>requestAnimationFrame(r));
-    try{await qbTypeset(root);}catch(e){console.warn('Fixed-question MathJax:',e);}
-  }
+  if(root) qbTypeset(root);
 }
 function gpToggleFixed(id,on){if(on)gpFixedIds.add(id);else gpFixedIds.delete(id);const e=document.getElementById('gpFixedCount');if(e)e.textContent=gpFixedIds.size+' fixed question(s) selected.'}
 
@@ -957,7 +954,7 @@ function qbRenderTable(){
   </tbody></table></div>`;
   document.getElementById('qbTable').innerHTML=html;
   const table=document.getElementById('qbTable');
-  if(table) qbTypeset(table).catch(e=>console.warn('Question-bank MathJax:',e));
+  if(window.MathJax?.typesetPromise && table) window.MathJax.typesetPromise([table]).catch(()=>{});
 }
 function qbDownloadExistingChapters(){
   try{
@@ -1265,15 +1262,20 @@ function qbMathHtml(text){
   return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
 async function qbTypeset(root){
-  let tries=0;
-  while(!window.MathJax?.typesetPromise && tries<200){
-    await new Promise(r=>setTimeout(r,50));
-    tries++;
-  }
-  if(!window.MathJax?.typesetPromise) throw new Error('MathJax did not load. Check the MathJax CDN/network connection.');
-  if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-  if(root) await window.MathJax.typesetPromise([root]);
-  else await window.MathJax.typesetPromise();
+  try{
+    // MathJax is loaded as a deferred external script. Fixed-question lists
+    // can be rendered before that script has finished loading, so wait briefly
+    // instead of silently giving up.
+    let tries=0;
+    while(!window.MathJax?.typesetPromise && tries<100){
+      await new Promise(r=>setTimeout(r,50));
+      tries++;
+    }
+    if(!window.MathJax?.typesetPromise) return;
+    if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
+    if(root) await window.MathJax.typesetPromise([root]);
+    else await window.MathJax.typesetPromise();
+  }catch(e){console.warn('MathJax typeset:',e);}
 }
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
@@ -1282,7 +1284,7 @@ function qbMathPreview(text){
 function qbRefreshMathPreview(id,text){
   const p=document.getElementById(id);if(!p)return;
   p.innerHTML=qbMathPreview(text);
-  qbTypeset(p).catch(e=>console.warn('Math preview MathJax:',e));
+  if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([p]).catch(()=>{});
 }
 function qbInsertAtCursor(textarea,text){
   const start=textarea.selectionStart??textarea.value.length;
@@ -1703,53 +1705,27 @@ function qbModelAnswerHtml(q,idx,opts,lang){
   if(String(q.question_type||'').toUpperCase()==='MCQ'){
     const o=opts.find(x=>x.question_id===q.id&&x.is_correct);
     const ans=o?.option_label||q.correct_answer||'—';
-    const answerText=o?(lang==='AS'?qbMathHtml(o.option_text_as||''):lang==='BOTH'?`${qbMathHtml(o.option_text_en||'')}${o.option_text_en&&o.option_text_as?'<br>':''}${qbMathHtml(o.option_text_as||'')}`:qbMathHtml(o.option_text_en||'')):'';
+    const answerText=o?(lang==='AS'?(o.option_text_as||''):lang==='BOTH'?`${o.option_text_en||''}${o.option_text_en&&o.option_text_as?'<br>':''}${o.option_text_as||''}`:(o.option_text_en||'')):'';
     return `<div class="key-q"><div class="key-num">${idx}.</div><div><b>Answer: ${qbEsc(ans)}</b>${answerText?`<div class="key-answer-text">${answerText}</div>`:''}</div><div class="key-marks">${Number(q.marks||0)}</div></div>`;
   }
   const notes=q.explanation||q.model_answers||'';
-  return `<div class="key-q"><div class="key-num">${idx}.</div><div><b>Model Answer / Marking Notes</b><div class="key-answer-text">${notes?qbMathHtml(typeof notes==='string'?notes:JSON.stringify(notes)): '<span class="muted">Model answer not provided.</span>'}</div></div><div class="key-marks">${Number(q.marks||0)}</div></div>`;
+  return `<div class="key-q"><div class="key-num">${idx}.</div><div><b>Model Answer / Marking Notes</b><div class="key-answer-text">${notes?qbEsc(typeof notes==='string'?notes:JSON.stringify(notes)): '<span class="muted">Model answer not provided.</span>'}</div></div><div class="key-marks">${Number(q.marks||0)}</div></div>`;
 }
-async function qbOpenPrintWindow(title,body,extraCss=''){
-  // The old implementation loaded MathJax again in the new print window.
-  // That is unreliable: the browser can print before the CDN MathJax bundle
-  // finishes loading. Render the paper in the current page first, then copy
-  // the already-typeset DOM into the print window.
-  const stage=document.createElement('div');
-  stage.id='qbPrintStage';
-  stage.style.cssText='position:fixed;left:-100000px;top:0;width:180mm;background:#fff;color:#111;z-index:-1;visibility:hidden;';
-  stage.innerHTML=body;
-  document.body.appendChild(stage);
-  try{
-    await qbTypeset(stage);
-    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-    const renderedBody=stage.innerHTML;
-    const mathStyles=[...document.head.querySelectorAll('style')]
-      .filter(x=>/mjx-|MathJax|mathjax/i.test(x.textContent||''))
-      .map(x=>x.textContent||'').join('\n');
-    const w=window.open('','_blank','width=1000,height=850');
-    if(!w){stage.remove();alert('Allow pop-ups for the PDF preview.');return null;}
-    const safeTitle=qbEsc(title);
-    w.document.open();
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title><style>
-      @page{size:A4;margin:15mm}
-      *{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:Georgia,"Times New Roman",Arial,"Noto Sans Assamese","Nirmala UI",sans-serif;color:#111;line-height:1.38;font-size:14px}
-      .no-print{position:sticky;top:0;background:#fff;padding:8px 0 12px;z-index:5}.no-print button{padding:9px 14px;border:0;border-radius:7px;background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
-      .paper{border:1px solid #777;padding:7mm 7mm 6mm;min-height:267mm;overflow-wrap:anywhere}.header{text-align:center;border-bottom:2px solid #111;padding-bottom:7px;margin-bottom:10px}.brand{font-size:22px;font-weight:700;letter-spacing:.3px;margin-bottom:12px}.meta-row{display:grid;grid-template-columns:1.25fr .75fr 1.35fr;gap:12px;text-align:left;font-size:14px;margin:5px 0}.meta-row.bottom{grid-template-columns:1fr 1fr}.meta b{font-weight:700}.section{background:#e7e7e7;text-align:center;font-size:19px;font-weight:700;padding:5px 8px;margin:10px 0 7px;border-top:1px solid #ccc;border-bottom:1px solid #ccc}.section-line{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:4px 0 9px}.section-line .total{font-weight:700}.instruction{font-weight:700;margin:4px 0 9px}.q{break-inside:avoid;page-break-inside:avoid;margin:0 0 10px;display:grid;grid-template-columns:34px minmax(0,1fr) 28px;gap:6px;align-items:start}.q-num{font-weight:700}.q-body{min-width:0}.q-marks{text-align:right;font-weight:700}.q-block{margin:0 0 5px;white-space:pre-wrap;overflow-wrap:anywhere}.q-block mjx-container,.option mjx-container{max-width:100%;overflow-x:auto}.q-image{text-align:center;margin:7px 0}.q-image img{max-width:100%;height:auto;display:inline-block}.opts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:26px;row-gap:4px;margin-top:5px;padding-left:10px}.option{break-inside:avoid;min-width:0;overflow-wrap:anywhere}.section-a-q{margin-bottom:9px}.section-a-total{text-align:right;font-weight:700}.end{text-align:center;font-weight:700;margin:16px 0 7px}.footer{border-top:1px solid #777;padding-top:5px;display:flex;justify-content:space-between;font-size:11px}.key-q{break-inside:avoid;page-break-inside:avoid;display:grid;grid-template-columns:34px minmax(0,1fr) 28px;gap:7px;margin:0 0 12px}.key-num,.key-marks{font-weight:700}.key-marks{text-align:right}.key-answer-text{margin-top:4px;white-space:pre-wrap}.muted{color:#666}.key-section{background:#e7e7e7;text-align:center;font-weight:700;padding:5px;margin:12px 0 8px}.key-header-note{font-size:12px;color:#444;margin-bottom:10px}
-      ${extraCss}
-      ${mathStyles}
-      @media print{.no-print{display:none}.paper{border:0;padding:0;min-height:auto}body{font-size:13px}}
-      </style></head><body><div class="no-print"><button id="printBtn">Print / Save as PDF</button></div>${renderedBody}<script>document.getElementById('printBtn')?.addEventListener('click',()=>window.print());<\/script></body></html>`);
-    w.document.close();
-    stage.remove();
-    return w;
-  }catch(e){
-    stage.remove();
-    console.error('School paper MathJax render failed:',e);
-    alert('Mathematics could not be rendered. Please refresh the Teacher Dashboard and try again.\n\n'+(e.message||e));
-    return null;
-  }
+function qbOpenPrintWindow(title,body,extraCss=''){
+  const w=window.open('','_blank','width=1000,height=850');
+  if(!w){alert('Allow pop-ups for the PDF preview.');return null;}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${qbEsc(title)}</title><style>
+  @page{size:A4;margin:15mm 15mm 15mm 15mm}
+  *{box-sizing:border-box}body{font-family:Georgia,"Times New Roman",Arial,"Noto Sans Assamese","Nirmala UI",sans-serif;color:#111;line-height:1.38;font-size:14px;margin:0}
+  .no-print{position:sticky;top:0;background:#fff;padding:8px 0 12px;z-index:5}.no-print button{padding:9px 14px;border:0;border-radius:7px;background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+  .paper{border:1px solid #777;padding:7mm 7mm 6mm;min-height:267mm;overflow-wrap:anywhere}.header{text-align:center;border-bottom:2px solid #111;padding-bottom:7px;margin-bottom:10px}.brand{font-size:22px;font-weight:700;letter-spacing:.3px;margin-bottom:12px}.meta-row{display:grid;grid-template-columns:1.25fr .75fr 1.35fr;gap:12px;text-align:left;font-size:14px;margin:5px 0}.meta-row.bottom{grid-template-columns:1fr 1fr}.meta b{font-weight:700}.section{background:#e7e7e7;text-align:center;font-size:19px;font-weight:700;padding:5px 8px;margin:10px 0 7px;border-top:1px solid #ccc;border-bottom:1px solid #ccc}.section-line{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:4px 0 9px}.section-line .total{font-weight:700}.instruction{font-weight:700;margin:4px 0 9px}.q{break-inside:avoid;page-break-inside:avoid;margin:0 0 10px;display:grid;grid-template-columns:34px 1fr 28px;gap:6px;align-items:start}.q-num{font-weight:700}.q-body{min-width:0}.q-marks{text-align:right;font-weight:700}.q-block{margin:0 0 5px;white-space:pre-wrap;overflow-wrap:anywhere}.q-block mjx-container,.option mjx-container{max-width:100%;overflow-x:auto}.q-image{text-align:center;margin:7px 0}.q-image img{max-width:100%;height:auto;display:inline-block}.opts{display:grid;grid-template-columns:1fr 1fr;column-gap:26px;row-gap:4px;margin-top:5px;padding-left:10px}.option{break-inside:avoid}.section-a-q{margin-bottom:9px}.section-a-total{text-align:right;font-weight:700}.end{text-align:center;font-weight:700;margin:16px 0 7px}.footer{border-top:1px solid #777;padding-top:5px;display:flex;justify-content:space-between;font-size:11px}.key-q{break-inside:avoid;page-break-inside:avoid;display:grid;grid-template-columns:34px 1fr 28px;gap:7px;margin:0 0 12px}.key-num,.key-marks{font-weight:700}.key-marks{text-align:right}.key-answer-text{margin-top:4px;white-space:pre-wrap}.muted{color:#666}.key-section{background:#e7e7e7;text-align:center;font-weight:700;padding:5px;margin:12px 0 8px}.key-header-note{font-size:12px;color:#444;margin-bottom:10px}
+  ${extraCss}
+  @media print{.no-print{display:none}.paper{border:0;padding:0;min-height:auto}body{font-size:13px}}
+  </style><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="no-print"><button id="printBtn" disabled>Preparing mathematics…</button></div>${body}<script>window.addEventListener('load',async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;if(window.MathJax?.typesetPromise)await window.MathJax.typesetPromise([document.body]);}catch(e){console.error('MathJax:',e);}try{const imgs=[...document.images];await Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})));}catch(e){console.error('Image loading:',e);}const b=document.getElementById('printBtn');if(b){b.disabled=false;b.textContent='Print / Save as PDF';b.onclick=()=>window.print();}});<\/script></body></html>`);
+  w.document.close();
+  return w;
 }
-async function previewQuestionPaper(){
+function previewQuestionPaper(){
   const p=window._generatedBankPaper;if(!p)return;
   const selected=qbPaperSortQuestions(p.selected);
   const mcqs=selected.filter(q=>String(q.question_type||'').toUpperCase()==='MCQ');
@@ -1782,9 +1758,9 @@ async function previewQuestionPaper(){
   const sectionA=mcqs.map(q=>qHtml(q,num++,true)).join('');
   const sectionB=others.map(q=>qHtml(q,num++,false)).join('');
   const body=`<div class="paper"><div class="header"><div class="brand">SWARUP SIR'S KNOWLEDGE HUB</div>${p.title?`<div style="font-size:18px;font-weight:700;margin:-4px 0 10px">${qbEsc(p.title)}</div>`:''}<div class="meta-row"><div><b>Subject:</b> ${qbEsc(p.subject||'')}</div><div><b>Class:</b> ${qbEsc(p.className||'')}</div><div><b>Medium:</b> ${qbEsc(qbPaperMedium(p.lang))}</div></div><div class="meta-row bottom"><div><b>Time:</b> ${qbEsc(p.duration||'')}</div><div style="text-align:right"><b>Full Marks:</b> ${Number(p.total||0)}</div></div></div><div class="section">SECTION A</div><div class="section-line"><span>Choose the correct answer.</span><span class="total">1 × ${mcqs.length} = ${mcqMarks}</span></div>${sectionA}<div class="section">SECTION B</div><div class="instruction">Answer the following questions.</div>${sectionB}<div class="end">--- End of Question Paper ---</div><div class="footer"><span>(c) Swarup Sir's Knowledge Hub</span><span>Page <span class="pageNumber"></span></span></div></div>`;
-  await qbOpenPrintWindow('Question Paper',body);
+  qbOpenPrintWindow('Question Paper',body);
 }
-async function previewModelAnswerKey(){
+function previewModelAnswerKey(){
   const p=window._generatedBankPaper;if(!p)return;
   const selected=qbPaperSortQuestions(p.selected);
   const mcqs=selected.filter(q=>String(q.question_type||'').toUpperCase()==='MCQ');
@@ -1794,7 +1770,7 @@ async function previewModelAnswerKey(){
   const mcqRows=keyRows(mcqs,num);num+=mcqs.length;
   const otherRows=keyRows(others,num);
   const body=`<div class="paper"><div class="header"><div class="brand">SWARUP SIR'S KNOWLEDGE HUB</div>${p.title?`<div style="font-size:18px;font-weight:700;margin:-4px 0 10px">${qbEsc(p.title)}</div>`:''}<div class="meta-row"><div><b>Subject:</b> ${qbEsc(p.subject||'')}</div><div><b>Class:</b> ${qbEsc(p.className||'')}</div><div><b>Medium:</b> ${qbEsc(qbPaperMedium(p.lang))}</div></div><div class="meta-row bottom"><div><b>Time:</b> ${qbEsc(p.duration||'')}</div><div style="text-align:right"><b>Full Marks:</b> ${Number(p.total||0)}</div></div></div><div class="section">MODEL ANSWER KEY</div><div class="key-header-note">Question numbering follows the generated question paper. MCQ answers are shown first; model answers/marking notes are shown for non-MCQ questions where available.</div>${mcqs.length?`<div class="key-section">SECTION A — MCQ</div>${mcqRows}`:''}${others.length?`<div class="key-section">SECTION B</div>${otherRows}`:''}<div class="end">--- End of Model Answer Key ---</div><div class="footer"><span>(c) Swarup Sir's Knowledge Hub</span><span>Model Answer Key</span></div></div>`;
-  await qbOpenPrintWindow('Model Answer Key',body);
+  qbOpenPrintWindow('Model Answer Key',body);
 }
 function previewBankPaper(){
   const p=window._generatedBankPaper;if(!p)return;
