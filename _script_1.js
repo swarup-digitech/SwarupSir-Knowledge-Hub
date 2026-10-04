@@ -1891,25 +1891,48 @@ async function studentSubscription(){
 }
 
 async function loadTeacherFeeData(){
-  // Fee-list loading is intentionally done through the authenticated Supabase
-  // client instead of the create-students Edge Function. The Edge Function in
-  // older deployments can reject a valid teacher with "Profile not found".
-  // These SELECT operations are already protected by the fee-table RLS policies.
-  const [{data:students,error:se},{data:accounts,error:ae}]=await Promise.all([
-    sb.from("profiles")
+  // Students Fees is a JNVST teacher feature. Do NOT load SCHOOL students here.
+  // Determine the students from JNVST classes owned by the current teacher,
+  // then load only their fee accounts and payments. This also prevents a School
+  // student with a fee record from appearing accidentally.
+  const {data:jnvstClasses,error:ce}=await sb.from("classes")
+    .select("id,name,course,teacher_id")
+    .eq("teacher_id",current.id)
+    .in("course",["JNVST-6","JNVST-9"]);
+  if(ce)throw new Error("Could not load JNVST classes: "+ce.message);
+
+  const classIds=(jnvstClasses||[]).map(c=>c.id).filter(Boolean);
+  let memberships=[];
+  if(classIds.length){
+    const {data:rows,error:me}=await sb.from("class_students")
+      .select("student_id,class_id")
+      .in("class_id",classIds);
+    if(me)throw new Error("Could not load JNVST students: "+me.message);
+    memberships=rows||[];
+  }
+
+  const studentIds=[...new Set(memberships.map(x=>x.student_id).filter(Boolean))];
+  let students=[];
+  if(studentIds.length){
+    const {data:studentRows,error:se}=await sb.from("profiles")
       .select("id,full_name,roll_no,course")
       .eq("role","student")
-      .eq("course","SCHOOL")
-      .order("full_name"),
-    sb.from("student_fee_accounts")
-      .select("*")
-      .eq("teacher_id",current.id)
-      .order("updated_at",{ascending:false})
-  ]);
-  if(se)throw new Error("Could not load students: "+se.message);
+      .in("id",studentIds)
+      .in("course",["JNVST-6","JNVST-9"])
+      .order("full_name");
+    if(se)throw new Error("Could not load JNVST students: "+se.message);
+    students=studentRows||[];
+  }
+
+  const validStudentIds=new Set(students.map(s=>s.id));
+  const {data:accounts,error:ae}=await sb.from("student_fee_accounts")
+    .select("*")
+    .eq("teacher_id",current.id)
+    .order("updated_at",{ascending:false});
   if(ae)throw new Error("Could not load fee accounts: "+ae.message);
 
-  const accountRows=accounts||[];
+  // Keep only fee accounts belonging to the JNVST students displayed above.
+  const accountRows=(accounts||[]).filter(a=>validStudentIds.has(a.student_id));
   const accountIds=accountRows.map(a=>a.id).filter(Boolean);
   let payments=[];
   if(accountIds.length){
@@ -1922,12 +1945,19 @@ async function loadTeacherFeeData(){
     payments=paymentRows||[];
   }
 
+  const classMap=new Map((jnvstClasses||[]).map(c=>[String(c.id),c]));
+  const membershipMap=new Map();
+  memberships.forEach(m=>{
+    if(validStudentIds.has(m.student_id)&&!membershipMap.has(m.student_id))membershipMap.set(m.student_id,m);
+  });
+  students=students.map(st=>({...st,class_id:membershipMap.get(st.id)?.class_id||"",class_name:classMap.get(String(membershipMap.get(st.id)?.class_id||""))?.name||""}));
+
   const am=new Map(accountRows.map(a=>[a.student_id,a]));
   const pm=new Map();
   payments.forEach(p=>{
     pm.set(p.student_id,(pm.get(p.student_id)||0)+Number(p.amount||0));
   });
-  return {students:students||[],accounts:accountRows,payments,am,pm};
+  return {students,accounts:accountRows,payments,am,pm};
 }
 
 async function manageStudentFees(){

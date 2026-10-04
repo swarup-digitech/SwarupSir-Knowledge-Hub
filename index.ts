@@ -70,45 +70,110 @@ Deno.serve(async (req) => {
     const { data: caller, error: callerErr } = await admin.auth.getUser(token);
     if (callerErr || !caller.user) return json({error:"Not authenticated."},401);
 
-    const { data: teacher, error: teacherErr } = await admin.from("profiles")
-      .select("id, role").eq("id", caller.user.id).single();
-    if (teacherErr || teacher?.role !== "teacher")
+    // Teacher authorization: normally the teacher profile identifies the
+    // caller.  Some older projects have a valid Auth teacher account but a
+    // missing/out-of-sync profiles row.  In that case, safely fall back to
+    // class ownership: only an account that owns at least one class can use
+    // this teacher function.  This prevents the Student Accounts page from
+    // failing with the misleading "Profile not found" error.
+    const { data: teacher } = await admin.from("profiles")
+      .select("id, role").eq("id", caller.user.id).maybeSingle();
+    let teacherAuthorized = teacher?.role === "teacher";
+    if (!teacherAuthorized) {
+      const { data: ownedClasses, error: ownerErr } = await admin
+        .from("classes").select("id").eq("teacher_id", caller.user.id).limit(1);
+      if (ownerErr) return json({error:ownerErr.message},400);
+      teacherAuthorized = (ownedClasses ?? []).length > 0;
+    }
+    if (!teacherAuthorized)
       return json({error:"Only teachers can use this function."},403);
 
     // ------------------------------------------------------------
-    // Teacher: list student credentials for students in own classes
+    // Teacher: list student credentials for students in own classes.
+    // Return the complete JNVST membership/group payload expected by the
+    // Student Accounts page, including course and subgroup information.
     // ------------------------------------------------------------
     if (body.action === "listCredentials") {
       const { data: memberships, error: me } = await admin
         .from("class_students")
-        .select("student_id, classes!inner(id, name, teacher_id)")
+        .select(`student_id, class_id, classes!inner(
+          id, name, course, teacher_id, jnvst_group_type, jnvst_parent_id, description
+        )`)
         .eq("classes.teacher_id", caller.user.id);
       if (me) return json({error:me.message},400);
 
-      const map = new Map<string, {classes:string[]}>();
-      for (const row of memberships ?? []) {
-        const sid = row.student_id as string;
-        const cls = row.classes as any;
-        if (!map.has(sid)) map.set(sid,{classes:[]});
-        if (cls?.name && !map.get(sid)!.classes.includes(cls.name)) map.get(sid)!.classes.push(cls.name);
-      }
-      const ids = [...map.keys()];
-      if (!ids.length) return json({success:true,students:[]});
+      const ids = [...new Set((memberships ?? []).map((r:any)=>String(r.student_id)))];
+      if (!ids.length) return json({success:true,students:[],groups:[]});
 
       const { data: profiles, error: pe } = await admin
-        .from("profiles").select("id, full_name, username, roll_no").in("id", ids).order("full_name");
+        .from("profiles")
+        .select("id, full_name, username, roll_no, course")
+        .in("id", ids)
+        .order("full_name");
       if (pe) return json({error:pe.message},400);
+
       const { data: creds, error: ce } = await admin
-        .from("student_credentials").select("student_id, email, password_plaintext, updated_at").in("student_id", ids);
+        .from("student_credentials")
+        .select("student_id, email, password_plaintext, updated_at")
+        .in("student_id", ids);
       if (ce) return json({error:ce.message},400);
-      const cm = new Map((creds??[]).map(c=>[c.student_id,c]));
-      return json({success:true,students:(profiles??[]).map(p=>({
-        id:p.id, full_name:p.full_name, username:p.username, roll_no:p.roll_no || "",
-        email:cm.get(p.id)?.email || p.username || "",
-        password:cm.get(p.id)?.password_plaintext || "",
-        updated_at:cm.get(p.id)?.updated_at || null,
-        classes:map.get(p.id)?.classes || []
-      }))});
+      const cm = new Map((creds??[]).map(c=>[String(c.student_id),c]));
+
+      const classRows = (memberships ?? []).map((r:any)=>({
+        student_id:String(r.student_id),
+        class_id:String(r.class_id),
+        class:r.classes
+      }));
+      const classById = new Map<string,any>();
+      classRows.forEach(r=>{ if(r.class?.id) classById.set(String(r.class.id),r.class); });
+
+      const isSub = (c:any) => String(c?.jnvst_group_type||"").toLowerCase().includes("sub") || !!c?.jnvst_parent_id;
+      const groupName = (c:any) => String(c?.name||"");
+
+      const groups = [...classById.values()]
+        .filter((c:any)=>String(c?.course||"").toUpperCase().startsWith("JNVST"))
+        .map((c:any)=>{
+          const sub=isSub(c);
+          const parent= c.jnvst_parent_id ? classById.get(String(c.jnvst_parent_id)) : null;
+          return {
+            id:c.id,
+            name:groupName(c),
+            course:c.course||"",
+            is_subgroup:sub,
+            main_group_id:sub ? (c.jnvst_parent_id || "") : c.id,
+            main_group_name:sub ? (parent?.name || "JNVST") : groupName(c),
+            description:c.description||""
+          };
+        });
+
+      const students=(profiles??[]).map((p:any)=>{
+        const ms=classRows.filter(r=>r.student_id===String(p.id));
+        const membershipsOut=ms.map(r=>{
+          const c=r.class||{};
+          const sub=isSub(c);
+          const parent=c.jnvst_parent_id ? classById.get(String(c.jnvst_parent_id)) : null;
+          return {
+            class_id:r.class_id,
+            class_name:c.name||"",
+            main_group_id:sub ? (c.jnvst_parent_id||"") : c.id,
+            main_group_name:sub ? (parent?.name||"JNVST") : (c.name||""),
+            is_subgroup:sub,
+            course:c.course||""
+          };
+        });
+        const jnvstMs=membershipsOut.filter((m:any)=>String(m.course||"").toUpperCase().startsWith("JNVST"));
+        const availableSubgroups=groups.filter((g:any)=>g.is_subgroup && jnvstMs.some((m:any)=>String(m.main_group_id)===String(g.main_group_id)))
+          .map((g:any)=>({class_id:g.id,class_name:g.name,main_group_id:g.main_group_id,main_group_name:g.main_group_name}));
+        const cred=cm.get(String(p.id));
+        return {
+          id:p.id, full_name:p.full_name, username:p.username, roll_no:p.roll_no||"", course:p.course||"",
+          email:cred?.email||p.username||"", password:cred?.password_plaintext||"",
+          updated_at:cred?.updated_at||null, classes:membershipsOut.map((m:any)=>m.class_name),
+          memberships:jnvstMs, available_subgroups:availableSubgroups
+        };
+      });
+
+      return json({success:true,students,groups});
     }
 
     // ------------------------------------------------------------
