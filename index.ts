@@ -89,6 +89,75 @@ Deno.serve(async (req) => {
       return json({error:"Only teachers can use this function."},403);
 
     // ------------------------------------------------------------
+    // Teacher: list SCHOOL-course students in the teacher's own classes.
+    // The School Teacher Dashboard calls this action. Keep it separate from
+    // listCredentials, which is intentionally JNVST-only.
+    // ------------------------------------------------------------
+    if (body.action === "listSchoolStudents") {
+      const { data: memberships, error: me } = await admin
+        .from("class_students")
+        .select(`student_id, class_id, classes!inner(
+          id, name, course, teacher_id
+        )`)
+        .eq("classes.teacher_id", caller.user.id)
+        .eq("classes.course", "SCHOOL");
+      if (me) return json({error:me.message},400);
+
+      const rows = memberships ?? [];
+      const ids = [...new Set(rows.map((r:any)=>String(r.student_id)).filter(Boolean))];
+      if (!ids.length) return json({success:true,students:[]});
+
+      const { data: profiles, error: pe } = await admin
+        .from("profiles")
+        .select("id, full_name, username, roll_no, course, school_group_id")
+        .eq("role", "student")
+        .eq("course", "SCHOOL")
+        .in("id", ids)
+        .order("full_name");
+      if (pe) return json({error:pe.message},400);
+
+      const { data: creds, error: ce } = await admin
+        .from("student_credentials")
+        .select("student_id, email, password_plaintext, updated_at")
+        .in("student_id", ids);
+      if (ce) return json({error:ce.message},400);
+      const cm = new Map((creds ?? []).map((c:any)=>[String(c.student_id), c]));
+
+      const classMap = new Map<string,any>();
+      for (const r of rows as any[]) {
+        if (r.classes?.id && !classMap.has(String(r.classes.id))) {
+          classMap.set(String(r.classes.id), r.classes);
+        }
+      }
+      const membershipMap = new Map<string,any>();
+      for (const r of rows as any[]) {
+        const sid=String(r.student_id);
+        if (!membershipMap.has(sid)) membershipMap.set(sid, r);
+      }
+
+      const students = (profiles ?? []).map((p:any)=>{
+        const r=membershipMap.get(String(p.id));
+        const c=r?.classes || classMap.get(String(r?.class_id||"")) || {};
+        const cred=cm.get(String(p.id));
+        return {
+          id:p.id,
+          full_name:p.full_name,
+          username:p.username,
+          roll_no:p.roll_no || "",
+          course:p.course || "SCHOOL",
+          class_id:r?.class_id || "",
+          className:c.name || "",
+          school_group_id:p.school_group_id || null,
+          email:cred?.email || p.username || "",
+          password:cred?.password_plaintext || "",
+          updated_at:cred?.updated_at || null
+        };
+      });
+
+      return json({success:true,students});
+    }
+
+    // ------------------------------------------------------------
     // Teacher: list student credentials for students in own classes.
     // Return the complete JNVST membership/group payload expected by the
     // Student Accounts page, including course and subgroup information.
@@ -226,6 +295,194 @@ Deno.serve(async (req) => {
       },{onConflict:"student_id"});
       if (upErr) return json({error:upErr.message},400);
       return json({success:true});
+    }
+
+    // ------------------------------------------------------------
+    // JNVST fee management
+    // Fee operations are authorized by JNVST class ownership, not by the
+    // presence of a teacher profile row. This prevents the old
+    // "Profile not found" failure when recording a payment.
+    // ------------------------------------------------------------
+    const isJnvstCourse = (course:any) =>
+      ["JNVST-6", "JNVST-9"].includes(String(course ?? "").trim().toUpperCase());
+
+    async function getJnvstStudentForTeacher(studentId:string) {
+      if (!studentId) return { student:null, classRow:null, error:"Student ID is required." };
+      const { data: memberships, error: me } = await admin
+        .from("class_students")
+        .select(`student_id, class_id, classes!inner(id, name, course, teacher_id, jnvst_group_type, jnvst_parent_id)`)
+        .eq("student_id", studentId)
+        .eq("classes.teacher_id", caller.user.id)
+        .in("classes.course", ["JNVST-6", "JNVST-9"]);
+      if (me) return { student:null, classRow:null, error:me.message };
+      const row = (memberships ?? [])[0] as any;
+      if (!row) return { student:null, classRow:null, error:"This student is not a JNVST student assigned to you." };
+
+      const { data: student, error: se } = await admin
+        .from("profiles")
+        .select("id, full_name, roll_no, role, course")
+        .eq("id", studentId)
+        .maybeSingle();
+      if (se) return { student:null, classRow:null, error:se.message };
+      if (!student || String(student.role || "").toLowerCase() !== "student")
+        return { student:null, classRow:null, error:"Student account not found." };
+
+      return { student, classRow:row, error:null };
+    }
+
+    if (["feeSaveAccount", "feeAddPayment", "feeBulkImport"].includes(String(body.action || ""))) {
+      if (body.action === "feeSaveAccount") {
+        const studentId = String(body.student_id ?? "").trim();
+        const check = await getJnvstStudentForTeacher(studentId);
+        if (check.error) return json({error:check.error},403);
+
+        const total = Number(body.total_course_fee ?? 0);
+        const discount = Number(body.discount_amount ?? 0);
+        if (!Number.isFinite(total) || total < 0 || !Number.isFinite(discount) || discount < 0 || discount > total)
+          return json({error:"Invalid course fee or discount."},400);
+
+        const { data: existing, error: ee } = await admin
+          .from("student_fee_accounts")
+          .select("id, teacher_id")
+          .eq("student_id", studentId)
+          .maybeSingle();
+        if (ee) return json({error:ee.message},400);
+        if (existing && String(existing.teacher_id) !== String(caller.user.id))
+          return json({error:"This student's fee account belongs to another teacher."},403);
+
+        const payload = {
+          student_id:studentId,
+          teacher_id:caller.user.id,
+          group_id:check.classRow?.class_id || null,
+          total_course_fee:total,
+          discount_amount:discount,
+          course_name:String(body.course_name ?? "").trim() || null,
+          message:String(body.message ?? "").trim() || null,
+          message_enabled:Boolean(body.message_enabled)
+        };
+        const { data: account, error: ae } = await admin
+          .from("student_fee_accounts")
+          .upsert(payload,{onConflict:"student_id"})
+          .select("*")
+          .single();
+        if (ae) return json({error:ae.message},400);
+        return json({success:true,account});
+      }
+
+      if (body.action === "feeAddPayment") {
+        const studentId = String(body.student_id ?? "").trim();
+        const check = await getJnvstStudentForTeacher(studentId);
+        if (check.error) return json({error:check.error},403);
+
+        const amount = Number(body.amount ?? 0);
+        if (!Number.isFinite(amount) || amount <= 0) return json({error:"Amount must be greater than 0."},400);
+        const paymentDate = String(body.payment_date ?? "").trim() || new Date().toISOString().slice(0,10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) return json({error:"Invalid payment date."},400);
+
+        let { data: account, error: ae } = await admin
+          .from("student_fee_accounts")
+          .select("*")
+          .eq("student_id",studentId)
+          .eq("teacher_id",caller.user.id)
+          .maybeSingle();
+        if (ae) return json({error:ae.message},400);
+        if (!account) {
+          const { data: created, error: ce } = await admin
+            .from("student_fee_accounts")
+            .insert({
+              student_id:studentId,
+              teacher_id:caller.user.id,
+              group_id:check.classRow?.class_id || null,
+              total_course_fee:0,
+              discount_amount:0,
+              course_name:`${check.classRow?.classes?.name || "JNVST"}`
+            })
+            .select("*").single();
+          if (ce) return json({error:ce.message},400);
+          account = created;
+        }
+
+        const paymentMode = String(body.payment_mode ?? "").trim() || null;
+        const referenceNo = String(body.reference_no ?? "").trim() || null;
+        const remarks = String(body.remarks ?? "").trim() || null;
+
+        if (!Boolean(body.allow_duplicate)) {
+          let q = admin.from("student_fee_payments")
+            .select("id")
+            .eq("fee_account_id",account.id)
+            .eq("student_id",studentId)
+            .eq("payment_date",paymentDate)
+            .eq("amount",amount);
+          if (referenceNo) q = q.eq("reference_no",referenceNo);
+          const { data: dup, error: de } = await q.limit(1);
+          if (de) return json({error:de.message},400);
+          if ((dup ?? []).length) return json({error:"A payment with the same date and amount already exists for this student."},409);
+        }
+
+        const { data: payment, error: pe } = await admin
+          .from("student_fee_payments")
+          .insert({
+            fee_account_id:account.id,
+            student_id:studentId,
+            amount,
+            payment_date:paymentDate,
+            payment_mode:paymentMode,
+            reference_no:referenceNo,
+            remarks,
+            created_by:caller.user.id
+          })
+          .select("*").single();
+        if (pe) return json({error:pe.message},400);
+        return json({success:true,payment});
+      }
+
+      // Bulk fee import uses the same JNVST ownership checks as the manual
+      // fee actions. Validation-only requests never write to the database.
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      const mode = String(body.mode || "payments").toLowerCase();
+      if (!rows.length) return json({error:"No fee rows supplied."},400);
+      if (!["payments","setup"].includes(mode)) return json({error:"Invalid fee import mode."},400);
+
+      const results:any[] = [];
+      for (const row of rows) {
+        const studentId = String(row.student_id || "").trim();
+        let check:any = null;
+        if (!studentId && row.roll_no) {
+          const { data:p } = await admin.from("profiles").select("id").eq("roll_no",String(row.roll_no).trim()).eq("role","student").maybeSingle();
+          if (p?.id) { check = await getJnvstStudentForTeacher(String(p.id)); }
+        } else if (studentId) {
+          check = await getJnvstStudentForTeacher(studentId);
+        }
+        if (!check || check.error) {
+          results.push({row:row.__row||row.row||0,roll_no:String(row.roll_no||""),status:"error",error:check?.error||"JNVST student not found."});
+          continue;
+        }
+        if (mode === "payments") {
+          const amount = Number(row.amount_paid ?? row.amount ?? 0);
+          const paymentDate = String(row.payment_date || new Date().toISOString().slice(0,10));
+          if (!Number.isFinite(amount) || amount <= 0) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:"Invalid amount."}); continue; }
+          let { data:account, error:ae } = await admin.from("student_fee_accounts").select("*").eq("student_id",check.student.id).eq("teacher_id",caller.user.id).maybeSingle();
+          if (ae) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:ae.message}); continue; }
+          if (!account) {
+            const { data:created,error:ce } = await admin.from("student_fee_accounts").insert({student_id:check.student.id,teacher_id:caller.user.id,group_id:check.classRow?.class_id||null,total_course_fee:0,discount_amount:0,course_name:"JNVST"}).select("*").single();
+            if (ce) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:ce.message}); continue; }
+            account=created;
+          }
+          const { data:dup } = await admin.from("student_fee_payments").select("id").eq("fee_account_id",account.id).eq("student_id",check.student.id).eq("payment_date",paymentDate).eq("amount",amount).limit(1);
+          if ((dup||[]).length) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"duplicate",error:"Duplicate payment."}); continue; }
+          if (body.validate_only) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"valid"}); continue; }
+          const {error:pe}=await admin.from("student_fee_payments").insert({fee_account_id:account.id,student_id:check.student.id,amount,payment_date:paymentDate,payment_mode:String(row.payment_mode||"").trim()||null,reference_no:String(row.reference_no||"").trim()||null,remarks:String(row.remarks||"").trim()||null,import_batch_id:String(body.batch_id||"").trim()||null,source_row_number:Number(row.__row||0)||null,created_by:caller.user.id});
+          results.push(pe?{row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:pe.message}:{row:row.__row||0,roll_no:String(row.roll_no||""),status:"valid"});
+        } else {
+          const total=Number(row.total_course_fee||0), discount=Number(row.discount_amount||0);
+          if (!Number.isFinite(total)||total<0||!Number.isFinite(discount)||discount<0||discount>total) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:"Invalid fee or discount."}); continue; }
+          if (body.validate_only) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"valid"}); continue; }
+          const {error:ae}=await admin.from("student_fee_accounts").upsert({student_id:check.student.id,teacher_id:caller.user.id,group_id:check.classRow?.class_id||null,total_course_fee:total,discount_amount:discount,course_name:String(row.course_name||"").trim()||null,message:String(row.message||"").trim()||null,message_enabled:Boolean(row.message_enabled)},{onConflict:"student_id"});
+          results.push(ae?{row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:ae.message}:{row:row.__row||0,roll_no:String(row.roll_no||""),status:"valid"});
+        }
+      }
+      const imported=results.filter(r=>r.status==="valid").length;
+      return json({success:true,results,imported,batch_id:String(body.batch_id||"")});
     }
 
     // ------------------------------------------------------------
