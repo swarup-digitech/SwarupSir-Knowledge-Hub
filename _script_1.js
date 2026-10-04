@@ -1890,7 +1890,45 @@ async function studentSubscription(){
   }catch(e){render(`<div class="wrap">${header("My Subscription")}<div class="card">${message("Could not load subscription details: "+(e.message||e))}</div></div>`)}
 }
 
-async function loadTeacherFeeData(){const j=await callTeacherFn({action:"feeList"});const students=j.students||[],accounts=j.accounts||[],payments=j.payments||[];const am=new Map(accounts.map(a=>[a.student_id,a])),pm=new Map();payments.forEach(p=>{pm.set(p.student_id,(pm.get(p.student_id)||0)+Number(p.amount||0));});return {students,accounts,payments,am,pm};}
+async function loadTeacherFeeData(){
+  // Fee-list loading is intentionally done through the authenticated Supabase
+  // client instead of the create-students Edge Function. The Edge Function in
+  // older deployments can reject a valid teacher with "Profile not found".
+  // These SELECT operations are already protected by the fee-table RLS policies.
+  const [{data:students,error:se},{data:accounts,error:ae}]=await Promise.all([
+    sb.from("profiles")
+      .select("id,full_name,roll_no,course")
+      .eq("role","student")
+      .eq("course","SCHOOL")
+      .order("full_name"),
+    sb.from("student_fee_accounts")
+      .select("*")
+      .eq("teacher_id",current.id)
+      .order("updated_at",{ascending:false})
+  ]);
+  if(se)throw new Error("Could not load students: "+se.message);
+  if(ae)throw new Error("Could not load fee accounts: "+ae.message);
+
+  const accountRows=accounts||[];
+  const accountIds=accountRows.map(a=>a.id).filter(Boolean);
+  let payments=[];
+  if(accountIds.length){
+    const {data:paymentRows,error:pe}=await sb.from("student_fee_payments")
+      .select("*")
+      .in("fee_account_id",accountIds)
+      .order("payment_date",{ascending:false})
+      .order("created_at",{ascending:false});
+    if(pe)throw new Error("Could not load fee payments: "+pe.message);
+    payments=paymentRows||[];
+  }
+
+  const am=new Map(accountRows.map(a=>[a.student_id,a]));
+  const pm=new Map();
+  payments.forEach(p=>{
+    pm.set(p.student_id,(pm.get(p.student_id)||0)+Number(p.amount||0));
+  });
+  return {students:students||[],accounts:accountRows,payments,am,pm};
+}
 
 async function manageStudentFees(){
   try{
