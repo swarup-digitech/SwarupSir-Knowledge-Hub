@@ -1574,13 +1574,25 @@ function previewQuestionPaper(){
   const mcqs=selected.filter(q=>String(q.question_type||'').toUpperCase()==='MCQ');
   const others=selected.filter(q=>String(q.question_type||'').toUpperCase()!=='MCQ');
   const mcqMarks=mcqs.length;
+
+  // Escape user/database text first, then deliberately restore only BR tags.
+  // This prevents literal <br> from appearing in the generated PDF while
+  // still keeping the output safe from arbitrary HTML injection.
+  const paperTextHtml=(value)=>qbEsc(String(value??''))
+    .replace(/&lt;br\s*\/?&gt;/gi,'<br>');
+  const bilingualHtml=(en,as)=>{
+    const e=paperTextHtml(en),a=paperTextHtml(as);
+    if(e&&a)return `${e}<br>${a}`;
+    return e||a;
+  };
+
   const qHtml=(q,num,sectionA=false)=>{
     const bs=p.blocks.filter(b=>b.question_id===q.id).sort((a,b)=>a.block_order-b.block_order);
     const os=p.opts.filter(o=>o.question_id===q.id).sort((a,b)=>a.display_order-b.display_order);
-    const blocks=bs.map(b=>b.block_type==='IMAGE'?`<div class="q-image"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'') }" style="width:${Math.min(100,Number(b.image_width||70))}%"></div>`:`<div class="q-block">${p.lang==='AS'?qbEsc(b.text_as||''):p.lang==='BOTH'?`${qbEsc(b.text_en||'')}${b.text_en&&b.text_as?'<br>':''}${qbEsc(b.text_as||'')}`:qbEsc(b.text_en||'')}</div>`).join('');
+    const blocks=bs.map(b=>b.block_type==='IMAGE'?`<div class="q-image"><img src="${qbEsc(b.image_url)}" alt="${qbEsc(b.alt_text||'') }" style="width:${Math.min(100,Number(b.image_width||70))}%"></div>`:`<div class="q-block">${p.lang==='AS'?paperTextHtml(b.text_as||b.text_en||''):p.lang==='BOTH'?bilingualHtml(b.text_en,b.text_as):paperTextHtml(b.text_en||b.text_as||'')}</div>`).join('');
     const isMcq=String(q.question_type||'').trim().toUpperCase()==='MCQ';
-    const optionText=(o)=>p.lang==='AS'?(o.option_text_as||o.option_text_en||''):p.lang==='BOTH'?`${o.option_text_en||''}${o.option_text_en&&o.option_text_as?'<br>':''}${o.option_text_as||''}`:(o.option_text_en||o.option_text_as||'');
-    const options=isMcq?`<div class="opts">${os.map((o,i)=>`<div class="option"><b>${qbEsc(o.option_label||String.fromCharCode(65+i))}.</b>${optionText(o)?` ${qbEsc(optionText(o))}`:''}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" alt="Option ${qbEsc(o.option_label||String.fromCharCode(65+i))}" style="max-width:100%;height:auto;max-height:180px;margin-top:3px;object-fit:contain">`:''}</div>`).join('')}</div>`:'';
+    const optionText=(o)=>p.lang==='AS'?paperTextHtml(o.option_text_as||o.option_text_en||''):p.lang==='BOTH'?bilingualHtml(o.option_text_en,o.option_text_as):paperTextHtml(o.option_text_en||o.option_text_as||'');
+    const options=isMcq?`<div class="opts">${os.map((o,i)=>`<div class="option"><b>${qbEsc(o.option_label||String.fromCharCode(65+i))}.</b>${optionText(o)?` ${optionText(o)}`:''}${o.image_url?`<br><img src="${qbEsc(o.image_url)}" alt="Option ${qbEsc(o.option_label||String.fromCharCode(65+i))}" style="max-width:100%;height:auto;max-height:180px;margin-top:3px;object-fit:contain">`:''}</div>`).join('')}</div>`:'';
     return `<div class="q ${sectionA?'section-a-q':''}"><div class="q-num">${num}.</div><div class="q-body">${blocks}${options}</div><div class="q-marks">${sectionA?'':`<b>${Number(q.marks||0)}</b>`}</div></div>`;
   };
   let num=1;
