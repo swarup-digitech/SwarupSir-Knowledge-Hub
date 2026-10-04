@@ -981,7 +981,7 @@ function qbChapterManager(){
       <button onclick="qbAddChapter()">Add Chapter / Subchapter</button></div>
       <div><h3>Existing Chapters</h3>${qbChapters.slice().sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>`<div class="student-card"><b>${qbChapterDisplay(c)}</b><div class="small muted">${qbEsc(c.description||'')}</div><button class="danger" style="margin-top:7px" onclick="qbDeleteChapter('${c.id}')">Delete</button></div>`).join('')||'<div class="muted">No chapters yet.</div>'}</div>
     </div></div>
-    <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><button class="secondary" onclick="qbDownloadExistingChapters()">⬇ Download Existing Chapters + Subchapters</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Blank Chapter/Subchapter Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
+    <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><button class="secondary" onclick="qbDownloadExistingChapters()">⬇ Download Existing Chapters + Subchapters (Excel)</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Blank Chapter/Subchapter Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
   }).catch(e=>alert(e.message));
 }
 async function qbAddChapter(){
