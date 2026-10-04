@@ -371,8 +371,8 @@ document.getElementById('loginForm').addEventListener('submit',async e=>{
    if(!res.ok||j.error)throw new Error(j.error||'Invalid Roll No or Password.');
    const {error}=await sb.auth.setSession({access_token:j.access_token,refresh_token:j.refresh_token});
    if(error)throw error;
-   const user={id:j.student_id};
-   if(!user.id)throw new Error('Student session could not be created.');
+   const {data:{user}}=await sb.auth.getUser();
+   if(!user)throw new Error('Student session could not be created.');
    const {data:profile,error:profileError}=await sb.from('profiles').select('id,full_name,roll_no,username,role,course').eq('id',user.id).single();
    if(profileError||!profile||profile.role!=='student')throw new Error('This account is not a student account.');
    if(String(profile.course||'').toUpperCase()!==String(selectedCourse||'').toUpperCase())
