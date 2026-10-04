@@ -860,6 +860,13 @@ function gpRefreshFixedList(){
       </div>
     </label>`;
   }).join(''):'<div class="muted">No questions found.</div>';
+  // Fixed-question cards are inserted dynamically, so MathJax must be
+  // explicitly typeset after the HTML is placed in the DOM. Without this,
+  // expressions such as \(x_1,y_1\) remain visible as raw LaTeX.
+  if(window.MathJax?.typesetPromise){
+    const root=document.getElementById('gpFixedList');
+    if(root) window.MathJax.typesetPromise([root]).catch(()=>{});
+  }
 }
 function gpToggleFixed(id,on){if(on)gpFixedIds.add(id);else gpFixedIds.delete(id);const e=document.getElementById('gpFixedCount');if(e)e.textContent=gpFixedIds.size+' fixed question(s) selected.'}
 
