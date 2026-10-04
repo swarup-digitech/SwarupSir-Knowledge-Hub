@@ -2429,7 +2429,7 @@ function bulkImportStudents(){
   bulkStudents=[];
   render(`<div class="wrap">${header("Bulk JNVST Students — Excel")}
     <div class="card" style="border:2px solid #f59e0b;background:#fffbeb"><h3>⚠ Bulk Student Account Creation</h3><p class="small" style="margin:0">Check the Excel preview carefully. Each row creates a real student login account. Existing Roll Nos. cannot be duplicated.</p></div>
-    <div class="card"><p><b>Required Excel columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div><p class="muted small">For JNVST, <b>Class</b> should be the exact existing JNVST main group or sub-group name. No email is required.</p>
+    <div class="card"><p><b>Required Excel columns:</b></p><div class="tag" style="font-size:15px">Name | Roll No | Class | Password</div><p class="muted small">For JNVST, <b>Class</b> should be the exact existing JNVST main group or sub-group name. Students use Roll No. + Password; no student email is required.</p>
     <label>Excel file</label><input id="studentExcel" type="file" accept=".xlsx,.xls" onchange="readJnvstStudentExcel(event)"><div id="bulkPreview"></div>
     <div class="actions"><button onclick="uploadJnvstBulkStudents()">Create All Students</button><button class="secondary" onclick="teacherHome()">← Dashboard</button><button class="secondary" onclick="manageStudentAccounts()">Student Accounts</button></div></div></div>`);
 }
