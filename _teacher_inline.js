@@ -1223,12 +1223,34 @@ let qbJnvstSubjects=[],qbJnvstLessons=[];
 function qbJnvstSubjectOptions(selected=''){const rows=qbJnvstSubjects||[];return `<option value="">Select JNVST Subject</option>${rows.map(x=>`<option value="${qbEsc(x.id)}" ${selected===x.id?'selected':''}>${qbEsc(x.name)}</option>`).join('')}`}
 function qbJnvstLessonOptions(subjectId,selected=''){const rows=(qbJnvstLessons||[]).filter(x=>!subjectId||x.subject_id===subjectId);const roots=rows.filter(x=>!x.parent_lesson_id);const out=[];const add=(l,d=0)=>{out.push(`<option value="${qbEsc(l.id)}" ${selected===l.id?'selected':''}>${'— '.repeat(d)}${qbEsc(l.lesson_code||'')} ${qbEsc(l.lesson_name)}</option>`);rows.filter(x=>x.parent_lesson_id===l.id).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x,d+1))};roots.sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x));return `<option value="">Select Lesson / Sub-lesson</option>${out.join('')}`}
 function qbRefreshJnvstLessonOptions(){const el=document.getElementById('qbJnvstLesson');if(el)el.innerHTML=qbJnvstLessonOptions(document.getElementById('qbJnvstSubject')?.value||'',el.dataset.selected||'')}
-async function qbEditor(id=null){
-  qbEditingId=id;
+let qbSimilarSourceId=null;
+function qbNewVariationGroup(){
+  const now=Date.now().toString(36).toUpperCase();
+  const rnd=Math.random().toString(36).slice(2,7).toUpperCase();
+  return `VG-${now}-${rnd}`;
+}
+async function qbGenerateSimilar(id){
+  const source=qbQuestions.find(x=>x.id===id);
+  if(!source)return alert('Source question not found.');
+  if(String(source.course_type||'SCHOOL').toUpperCase()!=='SCHOOL')return alert('Generate Similar Question is available only for School Course questions.');
+  let group=String(source.variation_group||'').trim();
+  try{
+    if(!group){
+      group=qbNewVariationGroup();
+      const {error}=await sb.from('school_question_bank_questions').update({variation_group:group}).eq('id',id).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
+      if(error)throw error;
+    }
+    await loadQuestionBank();
+    qbEditor(id,true);
+  }catch(e){alert('Could not start Similar Question mode: '+e.message)}
+}
+async function qbEditor(id=null, similar=false){
+  qbSimilarSourceId=similar?id:null;
+  qbEditingId=similar?null:id;
   const q=id?qbQuestions.find(x=>x.id===id):null;
   qbEditorBlocks=[];qbEditorOptions=[];
   const ch=qbChapters.length?qbChapters[0].id:'';
-  document.getElementById('app').innerHTML=`${header(id?'Edit Question':'Add Question')}
+  document.getElementById('app').innerHTML=`${header(similar?'Generate Similar Question':id?'Edit Question':'Add Question')}
   <div class="card">
    <div class="notice"><b>School Course Question Bank:</b> Chapter → Subchapter → Topic. JNVST Course uses a separate Question Bank in the JNVST Teacher Dashboard.</div>
    <div class="grid">
@@ -1249,14 +1271,22 @@ async function qbEditor(id=null){
     <div class="actions"><button class="secondary" onclick="qbAddTextBlock()">+ Text Block</button><button class="secondary" onclick="qbAddImageBlock()">🖼 Upload Image</button></div>
   </div>
   <div class="card" id="qbOptionsCard"><h3>MCQ Options</h3><div id="qbOptions"></div><button class="secondary" onclick="qbAddOption()">+ Add Option</button></div>
-  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions"><button onclick="qbSave()">💾 Save Question</button><button class="secondary" onclick="questionBankHome()">Cancel</button></div></div>`;
+  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions">
+    <button onclick="qbSave()">${similar?'💾 Save as New Similar Question':'💾 Save Question'}</button>
+    ${id&&!similar?'<button class="secondary" onclick="qbGenerateSimilar(\''+id+'\')">➕ Generate Similar Question</button>':''}
+    <button class="secondary" onclick="questionBankHome()">Cancel</button>
+  </div>${similar?'<div class="notice" style="margin-top:10px"><b>Similar-question mode:</b> All School Course fields, including English and Assamese content, have been copied from the source question. Edit the required values and save; the new question will remain in the same variation group.</div>':''}</div>`;
   if(!id){qbAddTextBlock();} else {
-    sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order').then(({data,error})=>{
-      if(error)return alert(error.message);qbEditorBlocks=data||[];qbRenderBlocks();
-    });
-    sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order').then(({data,error})=>{
-      if(error)return alert(error.message);qbEditorOptions=data||[];qbRenderOptions();
-    });
+    Promise.all([
+      sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order'),
+      sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order')
+    ]).then(([br,op])=>{
+      if(br.error)throw br.error;
+      if(op.error)throw op.error;
+      qbEditorBlocks=(br.data||[]).map(b=>({...b,id:null}));
+      qbEditorOptions=(op.data||[]).map(o=>({...o,id:null}));
+      qbRenderBlocks();qbRenderOptions();
+    }).catch(e=>alert('Could not load question content: '+e.message));
   }
   qbTypeChanged();
 }
@@ -1463,8 +1493,14 @@ async function qbSave(){
   if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
   const type=document.getElementById('qbType').value;
   if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return alert('MCQ needs at least 2 options and exactly one correct answer.');
-  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,medium:(qbEditorBlocks.some(b=>String(b.text_en||'').trim())&&qbEditorBlocks.some(b=>String(b.text_as||'').trim())?'BOTH':qbEditorBlocks.some(b=>String(b.text_en||'').trim())?'ENGLISH':qbEditorBlocks.some(b=>String(b.text_as||'').trim())?'ASSAMESE':null),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||null,topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
+  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,medium:(document.getElementById('qbMedium')?.value||((qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))&&(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'BOTH':(qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))?'ENGLISH':(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'ASSAMESE':null)),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||(qbSimilarSourceId?qbNewVariationGroup():null),topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
   try{
+    if(qbSimilarSourceId && !String(document.getElementById('qbVariation')?.value||'').trim()){
+      const g=qbNewVariationGroup();
+      document.getElementById('qbVariation').value=g;
+      const {error:ge}=await sb.from('school_question_bank_questions').update({variation_group:g}).eq('id',qbSimilarSourceId).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
+      if(ge)throw ge;
+    }
     let qid=qbEditingId;
     if(qid){const {error}=await sb.from('school_question_bank_questions').update(payload).eq('id',qid).eq('teacher_id',teacher.id);if(error)throw error;await sb.from('school_question_bank_blocks').delete().eq('question_id',qid);await sb.from('school_question_bank_options').delete().eq('question_id',qid);}
     else {const {data,error}=await sb.from('school_question_bank_questions').insert(payload).select().single();if(error)throw error;qid=data.id;}
@@ -1518,6 +1554,27 @@ function gpRecalc(){const total=Number(document.getElementById('gpTotal')?.value
 function gpTypeMsg(){const p=QB_TYPES.map((_,i)=>Number(document.getElementById('gpTypePct'+i)?.value||0));const e=document.getElementById('gpTypeMsg');if(e)e.textContent='Question-type total: '+p.reduce((a,b)=>a+b,0)+'%'+(p.reduce((a,b)=>a+b,0)===100?' ✓':' (set 100% or leave 100/0/0)')}
 function gpSubsetClosest(items,target){target=Math.round(target);let states=new Map([[0,[]]]);for(let i=0;i<items.length;i++){const m=Number(items[i].marks);if(!Number.isFinite(m)||m<=0)continue;const next=new Map(states);for(const [sum,arr] of states){const ns=sum+m;if(ns>target+10)continue;if(!next.has(ns))next.set(ns,arr.concat(i));}states=next;if(states.size>3000){const arr=[...states.entries()].sort((a,b)=>Math.abs(target-a[0])-Math.abs(target-b[0])).slice(0,2000);states=new Map(arr)}}let best=0,bestArr=[];for(const [sum,arr] of states){if(Math.abs(target-sum)<Math.abs(target-best)){best=sum;bestArr=arr}else if(sum===target){best=sum;bestArr=arr;break}}return {sum:best,indices:bestArr}}
 function gpVariationKey(q){return String(q.variation_group||'').trim().toLowerCase()||null}
+// Automatic duplicate detection (independent of Variation Group). Two questions are treated as the
+// same when their wording is identical after ignoring numbers that sit OUTSIDE maths (e.g. "part (2)"
+// vs "part (5)", "Fig. 2.10"), spacing, case and punctuation, and their options are identical.
+// Numbers inside maths are kept, so "Find the sum of 10 terms of 2,5,8.." stays distinct from other values.
+function gpAutoDupKey(q){
+  if(q._autoDupKey!==undefined)return q._autoDupKey;
+  const raw=String(q.question_text_en||'').trim()||String(q.question_text_as||'').trim();
+  const mathRe=/(\$\$[\s\S]*?\$\$|\$[^$\n]*\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/g;
+  const parts=raw.split(mathRe).map((s,i)=>i%2?'M'+s.replace(/\s+/g,''):s.toLowerCase().replace(/[0-9]+/g,'').replace(/[^\p{L}\p{M}]+/gu,' ').trim());
+  const stem=parts.join('|');
+  let key=null;
+  if(stem.replace(/[|M\s]/g,'').length>=8){
+    const opts=(typeof qbOptions!=='undefined'?qbOptions:[]).filter(o=>o.question_id===q.id)
+      .sort((a,b)=>(a.display_order||0)-(b.display_order||0))
+      .map(o=>String(o.option_text_en||o.option_text_as||'').toLowerCase().replace(/\s+/g,''));
+    key='auto:'+(q.question_type||'')+'::'+stem+'::'+opts.join('~');
+  }
+  try{Object.defineProperty(q,'_autoDupKey',{value:key,enumerable:false,writable:true})}catch(e){}
+  return key;
+}
+function gpDupKeys(q){const a=[],g=gpVariationKey(q),k=gpAutoDupKey(q);if(g)a.push('grp:'+g);if(k)a.push(k);return a}
 function gpQuestionChapterRule(q,rules){return rules.find(r=>r.ids.has(q.chapter_id))||null}
 function gpCandidateTypeAllowed(q,typeP){const positives=typeP.map((x,i)=>x>0?QB_TYPES[i]:null).filter(Boolean);return positives.length!==1||positives.includes(q.question_type)}
 function gpScoreState(candidate,total,targets,levelMarks,rules,chapterMarks,typeTargets,typeMarks){
@@ -1544,7 +1601,7 @@ function gpTypeTargets(typeP,total){
   return Object.fromEntries(QB_TYPES.map((t,i)=>[t,total*typeP[i]/100]));
 }
 function gpBuildAttempt(base,candidates,total,targets,rules,typeP){
-  const selected=[...base],used=new Set(selected.map(q=>q.id)),groups=new Set(selected.map(gpVariationKey).filter(Boolean));
+  const selected=[...base],used=new Set(selected.map(q=>q.id)),groups=new Set(selected.flatMap(gpDupKeys));
   const levelMarks=Object.fromEntries(QB_LEVELS.map(x=>[x,selected.filter(q=>q.cognitive_level===x).reduce((a,q)=>a+Number(q.marks),0)]));
   const chapterMarks=Object.fromEntries(rules.map(r=>[r.id,selected.filter(q=>r.ids.has(q.chapter_id)).reduce((a,q)=>a+Number(q.marks),0)]));
   const typeMarks=Object.fromEntries(QB_TYPES.map(t=>[t,selected.filter(q=>q.question_type===t).reduce((a,q)=>a+Number(q.marks),0)]));
@@ -1552,12 +1609,12 @@ function gpBuildAttempt(base,candidates,total,targets,rules,typeP){
   let sum=selected.reduce((a,q)=>a+Number(q.marks),0);
   let pool=candidates.filter(q=>!used.has(q.id)&&gpCandidateTypeAllowed(q,typeP));
   while(sum<total&&pool.length){
-    const feasible=pool.filter(q=>{const m=Number(q.marks),r=gpQuestionChapterRule(q,rules),g=gpVariationKey(q);if(!(m>0)||sum+m>total)return false;if(g&&groups.has(g))return false;if(r&&(chapterMarks[r.id]||0)+m>r.max)return false;return true});
+    const feasible=pool.filter(q=>{const m=Number(q.marks),r=gpQuestionChapterRule(q,rules),g=gpDupKeys(q);if(!(m>0)||sum+m>total)return false;if(g.some(k=>groups.has(k)))return false;if(r&&(chapterMarks[r.id]||0)+m>r.max)return false;return true});
     if(!feasible.length)break;
     const scored=feasible.map(q=>({q,s:gpScoreState(q,total,targets,levelMarks,rules,chapterMarks,typeTargets,typeMarks)+Math.random()*6}));
     scored.sort((a,b)=>a.s-b.s);
-    const q=scored[0].q,m=Number(q.marks),r=gpQuestionChapterRule(q,rules),g=gpVariationKey(q);
-    selected.push(q);used.add(q.id);if(g)groups.add(g);sum+=m;levelMarks[q.cognitive_level]+=m;typeMarks[q.question_type]=(typeMarks[q.question_type]||0)+m;if(r)chapterMarks[r.id]+=m;pool=pool.filter(x=>x.id!==q.id);
+    const q=scored[0].q,m=Number(q.marks),r=gpQuestionChapterRule(q,rules);
+    selected.push(q);used.add(q.id);gpDupKeys(q).forEach(k=>groups.add(k));sum+=m;levelMarks[q.cognitive_level]+=m;typeMarks[q.question_type]=(typeMarks[q.question_type]||0)+m;if(r)chapterMarks[r.id]+=m;pool=pool.filter(x=>x.id!==q.id);
   }
   return {selected,sum,levelMarks,chapterMarks,typeMarks,groups};
 }
@@ -1566,7 +1623,7 @@ function gpEvalSelection(selected,total,targets,rules,typeTargets){
   const levelMarks=Object.fromEntries(QB_LEVELS.map(x=>[x,selected.filter(q=>q.cognitive_level===x).reduce((a,q)=>a+Number(q.marks),0)]));
   const chapterMarks=Object.fromEntries(rules.map(r=>[r.id,selected.filter(q=>r.ids.has(q.chapter_id)).reduce((a,q)=>a+Number(q.marks),0)]));
   const typeMarks=Object.fromEntries(QB_TYPES.map(t=>[t,selected.filter(q=>q.question_type===t).reduce((a,q)=>a+Number(q.marks),0)]));
-  const groups=selected.map(gpVariationKey).filter(Boolean);
+  const groups=selected.flatMap(gpDupKeys);
   const varOk=new Set(groups).size===groups.length;
   const chapterOk=rules.every(x=>(chapterMarks[x.id]||0)>=x.min&&(chapterMarks[x.id]||0)<=x.max);
   const cogErr=QB_LEVELS.reduce((z,l)=>z+Math.abs(targets[l]-levelMarks[l]),0);
@@ -1616,7 +1673,7 @@ async function gpGenerate(){
   const invalidFixed=fixed.filter(q=>!qbLanguageAvailable(q,lang));
   if(invalidFixed.length)return alert(`${invalidFixed.length} fixed question(s) do not have the selected ${qbPaperMedium(lang)} version. Remove them or choose another medium.`);
   if(fixed.some(q=>allowedCh&&!allowedCh.has(q.chapter_id)))return alert('A fixed question is outside the selected chapter filter. Remove it or change the chapter filter.');
-  const fixedGroups=fixed.map(gpVariationKey).filter(Boolean);if(new Set(fixedGroups).size!==fixedGroups.length)return alert('Two or more fixed questions belong to the same Variation Group. Only one question from each Variation Group can be selected.');
+  const fixedGroups=fixed.flatMap(gpDupKeys);if(new Set(fixedGroups).size!==fixedGroups.length)return alert('Two or more fixed questions are duplicates (same Variation Group, or the same question wording and options). Keep only one of them.');
   const fixedSum=fixed.reduce((a,q)=>a+Number(q.marks),0);if(fixedSum>total)return alert('Fixed questions already exceed the paper total.');
   const fixedChapter=Object.fromEntries(rules.map(r=>[r.id,0]));for(const q of fixed){const r=gpQuestionChapterRule(q,rules);if(r)fixedChapter[r.id]+=Number(q.marks)}
   for(const r of rules)if(fixedChapter[r.id]>r.max)return alert(`Fixed questions exceed the maximum marks for Chapter ${r.code}.`);
