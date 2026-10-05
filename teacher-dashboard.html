@@ -934,6 +934,7 @@ function questionBankHome(){
 
         <select id="qbMediumFilter" onchange="qbRenderTable()"><option value="">All Mediums</option><option value="ENGLISH">English</option><option value="ASSAMESE">Assamese</option><option value="BOTH">English + Assamese</option></select>
         <select id="qbChapterFilter" onchange="qbRenderTable()">${qbChapterOptions()}</select>
+        <select id="qbVariationFilter" onchange="qbRenderTable()"><option value="">All Variation Groups</option>${qbVariationGroupOptions()}</select>
         <select id="qbLevelFilter" onchange="qbRenderTable()"><option value="">All Cognitive Levels</option>${QB_LEVELS.map(x=>`<option>${x}</option>`).join('')}</select><select id="qbTextBookFilter" onchange="qbRenderTable()"><option value="">Textbook: All</option><option value="YES">Textbook: YES</option><option value="NO">Textbook: NO</option></select>
         
       </div>
@@ -968,15 +969,46 @@ function qbQuestionTextForMedium(q,med){
   }
   return String(q?.question_text_en||q?.question_text_as||'').trim();
 }
+function qbVariationGroups(){
+  const groups=new Map();
+  (qbQuestions||[]).forEach(q=>{const g=String(q?.variation_group||'').trim();if(!g)return;if(!groups.has(g))groups.set(g,0);groups.set(g,groups.get(g)+1);});
+  return [...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true,sensitivity:'base'}));
+}
+function qbVariationGroupOptions(selected=''){
+  return qbVariationGroups().map(([g,n])=>`<option value="${qbEsc(g)}" ${selected===g?'selected':''}>${qbEsc(g)} (${n})</option>`).join('');
+}
+function qbRefreshVariationFilter(){
+  const el=document.getElementById('qbVariationFilter');if(!el)return;
+  const selected=el.value||'';el.innerHTML=`<option value="">All Variation Groups</option>${qbVariationGroupOptions(selected)}`;
+  if([...el.options].some(o=>o.value===selected))el.value=selected;else el.value='';
+}
+function qbVariationQuestionText(q,lang){
+  if(lang==='EN')return String(q?.question_text_en||'').trim()||String(q?.question_text_as||'').trim();
+  if(lang==='AS')return String(q?.question_text_as||'').trim()||String(q?.question_text_en||'').trim();
+  return qbQuestionTextForMedium(q,'BOTH');
+}
+function qbShowVariationGroup(group){
+  group=String(group||'').trim();if(!group)return;
+  const rows=(qbQuestions||[]).filter(q=>String(q?.variation_group||'').trim()===group).sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+  if(!rows.length)return alert('No questions found in Variation Group: '+group);
+  let m=document.getElementById('qbVariationModal');
+  if(!m){m=document.createElement('div');m.id='qbVariationModal';m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';document.body.appendChild(m);}
+  m.innerHTML=`<div style="width:min(1180px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 70px rgba(0,0,0,.35)">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:12px"><div><h2 style="margin:0">Variation Group: ${qbEsc(group)}</h2><div class="small muted" style="margin-top:4px">${rows.length} question record(s). English and Assamese versions are shown together where available.</div></div><button type="button" onclick="document.getElementById('qbVariationModal').remove()">✕ Close</button></div>
+    <div style="display:grid;gap:12px;margin-top:15px">${rows.map((q,i)=>{const c=qbChapters.find(x=>x.id===q.chapter_id);const en=qbVariationQuestionText(q,'EN'),as=qbVariationQuestionText(q,'AS');const imgs=(qbBlocks||[]).filter(b=>b.question_id===q.id&&b.block_type==='IMAGE'&&b.image_url);return `<div style="border:1px solid #dbe3ee;border-radius:12px;padding:14px;background:#f8fafc"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>Variation ${i+1}</b><span class="small muted">ID: ${qbEsc(q.id)} · ${qbEsc(q.question_type)} · ${Number(q.marks)||0} mark(s)</span></div><div class="small muted" style="margin:6px 0 10px">${qbEsc(qbChapterDisplay(c)||'')} ${q.topic?' · Topic: '+qbEsc(q.topic):''}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px"><div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px"><b>English</b><div class="qb-math-cell" style="margin-top:8px">${en?qbMathHtml(en):'<span class="muted">No English text</span>'}</div></div><div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px"><b>Assamese</b><div class="qb-math-cell" style="margin-top:8px">${as?qbMathHtml(as):'<span class="muted">No Assamese text</span>'}</div></div></div>${imgs.length?`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${imgs.map(b=>`<img src="${qbEsc(b.image_url)}" alt="Question image" style="max-width:220px;max-height:150px;object-fit:contain;background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:4px;cursor:zoom-in" onclick="gpOpenQuestionImage(this.src)">`).join('')}</div>`:''}<div class="actions" style="margin-top:10px"><button onclick="qbEdit('${q.id}');document.getElementById('qbVariationModal')?.remove()">Edit</button><button class="secondary" onclick="qbGenerateSimilar('${q.id}');document.getElementById('qbVariationModal')?.remove()">Generate Similar Question</button></div></div>`;}).join('')}</div>
+  </div>`;
+  qbTypeset(m).catch(e=>console.warn('Variation-group MathJax:',e));
+}
 function qbRenderTable(){
-  const s=(document.getElementById('qbSearch')?.value||'').toLowerCase(), ch=document.getElementById('qbChapterFilter')?.value||'', lv=document.getElementById('qbLevelFilter')?.value||'', med=(document.getElementById('qbMediumFilter')?.value||'').trim().toUpperCase(), tb=document.getElementById('qbTextBookFilter')?.value||'';
-  const allowed=ch?qbDescendantIds(ch):null; const rows=qbQuestions.filter(q=>{const hay=`${q.question_text_en||''} ${q.question_text_as||''} ${q.topic||''} ${q.variation_group||''}`.toLowerCase();return (!s||hay.includes(s))&&(!med || (med==='ENGLISH' ? qbLanguageAvailable(q,'EN') : med==='ASSAMESE' ? qbLanguageAvailable(q,'AS') : med==='BOTH' ? qbLanguageAvailable(q,'BOTH') : true))&&(!allowed||allowed.has(q.chapter_id))&&(!lv||q.cognitive_level===lv)&&(!tb||(tb==='YES'?!!q.text_book:!q.text_book))});
+  const s=(document.getElementById('qbSearch')?.value||'').toLowerCase(), ch=document.getElementById('qbChapterFilter')?.value||'', lv=document.getElementById('qbLevelFilter')?.value||'', med=(document.getElementById('qbMediumFilter')?.value||'').trim().toUpperCase(), tb=document.getElementById('qbTextBookFilter')?.value||'', vg=(document.getElementById('qbVariationFilter')?.value||'').trim();
+  const allowed=ch?qbDescendantIds(ch):null; const rows=qbQuestions.filter(q=>{const hay=`${q.question_text_en||''} ${q.question_text_as||''} ${q.topic||''} ${q.variation_group||''}`.toLowerCase();return (!s||hay.includes(s))&&(!med || (med==='ENGLISH' ? qbLanguageAvailable(q,'EN') : med==='ASSAMESE' ? qbLanguageAvailable(q,'AS') : med==='BOTH' ? qbLanguageAvailable(q,'BOTH') : true))&&(!allowed||allowed.has(q.chapter_id))&&(!lv||q.cognitive_level===lv)&&(!tb||(tb==='YES'?!!q.text_book:!q.text_book))&&(!vg||String(q.variation_group||'').trim()===vg)});
   const scope=ch?(qbChapters.find(c=>c.id===ch)?qbChapterDisplay(qbChapters.find(c=>c.id===ch)):'selected chapter/subchapter'):'all visible questions';
   const html=`<div class="small muted" style="margin-bottom:8px">${rows.length} question(s) &nbsp; | &nbsp; Textbook marking scope: <b>${qbEsc(scope)}</b></div>
   <div style="overflow:auto"><table><thead><tr><th>#</th><th>Question</th><th>Medium</th><th>Chapter / Lesson / Topic</th><th>Variation Group</th><th>Type</th><th>Marks</th><th>Cognitive</th><th>Difficulty</th><th>Text_Book</th><th>Actions</th></tr></thead><tbody>
-  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td class="qb-math-cell">${qbMathHtml(qbQuestionTextForMedium(q,med).slice(0,300))}${q.has_images?' 🖼️':''}</td><td>${qbEsc(qbQuestionLanguage(q)||'—')}</td><td>${qbChapterDisplay(qbChapters.find(c=>c.id===q.chapter_id))}${q.topic?`<div class="small muted">Topic: ${qbEsc(q.topic)}</div>`:''}</td><td>${q.variation_group?`<span class="tag">${qbEsc(q.variation_group)}</span>`:'—'}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td>${q.text_book?'<span class="tag" style="background:#dcfce7;color:#166534">YES</span>':'<span class="small muted">NO</span>'}${q.textbook_reference?`<div class="small muted">${qbEsc(q.textbook_reference)}</div>`:''}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
+  ${rows.map((q,i)=>`<tr><td>${i+1}</td><td class="qb-math-cell">${qbMathHtml(qbQuestionTextForMedium(q,med).slice(0,300))}${q.has_images?' 🖼️':''}</td><td>${qbEsc(qbQuestionLanguage(q)||'—')}</td><td>${qbChapterDisplay(qbChapters.find(c=>c.id===q.chapter_id))}${q.topic?`<div class="small muted">Topic: ${qbEsc(q.topic)}</div>`:''}</td><td>${q.variation_group?`<button class="tag" type="button" onclick="qbShowVariationGroup('${qbEsc(String(q.variation_group).replace(/'/g,"&#39;"))}')" title="View all questions in this variation group">${qbEsc(q.variation_group)}</button>`:'—'}</td><td>${q.question_type}</td><td>${q.marks}</td><td>${q.cognitive_level}</td><td>${q.difficulty||'—'}</td><td>${q.text_book?'<span class="tag" style="background:#dcfce7;color:#166534">YES</span>':'<span class="small muted">NO</span>'}${q.textbook_reference?`<div class="small muted">${qbEsc(q.textbook_reference)}</div>`:''}</td><td><button onclick="qbEdit('${q.id}')">Edit</button> <button class="danger" onclick="qbDelete('${q.id}')">Delete</button></td></tr>`).join('')}
   </tbody></table></div>`;
   document.getElementById('qbTable').innerHTML=html;
+  qbRefreshVariationFilter();
   const table=document.getElementById('qbTable');
   if(table) qbTypeset(table).catch(e=>console.warn('Question-bank MathJax:',e));
 }
