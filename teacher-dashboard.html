@@ -1,5 +1,12 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://jupefjdquakqsizapzbv.supabase.co"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]},startup:{typeset:false}};</script><script id="schoolMathJax" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{width:100%;max-width:none;margin:0;padding:18px 24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>
+window.MathJax={
+  tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]],processEscapes:true,processEnvironments:true},
+  options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"],ignoreHtmlClass:"tex2jax_ignore",processHtmlClass:"tex2jax_process"},
+  startup:{typeset:false}
+};
+</script>
+<script id="school-mathjax-primary" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer onerror="this.dataset.failed='1';var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js';s.defer=true;document.head.appendChild(s);"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{width:100%;max-width:none;margin:0;padding:18px 24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
 .eq-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 7px}.eq-toolbar button{padding:7px 11px;font-size:13px}.eq-hint{font-size:12px;color:#64748b}.eq-preview{margin:6px 0 10px;padding:9px 11px;border:1px dashed #cbd5e1;border-radius:9px;background:#f8fafc;min-height:24px;white-space:normal}.math-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:99999;padding:15px}.math-modal-card{width:min(820px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.28)}.math-editor-input{display:block;width:100%;min-height:110px;font-size:22px;line-height:1.5;border:1px solid #cbd5e1;border-radius:10px;padding:12px;background:#fff;resize:vertical;font-family:Arial,sans-serif}.math-live-preview{margin-top:10px;min-height:55px;border:1px dashed #cbd5e1;border-radius:10px;padding:12px;background:#f8fafc;font-size:24px}.math-symbols{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.math-symbols button{padding:7px 10px;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:8px} .mathfield-shell{border:1px solid #cbd5e1;border-radius:12px;background:#fff;padding:4px;margin-top:10px;box-shadow:inset 0 1px 2px #00000008}.mathfield-shell math-field{display:block;width:100%;min-height:105px;padding:18px 14px;font-size:30px;border:0;outline:0;background:#fff;border-radius:10px;--selection-background-color:#dbeafe;--contains-highlight-background-color:#eff6ff;--caret-color:#2563eb}.mathfield-status{font-size:12px;color:#64748b;margin-top:7px}.mathfield-latex{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px dashed #cbd5e1;font-family:Consolas,monospace;font-size:13px;word-break:break-all}.math-modal-card.math-visual{width:min(900px,97vw)}.math-help{font-size:13px;color:#475569;margin:8px 0}.math-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
 const SUPABASE_URL='https://jupefjdquakqsizapzbv.supabase.co',SUPABASE_KEY='sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP',CREATE_STUDENT_FN='create-students';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let teacher=null,students=[],classes=[],groups=[],assessments=[],bulkRows=[];
@@ -1014,7 +1021,12 @@ function qbRenderTable(){
     // Render the dynamic table first, then typeset its LaTeX. The explicit
     // delay prevents the browser from displaying raw \( ... \) source when
     // MathJax scans the DOM before the table has been committed.
-    qbTypeset(table).catch(e=>console.warn('School Question-bank MathJax:',e));
+    qbTypeset(table).catch(e=>{
+      console.warn('School Question-bank MathJax:',e);
+      // One delayed retry handles pages where the MathJax fallback script is
+      // still initializing when the first question-bank render occurs.
+      setTimeout(()=>qbTypeset(table).catch(err=>console.warn('School Question-bank MathJax retry:',err)),500);
+    });
   }
 }
 function qbDownloadExistingChapters(){
@@ -1346,60 +1358,45 @@ function qbTypeChanged(){const t=document.getElementById('qbType')?.value;const 
 function qbAddTextBlock(){qbEditorBlocks.push({id:null,block_type:'TEXT',text_en:'',text_as:''});qbRenderBlocks()}
 function qbAddImageBlock(){const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;try{const path=`${teacher.id}/${crypto.randomUUID()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from('school-question-bank-images').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});if(error)throw error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);qbEditorBlocks.push({id:null,block_type:'IMAGE',image_url:u.publicUrl,image_width:70,alt_text:f.name});const ir=document.getElementById('qbImageRequired');if(ir)ir.value='YES';qbRenderBlocks()}catch(e){alert('Image upload failed: '+e.message)}};input.click()}
 function qbMathHtml(text){
-  let s=String(text??'');
-  if(!s)return '';
-  s=s.replace(/\$\$(.*?)\$\$/gs,'\\[$1\\]');
-  s=s.replace(/(?<!\\)\$(?!\$)(.*?)(?<!\\)\$/gs,'\\($1\\)');
-  s=s.replace(/\\\$/g,'$');
-  const safe=qbEsc(s).replace(/\n/g,'<br>');
-  return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
+  const raw=String(text??'');
+  if(!raw)return '';
+  // Escape normal HTML while preserving TeX delimiters and TeX content.
+  // This prevents HTML escaping from interfering with MathJax input.
+  const parts=[];
+  const re=/\\\[((?:.|\n)*?)\\\]|\\\(((?:.|\n)*?)\\\)|\$\$((?:.|\n)*?)\$\$|(?<!\\)\$((?:.|\n)*?)(?<!\\)\$/g;
+  let last=0,m;
+  while((m=re.exec(raw))!==null){
+    if(m.index>last)parts.push(qbEsc(raw.slice(last,m.index)).replace(/\n/g,'<br>'));
+    const tex=m[1]!==undefined?`\\[${m[1]}\\]`:m[2]!==undefined?`\\(${m[2]}\\)`:m[3]!==undefined?`\\[${m[3]}\\]`:`\\(${m[4]}\\)`;
+    parts.push(tex);
+    last=re.lastIndex;
+  }
+  if(last<raw.length)parts.push(qbEsc(raw.slice(last)).replace(/\n/g,'<br>'));
+  return parts.join('');
 }
 async function qbEnsureMathJax(){
-  if(window.MathJax?.typesetPromise){
-    if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-    return window.MathJax;
+  let tries=0;
+  while(!window.MathJax && tries<300){await new Promise(r=>setTimeout(r,50));tries++;}
+  if(!window.MathJax)throw new Error('MathJax global was not created.');
+  // The primary script may have failed. Load a fallback exactly once.
+  if(!window.MathJax.startup?.promise && !document.getElementById('school-mathjax-fallback')){
+    const f=document.createElement('script');f.id='school-mathjax-fallback';f.src='https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js';f.async=true;document.head.appendChild(f);
   }
-  if(window.__schoolMathJaxLoading) return window.__schoolMathJaxLoading;
-  window.__schoolMathJaxLoading=(async()=>{
-    const urls=[
-      'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
-      'https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js'
-    ];
-    for(const src of urls){
-      try{
-        await new Promise((resolve,reject)=>{
-          const old=document.getElementById('schoolMathJaxDynamic');
-          if(old) old.remove();
-          const sc=document.createElement('script');
-          sc.id='schoolMathJaxDynamic';
-          sc.src=src;
-          sc.async=true;
-          sc.onload=resolve;
-          sc.onerror=()=>reject(new Error('MathJax CDN failed: '+src));
-          document.head.appendChild(sc);
-        });
-        for(let i=0;i<200;i++){
-          if(window.MathJax?.typesetPromise)break;
-          await new Promise(r=>setTimeout(r,50));
-        }
-        if(window.MathJax?.typesetPromise){
-          if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-          return window.MathJax;
-        }
-      }catch(e){ console.warn(e); }
-    }
-    throw new Error('MathJax could not be loaded. Check internet access/CDN blocking.');
-  })();
-  try{return await window.__schoolMathJaxLoading}
-  finally{window.__schoolMathJaxLoading=null}
+  tries=0;
+  while(!window.MathJax.typesetPromise && tries<300){await new Promise(r=>setTimeout(r,50));tries++;}
+  if(!window.MathJax.typesetPromise)throw new Error('MathJax did not load. Check browser network access to jsDelivr/unpkg.');
+  if(window.MathJax.startup?.promise)await window.MathJax.startup.promise;
+  // We disabled automatic startup typesetting so dynamic Question Bank HTML is
+  // always handled explicitly after it has been inserted into the DOM.
 }
 async function qbTypeset(root){
-  const mj=await qbEnsureMathJax();
+  await qbEnsureMathJax();
   const target=root||document.body;
-  try{mj.typesetClear?.([target]);}catch(_){ }
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-  await mj.typesetPromise([target]);
+  try{window.MathJax.typesetClear?.([target]);}catch(_){ }
+  await window.MathJax.typesetPromise([target]);
 }
+function qbMathJaxStatus(){return !!(window.MathJax&&window.MathJax.typesetPromise);}
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
   return safe||'<span class="muted">Equation/text preview will appear here.</span>';
