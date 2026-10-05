@@ -1010,7 +1010,12 @@ function qbRenderTable(){
   document.getElementById('qbTable').innerHTML=html;
   qbRefreshVariationFilter();
   const table=document.getElementById('qbTable');
-  if(table) qbTypeset(table).catch(e=>console.warn('Question-bank MathJax:',e));
+  if(table){
+    // Render the dynamic table first, then typeset its LaTeX. The explicit
+    // delay prevents the browser from displaying raw \( ... \) source when
+    // MathJax scans the DOM before the table has been committed.
+    qbTypeset(table).catch(e=>console.warn('School Question-bank MathJax:',e));
+  }
 }
 function qbDownloadExistingChapters(){
   try{
@@ -1350,15 +1355,23 @@ function qbMathHtml(text){
   return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
 async function qbTypeset(root){
+  // School Question Bank only: force MathJax to process dynamically-created
+  // question HTML every time it is rendered. This is intentionally scoped to
+  // the School QB helper and does not alter JNVST rendering.
   let tries=0;
-  while(!window.MathJax?.typesetPromise && tries<200){
+  while(!window.MathJax?.typesetPromise && tries<240){
     await new Promise(r=>setTimeout(r,50));
     tries++;
   }
   if(!window.MathJax?.typesetPromise) throw new Error('MathJax did not load. Check the MathJax CDN/network connection.');
   if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-  if(root) await window.MathJax.typesetPromise([root]);
-  else await window.MathJax.typesetPromise();
+  const target=root||document.body;
+  // Clear any previous MathJax processing for this dynamic container before
+  // typesetting again. This is important after search/filter re-renders.
+  try{window.MathJax.typesetClear?.([target]);}catch(_){}
+  // Allow the browser to commit the newly inserted HTML before MathJax scans it.
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await window.MathJax.typesetPromise([target]);
 }
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
