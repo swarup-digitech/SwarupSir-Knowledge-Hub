@@ -1,0 +1,4 @@
+/student-sw.js
+  Cache-Control: no-cache
+/mathjax/*
+  Cache-Control: public, max-age=31536000, immutable
