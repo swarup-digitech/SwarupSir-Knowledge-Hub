@@ -1223,12 +1223,34 @@ let qbJnvstSubjects=[],qbJnvstLessons=[];
 function qbJnvstSubjectOptions(selected=''){const rows=qbJnvstSubjects||[];return `<option value="">Select JNVST Subject</option>${rows.map(x=>`<option value="${qbEsc(x.id)}" ${selected===x.id?'selected':''}>${qbEsc(x.name)}</option>`).join('')}`}
 function qbJnvstLessonOptions(subjectId,selected=''){const rows=(qbJnvstLessons||[]).filter(x=>!subjectId||x.subject_id===subjectId);const roots=rows.filter(x=>!x.parent_lesson_id);const out=[];const add=(l,d=0)=>{out.push(`<option value="${qbEsc(l.id)}" ${selected===l.id?'selected':''}>${'— '.repeat(d)}${qbEsc(l.lesson_code||'')} ${qbEsc(l.lesson_name)}</option>`);rows.filter(x=>x.parent_lesson_id===l.id).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x,d+1))};roots.sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x));return `<option value="">Select Lesson / Sub-lesson</option>${out.join('')}`}
 function qbRefreshJnvstLessonOptions(){const el=document.getElementById('qbJnvstLesson');if(el)el.innerHTML=qbJnvstLessonOptions(document.getElementById('qbJnvstSubject')?.value||'',el.dataset.selected||'')}
-async function qbEditor(id=null){
-  qbEditingId=id;
+let qbSimilarSourceId=null;
+function qbNewVariationGroup(){
+  const now=Date.now().toString(36).toUpperCase();
+  const rnd=Math.random().toString(36).slice(2,7).toUpperCase();
+  return `VG-${now}-${rnd}`;
+}
+async function qbGenerateSimilar(id){
+  const source=qbQuestions.find(x=>x.id===id);
+  if(!source)return alert('Source question not found.');
+  if(String(source.course_type||'SCHOOL').toUpperCase()!=='SCHOOL')return alert('Generate Similar Question is available only for School Course questions.');
+  let group=String(source.variation_group||'').trim();
+  try{
+    if(!group){
+      group=qbNewVariationGroup();
+      const {error}=await sb.from('school_question_bank_questions').update({variation_group:group}).eq('id',id).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
+      if(error)throw error;
+    }
+    await loadQuestionBank();
+    qbEditor(id,true);
+  }catch(e){alert('Could not start Similar Question mode: '+e.message)}
+}
+async function qbEditor(id=null, similar=false){
+  qbSimilarSourceId=similar?id:null;
+  qbEditingId=similar?null:id;
   const q=id?qbQuestions.find(x=>x.id===id):null;
   qbEditorBlocks=[];qbEditorOptions=[];
   const ch=qbChapters.length?qbChapters[0].id:'';
-  document.getElementById('app').innerHTML=`${header(id?'Edit Question':'Add Question')}
+  document.getElementById('app').innerHTML=`${header(similar?'Generate Similar Question':id?'Edit Question':'Add Question')}
   <div class="card">
    <div class="notice"><b>School Course Question Bank:</b> Chapter → Subchapter → Topic. JNVST Course uses a separate Question Bank in the JNVST Teacher Dashboard.</div>
    <div class="grid">
@@ -1249,14 +1271,22 @@ async function qbEditor(id=null){
     <div class="actions"><button class="secondary" onclick="qbAddTextBlock()">+ Text Block</button><button class="secondary" onclick="qbAddImageBlock()">🖼 Upload Image</button></div>
   </div>
   <div class="card" id="qbOptionsCard"><h3>MCQ Options</h3><div id="qbOptions"></div><button class="secondary" onclick="qbAddOption()">+ Add Option</button></div>
-  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions"><button onclick="qbSave()">💾 Save Question</button><button class="secondary" onclick="questionBankHome()">Cancel</button></div></div>`;
+  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions">
+    <button onclick="qbSave()">${similar?'💾 Save as New Similar Question':'💾 Save Question'}</button>
+    ${id&&!similar?'<button class="secondary" onclick="qbGenerateSimilar(\''+id+'\')">➕ Generate Similar Question</button>':''}
+    <button class="secondary" onclick="questionBankHome()">Cancel</button>
+  </div>${similar?'<div class="notice" style="margin-top:10px"><b>Similar-question mode:</b> All School Course fields, including English and Assamese content, have been copied from the source question. Edit the required values and save; the new question will remain in the same variation group.</div>':''}</div>`;
   if(!id){qbAddTextBlock();} else {
-    sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order').then(({data,error})=>{
-      if(error)return alert(error.message);qbEditorBlocks=data||[];qbRenderBlocks();
-    });
-    sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order').then(({data,error})=>{
-      if(error)return alert(error.message);qbEditorOptions=data||[];qbRenderOptions();
-    });
+    Promise.all([
+      sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order'),
+      sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order')
+    ]).then(([br,op])=>{
+      if(br.error)throw br.error;
+      if(op.error)throw op.error;
+      qbEditorBlocks=(br.data||[]).map(b=>({...b,id:null}));
+      qbEditorOptions=(op.data||[]).map(o=>({...o,id:null}));
+      qbRenderBlocks();qbRenderOptions();
+    }).catch(e=>alert('Could not load question content: '+e.message));
   }
   qbTypeChanged();
 }
@@ -1275,25 +1305,66 @@ function qbTypeChanged(){const t=document.getElementById('qbType')?.value;const 
 function qbAddTextBlock(){qbEditorBlocks.push({id:null,block_type:'TEXT',text_en:'',text_as:''});qbRenderBlocks()}
 function qbAddImageBlock(){const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;try{const path=`${teacher.id}/${crypto.randomUUID()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from('school-question-bank-images').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});if(error)throw error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);qbEditorBlocks.push({id:null,block_type:'IMAGE',image_url:u.publicUrl,image_width:70,alt_text:f.name});qbRenderBlocks()}catch(e){alert('Image upload failed: '+e.message)}};input.click()}
 function qbMathHtml(text){
-  let s=String(text??'');
-  if(!s)return '';
-  s=s.replace(/\$\$(.*?)\$\$/gs,'\\[$1\\]');
-  s=s.replace(/(?<!\\)\$(?!\$)(.*?)(?<!\\)\$/gs,'\\($1\\)');
-  s=s.replace(/\\\$/g,'$');
-  const safe=qbEsc(s).replace(/\n/g,'<br>');
-  return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
+  const raw=String(text??'');
+  if(!raw)return '';
+  // Self-contained math renderer for the Question Bank. This is deliberately
+  // independent of an external MathJax CDN, so the Question Bank still renders
+  // mathematics when CDN scripts are blocked by browser/network/CSP.
+  const escMath=(x)=>qbEsc(String(x??''));
+  const renderTex=(tex)=>{
+    let t=String(tex??'').trim();
+    // Protect common TeX commands before HTML escaping.
+    const tokens=[];
+    const hold=(html)=>{const k='@@M'+tokens.length+'@@';tokens.push(html);return k;};
+    t=t.replace(/\\text\{([^{}]*)\}/g,(_,x)=>hold('<span class="qb-math-text">'+escMath(x)+'</span>'));
+    t=t.replace(/\\mathrm\{([^{}]*)\}/g,(_,x)=>hold('<span class="qb-math-text">'+escMath(x)+'</span>'));
+    t=t.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g,(_,a,b)=>hold('<span class="qb-frac"><span class="qb-frac-num">'+renderTex(a)+'</span><span class="qb-frac-den">'+renderTex(b)+'</span></span>'));
+    t=t.replace(/\\sqrt(?:\[([^\]]+)\])?\{([^{}]*)\}/g,(_,idx,x)=>hold('<span class="qb-sqrt">'+(idx?'<sup>'+renderTex(idx)+'</sup>':'')+'√<span class="qb-radicand">'+renderTex(x)+'</span></span>'));
+    t=t.replace(/\\(times|cdot|div|pm|mp|leq|geq|neq|approx|rightarrow|leftarrow|infty|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega)\b/g,(_,cmd)=>({times:'×',cdot:'·',div:'÷',pm:'±',mp:'∓',leq:'≤',geq:'≥',neq:'≠',approx:'≈',rightarrow:'→',leftarrow:'←',infty:'∞',alpha:'α',beta:'β',gamma:'γ',delta:'δ',theta:'θ',lambda:'λ',mu:'μ',pi:'π',sigma:'σ',omega:'ω'}[cmd]||cmd));
+    // Basic TeX grouping and powers/subscripts.
+    t=escMath(t);
+    t=t.replace(/\^\{([^{}]+)\}/g,'<sup>$1</sup>').replace(/\^([A-Za-z0-9])/g,'<sup>$1</sup>');
+    t=t.replace(/_\{([^{}]+)\}/g,'<sub>$1</sub>').replace(/_([A-Za-z0-9])/g,'<sub>$1</sub>');
+    t=t.replace(/\\,/g,' ');
+    // Restore generated HTML tokens after escaping.
+    tokens.forEach((html,i)=>{t=t.split('@@M'+i+'@@').join(html);});
+    return '<span class="qb-math-inline">'+t+'</span>';
+  };
+  const parts=[];
+  const re=/\\\[((?:.|\n)*?)\\\]|\\\(((?:.|\n)*?)\\\)|\$\$((?:.|\n)*?)\$\$|(?<!\\)\$((?:.|\n)*?)(?<!\\)\$/g;
+  let last=0,m;
+  while((m=re.exec(raw))!==null){
+    if(m.index>last)parts.push(qbEsc(raw.slice(last,m.index)).replace(/\n/g,'<br>'));
+    const tex=m[1]!==undefined?m[1]:m[2]!==undefined?m[2]:m[3]!==undefined?m[3]:m[4];
+    parts.push(renderTex(tex));
+    last=re.lastIndex;
+  }
+  if(last<raw.length)parts.push(qbEsc(raw.slice(last)).replace(/\n/g,'<br>'));
+  return parts.join('');
+}
+async function qbEnsureMathJax(){
+  let tries=0;
+  while(!window.MathJax && tries<300){await new Promise(r=>setTimeout(r,50));tries++;}
+  if(!window.MathJax)throw new Error('MathJax global was not created.');
+  // The primary script may have failed. Load a fallback exactly once.
+  if(!window.MathJax.startup?.promise && !document.getElementById('school-mathjax-fallback')){
+    const f=document.createElement('script');f.id='school-mathjax-fallback';f.src='https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js';f.async=true;document.head.appendChild(f);
+  }
+  tries=0;
+  while(!window.MathJax.typesetPromise && tries<300){await new Promise(r=>setTimeout(r,50));tries++;}
+  if(!window.MathJax.typesetPromise)throw new Error('MathJax did not load. Check browser network access to jsDelivr/unpkg.');
+  if(window.MathJax.startup?.promise)await window.MathJax.startup.promise;
+  // We disabled automatic startup typesetting so dynamic Question Bank HTML is
+  // always handled explicitly after it has been inserted into the DOM.
 }
 async function qbTypeset(root){
-  let tries=0;
-  while(!window.MathJax?.typesetPromise && tries<200){
-    await new Promise(r=>setTimeout(r,50));
-    tries++;
-  }
-  if(!window.MathJax?.typesetPromise) throw new Error('MathJax did not load. Check the MathJax CDN/network connection.');
-  if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-  if(root) await window.MathJax.typesetPromise([root]);
-  else await window.MathJax.typesetPromise();
+  await qbEnsureMathJax();
+  const target=root||document.body;
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  try{window.MathJax.typesetClear?.([target]);}catch(_){ }
+  await window.MathJax.typesetPromise([target]);
 }
+function qbMathJaxStatus(){return !!(window.MathJax&&window.MathJax.typesetPromise);}
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
   return safe||'<span class="muted">Equation/text preview will appear here.</span>';
@@ -1463,8 +1534,14 @@ async function qbSave(){
   if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
   const type=document.getElementById('qbType').value;
   if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return alert('MCQ needs at least 2 options and exactly one correct answer.');
-  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,medium:(qbEditorBlocks.some(b=>String(b.text_en||'').trim())&&qbEditorBlocks.some(b=>String(b.text_as||'').trim())?'BOTH':qbEditorBlocks.some(b=>String(b.text_en||'').trim())?'ENGLISH':qbEditorBlocks.some(b=>String(b.text_as||'').trim())?'ASSAMESE':null),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||null,topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
+  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,medium:(document.getElementById('qbMedium')?.value||((qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))&&(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'BOTH':(qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))?'ENGLISH':(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'ASSAMESE':null)),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||(qbSimilarSourceId?qbNewVariationGroup():null),topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
   try{
+    if(qbSimilarSourceId && !String(document.getElementById('qbVariation')?.value||'').trim()){
+      const g=qbNewVariationGroup();
+      document.getElementById('qbVariation').value=g;
+      const {error:ge}=await sb.from('school_question_bank_questions').update({variation_group:g}).eq('id',qbSimilarSourceId).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
+      if(ge)throw ge;
+    }
     let qid=qbEditingId;
     if(qid){const {error}=await sb.from('school_question_bank_questions').update(payload).eq('id',qid).eq('teacher_id',teacher.id);if(error)throw error;await sb.from('school_question_bank_blocks').delete().eq('question_id',qid);await sb.from('school_question_bank_options').delete().eq('question_id',qid);}
     else {const {data,error}=await sb.from('school_question_bank_questions').insert(payload).select().single();if(error)throw error;qid=data.id;}
@@ -2103,4 +2180,4 @@ function previewBankPaper(){
   document.getElementById('gpResult').insertAdjacentHTML('beforeend',`<div class="card" id="gpPdfOutputCard" style="margin-top:12px"><b>PDF Output</b><div class="actions" style="margin-top:8px"><button onclick="previewQuestionPaper()">📝 Question Paper PDF</button><button class="secondary" onclick="previewModelAnswerKey()">🔑 Model Answer Key PDF</button></div><div class="small muted" style="margin-top:7px">The two documents are generated separately. Use Print / Save as PDF in each preview.</div></div>`);
 }
 
-
+.qb-math-inline{display:inline-block;font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:1.05em;line-height:1.35;white-space:nowrap}.qb-math-text{font-family:Arial,sans-serif;font-style:normal}.qb-math-inline sup,.qb-math-inline sub{font-size:.72em;line-height:0}.qb-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 .12em}.qb-frac-num{border-bottom:1px solid currentColor;padding:0 .18em}.qb-frac-den{padding:0 .18em}.qb-sqrt{display:inline-flex;align-items:flex-start;font-family:"Cambria Math","Times New Roman",serif}.qb-radicand{border-top:1px solid currentColor;padding:0 .08em}
