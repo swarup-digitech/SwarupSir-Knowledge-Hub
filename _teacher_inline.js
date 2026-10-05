@@ -1223,34 +1223,12 @@ let qbJnvstSubjects=[],qbJnvstLessons=[];
 function qbJnvstSubjectOptions(selected=''){const rows=qbJnvstSubjects||[];return `<option value="">Select JNVST Subject</option>${rows.map(x=>`<option value="${qbEsc(x.id)}" ${selected===x.id?'selected':''}>${qbEsc(x.name)}</option>`).join('')}`}
 function qbJnvstLessonOptions(subjectId,selected=''){const rows=(qbJnvstLessons||[]).filter(x=>!subjectId||x.subject_id===subjectId);const roots=rows.filter(x=>!x.parent_lesson_id);const out=[];const add=(l,d=0)=>{out.push(`<option value="${qbEsc(l.id)}" ${selected===l.id?'selected':''}>${'— '.repeat(d)}${qbEsc(l.lesson_code||'')} ${qbEsc(l.lesson_name)}</option>`);rows.filter(x=>x.parent_lesson_id===l.id).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x,d+1))};roots.sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x));return `<option value="">Select Lesson / Sub-lesson</option>${out.join('')}`}
 function qbRefreshJnvstLessonOptions(){const el=document.getElementById('qbJnvstLesson');if(el)el.innerHTML=qbJnvstLessonOptions(document.getElementById('qbJnvstSubject')?.value||'',el.dataset.selected||'')}
-let qbSimilarSourceId=null;
-function qbNewVariationGroup(){
-  const now=Date.now().toString(36).toUpperCase();
-  const rnd=Math.random().toString(36).slice(2,7).toUpperCase();
-  return `VG-${now}-${rnd}`;
-}
-async function qbGenerateSimilar(id){
-  const source=qbQuestions.find(x=>x.id===id);
-  if(!source)return alert('Source question not found.');
-  if(String(source.course_type||'SCHOOL').toUpperCase()!=='SCHOOL')return alert('Generate Similar Question is available only for School Course questions.');
-  let group=String(source.variation_group||'').trim();
-  try{
-    if(!group){
-      group=qbNewVariationGroup();
-      const {error}=await sb.from('school_question_bank_questions').update({variation_group:group}).eq('id',id).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
-      if(error)throw error;
-    }
-    await loadQuestionBank();
-    qbEditor(id,true);
-  }catch(e){alert('Could not start Similar Question mode: '+e.message)}
-}
-async function qbEditor(id=null, similar=false){
-  qbSimilarSourceId=similar?id:null;
-  qbEditingId=similar?null:id;
+async function qbEditor(id=null){
+  qbEditingId=id;
   const q=id?qbQuestions.find(x=>x.id===id):null;
   qbEditorBlocks=[];qbEditorOptions=[];
   const ch=qbChapters.length?qbChapters[0].id:'';
-  document.getElementById('app').innerHTML=`${header(similar?'Generate Similar Question':id?'Edit Question':'Add Question')}
+  document.getElementById('app').innerHTML=`${header(id?'Edit Question':'Add Question')}
   <div class="card">
    <div class="notice"><b>School Course Question Bank:</b> Chapter → Subchapter → Topic. JNVST Course uses a separate Question Bank in the JNVST Teacher Dashboard.</div>
    <div class="grid">
@@ -1271,22 +1249,14 @@ async function qbEditor(id=null, similar=false){
     <div class="actions"><button class="secondary" onclick="qbAddTextBlock()">+ Text Block</button><button class="secondary" onclick="qbAddImageBlock()">🖼 Upload Image</button></div>
   </div>
   <div class="card" id="qbOptionsCard"><h3>MCQ Options</h3><div id="qbOptions"></div><button class="secondary" onclick="qbAddOption()">+ Add Option</button></div>
-  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions">
-    <button onclick="qbSave()">${similar?'💾 Save as New Similar Question':'💾 Save Question'}</button>
-    ${id&&!similar?'<button class="secondary" onclick="qbGenerateSimilar(\''+id+'\')">➕ Generate Similar Question</button>':''}
-    <button class="secondary" onclick="questionBankHome()">Cancel</button>
-  </div>${similar?'<div class="notice" style="margin-top:10px"><b>Similar-question mode:</b> All School Course fields, including English and Assamese content, have been copied from the source question. Edit the required values and save; the new question will remain in the same variation group.</div>':''}</div>`;
+  <div class="card"><label>Explanation / Answer / Marking Notes</label><textarea id="qbExplanation" rows="4">${qbEsc(q?.explanation||'')}</textarea><div class="actions"><button onclick="qbSave()">💾 Save Question</button><button class="secondary" onclick="questionBankHome()">Cancel</button></div></div>`;
   if(!id){qbAddTextBlock();} else {
-    Promise.all([
-      sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order'),
-      sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order')
-    ]).then(([br,op])=>{
-      if(br.error)throw br.error;
-      if(op.error)throw op.error;
-      qbEditorBlocks=(br.data||[]).map(b=>({...b,id:null}));
-      qbEditorOptions=(op.data||[]).map(o=>({...o,id:null}));
-      qbRenderBlocks();qbRenderOptions();
-    }).catch(e=>alert('Could not load question content: '+e.message));
+    sb.from('school_question_bank_blocks').select('*').eq('question_id',id).order('block_order').then(({data,error})=>{
+      if(error)return alert(error.message);qbEditorBlocks=data||[];qbRenderBlocks();
+    });
+    sb.from('school_question_bank_options').select('*').eq('question_id',id).order('display_order').then(({data,error})=>{
+      if(error)return alert(error.message);qbEditorOptions=data||[];qbRenderOptions();
+    });
   }
   qbTypeChanged();
 }
@@ -1313,17 +1283,17 @@ function qbMathHtml(text){
   const safe=qbEsc(s).replace(/\n/g,'<br>');
   return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
-async function qbEnsureMathJax(){
-  if(window.MathJax?.typesetPromise){if(window.MathJax.startup?.promise)await window.MathJax.startup.promise;return window.MathJax;}
-  if(window.__schoolMathJaxLoading)return window.__schoolMathJaxLoading;
-  window.__schoolMathJaxLoading=(async()=>{
-    const urls=['https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js','https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js'];
-    for(const src of urls){try{await new Promise((resolve,reject)=>{const old=document.getElementById('schoolMathJaxDynamic');if(old)old.remove();const sc=document.createElement('script');sc.id='schoolMathJaxDynamic';sc.src=src;sc.async=true;sc.onload=resolve;sc.onerror=()=>reject(new Error('MathJax CDN failed: '+src));document.head.appendChild(sc);});for(let i=0;i<200;i++){if(window.MathJax?.typesetPromise)break;await new Promise(r=>setTimeout(r,50));}if(window.MathJax?.typesetPromise){if(window.MathJax.startup?.promise)await window.MathJax.startup.promise;return window.MathJax;}}catch(e){console.warn(e);}}
-    throw new Error('MathJax could not be loaded. Check internet access/CDN blocking.');
-  })();
-  try{return await window.__schoolMathJaxLoading}finally{window.__schoolMathJaxLoading=null}
+async function qbTypeset(root){
+  let tries=0;
+  while(!window.MathJax?.typesetPromise && tries<200){
+    await new Promise(r=>setTimeout(r,50));
+    tries++;
+  }
+  if(!window.MathJax?.typesetPromise) throw new Error('MathJax did not load. Check the MathJax CDN/network connection.');
+  if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
+  if(root) await window.MathJax.typesetPromise([root]);
+  else await window.MathJax.typesetPromise();
 }
-async function qbTypeset(root){const mj=await qbEnsureMathJax();const target=root||document.body;try{mj.typesetClear?.([target]);}catch(_){}await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await mj.typesetPromise([target]);}
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
   return safe||'<span class="muted">Equation/text preview will appear here.</span>';
@@ -1493,14 +1463,8 @@ async function qbSave(){
   if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
   const type=document.getElementById('qbType').value;
   if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return alert('MCQ needs at least 2 options and exactly one correct answer.');
-  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,medium:(document.getElementById('qbMedium')?.value||((qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))&&(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'BOTH':(qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))?'ENGLISH':(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'ASSAMESE':null)),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||(qbSimilarSourceId?qbNewVariationGroup():null),topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
+  const payload={teacher_id:teacher.id,course_type:'SCHOOL',chapter_id:document.getElementById('qbChapter').value,medium:(qbEditorBlocks.some(b=>String(b.text_en||'').trim())&&qbEditorBlocks.some(b=>String(b.text_as||'').trim())?'BOTH':qbEditorBlocks.some(b=>String(b.text_en||'').trim())?'ENGLISH':qbEditorBlocks.some(b=>String(b.text_as||'').trim())?'ASSAMESE':null),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||null,topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
   try{
-    if(qbSimilarSourceId && !String(document.getElementById('qbVariation')?.value||'').trim()){
-      const g=qbNewVariationGroup();
-      document.getElementById('qbVariation').value=g;
-      const {error:ge}=await sb.from('school_question_bank_questions').update({variation_group:g}).eq('id',qbSimilarSourceId).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
-      if(ge)throw ge;
-    }
     let qid=qbEditingId;
     if(qid){const {error}=await sb.from('school_question_bank_questions').update(payload).eq('id',qid).eq('teacher_id',teacher.id);if(error)throw error;await sb.from('school_question_bank_blocks').delete().eq('question_id',qid);await sb.from('school_question_bank_options').delete().eq('question_id',qid);}
     else {const {data,error}=await sb.from('school_question_bank_questions').insert(payload).select().single();if(error)throw error;qid=data.id;}
