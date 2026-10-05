@@ -1313,17 +1313,17 @@ function qbMathHtml(text){
   const safe=qbEsc(s).replace(/\n/g,'<br>');
   return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
-async function qbTypeset(root){
-  let tries=0;
-  while(!window.MathJax?.typesetPromise && tries<200){
-    await new Promise(r=>setTimeout(r,50));
-    tries++;
-  }
-  if(!window.MathJax?.typesetPromise) throw new Error('MathJax did not load. Check the MathJax CDN/network connection.');
-  if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-  if(root) await window.MathJax.typesetPromise([root]);
-  else await window.MathJax.typesetPromise();
+async function qbEnsureMathJax(){
+  if(window.MathJax?.typesetPromise){if(window.MathJax.startup?.promise)await window.MathJax.startup.promise;return window.MathJax;}
+  if(window.__schoolMathJaxLoading)return window.__schoolMathJaxLoading;
+  window.__schoolMathJaxLoading=(async()=>{
+    const urls=['https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js','https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js'];
+    for(const src of urls){try{await new Promise((resolve,reject)=>{const old=document.getElementById('schoolMathJaxDynamic');if(old)old.remove();const sc=document.createElement('script');sc.id='schoolMathJaxDynamic';sc.src=src;sc.async=true;sc.onload=resolve;sc.onerror=()=>reject(new Error('MathJax CDN failed: '+src));document.head.appendChild(sc);});for(let i=0;i<200;i++){if(window.MathJax?.typesetPromise)break;await new Promise(r=>setTimeout(r,50));}if(window.MathJax?.typesetPromise){if(window.MathJax.startup?.promise)await window.MathJax.startup.promise;return window.MathJax;}}catch(e){console.warn(e);}}
+    throw new Error('MathJax could not be loaded. Check internet access/CDN blocking.');
+  })();
+  try{return await window.__schoolMathJaxLoading}finally{window.__schoolMathJaxLoading=null}
 }
+async function qbTypeset(root){const mj=await qbEnsureMathJax();const target=root||document.body;try{mj.typesetClear?.([target]);}catch(_){}await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await mj.typesetPromise([target]);}
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
   return safe||'<span class="muted">Equation/text preview will appear here.</span>';

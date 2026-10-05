@@ -1,0 +1,17 @@
+QUESTION BANK MATHJAX FIX
+
+Updated:
+- teacher-dashboard.html
+- _teacher_inline.js
+
+Fixes:
+1. MathJax is initialized with startup typesetting disabled so the Question Bank controls the timing of dynamic rendering.
+2. Question Bank now explicitly waits for MathJax startup before typesetting dynamically rendered questions.
+3. If MathJax is not available, the page attempts to load it from jsDelivr and then unpkg.
+4. Dynamic Question Bank tables, previews and variation-group views are re-typeset after rendering.
+5. Existing LaTeX stored in the database is preserved; no database conversion is required.
+
+Example now supported:
+Can two numbers have \(15\) as their \(\text{HCF}\) and \(175\) as their \(\text{LCM}\)? Give reason.
+
+Replace the existing teacher-dashboard.html with the corrected file from this package.

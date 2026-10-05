@@ -1,23 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://jupefjdquakqsizapzbv.supabase.co"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},svg:{fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script><script>
-/* MathJax loader. Uses the SVG build (no font files needed): one local file first, then CDNs.
-   Each source gets a 6-second limit so a blocked CDN cannot make the page wait. */
-window.__mjReady=new Promise(function(resolve){
-  var urls=['mathjax-svg.js','https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-svg.min.js','https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-svg.js','https://unpkg.com/mathjax@3/es5/tex-mml-svg.js'],i=0;
-  function next(){
-    if(i>=urls.length){window.__mjFailed=true;console.warn('MathJax: all sources failed');resolve(false);return}
-    var src=urls[i++],done=false,sc=document.createElement('script');
-    function fail(){if(done)return;done=true;clearTimeout(t);sc.remove();console.warn('MathJax: could not load',src);next()}
-    var t=setTimeout(fail,6000);
-    sc.async=true;sc.src=src;
-    sc.onload=function(){if(done)return;done=true;clearTimeout(t);
-      var w=0,iv=setInterval(function(){if(window.MathJax&&window.MathJax.typesetPromise){clearInterval(iv);console.info('MathJax loaded from',src);resolve(true)}else if(++w>100){clearInterval(iv);done=false;fail()}},50)};
-    sc.onerror=fail;
-    document.head.appendChild(sc);
-  }
-  next();
-});
-</script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{width:100%;max-width:none;margin:0;padding:18px 24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]},startup:{typeset:false}};</script><script id="schoolMathJax" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{width:100%;max-width:none;margin:0;padding:18px 24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
 .eq-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 7px}.eq-toolbar button{padding:7px 11px;font-size:13px}.eq-hint{font-size:12px;color:#64748b}.eq-preview{margin:6px 0 10px;padding:9px 11px;border:1px dashed #cbd5e1;border-radius:9px;background:#f8fafc;min-height:24px;white-space:normal}.math-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:99999;padding:15px}.math-modal-card{width:min(820px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.28)}.math-editor-input{display:block;width:100%;min-height:110px;font-size:22px;line-height:1.5;border:1px solid #cbd5e1;border-radius:10px;padding:12px;background:#fff;resize:vertical;font-family:Arial,sans-serif}.math-live-preview{margin-top:10px;min-height:55px;border:1px dashed #cbd5e1;border-radius:10px;padding:12px;background:#f8fafc;font-size:24px}.math-symbols{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.math-symbols button{padding:7px 10px;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:8px} .mathfield-shell{border:1px solid #cbd5e1;border-radius:12px;background:#fff;padding:4px;margin-top:10px;box-shadow:inset 0 1px 2px #00000008}.mathfield-shell math-field{display:block;width:100%;min-height:105px;padding:18px 14px;font-size:30px;border:0;outline:0;background:#fff;border-radius:10px;--selection-background-color:#dbeafe;--contains-highlight-background-color:#eff6ff;--caret-color:#2563eb}.mathfield-status{font-size:12px;color:#64748b;margin-top:7px}.mathfield-latex{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px dashed #cbd5e1;font-family:Consolas,monospace;font-size:13px;word-break:break-all}.math-modal-card.math-visual{width:min(900px,97vw)}.math-help{font-size:13px;color:#475569;margin:8px 0}.math-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}</style></head><body><div class="wrap"><div id="app"><div class="card">Loading…</div></div></div><script>
 const SUPABASE_URL='https://jupefjdquakqsizapzbv.supabase.co',SUPABASE_KEY='sb_publishable_eUcdkv0kFJjkifHQwQBUwg_VcY_lgTP',CREATE_STUDENT_FN='create-students';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let teacher=null,students=[],classes=[],groups=[],assessments=[],bulkRows=[];
@@ -1372,41 +1354,51 @@ function qbMathHtml(text){
   const safe=qbEsc(s).replace(/\n/g,'<br>');
   return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
-function qbLatexToText(t){
-  // Readable plain-text fallback used only if MathJax cannot be loaded at all.
-  const sup={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','n':'ⁿ','+':'⁺','-':'⁻'};
-  const sub={'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
-  const map={times:'×',div:'÷',cdot:'·',pm:'±',mp:'∓',leq:'≤',le:'≤',geq:'≥',ge:'≥',neq:'≠',approx:'≈',equiv:'≡',pi:'π',theta:'θ',alpha:'α',beta:'β',gamma:'γ',delta:'δ',Delta:'Δ',lambda:'λ',mu:'μ',sigma:'σ',omega:'ω',infty:'∞',angle:'∠',circ:'°',degree:'°',in:'∈',notin:'∉',subset:'⊂',subseteq:'⊆',sum:'Σ',prod:'Π',int:'∫',therefore:'∴',because:'∵',rightarrow:'→',to:'→',Rightarrow:'⇒',ldots:'…',dots:'…',cup:'∪',cap:'∩',parallel:'∥',perp:'⊥',triangle:'△'};
-  let s=t,prev;
-  do{prev=s;s=s.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,'($1)/($2)').replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g,'$1√($2)').replace(/\\sqrt\s*\{([^{}]*)\}/g,'√($1)').replace(/\\(?:text|mathrm|mathbf|textbf|operatorname|mbox)\s*\{([^{}]*)\}/g,'$1')}while(s!==prev);
-  s=s.replace(/\\sqrt\s*(\w)/g,'√$1').replace(/\\(left|right|,|;|!|quad|qquad)/g,m=>m==='\\quad'||m==='\\qquad'?' ':'').replace(/\\([A-Za-z]+)/g,(m,n)=>map[n]||n);
-  s=s.replace(/\^\s*\{([^{}]*)\}/g,(m,x)=>[...x].every(c=>sup[c])?[...x].map(c=>sup[c]).join(''):'^('+x+')').replace(/\^\s*([0-9n])/g,(m,x)=>sup[x]).replace(/_\s*\{([^{}]*)\}/g,(m,x)=>[...x].every(c=>sub[c])?[...x].map(c=>sub[c]).join(''):'_'+x).replace(/_\s*([0-9])/g,(m,x)=>sub[x]);
-  return s.replace(/[{}]/g,'');
-}
-function qbMathFallback(root){
-  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null),nodes=[];
-  while(walker.nextNode())nodes.push(walker.currentNode);
-  nodes.forEach(n=>{
-    const v=n.nodeValue;if(!v||v.indexOf('\\')<0)return;
-    const out=v.replace(/\\\((.*?)\\\)/gs,(m,x)=>qbLatexToText(x)).replace(/\\\[(.*?)\\\]/gs,(m,x)=>qbLatexToText(x));
-    if(out!==v)n.nodeValue=out;
-  });
+async function qbEnsureMathJax(){
+  if(window.MathJax?.typesetPromise){
+    if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
+    return window.MathJax;
+  }
+  if(window.__schoolMathJaxLoading) return window.__schoolMathJaxLoading;
+  window.__schoolMathJaxLoading=(async()=>{
+    const urls=[
+      'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+      'https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js'
+    ];
+    for(const src of urls){
+      try{
+        await new Promise((resolve,reject)=>{
+          const old=document.getElementById('schoolMathJaxDynamic');
+          if(old) old.remove();
+          const sc=document.createElement('script');
+          sc.id='schoolMathJaxDynamic';
+          sc.src=src;
+          sc.async=true;
+          sc.onload=resolve;
+          sc.onerror=()=>reject(new Error('MathJax CDN failed: '+src));
+          document.head.appendChild(sc);
+        });
+        for(let i=0;i<200;i++){
+          if(window.MathJax?.typesetPromise)break;
+          await new Promise(r=>setTimeout(r,50));
+        }
+        if(window.MathJax?.typesetPromise){
+          if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
+          return window.MathJax;
+        }
+      }catch(e){ console.warn(e); }
+    }
+    throw new Error('MathJax could not be loaded. Check internet access/CDN blocking.');
+  })();
+  try{return await window.__schoolMathJaxLoading}
+  finally{window.__schoolMathJaxLoading=null}
 }
 async function qbTypeset(root){
-  // School Question Bank: typeset dynamically-created question HTML.
+  const mj=await qbEnsureMathJax();
   const target=root||document.body;
-  // Wait for the loader (local copy -> CDN fallbacks) to finish.
-  let ok=false;
-  try{ok=await Promise.race([window.__mjReady||Promise.resolve(false),new Promise(r=>setTimeout(()=>r(false),30000))]);}catch(_){}
-  if(!ok||!window.MathJax?.typesetPromise){
-    console.warn('MathJax could not be loaded; using plain-text math fallback.');
-    qbMathFallback(target);
-    return;
-  }
-  if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
-  try{window.MathJax.typesetClear?.([target]);}catch(_){}
-  await new Promise(r=>setTimeout(r,0));
-  try{await window.MathJax.typesetPromise([target]);}catch(e){console.warn('MathJax typeset failed; using text fallback',e);qbMathFallback(target);}
+  try{mj.typesetClear?.([target]);}catch(_){ }
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await mj.typesetPromise([target]);
 }
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
