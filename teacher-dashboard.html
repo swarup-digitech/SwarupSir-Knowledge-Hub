@@ -1,13 +1,18 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://jupefjdquakqsizapzbv.supabase.co"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script><script>
-/* MathJax loader: local copy first (works even if a CDN is blocked), then CDN fallbacks. */
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},svg:{fontCache:"global"},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script><script>
+/* MathJax loader. Uses the SVG build (no font files needed): one local file first, then CDNs.
+   Each source gets a 6-second limit so a blocked CDN cannot make the page wait. */
 window.__mjReady=new Promise(function(resolve){
-  var urls=['mathjax/es5/tex-mml-chtml.js','https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js','https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js','https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js'],i=0;
+  var urls=['mathjax-svg.js','https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-svg.min.js','https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-svg.js','https://unpkg.com/mathjax@3/es5/tex-mml-svg.js'],i=0;
   function next(){
-    if(i>=urls.length){window.__mjFailed=true;resolve(false);return}
-    var sc=document.createElement('script');sc.async=true;sc.src=urls[i++];
-    sc.onload=function(){resolve(true)};
-    sc.onerror=function(){sc.remove();next()};
+    if(i>=urls.length){window.__mjFailed=true;console.warn('MathJax: all sources failed');resolve(false);return}
+    var src=urls[i++],done=false,sc=document.createElement('script');
+    function fail(){if(done)return;done=true;clearTimeout(t);sc.remove();console.warn('MathJax: could not load',src);next()}
+    var t=setTimeout(fail,6000);
+    sc.async=true;sc.src=src;
+    sc.onload=function(){if(done)return;done=true;clearTimeout(t);
+      var w=0,iv=setInterval(function(){if(window.MathJax&&window.MathJax.typesetPromise){clearInterval(iv);console.info('MathJax loaded from',src);resolve(true)}else if(++w>100){clearInterval(iv);done=false;fail()}},50)};
+    sc.onerror=fail;
     document.head.appendChild(sc);
   }
   next();
@@ -1392,7 +1397,7 @@ async function qbTypeset(root){
   const target=root||document.body;
   // Wait for the loader (local copy -> CDN fallbacks) to finish.
   let ok=false;
-  try{ok=await Promise.race([window.__mjReady||Promise.resolve(false),new Promise(r=>setTimeout(()=>r(false),20000))]);}catch(_){}
+  try{ok=await Promise.race([window.__mjReady||Promise.resolve(false),new Promise(r=>setTimeout(()=>r(false),30000))]);}catch(_){}
   if(!ok||!window.MathJax?.typesetPromise){
     console.warn('MathJax could not be loaded; using plain-text math fallback.');
     qbMathFallback(target);
@@ -1401,7 +1406,7 @@ async function qbTypeset(root){
   if(window.MathJax.startup?.promise) await window.MathJax.startup.promise;
   try{window.MathJax.typesetClear?.([target]);}catch(_){}
   await new Promise(r=>setTimeout(r,0));
-  await window.MathJax.typesetPromise([target]);
+  try{await window.MathJax.typesetPromise([target]);}catch(e){console.warn('MathJax typeset failed; using text fallback',e);qbMathFallback(target);}
 }
 function qbMathPreview(text){
   const safe=qbMathHtml(text);
