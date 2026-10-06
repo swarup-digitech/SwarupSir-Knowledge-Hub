@@ -246,6 +246,145 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------
+    // Teacher: change a student's JNVST sub-group
+    //
+    // The Student Accounts page sends this action when the teacher selects
+    // "Change Group".  Keep the authorization here (server-side) so a
+    // teacher cannot move a student into another teacher's group or into a
+    // different JNVST main group.
+    // ------------------------------------------------------------
+    if (body.action === "setStudentJnvstSubgroup") {
+      const studentId = String(body.student_id ?? "").trim();
+      const targetClassId = String(body.target_class_id ?? "").trim();
+      if (!studentId || !targetClassId)
+        return json({error:"Student and target JNVST sub-group are required."},400);
+
+      // Target must be a JNVST SUB group owned by the logged-in teacher.
+      const { data: target, error: targetErr } = await admin
+        .from("classes")
+        .select("id, name, course, teacher_id, jnvst_group_type, jnvst_parent_id")
+        .eq("id", targetClassId)
+        .maybeSingle();
+
+      if (targetErr) return json({error:targetErr.message},400);
+      if (!target)
+        return json({error:"Target JNVST group was not found."},404);
+      if (String(target.teacher_id) !== String(caller.user.id))
+        return json({error:"You can only move students into your own JNVST groups."},403);
+
+      const targetIsSub =
+        String(target.jnvst_group_type ?? "").toUpperCase() === "SUB" ||
+        !!target.jnvst_parent_id;
+      if (!targetIsSub || !target.jnvst_parent_id)
+        return json({error:"The selected target must be a JNVST sub-group."},400);
+
+      if (!String(target.course ?? "").toUpperCase().startsWith("JNVST"))
+        return json({error:"The selected group is not a JNVST group."},400);
+
+      // Load all JNVST memberships for this student, but only through classes
+      // owned by the current teacher.
+      const { data: memberships, error: membershipErr } = await admin
+        .from("class_students")
+        .select(`student_id, class_id, classes!inner(
+          id, name, course, teacher_id, jnvst_group_type, jnvst_parent_id
+        )`)
+        .eq("student_id", studentId)
+        .eq("classes.teacher_id", caller.user.id);
+
+      if (membershipErr) return json({error:membershipErr.message},400);
+      if (!memberships?.length)
+        return json({error:"This student is not in one of your classes."},403);
+
+      const jnvstMemberships = memberships.filter((m:any) =>
+        String(m.classes?.course ?? "").toUpperCase().startsWith("JNVST")
+      );
+
+      if (!jnvstMemberships.length)
+        return json({error:"This student has no JNVST group membership."},400);
+
+      const isSub = (c:any) =>
+        String(c?.jnvst_group_type ?? "").toUpperCase() === "SUB" ||
+        !!c?.jnvst_parent_id;
+
+      // Determine the student's current JNVST main-group IDs.
+      const currentMainIds = new Set<string>();
+      for (const m of jnvstMemberships as any[]) {
+        const c = m.classes;
+        if (!c) continue;
+        if (isSub(c) && c.jnvst_parent_id)
+          currentMainIds.add(String(c.jnvst_parent_id));
+        else if (!isSub(c))
+          currentMainIds.add(String(c.id));
+      }
+
+      const targetMainId = String(target.jnvst_parent_id);
+      if (!currentMainIds.has(targetMainId)) {
+        return json({
+          error:"The target sub-group does not belong to the student's current JNVST main group."
+        },400);
+      }
+
+      // If already in the target, do nothing.
+      const alreadyInTarget = jnvstMemberships.some((m:any) =>
+        String(m.class_id) === targetClassId
+      );
+      if (alreadyInTarget) {
+        return json({
+          success:true,
+          student_id:studentId,
+          target_class_id:targetClassId,
+          target_class_name:target.name,
+          message:"Student is already in the selected JNVST sub-group."
+        });
+      }
+
+      // Insert the new membership first. This prevents a failed insert from
+      // leaving the student without a group.
+      const { error: insertErr } = await admin
+        .from("class_students")
+        .insert({class_id:targetClassId, student_id:studentId});
+
+      if (insertErr) return json({error:insertErr.message},400);
+
+      // Remove only old JNVST SUB memberships belonging to this same main
+      // group. Main-group membership, if present, is deliberately preserved.
+      const oldSubIds = jnvstMemberships
+        .filter((m:any) => {
+          const c = m.classes;
+          return isSub(c) && String(c.jnvst_parent_id) === targetMainId;
+        })
+        .map((m:any) => String(m.class_id))
+        .filter(id => id !== targetClassId);
+
+      if (oldSubIds.length) {
+        const { error: deleteErr } = await admin
+          .from("class_students")
+          .delete()
+          .eq("student_id", studentId)
+          .in("class_id", oldSubIds);
+
+        if (deleteErr) {
+          // The new membership is already valid, so report the partial state
+          // explicitly instead of pretending the operation fully succeeded.
+          return json({
+            success:false,
+            partial:true,
+            error:"The new group was added, but the previous sub-group could not be removed: " + deleteErr.message,
+            student_id:studentId,
+            target_class_id:targetClassId
+          },500);
+        }
+      }
+
+      return json({
+        success:true,
+        student_id:studentId,
+        target_class_id:targetClassId,
+        target_class_name:target.name
+      });
+    }
+
+    // ------------------------------------------------------------
     // Teacher: set/change a student's Roll No
     // ------------------------------------------------------------
     if (body.action === "setStudentRollNo") {
