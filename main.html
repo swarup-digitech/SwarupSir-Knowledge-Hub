@@ -5482,6 +5482,10 @@ function toggleResultDetails(attemptId,type){
    <div class="${type==="correct"?'result-correct':'result-wrong'}" style="margin-top:8px"><b>${type==="correct"?'✓ Correct':'✗ Wrong'}</b></div>
   </div>`;
  }).join('');
+ // Result details are inserted dynamically after the Results page is rendered.
+ // Explicitly typeset this newly-created subtree so LaTeX in questions/options
+ // is rendered by MathJax instead of being shown literally.
+ jnvstTypesetWhenReady([box]);
 }
 
 function applyResultSort(){
