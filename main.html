@@ -4617,12 +4617,7 @@ function assignmentSchoolQbRenderBuilder(){
  const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
  const subjects=assignmentSchoolQbMode==='JNVST'
    ?(jnvstSubjects||[]).filter(x=>String(x.name||'').trim())
-   :(()=>{
-      const names=[...new Set(assignmentSchoolQbQuestions.map(q=>String(q.subject||'').trim()).filter(Boolean))];
-      const currentSubject=String(document.getElementById('asub')?.value||assignmentSchoolQbSubjectName||'').trim();
-      if(currentSubject && !names.some(n=>n.toLowerCase()===currentSubject.toLowerCase())) names.unshift(currentSubject);
-      return names.sort((a,b)=>a.localeCompare(b)).map(name=>({id:name,name}));
-    })();
+   :(schoolSubjects||[]).filter(x=>String(x.name||'').trim() && x.active!==false).map(x=>({id:x.id,name:x.name,code:x.code}));
  const subjectOptions=subjects.length?subjects.map(x=>`<option value="${assignmentSchoolQbEsc(x.id)}" ${assignmentSchoolQbSubject===x.id||assignmentSchoolQbSubjectName===x.name?'selected':''}>${assignmentSchoolQbEsc(x.name)}</option>`).join(''):`<option value="" selected>No School subjects found — add one in Teacher Dashboard</option>`;
  const jnvstLessons=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===assignmentSchoolQbSubject);
  const lessons=assignmentSchoolQbMode==='JNVST'?jnvstLessons:assignmentSchoolQbChapters.filter(c=>assignmentSchoolQbBaseFiltered().some(q=>q.chapter_id===c.id)).sort((a,b)=>String(a.chapter_code||a.chapter_number||'').localeCompare(String(b.chapter_code||b.chapter_number||''),undefined,{numeric:true}));
