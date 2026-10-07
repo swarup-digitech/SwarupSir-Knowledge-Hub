@@ -245,6 +245,9 @@ let assignmentBankCache=[];
 let assignmentBankSelected=new Set();
 let assignmentBankFilters={part:'',topic:'',language:'',search:''};
 let assignmentSchoolQbQuestions=[];
+let schoolSubjects=[];
+async function ensureSchoolSubjects(){if(schoolSubjects?.length)return schoolSubjects;const {data,error}=await sb.from('school_subjects').select('id,name,code').eq('teacher_id',current.id).eq('active',true).order('name');if(error)throw error;schoolSubjects=data||[];return schoolSubjects;}
+function schoolSubjectSelectHtml(selected=''){if(!schoolSubjects.length)return '<option value="">No subjects found — add subjects in Teacher Dashboard</option>';return schoolSubjects.map(x=>`<option value="${esc(x.id)}" ${String(selected)===String(x.id)?'selected':''}>${esc(x.name)}</option>`).join('')}
 let assignmentSchoolQbChapters=[];
 let assignmentSchoolQbBlocks=[];
 let assignmentSchoolQbOptions=[];
@@ -2300,7 +2303,7 @@ async function teacherHome(){
 }
 async function schoolAssignmentManagement(){
   schoolTeacherMode=true;
-  try{
+  try{await ensureSchoolSubjects();
     const [{data:assignments,error:ae},{data:classes,error:ce},{data:groups,error:ge}]=await Promise.all([
       sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
       sb.from("classes").select("id,name,description,course").eq("teacher_id",current.id).eq("course","SCHOOL").order("name"),
@@ -2358,7 +2361,7 @@ async function schoolAdaptivePerformanceDashboard(){
     const [{data:students,error:se},{data:perf,error:pe},{data:qb,error:qe}]=await Promise.all([
       sb.from('profiles').select('id,full_name,roll_no').eq('role','student').eq('course','SCHOOL').order('full_name'),
       sb.from('school_student_question_performance').select('student_id,source_school_question_bank_id,attempt_count,wrong_count,correct_count,last_wrong_at,last_correct_at,last_attempted_at').order('wrong_count',{ascending:false}),
-      sb.from('school_question_bank_questions').select('id,chapter_id,topic,subject,variation_group,marks').eq('teacher_id',current.id).eq('course_type','SCHOOL')
+      sb.from('school_question_bank_questions').select('id,chapter_id,topic,subject_id,variation_group,marks').eq('teacher_id',current.id).eq('course_type','SCHOOL')
     ]);
     if(se)throw se;if(pe)throw pe;if(qe)throw qe;
     window._adaptivePerformance={students:students||[],perf:perf||[],qb:qb||[]};
@@ -3705,13 +3708,14 @@ function filterTeacherAssignments(){
  document.querySelectorAll(".teacher-assignment-row").forEach(row=>{const ok=(main==="all"||row.dataset.mainGroup===main)&&(sub==="all"||row.dataset.subGroup===sub);row.style.display=ok?"block":"none";});
 }
 async function editAssignmentDetails(assignmentId){
+ if(schoolTeacherMode)try{await ensureSchoolSubjects()}catch(e){return alert('Could not load School Subjects: '+e.message)}
  const {data:a,error}=await sb.from("assignments").select("*").eq("id",assignmentId).eq("created_by",current.id).single();
  if(error||!a)return alert(error?.message||"Assignment not found.");
  const isVideo=String(a.assignment_type||"").toUpperCase()==="VIDEO" || !!a.video_url;
  render(`<div class="wrap">${header("Edit Assignment Details")}<div class="card">
    <h2>${esc(a.title||"")}</h2>
    <label>Assignment Title</label><input id="editAtTitle" value="${esc(a.title||"")}">
-   <label>Subject</label><input id="editAtSubject" value="${esc(a.subject||"")}">
+   <label>Subject</label>${schoolTeacherMode?`<select id="editAtSubject">${schoolSubjects.map(x=>`<option value="${esc(x.id)}" ${String(a.school_subject_id||"")===String(x.id)||String(x.name).toLowerCase()===String(a.subject||"").toLowerCase()?"selected":""}>${esc(x.name)}</option>`).join("")}</select>`:`<input id="editAtSubject" value="${esc(a.subject||"")}">`}
    <label>Assignment Type</label><select id="editAtType"><option value="MCQ" ${!isVideo?"selected":""}>MCQ — No Video</option><option value="VIDEO" ${isVideo?"selected":""}>Video + MCQ</option></select>
    <label>YouTube Video URL</label><input id="editAtVideo" value="${esc(a.video_url||"")}" placeholder="Leave blank for MCQ-only assignment">
    <label>Description</label><textarea id="editAtDescription">${esc(a.description||"")}</textarea>
@@ -3719,10 +3723,10 @@ async function editAssignmentDetails(assignmentId){
  </div></div>`);
 }
 async function saveAssignmentDetails(assignmentId){
- const title=document.getElementById("editAtTitle")?.value.trim(),subject=document.getElementById("editAtSubject")?.value.trim()||"",type=document.getElementById("editAtType")?.value||"MCQ",video=document.getElementById("editAtVideo")?.value.trim()||"",description=document.getElementById("editAtDescription")?.value.trim()||"";
- if(!title)return alert("Assignment title cannot be empty.");
+ const title=document.getElementById("editAtTitle")?.value.trim(),subjectId=schoolTeacherMode?(document.getElementById("editAtSubject")?.value||""):null,subject=schoolTeacherMode?(schoolSubjects.find(x=>String(x.id)===String(subjectId))?.name||""):(document.getElementById("editAtSubject")?.value.trim()||""),type=document.getElementById("editAtType")?.value||"MCQ",video=document.getElementById("editAtVideo")?.value.trim()||"",description=document.getElementById("editAtDescription")?.value.trim()||"";
+ if(!title)return alert("Assignment title cannot be empty.");if(schoolTeacherMode&&!subjectId)return alert("Select Subject.");
  if(type==="VIDEO"&&!video)return alert("Enter a YouTube video URL for a Video assignment, or choose MCQ.");
- const {error}=await sb.from("assignments").update({title,subject,description,video_url:video||null,assignment_type:type}).eq("id",assignmentId).eq("created_by",current.id);
+ const {error}=await sb.from("assignments").update({title,subject,school_subject_id:subjectId||null,description,video_url:video||null,assignment_type:type}).eq("id",assignmentId).eq("created_by",current.id);
  if(error)return alert("Could not update assignment: "+error.message);
  alert("Assignment details updated successfully.");
  return schoolTeacherMode?schoolAssignmentManagement():teacherHome();
@@ -4296,6 +4300,7 @@ async function newAssignment(){
  const classes=(allClasses||[]).filter(c=>schoolTeacherMode
    ?String(c.course||"").trim().toUpperCase()==="SCHOOL"
    :String(c.course||"").trim().toUpperCase()!=="SCHOOL");
+ if(schoolTeacherMode){try{await ensureSchoolSubjects()}catch(se){return alert('Could not load School Subjects: '+se.message)}}
  if(!classes.length){alert(schoolTeacherMode?"Create a School Course class first.":"JNVST classes are not available.");return schoolTeacherMode?newClass():teacherHome()}
 
  const jnvstBases=jnvstMainGroups(classes);
@@ -4321,7 +4326,7 @@ ${schoolTeacherMode?`<div class="card" style="border:2px solid #7c3aed;backgroun
   <div id="newAssignmentClassList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px"></div>
   <div id="newAssignmentStudentPicker" class="small muted" style="margin-top:12px">Select one or more classes above.</div>
  </div>
- <label>Title</label><input id="at"><label>Subject</label>${schoolTeacherMode?`<input id="asub" placeholder="e.g. Mathematics">`:`<select id="asub"><option value="">Select JNVST Subject</option>${jnvstSubjects.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select>`}<div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea>
+ <label>Title</label><input id="at"><label>Subject</label>${schoolTeacherMode?`<select id="asub">${schoolSubjectSelectHtml()}</select>`:`<select id="asub"><option value="">Select JNVST Subject</option>${jnvstSubjects.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select>`}<div id="assignmentVideoField"><label>YouTube video URL</label><input id="av" placeholder="https://www.youtube.com/watch?v=..."><div class="small muted">Students must watch this video before answering the questions.</div></div><label>Description</label><textarea id="adesc"></textarea>
  <div class="card" style="background:#f8fafc;border:1px solid #dbeafe;margin-top:15px"><h3 style="margin-top:0">Questions</h3>
 <p class="small muted">Choose how you want to add questions. You can combine questions from the Mock Test Question Bank with uploaded or manually entered questions.</p>
 <div class="grid" style="margin-top:10px">
@@ -4350,7 +4355,7 @@ ${schoolTeacherMode?`<div class="card" style="border:2px solid #7c3aed;backgroun
    if(newAssignmentDraft.schoolQbSelection){assignmentSchoolQbSelected={...newAssignmentDraft.schoolQbSelection};const savedSub=newAssignmentDraft.schoolQbSelection.subject||'';const savedObj=(jnvstSubjects||[]).find(x=>x.id===savedSub)|| (jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(savedSub).trim().toLowerCase());assignmentSchoolQbSubject=savedObj?.id||'';assignmentSchoolQbSubjectName=savedObj?.name||newAssignmentDraft.schoolQbSelection.subject_name||savedSub;assignmentSchoolQbMedium=newAssignmentDraft.schoolQbSelection.medium||'';}
    const d=newAssignmentDraft;
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
-   document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";if(schoolTeacherMode&&d.schoolAssignmentMode){const ar=document.querySelector(`input[name="schoolAssignmentMode"][value="${d.schoolAssignmentMode}"]`);if(ar){ar.checked=true;toggleAdaptiveAssignmentFields();}}if(document.getElementById("adaptiveMaxPercent"))document.getElementById("adaptiveMaxPercent").value=d.adaptiveMaxPercent||"60";
+   document.getElementById("at").value=d.title||"";if(document.getElementById("asub")){const so=schoolSubjects.find(x=>String(x.id)===String(d.subject_id||d.subject)||String(x.name).toLowerCase()===String(d.subject||"").toLowerCase());document.getElementById("asub").value=so?.id||"";}document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";if(schoolTeacherMode&&d.schoolAssignmentMode){const ar=document.querySelector(`input[name="schoolAssignmentMode"][value="${d.schoolAssignmentMode}"]`);if(ar){ar.checked=true;toggleAdaptiveAssignmentFields();}}if(document.getElementById("adaptiveMaxPercent"))document.getElementById("adaptiveMaxPercent").value=d.adaptiveMaxPercent||"60";
    if(!schoolTeacherMode){
      const main=d.mainGroup||firstBaseId;if([...document.querySelectorAll("#aMainGroup option")].some(o=>o.value===main))document.getElementById("aMainGroup").value=main;
      await refreshJnvstAssignmentGroups(d.subGroup||"");
@@ -4584,7 +4589,18 @@ function assignmentSchoolQbJs(v){return JSON.stringify(String(v==null?'':v))}
 function assignmentSchoolQbQuestionLessonId(q){return assignmentSchoolQbMode==='JNVST'?q.lesson_id:q.chapter_id}
 function assignmentSchoolQbQuestionText(q,lang){if(assignmentSchoolQbMode==='JNVST')return q.question_text||'';if(lang==='AS')return q.question_text_as||q.question_text_en||'';if(lang==='BOTH')return [q.question_text_en,q.question_text_as].filter(Boolean).join('\n');return q.question_text_en||q.question_text_as||''}
 function assignmentSchoolQbLessonLabel(id){if(assignmentSchoolQbMode==='JNVST'){const jl=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!jl)return '—';const p=(jnvstSubjectLessons||[]).find(x=>x.id===jl.parent_lesson_id);return `${jl.lesson_code||''} ${jl.lesson_name}${p?' (Sub-lesson of '+(p.lesson_code||'')+')':''}`}const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return '—';const p=assignmentSchoolQbChapters.find(x=>x.id===c.parent_chapter_id);return `${c.chapter_code||c.chapter_number||''}. ${c.chapter_name}${p?' (Subchapter of '+(p.chapter_code||p.chapter_number||'')+')':''}`}
-function assignmentSchoolQbSubjectMatches(q){if(assignmentSchoolQbMode==='SCHOOL')return q.course_type==='SCHOOL'&&String(q.subject||'').trim().toLowerCase()===String(assignmentSchoolQbSubjectName||assignmentSchoolQbSubject||'').trim().toLowerCase();return !!assignmentSchoolQbSubject&&String(q.subject_id||'')===String(assignmentSchoolQbSubject)}
+function assignmentSchoolQbSubjectMatches(q){
+ if(assignmentSchoolQbMode==='SCHOOL'){
+   // School Course questions now use the shared School Subject list. Legacy rows
+   // without subject_id remain compatible and are matched by their subject text when present.
+   if(q.course_type!=='SCHOOL')return false;
+   const wanted=String(assignmentSchoolQbSubjectName||'').trim().toLowerCase();
+   const stored=String(q.subject||'').trim().toLowerCase();
+   if(q.subject_id && String(q.subject_id)!==String(assignmentSchoolQbSubject))return false;
+   return !stored || !wanted || stored===wanted;
+ }
+ return !!assignmentSchoolQbSubject&&String(q.subject_id||'')===String(assignmentSchoolQbSubject)
+}
 function assignmentSchoolQbMediumMatches(q){const m=String(assignmentSchoolQbMode==='JNVST'?q.language:q.medium||'').trim().toUpperCase(),wanted=String(assignmentSchoolQbMedium||'').trim().toUpperCase();if(!wanted)return false;if(assignmentSchoolQbMode==='JNVST')return wanted==='BOTH'?(m==='ENGLISH'||m==='ASSAMESE'):m===wanted; if(wanted==='BOTH')return m==='BOTH'||m==='ENGLISH_ASSAMESE'||m==='BILINGUAL'||m==='ENGLISH + ASSAMESE'||m==='ENGLISH+ASSAMESE';return m===wanted}
 function assignmentSchoolQbBaseFiltered(){if(!assignmentSchoolQbSubject||!assignmentSchoolQbMedium)return [];return assignmentSchoolQbQuestions.filter(q=>assignmentSchoolQbSubjectMatches(q)&&assignmentSchoolQbMediumMatches(q))}
 function assignmentSchoolQbJnvstDescendantIds(rootId){const ids=new Set([rootId]);let changed=true;while(changed){changed=false;(jnvstSubjectLessons||[]).forEach(x=>{if(x.parent_lesson_id&&ids.has(x.parent_lesson_id)&&!ids.has(x.id)){ids.add(x.id);changed=true;}})}return ids}
@@ -4599,8 +4615,15 @@ function assignmentSchoolQbPreview(q,lang){
 }
 function assignmentSchoolQbRenderBuilder(){
  const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
- const subjects=assignmentSchoolQbMode==='JNVST'?(jnvstSubjects||[]).filter(x=>String(x.name||'').trim()):[...new Set(assignmentSchoolQbQuestions.map(q=>String(q.subject||'').trim()).filter(Boolean))].sort().map(name=>({id:name,name}));
- const subjectOptions=subjects.length?subjects.map(x=>`<option value="${assignmentSchoolQbEsc(x.id)}" ${assignmentSchoolQbSubject===x.id||assignmentSchoolQbSubjectName===x.name?'selected':''}>${assignmentSchoolQbEsc(x.name)}</option>`).join(''):`<option value="" selected>No subjects found</option>`;
+ const subjects=assignmentSchoolQbMode==='JNVST'
+   ?(jnvstSubjects||[]).filter(x=>String(x.name||'').trim())
+   :(()=>{
+      const names=[...new Set(assignmentSchoolQbQuestions.map(q=>String(q.subject||'').trim()).filter(Boolean))];
+      const currentSubject=String(document.getElementById('asub')?.value||assignmentSchoolQbSubjectName||'').trim();
+      if(currentSubject && !names.some(n=>n.toLowerCase()===currentSubject.toLowerCase())) names.unshift(currentSubject);
+      return names.sort((a,b)=>a.localeCompare(b)).map(name=>({id:name,name}));
+    })();
+ const subjectOptions=subjects.length?subjects.map(x=>`<option value="${assignmentSchoolQbEsc(x.id)}" ${assignmentSchoolQbSubject===x.id||assignmentSchoolQbSubjectName===x.name?'selected':''}>${assignmentSchoolQbEsc(x.name)}</option>`).join(''):`<option value="" selected>No School subjects found — add one in Teacher Dashboard</option>`;
  const jnvstLessons=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===assignmentSchoolQbSubject);
  const lessons=assignmentSchoolQbMode==='JNVST'?jnvstLessons:assignmentSchoolQbChapters.filter(c=>assignmentSchoolQbBaseFiltered().some(q=>q.chapter_id===c.id)).sort((a,b)=>String(a.chapter_code||a.chapter_number||'').localeCompare(String(b.chapter_code||b.chapter_number||''),undefined,{numeric:true}));
  const lessonLabel=l=>assignmentSchoolQbMode==='JNVST'?`${l.lesson_code||''} ${l.lesson_name}`:`${l.chapter_code||l.chapter_number||''}. ${l.chapter_name}`;
@@ -4609,7 +4632,7 @@ function assignmentSchoolQbRenderBuilder(){
  const ready=!!assignmentSchoolQbSubject&&!!assignmentSchoolQbMedium;
  const mediumOptions=assignmentSchoolQbMode==='JNVST'?`<option value="">Select Medium</option><option value="COMMON" ${assignmentSchoolQbMedium==='COMMON'?'selected':''}>Common (MAT)</option><option value="ENGLISH" ${assignmentSchoolQbMedium==='ENGLISH'?'selected':''}>English</option><option value="ASSAMESE" ${assignmentSchoolQbMedium==='ASSAMESE'?'selected':''}>Assamese</option><option value="BOTH" ${assignmentSchoolQbMedium==='BOTH'?'selected':''}>English + Assamese</option>`:`<option value="">Select Medium</option><option value="ENGLISH" ${assignmentSchoolQbMedium==='ENGLISH'?'selected':''}>English</option><option value="ASSAMESE" ${assignmentSchoolQbMedium==='ASSAMESE'?'selected':''}>Assamese</option><option value="BOTH" ${assignmentSchoolQbMedium==='BOTH'?'selected':''}>English + Assamese</option>`;
  box.innerHTML=`<div class="card" style="border:2px solid #16a34a;background:#f7fff9"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><div><h3 style="margin:0">🧩 ${assignmentSchoolQbMode==='JNVST'?'JNVST Assignment from JNVST Question Bank':'School Course Assignment from School Question Bank'}</h3><div class="small muted">Select Subject + Medium first. Only matching questions from this course are then displayed.</div></div><button type="button" class="secondary" onclick="document.getElementById('assignmentSchoolQbBuilder').style.display='none'">Close</button></div>
- <div class="grid" style="margin-top:12px"><div><label>Subject</label><select id="asqbSubject" onchange="assignmentSchoolQbSubject=this.value;assignmentSchoolQbSubjectName=assignmentSchoolQbMode==='JNVST'?((jnvstSubjects.find(x=>x.id===this.value)||{}).name||''):this.value;const a=document.getElementById('asub');if(a&&assignmentSchoolQbSubjectName)a.value=assignmentSchoolQbSubjectName;assignmentSchoolQbLessons.clear();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()"><option value="">Select Subject</option>${subjectOptions}</select></div><div><label>Medium</label><select id="asqbMedium" onchange="assignmentSchoolQbMedium=this.value;assignmentSchoolQbLessons.clear();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()">${mediumOptions}</select></div><div><label>Total Questions</label><input id="asqbTotal" type="number" min="1" value="${assignmentSchoolQbSelected?.total||10}" onchange="assignmentSchoolQbRenderSummary()"></div>${assignmentSchoolQbMode==='SCHOOL'?`<div><label>Question Language</label><select id="asqbLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">English + Assamese</option></select></div>`:''}</div>
+ <div class="grid" style="margin-top:12px"><div><label>Subject</label><select id="asqbSubject" onchange="assignmentSchoolQbSubject=this.value;assignmentSchoolQbSubjectName=assignmentSchoolQbMode==='JNVST'?((jnvstSubjects.find(x=>x.id===this.value)||{}).name||''):(schoolSubjects.find(x=>x.id===this.value)||{}).name||'';const a=document.getElementById('asub');if(a&&assignmentSchoolQbSubjectName)a.value=assignmentSchoolQbSubjectName;assignmentSchoolQbLessons.clear();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()"><option value="">Select Subject</option>${subjectOptions}</select></div><div><label>Medium</label><select id="asqbMedium" onchange="assignmentSchoolQbMedium=this.value;assignmentSchoolQbLessons.clear();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder()">${mediumOptions}</select></div><div><label>Total Questions</label><input id="asqbTotal" type="number" min="1" value="${assignmentSchoolQbSelected?.total||10}" onchange="assignmentSchoolQbRenderSummary()"></div>${assignmentSchoolQbMode==='SCHOOL'?`<div><label>Question Language</label><select id="asqbLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">English + Assamese</option></select></div>`:''}</div>
  ${!ready?'<div class="notice" style="margin-top:10px"><b>Select Subject and Medium.</b> Questions will not be displayed until both are selected.</div>':`<div class="success" style="margin-top:10px"><b>${allowed.length}</b> matching question(s) available for <b>${assignmentSchoolQbEsc(assignmentSchoolQbSubjectName||((jnvstSubjects||[]).find(x=>x.id===assignmentSchoolQbSubject)||{}).name||'')}</b> / <b>${assignmentSchoolQbMedium}</b>.</div>`}
  ${ready?`<div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">1. Select Lessons / Chapters</h4><div class="small muted" style="margin-bottom:7px">${assignmentSchoolQbMode==='JNVST'?'JNVST uses Lesson → Sub-lesson. Selecting a parent includes its sub-lessons.':'School Course uses Chapter → Subchapter. Selecting a parent includes its subchapters.'}</div><div style="max-height:220px;overflow:auto">${lessons.length?lessons.map(c=>`<label style="display:block;padding:5px;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto" ${assignmentSchoolQbLessons.has(c.id)?'checked':''} onchange="assignmentSchoolQbLessonToggle('${c.id}',this.checked)"> <b>${assignmentSchoolQbEsc(c.lesson_code||c.chapter_code||c.chapter_number||'')}</b> ${assignmentSchoolQbEsc(c.lesson_name||c.chapter_name)} ${c.parent_lesson_id||c.parent_chapter_id?'<span class="small muted">(Sub-lesson/Subchapter)</span>':'<span class="small muted">(Lesson/Chapter)</span>'}</label>`).join(''):'<div class="muted">No lessons contain questions for this Subject + Medium. Assign existing questions to a JNVST lesson first.</div>'}</div></div>
  <div class="grid"><div class="card" style="margin-top:10px"><h4 style="margin:0 0 7px">2. Fixed Questions</h4><div class="small muted">These selected questions must appear. Their variation group is excluded from the remaining random pool.</div><input id="asqbFixedSearch" placeholder="Search question / topic / group..." oninput="assignmentSchoolQbRenderFixed()"><div id="asqbFixedList" style="max-height:300px;overflow:auto;margin-top:7px"></div></div>
@@ -4660,14 +4683,31 @@ function generateSchoolAssignmentQbSelection(){
  if(window.MathJax?.typesetPromise){const out=document.getElementById('asqbSelectedList');if(out)window.MathJax.typesetPromise([out]).catch(()=>{});}
 }
 async function openJnvstAssignmentQbBuilder(){assignmentSchoolQbMode='JNVST';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading JNVST Question Bank…</span></div>';const {data:q,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false});if(error){box.innerHTML=`<div class="notice">Could not load JNVST Question Bank: ${assignmentSchoolQbEsc(error.message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=[];const initial=document.getElementById('asub')?.value||'';const so=(jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(initial).trim().toLowerCase());assignmentSchoolQbSubject=so?.id||'';assignmentSchoolQbSubjectName=so?.name||initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
-async function openSchoolAssignmentQbBuilder(){assignmentSchoolQbMode='SCHOOL';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Course Question Bank…</span></div>';const [{data:q,error:qe},{data:c,error:ce}]=await Promise.all([sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).eq('course_type','SCHOOL').order('created_at',{ascending:false}),sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name')]);if(qe||ce){box.innerHTML=`<div class="notice">Could not load School Course Question Bank: ${assignmentSchoolQbEsc((qe||ce).message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];const initial=document.getElementById('asub')?.value||'';assignmentSchoolQbSubject=initial;assignmentSchoolQbSubjectName=initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
+async function openSchoolAssignmentQbBuilder(){
+ assignmentSchoolQbMode='SCHOOL';
+ const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
+ box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Course Question Bank…</span></div>';
+ const [{data:q,error:qe},{data:c,error:ce},{data:ss,error:se}]=await Promise.all([
+   sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).eq('course_type','SCHOOL').order('created_at',{ascending:false}),
+   sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name'),
+   sb.from('school_subjects').select('id,name,code').eq('teacher_id',current.id).eq('active',true).order('name')
+ ]);
+ if(qe||ce||se){box.innerHTML=`<div class="notice">Could not load School Course Question Bank: ${assignmentSchoolQbEsc((qe||ce||se).message)}</div>`;return;}
+ schoolSubjects=ss||[];assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];
+ const initial=String(document.getElementById('asub')?.value||'').trim();
+ const selectedSubject=schoolSubjects.find(x=>String(x.id)===initial)||schoolSubjects.find(x=>String(x.name).trim().toLowerCase()===initial.toLowerCase())||schoolSubjects.find(x=>x.name==='Mathematics');
+ assignmentSchoolQbSubject=selectedSubject?.id||'';assignmentSchoolQbSubjectName=selectedSubject?.name||initial;
+ 
+ assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;
+ assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});
+}
 
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
 async function loadSchoolAdaptiveSnapshots(ids,lang){
   const wanted=[...new Set((ids||[]).filter(Boolean))];
   if(!wanted.length)return new Map();
   const [{data:bankRows,error:be},{data:opts,error:oe},{data:blocks,error:ble}]=await Promise.all([
-    sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,correct_answer,explanation,variation_group,chapter_id,topic,subject,medium,marks,cognitive_level,difficulty').eq('teacher_id',current.id).eq('course_type','SCHOOL').in('id',wanted),
+    sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,correct_answer,explanation,variation_group,chapter_id,topic,subject_id,medium,marks,cognitive_level,difficulty').eq('teacher_id',current.id).eq('course_type','SCHOOL').in('id',wanted),
     sb.from('school_question_bank_options').select('question_id,display_order,option_label,option_text_en,option_text_as,is_correct').in('question_id',wanted).order('display_order'),
     sb.from('school_question_bank_blocks').select('question_id,block_order,block_type,text_en,text_as,image_url').in('question_id',wanted).order('block_order')
   ]);
@@ -4683,7 +4723,7 @@ async function loadSchoolAdaptiveSnapshots(ids,lang){
     const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();
     const text=textFromBlocks||(lang==='AS'?(q.question_text_as||q.question_text_en||''):lang==='BOTH'?[q.question_text_en,q.question_text_as].filter(Boolean).join('\n'):(q.question_text_en||q.question_text_as||''));
     const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;
-    out.set(q.id,{assignment_id:null,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:image?'Option A':getOpt('A'),option_b:image?'Option B':getOpt('B'),option_c:image?'Option C':getOpt('C'),option_d:image?'Option D':getOpt('D'),correct_option:q.correct_answer,question_order:0,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id||null,source_topic:q.topic||null,source_subject:q.subject||null,source_medium:q.medium||null});
+    out.set(q.id,{assignment_id:null,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:image?'Option A':getOpt('A'),option_b:image?'Option B':getOpt('B'),option_c:image?'Option C':getOpt('C'),option_d:image?'Option D':getOpt('D'),correct_option:q.correct_answer,question_order:0,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id||null,source_topic:q.topic||null,source_subject:q.subject_id||null,source_medium:q.medium||null});
   });
   return out;
 }
@@ -4786,7 +4826,7 @@ async function saveAdaptiveSchoolAssignment(){
     const perfRows=perfByStudent.get(studentId)||[];
     const picked=selectSchoolAdaptiveQuestions(candidates,perfRows,scheduled.get(studentId)||new Set(),total,maxPercent);
     if(picked.selected.length<total){errors.push(`${studentId}: only ${picked.selected.length}/${total} usable questions`);continue;}
-    const {data:a,error:ae}=await sb.from('assignments').insert({class_id:primaryClassId,title,subject:document.getElementById('asub')?.value.trim()||'',description:document.getElementById('adesc')?.value.trim()||'',video_url:videoUrl,assignment_type:(document.querySelector('input[name="assignmentType"]:checked')?.value||'video')==='video'?'VIDEO':'MCQ',time_limit:null,shuffle_questions:false,shuffle_options:false,main_group:primaryClass?.name||'School Class',sub_group:primarySubGroup,created_by:current.id,adaptive_mode:true,adaptive_max_percent:Math.round(maxPercent),adaptive_batch_id:batchId,adaptive_for_student_id:studentId,adaptive_weakness_count:picked.adaptiveCount,adaptive_normal_count:picked.normalCount,adaptive_selection_summary:{total,maximum_adaptive_percent:maxPercent,adaptive_count:picked.adaptiveCount,normal_count:picked.normalCount,selected_range:[...assignmentSchoolQbLessons],subject:assignmentSchoolQbSubjectName,medium:assignmentSchoolQbMedium}}).select().single();
+    const subjectId=document.getElementById('asub')?.value||'';const subjectName=schoolSubjects.find(x=>String(x.id)===String(subjectId))?.name||'';if(schoolTeacherMode&&!subjectId)return alert('Select Subject.'); const {data:a,error:ae}=await sb.from('assignments').insert({class_id:primaryClassId,title,subject:schoolTeacherMode?subjectName:(document.getElementById('asub')?.value.trim()||''),school_subject_id:schoolTeacherMode?subjectId:null,description:document.getElementById('adesc')?.value.trim()||'',video_url:videoUrl,assignment_type:(document.querySelector('input[name="assignmentType"]:checked')?.value||'video')==='video'?'VIDEO':'MCQ',time_limit:null,shuffle_questions:false,shuffle_options:false,main_group:primaryClass?.name||'School Class',sub_group:primarySubGroup,created_by:current.id,adaptive_mode:true,adaptive_max_percent:Math.round(maxPercent),adaptive_batch_id:batchId,adaptive_for_student_id:studentId,adaptive_weakness_count:picked.adaptiveCount,adaptive_normal_count:picked.normalCount,adaptive_selection_summary:{total,maximum_adaptive_percent:maxPercent,adaptive_count:picked.adaptiveCount,normal_count:picked.normalCount,selected_range:[...assignmentSchoolQbLessons],subject:assignmentSchoolQbSubjectName,medium:assignmentSchoolQbMedium}}).select().single();
     if(ae){errors.push(`${studentId}: ${ae.message}`);continue;}
     const qs=picked.selected.map((item,i)=>{const q={...(snapshotMap.get(item.q.id)||{})};return {...q,assignment_id:a.id,question_order:i+1,adaptive_selection_reason:item.reason,adaptive_source_wrong_question_id:item.wrongSourceId||null,adaptive_source_wrong_count:item.wrongCount||0};});
     const {error:qe}=await sb.from('questions').insert(qs);
@@ -4843,7 +4883,7 @@ async function saveAssignment(){
  const primarySubGroup=schoolTeacherMode
    ? (recipientInfo.schoolGroupNames?.length?recipientInfo.schoolGroupNames.join(", "):"")
    : (selectedSubClass?.name|| (recipientSubNames.length===1?recipientSubNames[0]:recipientSubNames.length>1?"Multiple Sub-groups":""));
- const {data:a,error}=await sb.from("assignments").insert({class_id:primaryClassId,title:at.value.trim(),subject:asub.value.trim(),description:adesc.value.trim(),video_url:videoUrl,assignment_type:assignmentType,time_limit:mockTime,shuffle_questions:shuffleQuestions,shuffle_options:shuffleOptions,main_group:primaryMainGroup,sub_group:primarySubGroup,created_by:current.id}).select().single();if(error)return alert(error.message);
+ const standardSubjectId=schoolTeacherMode?(document.getElementById("asub")?.value||""):null;const standardSubjectName=schoolTeacherMode?(schoolSubjects.find(x=>String(x.id)===String(standardSubjectId))?.name||""):(asub.value.trim()||"");if(schoolTeacherMode&&!standardSubjectId)return alert("Select Subject.");const {data:a,error}=await sb.from("assignments").insert({class_id:primaryClassId,title:at.value.trim(),subject:standardSubjectName,school_subject_id:standardSubjectId||null,description:adesc.value.trim(),video_url:videoUrl,assignment_type:assignmentType,time_limit:mockTime,shuffle_questions:shuffleQuestions,shuffle_options:shuffleOptions,main_group:primaryMainGroup,sub_group:primarySubGroup,created_by:current.id}).select().single();if(error)return alert(error.message);
  let qs=[];
  if(importedForNewAssignment&&importedQuestions.length){
    const imageMode=importedQuestions.some(q=>q.image_mode);
@@ -4872,7 +4912,7 @@ async function saveAssignment(){
      const byId=new Map((bankRows||[]).map(x=>[x.id,x]));
      ids.forEach(id=>{const q=byId.get(id);if(!q)return;qs.push({assignment_id:a.id,question_text:q.image_url?'[IMAGE QUESTION]':(q.question_text||''),option_a:q.image_url?'Option A':q.option_a,option_b:q.image_url?'Option B':q.option_b,option_c:q.image_url?'Option C':q.option_c,option_d:q.image_url?'Option D':q.option_d,correct_option:q.correct_option,question_order:qs.length+1,image_url:q.image_url||null,explanation:null,source_mock_question_id:q.id,source_variation_group:q.variation_group||null,source_topic:q.topic||null});});
    }else{
-     const {data:bankRows,error:be}=await sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,question_type,marks,correct_answer,explanation,variation_group,chapter_id,topic,subject,medium,has_images,jnvst_subject_id,jnvst_lesson_id').eq('teacher_id',current.id).eq('course_type','SCHOOL').in('id',ids);
+     const {data:bankRows,error:be}=await sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,question_type,marks,correct_answer,explanation,variation_group,chapter_id,topic,subject_id,medium,has_images,jnvst_subject_id,jnvst_lesson_id').eq('teacher_id',current.id).eq('course_type','SCHOOL').in('id',ids);
      if(be){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load School Course Question Bank questions: '+be.message)}
      const {data:opts,error:oe}=await sb.from('school_question_bank_options').select('question_id,display_order,option_label,option_text_en,option_text_as,is_correct').in('question_id',ids).order('display_order');
      if(oe){await sb.from('assignments').delete().eq('id',a.id);return alert('Could not load School Course Question Bank options: '+oe.message)}
@@ -4882,7 +4922,7 @@ async function saveAssignment(){
      (opts||[]).forEach(o=>{if(!optMap.has(o.question_id))optMap.set(o.question_id,[]);optMap.get(o.question_id).push(o)});
      (blocks||[]).forEach(b=>{if(!blockMap.has(b.question_id))blockMap.set(b.question_id,[]);blockMap.get(b.question_id).push(b)});
      const lang=assignmentSchoolQbSelected.lang||'EN';
-     ids.forEach(id=>{const q=byId.get(id);if(!q)return;const bs=blockMap.get(id)||[];const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();const text=textFromBlocks||assignmentSchoolQbQuestionText(q,lang);const os=optMap.get(id)||[];const labelMap={};os.forEach(o=>labelMap[o.option_label]=o);const getOpt=l=>{const o=labelMap[l];if(!o)return '';return lang==='AS'?(o.option_text_as||o.option_text_en||''):lang==='BOTH'?[o.option_text_en,o.option_text_as].filter(Boolean).join(' / '):(o.option_text_en||o.option_text_as||'')};const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;qs.push({assignment_id:a.id,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:getOpt('A'),option_b:getOpt('B'),option_c:getOpt('C'),option_d:getOpt('D'),correct_option:q.correct_answer,question_order:qs.length+1,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id,source_topic:q.topic||null,source_subject:q.subject||null,source_medium:q.medium||null});});
+     ids.forEach(id=>{const q=byId.get(id);if(!q)return;const bs=blockMap.get(id)||[];const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();const text=textFromBlocks||assignmentSchoolQbQuestionText(q,lang);const os=optMap.get(id)||[];const labelMap={};os.forEach(o=>labelMap[o.option_label]=o);const getOpt=l=>{const o=labelMap[l];if(!o)return '';return lang==='AS'?(o.option_text_as||o.option_text_en||''):lang==='BOTH'?[o.option_text_en,o.option_text_as].filter(Boolean).join(' / '):(o.option_text_en||o.option_text_as||'')};const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;qs.push({assignment_id:a.id,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:getOpt('A'),option_b:getOpt('B'),option_c:getOpt('C'),option_d:getOpt('D'),correct_option:q.correct_answer,question_order:qs.length+1,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id,source_topic:q.topic||null,source_subject:q.subject_id||null,source_medium:q.medium||null});});
    }
  }
  // Add selected Mock Test Question Bank questions as immutable assignment snapshots.
@@ -4918,7 +4958,7 @@ function startBulkImportFromNewAssignment(){
   description:document.getElementById("adesc")?.value||"",
   schoolAssignmentMode:document.querySelector('input[name="schoolAssignmentMode"]:checked')?.value||"standard",
   adaptiveMaxPercent:document.getElementById("adaptiveMaxPercent")?.value||"60",
-  selectedBankQuestionIds:[...assignmentBankSelected], schoolQbSelection:assignmentSchoolQbSelected ? {...assignmentSchoolQbSelected,subject:assignmentSchoolQbSubject,medium:assignmentSchoolQbMedium} : null
+  selectedBankQuestionIds:[...assignmentBankSelected], subject_id:document.getElementById('asub')?.value||'', schoolQbSelection:assignmentSchoolQbSelected ? {...assignmentSchoolQbSelected,subject:assignmentSchoolQbSubject,subject_name:assignmentSchoolQbSubjectName,medium:assignmentSchoolQbMedium} : null
  };
  importedForNewAssignment=true;
  bulkImportMCQs();

@@ -4298,7 +4298,20 @@ function assignmentSchoolQbJs(v){return JSON.stringify(String(v==null?'':v))}
 function assignmentSchoolQbQuestionLessonId(q){return assignmentSchoolQbMode==='JNVST'?q.lesson_id:q.chapter_id}
 function assignmentSchoolQbQuestionText(q,lang){if(assignmentSchoolQbMode==='JNVST')return q.question_text||'';if(lang==='AS')return q.question_text_as||q.question_text_en||'';if(lang==='BOTH')return [q.question_text_en,q.question_text_as].filter(Boolean).join('\n');return q.question_text_en||q.question_text_as||''}
 function assignmentSchoolQbLessonLabel(id){if(assignmentSchoolQbMode==='JNVST'){const jl=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!jl)return '—';const p=(jnvstSubjectLessons||[]).find(x=>x.id===jl.parent_lesson_id);return `${jl.lesson_code||''} ${jl.lesson_name}${p?' (Sub-lesson of '+(p.lesson_code||'')+')':''}`}const c=assignmentSchoolQbChapters.find(x=>x.id===id);if(!c)return '—';const p=assignmentSchoolQbChapters.find(x=>x.id===c.parent_chapter_id);return `${c.chapter_code||c.chapter_number||''}. ${c.chapter_name}${p?' (Subchapter of '+(p.chapter_code||p.chapter_number||'')+')':''}`}
-function assignmentSchoolQbSubjectMatches(q){if(assignmentSchoolQbMode==='SCHOOL')return q.course_type==='SCHOOL'&&String(q.subject||'').trim().toLowerCase()===String(assignmentSchoolQbSubjectName||assignmentSchoolQbSubject||'').trim().toLowerCase();return !!assignmentSchoolQbSubject&&String(q.subject_id||'')===String(assignmentSchoolQbSubject)}
+function assignmentSchoolQbSubjectMatches(q){
+ if(assignmentSchoolQbMode==='SCHOOL'){
+   // School Course Question Bank intentionally does not store a subject on each
+   // question. The assignment's Subject field is the authoritative subject label;
+   // chapters/topics define the actual question scope. Keep legacy subject values
+   // compatible when they exist, but do not reject normal School questions whose
+   // subject column is blank.
+   if(q.course_type!=='SCHOOL')return false;
+   const wanted=String(assignmentSchoolQbSubjectName||assignmentSchoolQbSubject||'').trim().toLowerCase();
+   const stored=String(q.subject||'').trim().toLowerCase();
+   return !stored || !wanted || stored===wanted;
+ }
+ return !!assignmentSchoolQbSubject&&String(q.subject_id||'')===String(assignmentSchoolQbSubject)
+}
 function assignmentSchoolQbMediumMatches(q){const m=String(assignmentSchoolQbMode==='JNVST'?q.language:q.medium||'').trim().toUpperCase(),wanted=String(assignmentSchoolQbMedium||'').trim().toUpperCase();if(!wanted)return false;if(assignmentSchoolQbMode==='JNVST')return wanted==='BOTH'?(m==='ENGLISH'||m==='ASSAMESE'):m===wanted; if(wanted==='BOTH')return m==='BOTH'||m==='ENGLISH_ASSAMESE'||m==='BILINGUAL'||m==='ENGLISH + ASSAMESE'||m==='ENGLISH+ASSAMESE';return m===wanted}
 function assignmentSchoolQbBaseFiltered(){if(!assignmentSchoolQbSubject||!assignmentSchoolQbMedium)return [];return assignmentSchoolQbQuestions.filter(q=>assignmentSchoolQbSubjectMatches(q)&&assignmentSchoolQbMediumMatches(q))}
 function assignmentSchoolQbJnvstDescendantIds(rootId){const ids=new Set([rootId]);let changed=true;while(changed){changed=false;(jnvstSubjectLessons||[]).forEach(x=>{if(x.parent_lesson_id&&ids.has(x.parent_lesson_id)&&!ids.has(x.id)){ids.add(x.id);changed=true;}})}return ids}
@@ -4313,7 +4326,14 @@ function assignmentSchoolQbPreview(q,lang){
 }
 function assignmentSchoolQbRenderBuilder(){
  const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
- const subjects=assignmentSchoolQbMode==='JNVST'?(jnvstSubjects||[]).filter(x=>String(x.name||'').trim()):[...new Set(assignmentSchoolQbQuestions.map(q=>String(q.subject||'').trim()).filter(Boolean))].sort().map(name=>({id:name,name}));
+ const subjects=assignmentSchoolQbMode==='JNVST'
+   ?(jnvstSubjects||[]).filter(x=>String(x.name||'').trim())
+   :(()=>{
+      const names=[...new Set(assignmentSchoolQbQuestions.map(q=>String(q.subject||'').trim()).filter(Boolean))];
+      const currentSubject=String(document.getElementById('asub')?.value||assignmentSchoolQbSubjectName||'').trim();
+      if(currentSubject && !names.some(n=>n.toLowerCase()===currentSubject.toLowerCase())) names.unshift(currentSubject);
+      return names.sort((a,b)=>a.localeCompare(b)).map(name=>({id:name,name}));
+    })();
  const subjectOptions=subjects.length?subjects.map(x=>`<option value="${assignmentSchoolQbEsc(x.id)}" ${assignmentSchoolQbSubject===x.id||assignmentSchoolQbSubjectName===x.name?'selected':''}>${assignmentSchoolQbEsc(x.name)}</option>`).join(''):`<option value="" selected>No subjects found</option>`;
  const jnvstLessons=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===assignmentSchoolQbSubject);
  const lessons=assignmentSchoolQbMode==='JNVST'?jnvstLessons:assignmentSchoolQbChapters.filter(c=>assignmentSchoolQbBaseFiltered().some(q=>q.chapter_id===c.id)).sort((a,b)=>String(a.chapter_code||a.chapter_number||'').localeCompare(String(b.chapter_code||b.chapter_number||''),undefined,{numeric:true}));
@@ -4361,7 +4381,24 @@ function generateSchoolAssignmentQbSelection(){
  if(window.MathJax?.typesetPromise){const out=document.getElementById('asqbSelectedList');if(out)window.MathJax.typesetPromise([out]).catch(()=>{});}
 }
 async function openJnvstAssignmentQbBuilder(){assignmentSchoolQbMode='JNVST';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading JNVST Question Bank…</span></div>';const {data:q,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false});if(error){box.innerHTML=`<div class="notice">Could not load JNVST Question Bank: ${assignmentSchoolQbEsc(error.message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=[];const initial=document.getElementById('asub')?.value||'';const so=(jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(initial).trim().toLowerCase());assignmentSchoolQbSubject=so?.id||'';assignmentSchoolQbSubjectName=so?.name||initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
-async function openSchoolAssignmentQbBuilder(){assignmentSchoolQbMode='SCHOOL';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Course Question Bank…</span></div>';const [{data:q,error:qe},{data:c,error:ce}]=await Promise.all([sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).eq('course_type','SCHOOL').order('created_at',{ascending:false}),sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name')]);if(qe||ce){box.innerHTML=`<div class="notice">Could not load School Course Question Bank: ${assignmentSchoolQbEsc((qe||ce).message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];const initial=document.getElementById('asub')?.value||'';assignmentSchoolQbSubject=initial;assignmentSchoolQbSubjectName=initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
+async function openSchoolAssignmentQbBuilder(){
+ assignmentSchoolQbMode='SCHOOL';
+ const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
+ box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Course Question Bank…</span></div>';
+ const [{data:q,error:qe},{data:c,error:ce}]=await Promise.all([
+   sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).eq('course_type','SCHOOL').order('created_at',{ascending:false}),
+   sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name')
+ ]);
+ if(qe||ce){box.innerHTML=`<div class="notice">Could not load School Course Question Bank: ${assignmentSchoolQbEsc((qe||ce).message)}</div>`;return;}
+ assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];
+ const initial=String(document.getElementById('asub')?.value||'').trim();
+ // School Course Subject is entered on the assignment itself. Older/newer School
+ // Question Bank records may have no subject column, so retain the assignment subject
+ // instead of showing “No subjects found”.
+ assignmentSchoolQbSubject=initial;assignmentSchoolQbSubjectName=initial;
+ assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;
+ assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});
+}
 
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
 async function saveAssignment(){
