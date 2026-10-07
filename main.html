@@ -2321,7 +2321,7 @@ async function schoolAssignmentManagement(){
       return `<div class="assignment" style="border:1px solid #dbe3ee;margin:10px 0">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div><h3 style="margin:0 0 5px">${esc(a.title)}</h3><div class="muted">${esc(a.subject||"No subject")} • ${qCounts.get(a.id)||0} question(s)</div></div>
-          <div class="actions"><span class="tag">${esc(c?.name||"Class")}</span><span class="tag">${esc(sub)}</span><span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>
+          <div class="actions"><span class="tag">${esc(c?.name||"Class")}</span><span class="tag">${esc(sub)}</span>${a.adaptive_mode?`<span class="tag" style="background:#f3e8ff;color:#6b21a8">🎯 ADAPTIVE · ≤${Number(a.adaptive_max_percent||60)}%</span>`:''}<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span></div>
         </div>
         <div class="small muted" style="margin-top:8px">Created: ${a.created_at?new Date(a.created_at).toLocaleString():"—"}</div>
         <div class="actions" style="margin-top:10px">
@@ -2348,10 +2348,36 @@ async function schoolAssignmentManagement(){
         <div class="grid"><div><label>Class</label><select id="schoolAssignmentClassFilter" onchange="filterSchoolAssignments()"><option value="all">All Classes</option>${schoolClasses.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select></div><div><label>Sub-division</label><select id="schoolAssignmentGroupFilter" onchange="filterSchoolAssignments()"><option value="all">All Sub-divisions</option>${[...new Set((groups||[]).map(g=>g.name))].sort().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}</select></div></div>
       </div>
       <div class="card"><h2>Existing Assignments</h2><div id="schoolAssignmentsList">${cards||'<p class="muted">No School Course assignments yet.</p>'}</div></div>
-      <div class="actions"><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ New Assignment</button><button class="secondary" onclick="location.href='teacher-dashboard.html'">← Dashboard</button></div>
+      <div class="actions"><button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=newAssignment'">+ New Assignment</button><button onclick="schoolAdaptivePerformanceDashboard()">📊 Student Performance & Struggle</button><button class="secondary" onclick="location.href='teacher-dashboard.html'">← Dashboard</button></div>
     </div>`);
   }catch(e){render(`<div class="wrap">${header("School Course — Manage Assignments")}<div class="card">${message("Could not load School assignments: "+(e.message||e))}</div></div>`)}
 }
+async function schoolAdaptivePerformanceDashboard(){
+  schoolTeacherMode=true;
+  try{
+    const [{data:students,error:se},{data:perf,error:pe},{data:qb,error:qe}]=await Promise.all([
+      sb.from('profiles').select('id,full_name,roll_no').eq('role','student').eq('course','SCHOOL').order('full_name'),
+      sb.from('school_student_question_performance').select('student_id,source_school_question_bank_id,attempt_count,wrong_count,correct_count,last_wrong_at,last_correct_at,last_attempted_at').order('wrong_count',{ascending:false}),
+      sb.from('school_question_bank_questions').select('id,chapter_id,topic,subject,variation_group,marks').eq('teacher_id',current.id).eq('course_type','SCHOOL')
+    ]);
+    if(se)throw se;if(pe)throw pe;if(qe)throw qe;
+    window._adaptivePerformance={students:students||[],perf:perf||[],qb:qb||[]};
+    const options=(students||[]).map(st=>`<option value="${esc(st.id)}">${esc(st.full_name||'Student')} ${st.roll_no?`(${esc(st.roll_no)})`:''}</option>`).join('');
+    render(`<div class="wrap">${header('Student Performance & Struggle Analysis')}<div class="card" style="border:2px solid #7c3aed;background:#faf5ff"><h2 style="margin:0">🎯 Adaptive Learning Analytics</h2><p class="muted">Question-level mistakes, repeated errors, topic weaknesses and mastery indicators used by Adaptive Assignments.</p><div class="grid"><div><label>Student</label><select id="adaptivePerfStudent" onchange="renderSchoolAdaptivePerformance(this.value)"><option value="">Select a student</option>${options}</select></div><div><label>Scope</label><div class="success">Adaptive assignments use a maximum of 60% weakness-based questions. The remainder is new/normal practice.</div></div></div></div><div id="adaptivePerfContent"><div class="card"><p class="muted">Select a student to view the performance profile.</p></div></div><div class="actions"><button class="secondary" onclick="schoolAssignmentManagement()">← Back to Assignments</button></div></div>`);
+  }catch(e){render(`<div class="wrap">${header('Student Performance & Struggle Analysis')}<div class="card">${message('Could not load performance data: '+(e.message||e))}</div></div>`)}
+}
+function renderSchoolAdaptivePerformance(studentId){
+  const box=document.getElementById('adaptivePerfContent');if(!box)return;
+  if(!studentId){box.innerHTML='<div class="card"><p class="muted">Select a student to view the performance profile.</p></div>';return;}
+  const d=window._adaptivePerformance||{}, rows=(d.perf||[]).filter(x=>x.student_id===studentId), qbMap=new Map((d.qb||[]).map(q=>[q.id,q]));
+  const attempts=rows.reduce((n,x)=>n+Number(x.attempt_count||0),0),wrong=rows.reduce((n,x)=>n+Number(x.wrong_count||0),0),correct=rows.reduce((n,x)=>n+Number(x.correct_count||0),0),accuracy=attempts?Math.round(correct*100/attempts):0;
+  const topics=new Map();rows.forEach(r=>{const q=qbMap.get(r.source_school_question_bank_id);if(!q)return;const topic=String(q.topic||'Unspecified').trim()||'Unspecified';const x=topics.get(topic)||{attempts:0,wrong:0,correct:0};x.attempts+=Number(r.attempt_count||0);x.wrong+=Number(r.wrong_count||0);x.correct+=Number(r.correct_count||0);topics.set(topic,x)});
+  const topicRows=[...topics.entries()].map(([topic,x])=>({topic,...x,accuracy:x.attempts?Math.round(x.correct*100/x.attempts):0})).sort((a,b)=>a.accuracy-b.accuracy);
+  const weak=rows.filter(x=>Number(x.wrong_count||0)>0).sort((a,b)=>Number(b.wrong_count||0)-Number(a.wrong_count||0)).slice(0,20);
+  const student=(d.students||[]).find(x=>x.id===studentId);
+  box.innerHTML=`<div class="card"><h2 style="margin-top:0">${esc(student?.full_name||'Student')}</h2><div class="grid"><div class="card" style="margin:0"><div class="muted">Overall Accuracy</div><div style="font-size:30px;font-weight:800">${accuracy}%</div></div><div class="card" style="margin:0"><div class="muted">Questions Attempted</div><div style="font-size:30px;font-weight:800">${attempts}</div></div><div class="card" style="margin:0"><div class="muted">Wrong Answers</div><div style="font-size:30px;font-weight:800">${wrong}</div></div></div></div><div class="card"><h3>📚 Topic Struggle Analysis</h3>${topicRows.length?`<div style="overflow:auto"><table><thead><tr><th>Topic</th><th>Attempts</th><th>Wrong</th><th>Accuracy</th><th>Status</th></tr></thead><tbody>${topicRows.map(x=>`<tr><td>${esc(x.topic)}</td><td>${x.attempts}</td><td>${x.wrong}</td><td>${x.accuracy}%</td><td>${x.accuracy<50?'🔴 Critical':x.accuracy<70?'🔴 Weak':x.accuracy<80?'🟡 Needs Practice':x.accuracy>=90?'🟢 Strong':'🟢 Good'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No School Course question performance has been recorded yet.</p>'}</div><div class="card"><h3>❌ Most Frequently Wrong Questions</h3>${weak.length?`<div style="overflow:auto"><table><thead><tr><th>Question</th><th>Topic</th><th>Wrong</th><th>Attempts</th><th>Last Wrong</th></tr></thead><tbody>${weak.map(r=>{const q=qbMap.get(r.source_school_question_bank_id)||{};return `<tr><td>${esc(r.source_school_question_bank_id||'')}</td><td>${esc(q.topic||'Unspecified')}</td><td><b>${Number(r.wrong_count||0)}</b></td><td>${Number(r.attempt_count||0)}</td><td>${r.last_wrong_at?new Date(r.last_wrong_at).toLocaleString():'—'}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted">No wrong answers recorded for this student.</p>'}</div>`;
+}
+
 function filterSchoolAssignments(){
   const cls=document.getElementById("schoolAssignmentClassFilter")?.value||"all",grp=document.getElementById("schoolAssignmentGroupFilter")?.value||"all";
   const classes=window._schoolAssignmentClasses||[],groups=window._schoolAssignmentGroups||[];
@@ -4288,6 +4314,7 @@ async function newAssignment(){
 
  render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New JNVST Assignment")}<div class="card">
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
+${schoolTeacherMode?`<div class="card" style="border:2px solid #7c3aed;background:#faf5ff;margin-top:12px"><h3 style="margin:0 0 6px">🎯 Assignment Personalization</h3><label><input type="radio" name="schoolAssignmentMode" value="standard" checked onchange="toggleAdaptiveAssignmentFields()" style="width:auto;margin-right:8px">Standard Assignment — keep the existing question-selection workflow</label><label><input type="radio" name="schoolAssignmentMode" value="adaptive" onchange="toggleAdaptiveAssignmentFields()" style="width:auto;margin-right:8px">Adaptive Assignment — customize questions for each student from previous performance</label><div id="adaptiveAssignmentFields" style="display:none;margin-top:10px"><div class="grid"><div><label>Maximum Adaptive / Weakness Questions</label><input id="adaptiveMaxPercent" type="number" min="0" max="60" value="60"><div class="small muted">Maximum allowed is 60%. The system may use fewer when the student has fewer meaningful weaknesses.</div></div><div><label>Adaptive source</label><div class="success" style="margin-top:5px">Uses the selected School Question Bank chapter/range below. Previous wrong questions are preferred, with Variation Group alternatives when available.</div></div></div><div class="notice" style="margin-top:8px"><b>Important:</b> Adaptive mode creates a separate question snapshot for each student. Your existing Standard Assignment workflow is unchanged.</div></div></div>`:''}
  ${assignmentGroupHtml}
  <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To</h3><p class="small muted">${schoolTeacherMode?"Select the School Course class, then choose the entire class or one/multiple subdivisions.":"Select students/classes under the selected JNVST main group. The fixed main group and its teacher-created sub-groups are shown below."}</p>
   <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all shown</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div>
@@ -4323,7 +4350,7 @@ async function newAssignment(){
    if(newAssignmentDraft.schoolQbSelection){assignmentSchoolQbSelected={...newAssignmentDraft.schoolQbSelection};const savedSub=newAssignmentDraft.schoolQbSelection.subject||'';const savedObj=(jnvstSubjects||[]).find(x=>x.id===savedSub)|| (jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(savedSub).trim().toLowerCase());assignmentSchoolQbSubject=savedObj?.id||'';assignmentSchoolQbSubjectName=savedObj?.name||newAssignmentDraft.schoolQbSelection.subject_name||savedSub;assignmentSchoolQbMedium=newAssignmentDraft.schoolQbSelection.medium||'';}
    const d=newAssignmentDraft;
    const typeRadio=document.querySelector(`input[name="assignmentType"][value="${d.type}"]`);if(typeRadio){typeRadio.checked=true;toggleAssignmentVideoFields()}
-   document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";
+   document.getElementById("at").value=d.title||"";document.getElementById("asub").value=d.subject||"";document.getElementById("av").value=d.video||"";document.getElementById("adesc").value=d.description||"";if(schoolTeacherMode&&d.schoolAssignmentMode){const ar=document.querySelector(`input[name="schoolAssignmentMode"][value="${d.schoolAssignmentMode}"]`);if(ar){ar.checked=true;toggleAdaptiveAssignmentFields();}}if(document.getElementById("adaptiveMaxPercent"))document.getElementById("adaptiveMaxPercent").value=d.adaptiveMaxPercent||"60";
    if(!schoolTeacherMode){
      const main=d.mainGroup||firstBaseId;if([...document.querySelectorAll("#aMainGroup option")].some(o=>o.value===main))document.getElementById("aMainGroup").value=main;
      await refreshJnvstAssignmentGroups(d.subGroup||"");
@@ -4385,6 +4412,8 @@ function getSelectedSchoolAssignmentSubgroups(){
 }
 
 function toggleAssignmentVideoFields(){const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";const box=document.getElementById("assignmentVideoField");if(box)box.style.display=type==="video"?"block":"none"}
+function toggleAdaptiveAssignmentFields(){const mode=document.querySelector('input[name="schoolAssignmentMode"]:checked')?.value||'standard';const box=document.getElementById('adaptiveAssignmentFields');if(box)box.style.display=mode==='adaptive'?'block':'none';if(mode==='adaptive'&&schoolTeacherMode&&!assignmentSchoolQbQuestions.length){setTimeout(()=>{if(!document.getElementById('assignmentSchoolQbBuilder')?.innerHTML)openSchoolAssignmentQbBuilder();},0);}}
+function isAdaptiveSchoolAssignment(){return schoolTeacherMode&&document.querySelector('input[name="schoolAssignmentMode"]:checked')?.value==='adaptive';}
 async function loadNewAssignmentClassStudents(){
  const box=document.getElementById("newAssignmentStudentPicker");if(!box)return;
  const classIds=[...document.querySelectorAll('.newassign-class:checked')].map(x=>x.value);
@@ -4634,7 +4663,147 @@ async function openJnvstAssignmentQbBuilder(){assignmentSchoolQbMode='JNVST';con
 async function openSchoolAssignmentQbBuilder(){assignmentSchoolQbMode='SCHOOL';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading School Course Question Bank…</span></div>';const [{data:q,error:qe},{data:c,error:ce}]=await Promise.all([sb.from('school_question_bank_questions').select('*').eq('teacher_id',current.id).eq('course_type','SCHOOL').order('created_at',{ascending:false}),sb.from('school_question_bank_chapters').select('*').eq('teacher_id',current.id).order('chapter_code').order('chapter_name')]);if(qe||ce){box.innerHTML=`<div class="notice">Could not load School Course Question Bank: ${assignmentSchoolQbEsc((qe||ce).message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=c||[];const initial=document.getElementById('asub')?.value||'';assignmentSchoolQbSubject=initial;assignmentSchoolQbSubjectName=initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
 
 function addQ(){const i=document.querySelectorAll(".q").length;document.getElementById("qs").insertAdjacentHTML("beforeend",`<div class="card q" style="background:#f8fafc"><b>Question ${i+1}</b><input class="qt" placeholder="Question"><input class="oa" placeholder="Option A"><input class="ob" placeholder="Option B"><input class="oc" placeholder="Option C"><input class="od" placeholder="Option D"><select class="co"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>`)}
+async function loadSchoolAdaptiveSnapshots(ids,lang){
+  const wanted=[...new Set((ids||[]).filter(Boolean))];
+  if(!wanted.length)return new Map();
+  const [{data:bankRows,error:be},{data:opts,error:oe},{data:blocks,error:ble}]=await Promise.all([
+    sb.from('school_question_bank_questions').select('id,question_text_en,question_text_as,correct_answer,explanation,variation_group,chapter_id,topic,subject,medium,marks,cognitive_level,difficulty').eq('teacher_id',current.id).eq('course_type','SCHOOL').in('id',wanted),
+    sb.from('school_question_bank_options').select('question_id,display_order,option_label,option_text_en,option_text_as,is_correct').in('question_id',wanted).order('display_order'),
+    sb.from('school_question_bank_blocks').select('question_id,block_order,block_type,text_en,text_as,image_url').in('question_id',wanted).order('block_order')
+  ]);
+  if(be)throw be;if(oe)throw oe;if(ble)throw ble;
+  const optMap=new Map(),blockMap=new Map();
+  (opts||[]).forEach(o=>{if(!optMap.has(o.question_id))optMap.set(o.question_id,[]);optMap.get(o.question_id).push(o)});
+  (blocks||[]).forEach(b=>{if(!blockMap.has(b.question_id))blockMap.set(b.question_id,[]);blockMap.get(b.question_id).push(b)});
+  const out=new Map();
+  (bankRows||[]).forEach(q=>{
+    const os=optMap.get(q.id)||[], labelMap=Object.fromEntries(os.map(o=>[o.option_label,o]));
+    const getOpt=l=>{const o=labelMap[l];if(!o)return '';return lang==='AS'?(o.option_text_as||o.option_text_en||''):lang==='BOTH'?[o.option_text_en,o.option_text_as].filter(Boolean).join(' / '):(o.option_text_en||o.option_text_as||'')};
+    const bs=blockMap.get(q.id)||[];
+    const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();
+    const text=textFromBlocks||(lang==='AS'?(q.question_text_as||q.question_text_en||''):lang==='BOTH'?[q.question_text_en,q.question_text_as].filter(Boolean).join('\n'):(q.question_text_en||q.question_text_as||''));
+    const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;
+    out.set(q.id,{assignment_id:null,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:image?'Option A':getOpt('A'),option_b:image?'Option B':getOpt('B'),option_c:image?'Option C':getOpt('C'),option_d:image?'Option D':getOpt('D'),correct_option:q.correct_answer,question_order:0,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id||null,source_topic:q.topic||null,source_subject:q.subject||null,source_medium:q.medium||null});
+  });
+  return out;
+}
+function adaptiveShuffle(arr){const a=[...(arr||[])];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a;}
+function adaptiveRecencyScore(ts){if(!ts)return 0;const days=Math.max(0,(Date.now()-new Date(ts).getTime())/86400000);return Math.max(0,30-days);}
+async function getSchoolAdaptiveScheduled(studentIds){
+  const ids=[...new Set((studentIds||[]).filter(Boolean))],result=new Map();ids.forEach(id=>result.set(id,new Set()));
+  if(!ids.length)return result;
+  const {data:links,error:le}=await sb.from('assignment_students').select('assignment_id,student_id').in('student_id',ids);if(le)throw le;
+  const aids=[...new Set((links||[]).map(x=>x.assignment_id).filter(Boolean))];if(!aids.length)return result;
+  const {data:ass,error:ae}=await sb.from('assignments').select('id,created_at').in('id',aids).eq('created_by',current.id);if(ae)throw ae;
+  const valid=new Set((ass||[]).map(a=>a.id));
+  const {data:qs,error:qe}=await sb.from('questions').select('assignment_id,source_school_question_bank_id').in('assignment_id',[...valid]).not('source_school_question_bank_id','is',null);if(qe)throw qe;
+  const studentByAssignment=new Map();(links||[]).forEach(l=>{if(!valid.has(l.assignment_id))return;if(!studentByAssignment.has(l.assignment_id))studentByAssignment.set(l.assignment_id,new Set());studentByAssignment.get(l.assignment_id).add(l.student_id)});
+  (qs||[]).forEach(q=>{const students=studentByAssignment.get(q.assignment_id)||[];students.forEach(sid=>{if(q.source_school_question_bank_id)result.get(sid)?.add(q.source_school_question_bank_id)})});
+  return result;
+}
+function adaptiveTopicScores(candidates,perfRows){
+  const byTopic=new Map();
+  (perfRows||[]).forEach(p=>{const q=candidates.find(x=>x.id===p.source_school_question_bank_id);if(!q)return;const t=String(q.topic||'').trim()||'__NO_TOPIC__';const x=byTopic.get(t)||{attempts:0,wrong:0};x.attempts+=Number(p.attempt_count||0);x.wrong+=Number(p.wrong_count||0);byTopic.set(t,x)});
+  const out=new Map();byTopic.forEach((v,k)=>out.set(k,v.attempts?Math.min(1,v.wrong/v.attempts):0));return out;
+}
+function selectSchoolAdaptiveQuestions(candidates,perfRows,scheduled,total,maxPercent){
+  const perf=new Map((perfRows||[]).map(x=>[x.source_school_question_bank_id,x]));
+  const attempted=new Set((perfRows||[]).map(x=>x.source_school_question_bank_id));
+  const topicScores=adaptiveTopicScores(candidates,perfRows);
+  const groups=new Map();candidates.forEach(q=>{const g=String(q.variation_group||'').trim().toLowerCase();if(g){if(!groups.has(g))groups.set(g,[]);groups.get(g).push(q)}});
+  const adaptiveCandidates=[];const usedAdaptive=new Set();
+  const wrongs=candidates.filter(q=>Number(perf.get(q.id)?.wrong_count||0)>0).sort((a,b)=>{
+    const pa=perf.get(a.id)||{},pb=perf.get(b.id)||{};
+    const sa=Number(pa.wrong_count||0)*100+adaptiveRecencyScore(pa.last_wrong_at)*2+(topicScores.get(String(a.topic||'').trim()||'__NO_TOPIC__')||0)*40;
+    const sb=Number(pb.wrong_count||0)*100+adaptiveRecencyScore(pb.last_wrong_at)*2+(topicScores.get(String(b.topic||'').trim()||'__NO_TOPIC__')||0)*40;
+    return sb-sa;
+  });
+  for(const wrong of wrongs){
+    if(usedAdaptive.has(wrong.id))continue;
+    const g=String(wrong.variation_group||'').trim().toLowerCase();
+    let chosen=null;
+    if(g){
+      const alternatives=(groups.get(g)||[]).filter(q=>q.id!==wrong.id&&!usedAdaptive.has(q.id)&&!scheduled.has(q.id)).sort((a,b)=>{
+        const pa=perf.get(a.id)||{},pb=perf.get(b.id)||{};
+        return (Number(pa.attempt_count||0)-Number(pb.attempt_count||0)) || (Math.random()-.5);
+      });
+      chosen=alternatives[0]||null;
+      if(!chosen){
+        const fallback=(groups.get(g)||[]).filter(q=>q.id!==wrong.id&&!usedAdaptive.has(q.id)).sort((a,b)=>Number(perf.get(a.id)?.attempt_count||0)-Number(perf.get(b.id)?.attempt_count||0));
+        chosen=fallback[0]||null;
+      }
+    }
+    if(!chosen && !scheduled.has(wrong.id))chosen=wrong;
+    if(!chosen)chosen=wrong;
+    if(chosen&&!usedAdaptive.has(chosen.id)){adaptiveCandidates.push({q:chosen,reason:chosen.id===wrong.id?'PREVIOUSLY_WRONG':'PREVIOUSLY_WRONG_VARIATION',wrongSourceId:wrong.id,wrongCount:Number(perf.get(wrong.id)?.wrong_count||0)});usedAdaptive.add(chosen.id)}
+  }
+  const maxAdaptive=Math.min(Math.floor(total*Math.min(60,Math.max(0,Number(maxPercent||60)))/100),total);
+  const selectedAdaptive=adaptiveCandidates.slice(0,maxAdaptive);
+  const selectedIds=new Set(selectedAdaptive.map(x=>x.q.id));
+  const freshUnseen=candidates.filter(q=>!selectedIds.has(q.id)&&!scheduled.has(q.id)&&!attempted.has(q.id));
+  const freshAttempted=candidates.filter(q=>!selectedIds.has(q.id)&&!scheduled.has(q.id)&&attempted.has(q.id));
+  const fallback=candidates.filter(q=>!selectedIds.has(q.id)&&scheduled.has(q.id));
+  const normal=adaptiveShuffle(freshUnseen);
+  adaptiveShuffle(freshAttempted).forEach(q=>normal.push(q));
+  adaptiveShuffle(fallback).forEach(q=>normal.push(q));
+  const selectedNormal=[];const usedGroups=new Set(selectedAdaptive.map(x=>String(x.q.variation_group||'').trim().toLowerCase()).filter(Boolean));
+  for(const q of normal){if(selectedNormal.length+selectedAdaptive.length>=total)break;const g=String(q.variation_group||'').trim().toLowerCase();if(g&&usedGroups.has(g))continue;selectedNormal.push({q,reason:'NEW_OR_NORMAL'});if(g)usedGroups.add(g)}
+  if(selectedAdaptive.length+selectedNormal.length<total){
+    const remaining=adaptiveShuffle(candidates.filter(q=>!selectedIds.has(q.id)&&!selectedNormal.some(x=>x.q.id===q.id)));
+    for(const q of remaining){if(selectedAdaptive.length+selectedNormal.length>=total)break;selectedNormal.push({q,reason:'FALLBACK_NORMAL'});}
+  }
+  return {selected:[...selectedAdaptive,...selectedNormal].slice(0,total),adaptiveCount:Math.min(selectedAdaptive.length,maxAdaptive),normalCount:Math.max(0,Math.min(total-selectedAdaptive.length,selectedNormal.length)),maxAdaptive};
+}
+async function saveAdaptiveSchoolAssignment(){
+  if(!schoolTeacherMode)return false;
+  const maxPercent=Math.min(60,Math.max(0,Number(document.getElementById('adaptiveMaxPercent')?.value||60)));
+  const total=Number(document.getElementById('asqbTotal')?.value||assignmentSchoolQbSelected?.total||0);
+  if(!total||total<1)return alert('For Adaptive Assignment, open the School Question Bank builder and enter the Total Questions.');
+  if(!assignmentSchoolQbQuestions.length||assignmentSchoolQbMode!=='SCHOOL')return alert('Open “Build Assignment from School Question Bank”, select Subject, Medium and the required Chapter/Range first.');
+  const candidates=assignmentSchoolQbAllowed().filter(q=>q&&q.id);
+  if(!candidates.length)return alert('No School Question Bank questions are available in the selected range.');
+  const lang=document.getElementById('asqbLang')?.value||assignmentSchoolQbSelected?.lang||'EN';
+  let recipientInfo;try{recipientInfo=await getNewAssignmentRecipients();if(!recipientInfo.studentIds.length)return alert('Select at least one student.');}catch(e){return alert(e.message)}
+  if(total>candidates.length)return alert(`Only ${candidates.length} questions are available in the selected range. Reduce the assignment size or select a wider range.`);
+  const studentIds=[...new Set(recipientInfo.studentIds)];
+  const [{data:perf,error:pe},scheduled]=await Promise.all([
+    sb.from('school_student_question_performance').select('student_id,source_school_question_bank_id,attempt_count,wrong_count,correct_count,last_wrong_at,last_correct_at,last_attempted_at').in('student_id',studentIds),
+    getSchoolAdaptiveScheduled(studentIds)
+  ]);
+  if(pe)return alert('Could not load student performance: '+pe.message);
+  const perfByStudent=new Map();studentIds.forEach(id=>perfByStudent.set(id,(perf||[]).filter(x=>x.student_id===id)));
+  const sourceIds=[...new Set(candidates.map(q=>q.id))];
+  const snapshotMap=await loadSchoolAdaptiveSnapshots(sourceIds,lang);
+  const videoUrl=(document.querySelector('input[name="assignmentType"]:checked')?.value||'video')==='video'?(document.getElementById('av')?.value.trim()||''):null;
+  const title=String(document.getElementById('at')?.value||'').trim();if(!title)return alert('Enter an assignment title.');
+  if(!videoUrl&&(document.querySelector('input[name="assignmentType"]:checked')?.value||'video')==='video')return alert('Enter the YouTube video URL for this video assignment.');
+  const primaryClassId=document.getElementById('aMainGroup')?.value||recipientInfo.classIds[0];
+  const primaryClass=(window._newAssignmentClasses||[]).find(c=>c.id===primaryClassId);
+  const primarySubGroup=recipientInfo.schoolGroupNames?.length?recipientInfo.schoolGroupNames.join(', '):'';
+  const batchId=crypto.randomUUID();
+  const created=[];const errors=[];
+  for(const studentId of studentIds){
+    const perfRows=perfByStudent.get(studentId)||[];
+    const picked=selectSchoolAdaptiveQuestions(candidates,perfRows,scheduled.get(studentId)||new Set(),total,maxPercent);
+    if(picked.selected.length<total){errors.push(`${studentId}: only ${picked.selected.length}/${total} usable questions`);continue;}
+    const {data:a,error:ae}=await sb.from('assignments').insert({class_id:primaryClassId,title,subject:document.getElementById('asub')?.value.trim()||'',description:document.getElementById('adesc')?.value.trim()||'',video_url:videoUrl,assignment_type:(document.querySelector('input[name="assignmentType"]:checked')?.value||'video')==='video'?'VIDEO':'MCQ',time_limit:null,shuffle_questions:false,shuffle_options:false,main_group:primaryClass?.name||'School Class',sub_group:primarySubGroup,created_by:current.id,adaptive_mode:true,adaptive_max_percent:Math.round(maxPercent),adaptive_batch_id:batchId,adaptive_for_student_id:studentId,adaptive_weakness_count:picked.adaptiveCount,adaptive_normal_count:picked.normalCount,adaptive_selection_summary:{total,maximum_adaptive_percent:maxPercent,adaptive_count:picked.adaptiveCount,normal_count:picked.normalCount,selected_range:[...assignmentSchoolQbLessons],subject:assignmentSchoolQbSubjectName,medium:assignmentSchoolQbMedium}}).select().single();
+    if(ae){errors.push(`${studentId}: ${ae.message}`);continue;}
+    const qs=picked.selected.map((item,i)=>{const q={...(snapshotMap.get(item.q.id)||{})};return {...q,assignment_id:a.id,question_order:i+1,adaptive_selection_reason:item.reason,adaptive_source_wrong_question_id:item.wrongSourceId||null,adaptive_source_wrong_count:item.wrongCount||0};});
+    const {error:qe}=await sb.from('questions').insert(qs);
+    if(qe){await sb.from('assignments').delete().eq('id',a.id);errors.push(`${studentId}: could not save questions — ${qe.message}`);continue;}
+    const {error:re}=await sb.from('assignment_students').insert({assignment_id:a.id,student_id:studentId});
+    if(re){await sb.from('questions').delete().eq('assignment_id',a.id);await sb.from('assignments').delete().eq('id',a.id);errors.push(`${studentId}: could not assign — ${re.message}`);continue;}
+    created.push({id:a.id,studentId,adaptiveCount:picked.adaptiveCount,normalCount:picked.normalCount});
+  }
+  if(!created.length)return alert('No adaptive assignments were created. '+errors.join('\n'));
+  alert(`Adaptive assignment created for ${created.length} student${created.length===1?'':'s'}.\n\nEach student received a personalized question set. Maximum adaptive/weakness questions: ${maxPercent}%.${errors.length?'\n\nSome students could not be created:\n'+errors.join('\n'):''}`);
+  importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentSchoolQbSelected=null;assignmentSchoolQbSubject='';assignmentSchoolQbMedium='';assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();
+  schoolAssignmentManagement();
+  return true;
+}
+
 async function saveAssignment(){
+ if(isAdaptiveSchoolAssignment())return saveAdaptiveSchoolAssignment();
  const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";
  if(assignmentSchoolQbSelected?.ids?.length && (importedQuestions.length || document.querySelectorAll('.q').length || assignmentBankSelected.size)) {
    // A lesson-based Question Bank selection is the authoritative question source.
@@ -4747,6 +4916,8 @@ function startBulkImportFromNewAssignment(){
   subject:document.getElementById("asub")?.value||"",
   video:document.getElementById("av")?.value||"",
   description:document.getElementById("adesc")?.value||"",
+  schoolAssignmentMode:document.querySelector('input[name="schoolAssignmentMode"]:checked')?.value||"standard",
+  adaptiveMaxPercent:document.getElementById("adaptiveMaxPercent")?.value||"60",
   selectedBankQuestionIds:[...assignmentBankSelected], schoolQbSelection:assignmentSchoolQbSelected ? {...assignmentSchoolQbSelected,subject:assignmentSchoolQbSubject,medium:assignmentSchoolQbMedium} : null
  };
  importedForNewAssignment=true;
@@ -6324,6 +6495,8 @@ async function submitQuiz(autoSubmit=false){
 
     const perfRows=active.questions.map((q,i)=>({mock_question_id:q.source_mock_question_id||null,is_correct:answers[i]===q.correct_option})).filter(x=>x.mock_question_id);
     if(perfRows.length){const {error:pe}=await sb.rpc('record_student_question_results',{p_student_id:current.id,p_results:perfRows});if(pe)console.warn('Could not record question performance:',pe.message);}
+    const schoolPerfRows=active.questions.map((q,i)=>({source_school_question_bank_id:q.source_school_question_bank_id||null,is_correct:answers[i]===q.correct_option})).filter(x=>x.source_school_question_bank_id);
+    if(schoolPerfRows.length){const {error:spe}=await sb.rpc('record_school_student_question_results',{p_student_id:current.id,p_results:schoolPerfRows});if(spe)console.warn('Could not record School Course question performance:',spe.message);}
 
     const submissionPct=active.questions.length?Math.round(score*100/active.questions.length):0;
     window.quizSubmitting=false;
