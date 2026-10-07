@@ -3332,6 +3332,127 @@ async function jnvstQbSaveEditRich(){
  }catch(e){alert('Could not save JNVST question: '+(e.message||e))}
 }
 async function jnvstQbSaveEdit(){return jnvstQbSaveEditRich()}
+function jnvstManualAddQuestion(){
+  const subjects=jnvstSubjects||[];
+  const escx=v=>esc(v??'');
+  const subjectOptions=jnvstQbSubjectOptions('');
+  render(`<div class="wrap">${header('Add JNVST Question')}
+    <div class="card" style="border:2px solid #2563eb;background:#f8fbff">
+      <div class="notice"><b>JNVST Manual Question Entry</b><br>Enter one logical question here. For bilingual questions, fill both English and Assamese sections. They will be stored as linked language records in the JNVST Question Bank. This form writes only to <b>mock_question_bank</b>; School Course questions are not affected.</div>
+      <div class="grid">
+        <div><label>JNVST Subject <span style="color:#dc2626">*</span></label><select id="jmSubject" onchange="jnvstManualSubjectChanged()">${subjectOptions}</select></div>
+        <div><label>Medium / Version <span style="color:#dc2626">*</span></label><select id="jmMedium" onchange="jnvstManualMediumChanged()"><option value="BILINGUAL">English + Assamese</option><option value="ENGLISH">English only</option><option value="ASSAMESE">Assamese only</option><option value="COMMON">Common (MAT)</option></select></div>
+        <div><label>Lesson / Sub-lesson <span style="color:#dc2626">*</span></label><select id="jmLesson"><option value="">— Select Subject First —</option></select></div>
+        <div><label>Part <span style="color:#dc2626">*</span></label><select id="jmPart"></select></div>
+        <div><label>Topic <span style="color:#dc2626">*</span></label><input id="jmTopic" placeholder="e.g. Fractions, Pattern Completion"></div>
+        <div><label>Question Type</label><select id="jmType"><option value="MCQ">MCQ</option><option value="Short">Short</option><option value="Long">Long</option><option value="EVS-PASSAGE">EVS Passage Question</option><option value="LANGUAGE-PASSAGE">Language Passage Question</option></select></div>
+        <div><label>Marks</label><input id="jmMarks" type="number" min="0" step="0.5" value="1"></div>
+        <div><label>Cognitive Level</label><select id="jmCognitive"><option value="">— Optional —</option>${['Knowledge','Understanding','Application','HOTS'].map(v=>`<option value="${v}">${v}</option>`).join('')}</select></div>
+        <div><label>Difficulty</label><select id="jmDifficulty"><option value="">— Optional —</option>${['Easy','Medium','Hard'].map(v=>`<option value="${v}">${v}</option>`).join('')}</select></div>
+        <div><label>Variation Group</label><input id="jmVariation" placeholder="Optional, e.g. FRA-001"></div>
+        <div style="display:flex;align-items:center;padding-top:24px"><label style="display:flex;align-items:center;gap:8px;margin:0"><input id="jmFixed" type="checkbox" style="width:auto"> Mark as Fixed / Mandatory Question</label></div>
+      </div>
+      <div id="jmPassageFields" style="display:none;margin-top:14px;padding:14px;border:1px solid #cbd5e1;border-radius:10px;background:#fff">
+        <h3 style="margin:0 0 10px">Passage Information</h3>
+        <div class="grid">
+          <div><label>Local Passage No.</label><input id="jmPassageNo" placeholder="e.g. 1"></div>
+          <div><label>Question Order</label><select id="jmQuestionOrder"><option value="">— Not a passage question —</option>${[1,2,3,4,5].map(n=>`<option value="${n}">${n}</option>`).join('')}</select></div>
+          <div><label>Passage Title — English</label><input id="jmPassageTitleEn"></div>
+          <div><label>Passage Title — Assamese</label><input id="jmPassageTitleAs"></div>
+        </div>
+        <div class="grid" style="margin-top:10px">
+          <div><label>Passage — English</label><textarea id="jmPassageEn" rows="6"></textarea></div>
+          <div><label>Passage — Assamese</label><textarea id="jmPassageAs" rows="6"></textarea></div>
+        </div>
+        <div class="small muted" style="margin-top:8px">For a complete passage entity, create exactly 5 questions with the same Local Passage No. and Question Order 1–5. Existing bulk-upload passage rules are unchanged.</div>
+      </div>
+    </div>
+
+    <div id="jmEnglishCard" class="card" style="border:2px solid #2563eb;background:#f8fbff">
+      <h2 style="margin-top:0">🇬🇧 English Version</h2>
+      <div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('jmEnQ')">∑ Equation Editor</button></div>
+      <textarea id="jmEnQ" rows="7" placeholder="Type the English question..." oninput="jnvstRefreshMathPreview('jmEnQPreview',this.value)"></textarea><div id="jmEnQPreview" class="eq-preview"></div>
+      <div class="grid" style="margin-top:10px">${['A','B','C','D'].map(o=>`<div><label>Option ${o} — English</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('jmEn${o}')">∑ Equation</button></div><textarea id="jmEn${o}" rows="3" oninput="jnvstRefreshMathPreview('jmEn${o}Preview',this.value)"></textarea><div id="jmEn${o}Preview" class="eq-preview"></div></div>`).join('')}</div>
+      <div class="grid"><div><label>Correct Answer — English</label><select id="jmEnAns"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div><label>Explanation — English</label><textarea id="jmEnEx" rows="3"></textarea></div></div>
+    </div>
+
+    <div id="jmAssameseCard" class="card" style="border:2px solid #16a34a;background:#f7fff9">
+      <h2 style="margin-top:0">🇮🇳 Assamese Version</h2>
+      <div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('jmAsQ')">∑ Equation Editor</button></div>
+      <textarea id="jmAsQ" rows="7" placeholder="প্ৰশ্নটো অসমীয়াত লিখক..." oninput="jnvstRefreshMathPreview('jmAsQPreview',this.value)"></textarea><div id="jmAsQPreview" class="eq-preview"></div>
+      <div class="grid" style="margin-top:10px">${['A','B','C','D'].map(o=>`<div><label>Option ${o} — Assamese</label><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('jmAs${o}')">∑ Equation</button></div><textarea id="jmAs${o}" rows="3" oninput="jnvstRefreshMathPreview('jmAs${o}Preview',this.value)"></textarea><div id="jmAs${o}Preview" class="eq-preview"></div></div>`).join('')}</div>
+      <div class="grid"><div><label>Correct Answer — Assamese</label><select id="jmAsAns"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div><label>Explanation — Assamese</label><textarea id="jmAsEx" rows="3"></textarea></div></div>
+    </div>
+
+    <div class="card"><h3 style="margin-top:0">Question Image / Diagram</h3><input id="jmImage" type="file" accept="image/*" onchange="jnvstManualPreviewImage(this)"><div id="jmImagePreview" class="small muted" style="margin-top:8px">No image selected.</div></div>
+    <div class="actions" style="margin-top:16px"><button id="jmSave" onclick="saveJnvstManualQuestion()">💾 Save Question</button><button id="jmSaveAnother" class="secondary" onclick="saveJnvstManualQuestion(true)">💾 Save & Add Another</button><button class="secondary" onclick="jnvstQuestionBankHome()">Cancel</button></div>
+  </div>`);
+  jnvstManualSubjectChanged();
+  jnvstManualMediumChanged();
+  document.getElementById('jmType')?.addEventListener('change',jnvstManualTypeChanged);
+  jnvstManualTypeChanged();
+  if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+}
+function jnvstManualSubjectChanged(){
+  const subject=document.getElementById('jmSubject')?.value||'',lesson=document.getElementById('jmLesson');
+  if(lesson)lesson.innerHTML=jnvstQbLessonOptions(subject,'');
+}
+function jnvstManualMediumChanged(){
+  const medium=document.getElementById('jmMedium')?.value||'BILINGUAL',part=document.getElementById('jmPart');
+  const opts=medium==='COMMON'?[['MAT_PATTERN','Pattern Completion'],['MAT_SERIES','Series'],['MAT_GEOMETRICAL','Geometrical Figure'],['MAT_MIRROR','Mirror Image'],['MAT_EMBEDDED','Embedded Figure']]:[['ARITHMETIC','Arithmetic'],['EVS_MCQ','EVS-MCQ'],['EVS_PASSAGE','EVS-Passage'],['LANGUAGE_MCQ','Language-MCQ'],['LANGUAGE_PASSAGE','Language-Passage']];
+  if(part)part.innerHTML=opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  const en=document.getElementById('jmEnglishCard'),as=document.getElementById('jmAssameseCard');
+  if(en)en.style.display=medium==='ASSAMESE'||medium==='COMMON'?'none':'block';
+  if(as)as.style.display=medium==='ENGLISH'||medium==='COMMON'?'none':'block';
+  jnvstManualTypeChanged();
+}
+function jnvstManualTypeChanged(){
+  const type=document.getElementById('jmType')?.value||'MCQ',box=document.getElementById('jmPassageFields');
+  const passage=type==='EVS-PASSAGE'||type==='LANGUAGE-PASSAGE';
+  if(box)box.style.display=passage?'block':'none';
+}
+function jnvstManualPreviewImage(input){
+  const box=document.getElementById('jmImagePreview'),file=input?.files?.[0];if(!box)return;
+  if(!file){box.innerHTML='<span class="muted">No image selected.</span>';return;}
+  if(file.size>10*1024*1024){input.value='';return alert('Image size must be 10 MB or less.');}
+  box.innerHTML=`<img class="jnvst-editor-image" src="${URL.createObjectURL(file)}" alt="Question image preview"><div class="small muted">Image selected.</div>`;
+}
+function jnvstManualField(id){return document.getElementById(id)?.value.trim()||''}
+async function saveJnvstManualQuestion(saveAnother=false){
+  const subject=document.getElementById('jmSubject')?.value||'',lesson=document.getElementById('jmLesson')?.value||'',medium=document.getElementById('jmMedium')?.value||'',part=document.getElementById('jmPart')?.value||'',topic=jnvstManualField('jmTopic');
+  const type=document.getElementById('jmType')?.value||'MCQ',marks=Number(document.getElementById('jmMarks')?.value||1);
+  if(!subject||!lesson)return alert('Select JNVST Subject and Lesson / Sub-lesson.');
+  if(!part||!topic)return alert('Part and Topic are required.');
+  if(!Number.isFinite(marks)||marks<0)return alert('Marks must be 0 or greater.');
+  const passage=type==='EVS-PASSAGE'||type==='LANGUAGE-PASSAGE';
+  const pno=jnvstManualField('jmPassageNo'),order=Number(document.getElementById('jmQuestionOrder')?.value||0);
+  if(passage&&(!pno||![1,2,3,4,5].includes(order)))return alert('For a passage question, Local Passage No. and Question Order 1–5 are required.');
+  const makeVersion=(lang)=>({language:lang,question_text:jnvstManualField(lang==='ENGLISH'?'jmEnQ':'jmAsQ'),option_a:jnvstManualField(lang==='ENGLISH'?'jmEnA':'jmAsA'),option_b:jnvstManualField(lang==='ENGLISH'?'jmEnB':'jmAsB'),option_c:jnvstManualField(lang==='ENGLISH'?'jmEnC':'jmAsC'),option_d:jnvstManualField(lang==='ENGLISH'?'jmEnD':'jmAsD'),correct_option:document.getElementById(lang==='ENGLISH'?'jmEnAns':'jmAsAns')?.value||'A',explanation:jnvstManualField(lang==='ENGLISH'?'jmEnEx':'jmAsEx'),passage_title:jnvstManualField(lang==='ENGLISH'?'jmPassageTitleEn':'jmPassageTitleAs'),passage_text:jnvstManualField(lang==='ENGLISH'?'jmPassageEn':'jmPassageAs')});
+  let versions=[];
+  if(medium==='COMMON')versions=[makeVersion('COMMON')];
+  else if(medium==='ENGLISH')versions=[makeVersion('ENGLISH')];
+  else if(medium==='ASSAMESE')versions=[makeVersion('ASSAMESE')];
+  else versions=[makeVersion('ENGLISH'),makeVersion('ASSAMESE')];
+  if(versions.some(v=>!v.question_text))return alert('Question text is required for every selected language version.');
+  if(type==='MCQ'&&versions.some(v=>!['A','B','C','D'].includes(v.correct_option)))return alert('Correct Answer must be A, B, C or D.');
+  if(passage){
+    for(const v of versions){if(!v.passage_title||!v.passage_text)return alert(`Passage title and passage text are required for ${v.language==='ENGLISH'?'English':v.language==='ASSAMESE'?'Assamese':'the selected language'}.`);}
+  }
+  const btn=document.getElementById('jmSave'),btn2=document.getElementById('jmSaveAnother');if(btn)btn.disabled=true;if(btn2)btn2.disabled=true;
+  try{
+    const subj=(jnvstSubjects||[]).find(s=>s.id===subject),lessonObj=(jnvstSubjectLessons||[]).find(l=>l.id===lesson);if(!subj||!lessonObj)throw new Error('Selected Subject or Lesson could not be found.');
+    let imageUrl=null;const file=document.getElementById('jmImage')?.files?.[0];if(file)imageUrl=await uploadMockFile(file,`${current.id}/jnvst-manual/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);
+    const pairId=versions.length>1?crypto.randomUUID():null;
+    const passageId=passage?`JNVST-${part==='EVS_PASSAGE'?'EVS':'LANG'}-${medium}-${shortId()}`:null;
+    const rows=versions.map(v=>({teacher_id:current.id,section_code:sectionFor(part),part_code:part,topic,variation_group:jnvstManualField('jmVariation')||null,is_fixed:!!document.getElementById('jmFixed')?.checked,question_type:type,marks,cognitive_level:document.getElementById('jmCognitive')?.value||null,difficulty:document.getElementById('jmDifficulty')?.value||null,language:v.language,subject_id:subj.id,lesson_id:lessonObj.id,lesson_code:lessonObj.lesson_code||null,question_text:v.question_text,option_a:v.option_a||null,option_b:v.option_b||null,option_c:v.option_c||null,option_d:v.option_d||null,correct_option:v.correct_option,explanation:v.explanation||null,source_type:'JNVST_MANUAL',active:true,image_url:imageUrl,passage_id:passageId,passage_title:passage?v.passage_title:null,passage_text:passage?v.passage_text:null,question_order:passage?order:null,language_pair_id:pairId,set_id:passageId}));
+    const {data:old,error:oe}=await sb.from('mock_question_bank').select('id,question_text,option_a,option_b,option_c,option_d,subject_id,lesson_id,language,passage_id,question_order').eq('teacher_id',current.id).eq('active',true);if(oe)throw oe;
+    const seen=new Set((old||[]).map(q=>[q.subject_id,q.lesson_id,q.language,q.passage_id,q.question_order,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d].map(v=>String(v??'').trim().toLowerCase()).join('¦')));
+    const fresh=[];for(const r of rows){const key=[r.subject_id,r.lesson_id,r.language,r.passage_id,r.question_order,r.question_text,r.option_a,r.option_b,r.option_c,r.option_d].map(v=>String(v??'').trim().toLowerCase()).join('¦');if(seen.has(key))throw new Error(`A duplicate ${r.language} question already exists in this Subject/Lesson.`);seen.add(key);fresh.push(r);}
+    const {error}=await sb.from('mock_question_bank').insert(fresh);if(error)throw error;
+    alert(`JNVST question saved successfully.\nAdded ${fresh.length} language record(s).${passage?'\nThis question is linked to passage '+pno+' / order '+order+'.':''}`);
+    if(saveAnother){jnvstManualAddQuestion();}else{jnvstQuestionBankHome();}
+  }catch(e){alert('Could not save JNVST question: '+(e.message||e));if(btn)btn.disabled=false;if(btn2)btn2.disabled=false;}
+}
 function downloadJnvstQuestionTemplate(){if(typeof XLSX==='undefined')return alert('Excel library is not loaded.');const wb=XLSX.utils.book_new();const rows=[['Subject Name','Medium','Lesson Code','Topic','Variation Group','Fixed Question','Question Type','Marks','Cognitive Level','Difficulty','Question English','Question Assamese','Option A English','Option B English','Option C English','Option D English','Option A Assamese','Option B Assamese','Option C Assamese','Option D Assamese','Correct Answer','Explanation'],['Arithmetic','ENGLISH','1.1','Place Value','NUM-001','NO','MCQ',1,'Knowledge','Medium','Find the value of \frac{3}{4}+\frac{1}{2}.','','1000','500','50','5','','','','','A','']];const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map((_,i)=>({wch:i<6?18:i>10?28:20}));XLSX.utils.book_append_sheet(wb,ws,'JNVST Questions');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['JNVST Question Bulk Upload Instructions'],['Subject Name must exactly match an existing JNVST Subject.'],['Lesson Code must match an existing JNVST Lesson/Sub-lesson under that subject.'],['Medium may be COMMON, ENGLISH or ASSAMESE. If both Question English and Question Assamese are supplied, the importer automatically creates both linked language versions from the same Excel row.'],['Use the same Variation Group for small-variation questions; assignment generation selects at most one per group.'],['Fixed Question: YES or NO. Fixed questions can be selected explicitly when generating an assignment.'],['Mathematics: You may enter LaTeX-style expressions directly in Question/Option/Explanation cells, e.g. \frac{3}{4}, x^2, \sqrt{16}, \times, \div. The system renders these as mathematical notation.'],['This upload writes to mock_question_bank only. It does not create or modify School Course questions.']]),'Instructions');XLSX.writeFile(wb,'JNVST_Question_Bank_Bulk_Upload_Template.xlsx')}
 let jnvstQbBulkRows=[];
 function jnvstQuestionBulkUpload(){jnvstQbBulkRows=[];jnvstPdfRows=[];jnvstPdfMeta={};render(`<div class="wrap">${header('Bulk Upload JNVST Question Bank')}<div class="card"><div class="notice"><b>JNVST only.</b> This uploader writes to <b>mock_question_bank</b>. School Course Question Bank is not affected.<br><b>Part is important:</b> individual EVS = <code>EVS_MCQ</code>; EVS passage = <code>EVS_PASSAGE</code>; Language passage = <code>LANGUAGE_PASSAGE</code>; Arithmetic = <code>ARITHMETIC</code>. The importer also infers Part when the column is blank.</div><div class="actions"><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Download Excel Template</button><button class="secondary" onclick="downloadJnvstMatPdfTemplate()">⬇ MAT PDF + Excel Template</button><button class="secondary" onclick="jnvstQuestionBankHome()">← Back</button></div></div><div class="card" style="border:2px solid #16a34a"><span class="tag" style="background:#dcfce7;color:#166534">PDF + EXCEL</span><h3>🧩 Mental Ability (MAT) — Image Question Bulk Upload</h3><p class="small muted">Upload one PDF containing one complete MAT question per page and one Excel file containing the answer key and metadata. PDF page 1 = Question 1, page 2 = Question 2, etc. Unnecessary white margins are cropped automatically.</p><div class="grid"><div><label>JNVST Subject</label><select id="jnvstPdfSubject">${jnvstQbSubjectOptions('')}</select></div><div><label>Medium</label><select id="jnvstPdfMedium"><option value="COMMON">Common (MAT)</option></select></div><div><label>Lesson / Sub-lesson</label><select id="jnvstPdfLesson">${jnvstQbLessonOptions('','')}</select></div></div><label>Questions PDF</label><input id="jnvstPdfFile" type="file" accept=".pdf" onchange="readJnvstQuestionPdf(event)"><label>Answer Key & Metadata Excel</label><input id="jnvstPdfExcel" type="file" accept=".xlsx,.xls" onchange="readJnvstPdfMetadataExcel(event)"><div id="jnvstPdfPreview" class="small muted" style="margin-top:10px">No PDF or metadata file selected.</div><div class="actions"><button id="jnvstPdfImportBtn" disabled onclick="saveJnvstPdfBulk()">✓ Validate & Import PDF Questions</button></div></div><div class="card"><h3>📝 Text / MCQ Excel Bulk Upload</h3><div class="notice"><b>Mathematics supported:</b> You may type LaTeX-style equations directly in Excel cells, for example <code>\frac{3}{4}</code>, <code>x^2</code>, <code>\sqrt{16}</code>, <code>\times</code>, <code>\div</code>. Equations in Question, Options and Explanation are rendered as mathematics after upload.</div><label>Excel file (.xlsx / .xls)</label><input type="file" accept=".xlsx,.xls" onchange="readJnvstQuestionExcel(event)"><div id="jnvstQbBulkPreview" class="small muted" style="margin-top:10px">No file selected.</div><div id="jnvstQbBulkMathPreview" class="eq-preview" style="margin-top:10px"></div></div><div class="actions"><button id="jnvstQbImportBtn" disabled onclick="saveJnvstQuestionBulk()">✓ Validate & Import Excel Questions</button><button class="secondary" onclick="jnvstQuestionBankHome()">Cancel</button></div></div>`);document.getElementById('jnvstPdfSubject')?.addEventListener('change',e=>{const l=document.getElementById('jnvstPdfLesson');if(l)l.innerHTML=jnvstQbLessonOptions(e.target.value,'')})}
