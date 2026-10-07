@@ -770,7 +770,7 @@ async function reviewAssessment(id){
    html+='<div class="student-card"><div class="question-head"><div><h3 style="margin:0">'+esc(g.student.full_name||'Student')+'</h3><div class="muted">Roll No: '+esc(g.student.roll_no||'—')+'</div></div></div>';
    for(const qq of(q||[])){
      const x=g.items.find(i=>i.question_id===qq.id); const fs=x?(fmap.get(x.id)||[]):[];
-     html+='<div class="assignment"><div class="question-head"><div><b>Q'+qq.question_order+'</b><div class="small muted" style="white-space:pre-wrap;margin-top:4px">'+esc(qq.question_text)+'</div></div><span class="tag">Max '+esc(qq.marks)+' Marks</span></div>';
+     html+='<div class="assignment"><div class="question-head"><div><b>Q'+qq.question_order+'</b><div class="small muted qb-math-cell" style="margin-top:4px">'+qbMathHtml(qq.question_text||'')+'</div></div><span class="tag">Max '+esc(qq.marks)+' Marks</span></div>';
      if(!x){html+='<div class="muted small" style="margin-top:9px">Not submitted yet.</div>';}
      else{
        html+='<div class="small" style="margin-top:9px"><b>Submitted:</b> '+new Date(x.submitted_at).toLocaleString()+' &nbsp; <b>Status:</b> '+esc(x.status)+'</div>';
