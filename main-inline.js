@@ -2052,7 +2052,7 @@ async function teacherHome(){
  render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}
   <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">JNVST-VI (Class-IV) • JNVST-IX (Class IX)</p>${window._jnvstMigration?.groupsMigrated?.length?`<div class="success" style="margin-top:10px"><b>Previous Navodaya groups migrated:</b> ${esc(window._jnvstMigration.groupsMigrated.join(" • "))}. Students are now under the JNVST-VI (Class-IV) sub-groups.</div>`:""}</div>
   <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
-  <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage Groups & Subjects</button><button onclick="jnvstQuestionBankHome()">📚 JNVST Question Bank</button><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button><button onclick="manageStudentFees()">💰 Students Fees</button></div></div>
+  <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage Groups & Subjects</button><button onclick="jnvstQuestionBankHome()">📚 JNVST Question Bank</button><button onclick="jnvstManualAddQuestion()">➕ Add JNVST Question</button><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button><button onclick="manageStudentFees()">💰 Students Fees</button></div></div>
   <div class="card"><h2>JNVST Classes</h2>${renderJnvstClassManager(classes,students,assignments)}</div>
   <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${jnvstMainGroups(classes).map(g=>`<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${[...new Set(classes.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))].sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div></div>
  </div>`);
@@ -2616,7 +2616,7 @@ function manageJnvstClasses(){
    <div class="actions" style="margin-top:12px"><button onclick="newJnvstMainGroup()">+ Create Main Group</button><button onclick="newJnvstSubject()">+ Create Subject</button><button onclick="jnvstLessonBulkUpload()">↑ Bulk Upload Lessons / Sub-lessons</button><button class="secondary" onclick="downloadJnvstLessonTemplate()">↓ Excel Template</button><button class="secondary" onclick="teacherHome()">← Dashboard</button></div>
   </div>
   <div class="card"><h2>📚 Main Groups & Sub-groups</h2>${mainCards||"<div class='notice'>No groups found.</div>"}</div>
-  <div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">📖 Subjects, Lessons & Sub-lessons</h2><div class="actions"><button onclick="jnvstLessonBulkUpload()">📥 Bulk Upload Lessons / Sub-lessons</button><button class="secondary" onclick="downloadJnvstLessonTemplate()">⬇ Excel Template</button><button onclick="jnvstQuestionBankHome()">📚 JNVST Question Bank</button><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Question Template</button></div></div><div class="notice" style="margin-top:10px">Create the JNVST teaching hierarchy <b>Subject → Lesson → Sub-lesson</b>. JNVST and School Course Question Banks are separate. JNVST questions use this hierarchy; School Course questions use <b>Subject → Chapter → Subchapter → Topic</b> in the School Teacher Dashboard.</div>${subjects.length?subjects.map(x=>{const ls=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===x.id);const roots=ls.filter(l=>!l.parent_lesson_id);const renderLesson=(l,depth=0)=>{const kids=ls.filter(k=>k.parent_lesson_id===l.id);return `<div class="student-card" style="margin:${depth?6:8}px 0 0 ${depth*24}px;background:${depth?'#f8fafc':'#fff'}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b>${esc(l.lesson_code||'')}</b> ${esc(l.lesson_name)}${l.description?`<div class="small muted">${esc(l.description)}</div>`:''}<div class="small muted">${kids.length?kids.length+' sub-lesson(s)':''}</div></div><div class="actions"><button class="secondary" onclick="editJnvstLesson('${l.id}')">✎ Edit</button><button class="secondary" onclick="newJnvstLesson('${x.id}','${l.id}')">+ Sub-lesson</button><button class="danger" onclick="deleteJnvstLesson('${l.id}')">Delete</button></div></div>${kids.map(k=>renderLesson(k,depth+1)).join('')}</div>`};return `<div class="student-card" style="background:#eff6ff;border:1px solid #bfdbfe"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>${esc(x.name)}</b>${x.description?`<div class="small muted">${esc(x.description)}</div>`:''}</div><div class="actions"><button onclick="newJnvstLesson('${x.id}','')">+ Create Lesson</button><button class="danger" onclick="deleteJnvstSubject('${x.id}')">Delete Subject</button></div></div><div style="margin-top:8px">${roots.length?roots.map(l=>renderLesson(l,0)).join(''):'<div class="muted small">No lessons yet. Create the first lesson.</div>'}</div></div>`}).join(""):"<div class='muted'>No subjects. Create one to use it in assignments.</div>"}</div>
+  <div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">📖 Subjects, Lessons & Sub-lessons</h2><div class="actions"><button onclick="jnvstLessonBulkUpload()">📥 Bulk Upload Lessons / Sub-lessons</button><button class="secondary" onclick="downloadJnvstLessonTemplate()">⬇ Excel Template</button><button onclick="jnvstQuestionBankHome()">📚 JNVST Question Bank</button><button onclick="jnvstManualAddQuestion()">➕ Add JNVST Question</button><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Question Template</button></div></div><div class="notice" style="margin-top:10px">Create the JNVST teaching hierarchy <b>Subject → Lesson → Sub-lesson</b>. JNVST and School Course Question Banks are separate. JNVST questions use this hierarchy; School Course questions use <b>Subject → Chapter → Subchapter → Topic</b> in the School Teacher Dashboard.</div>${subjects.length?subjects.map(x=>{const ls=(jnvstSubjectLessons||[]).filter(l=>l.subject_id===x.id);const roots=ls.filter(l=>!l.parent_lesson_id);const renderLesson=(l,depth=0)=>{const kids=ls.filter(k=>k.parent_lesson_id===l.id);return `<div class="student-card" style="margin:${depth?6:8}px 0 0 ${depth*24}px;background:${depth?'#f8fafc':'#fff'}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b>${esc(l.lesson_code||'')}</b> ${esc(l.lesson_name)}${l.description?`<div class="small muted">${esc(l.description)}</div>`:''}<div class="small muted">${kids.length?kids.length+' sub-lesson(s)':''}</div></div><div class="actions"><button class="secondary" onclick="editJnvstLesson('${l.id}')">✎ Edit</button><button class="secondary" onclick="newJnvstLesson('${x.id}','${l.id}')">+ Sub-lesson</button><button class="danger" onclick="deleteJnvstLesson('${l.id}')">Delete</button></div></div>${kids.map(k=>renderLesson(k,depth+1)).join('')}</div>`};return `<div class="student-card" style="background:#eff6ff;border:1px solid #bfdbfe"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><b>${esc(x.name)}</b>${x.description?`<div class="small muted">${esc(x.description)}</div>`:''}</div><div class="actions"><button onclick="newJnvstLesson('${x.id}','')">+ Create Lesson</button><button class="danger" onclick="deleteJnvstSubject('${x.id}')">Delete Subject</button></div></div><div style="margin-top:8px">${roots.length?roots.map(l=>renderLesson(l,0)).join(''):'<div class="muted small">No lessons yet. Create the first lesson.</div>'}</div></div>`}).join(""):"<div class='muted'>No subjects. Create one to use it in assignments.</div>"}</div>
  </div>`);
 }
 function downloadJnvstLessonTemplate(){
@@ -2773,7 +2773,7 @@ async function jnvstQuestionBankHome(){
  const subj=document.getElementById('jnvstQbSubjectFilter')?.value||'';
  render(`<div class="wrap">${header('📚 JNVST Question Bank')}
   <div class="card"><div class="notice"><b>JNVST Course Question Bank is separate from School Course.</b> Questions are stored in <b>mock_question_bank</b> and use <b>Subject → Lesson → Sub-lesson → Topic → Variation/Fixed metadata</b>.</div>
-   <div class="actions"><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Excel Template</button><button class="secondary" onclick="manageJnvstClasses()">← Manage JNVST Subjects</button><button id="jnvstCreateVariationTop" onclick="jnvstQbCreateVariationFromSelected()" style="display:none">➕ Create Variation Question</button></div>
+   <div class="actions"><button onclick="jnvstManualAddQuestion()">➕ Add JNVST Question</button><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Excel Template</button><button class="secondary" onclick="manageJnvstClasses()">← Manage JNVST Subjects</button><button id="jnvstCreateVariationTop" onclick="jnvstQbCreateVariationFromSelected()" style="display:none">➕ Create Variation Question</button></div>
   </div>
   <div class="card"><div class="grid"><div><label>Subject</label><select id="jnvstQbSubjectFilter" onchange="jnvstQbSubjectChanged(this.value)">${jnvstQbSubjectOptions(subj)}</select></div><div><label>Medium</label><select id="jnvstQbMediumFilter" onchange="jnvstQbContextChanged()"><option value="">All Mediums</option><option value="COMMON">Common (MAT)</option><option value="ENGLISH">English</option><option value="ASSAMESE">Assamese</option></select></div><div><label>Lesson / Sub-lesson</label><select id="jnvstQbLessonFilter" onchange="jnvstQbContextChanged()"><option value="">All Lessons</option></select></div><div><label>Variation Group</label><select id="jnvstQbVariationFilter" onchange="jnvstQbVariationChanged(this.value)"><option value="">All Variations</option></select></div><div><label>Search / Topic / Group</label><input id="jnvstQbSearch" placeholder="Search..." oninput="jnvstQbRenderTable()"></div></div>
     <div class="actions" style="margin-top:12px;align-items:center">
@@ -2881,7 +2881,148 @@ function jnvstQbRenderTable(){
  if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([box]).catch(()=>{});
 }
 function jnvstQbToggleVisible(checked){jnvstQbFilteredRows().forEach(q=>checked?jnvstQbSelected.add(q.id):jnvstQbSelected.delete(q.id));jnvstQbRenderTable()}
-async function jnvstQbEdit(id){
+async function jnvstManualAddQuestion(){
+  const partOptions=[
+    ['MAT','MAT — Mental Ability (Common)'],
+    ['ARITHMETIC','Arithmetic'],
+    ['EVS_MCQ','EVS — MCQ'],
+    ['EVS_PASSAGE','EVS — Passage'],
+    ['LANGUAGE_PASSAGE','Language — Passage']
+  ];
+  const subjectOptions=jnvstQbSubjectOptions('');
+  const lessonOptions=jnvstQbLessonOptions('','');
+  const textField=(id,label,value='',rows=5,placeholder='')=>`<div class="jnvst-editor-section"><h4 style="margin:0 0 7px">${label}</h4><div class="eq-toolbar"><button type="button" class="secondary" onclick="jnvstOpenMathEditor('${id}')">∑ Equation Editor</button></div><textarea id="${id}" rows="${rows}" placeholder="${esc(placeholder)}" oninput="jnvstRefreshMathPreview('${id}Preview',this.value)">${esc(value)}</textarea><div id="${id}Preview" class="eq-preview">${jnvstMathPreview(value)}</div></div>`;
+  const optionFields=(prefix,langLabel)=>['A','B','C','D'].map(o=>textField(`jma_${prefix}_${o}`,`Option ${o} — ${langLabel}`,'',3,`Option ${o}`)).join('');
+  const versionBlock=(prefix,title,required=true)=>`<div class="card" style="border:1px solid #cbd5e1;background:#f8fafc"><h3 style="margin-top:0">${title}</h3>${textField(`jma_${prefix}_q`,'Question','',6,'Type the complete question here...')}${optionFields(prefix,title)}<div class="grid"><div><label>Correct Answer</label><select id="jma_${prefix}_ans"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div>${textField(`jma_${prefix}_ex`,'Explanation (optional)','',3,'Optional explanation...')}</div></div></div>`;
+  render(`<div class="wrap">${header('➕ Add JNVST Question')}
+    <div class="card" style="border:2px solid #2563eb;background:#eff6ff">
+      <h2 style="margin:0">Create JNVST Question</h2>
+      <p class="muted" style="margin:7px 0 0">Add a question manually to the <b>JNVST Question Bank</b>. English and Assamese versions are saved as one linked bilingual question. Common (MAT) is saved as one common question.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">1. Question Metadata</h3>
+      <div class="grid">
+        <div><label>JNVST Subject <span style="color:#dc2626">*</span></label><select id="jmaSubject" onchange="document.getElementById('jmaLesson').innerHTML=jnvstQbLessonOptions(this.value,'')">${subjectOptions}</select></div>
+        <div><label>Lesson / Sub-lesson <span style="color:#dc2626">*</span></label><select id="jmaLesson">${lessonOptions}</select></div>
+        <div><label>Part <span style="color:#dc2626">*</span></label><select id="jmaPart" onchange="jnvstManualModeChanged()">${partOptions.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('')}</select></div>
+        <div><label>Question Mode</label><select id="jmaMode" onchange="jnvstManualModeChanged()"><option value="BILINGUAL">English + Assamese (Bilingual)</option><option value="COMMON">Common (MAT)</option></select></div>
+        <div><label>Topic <span style="color:#dc2626">*</span></label><input id="jmaTopic" placeholder="e.g. Fractions / Analogy / Reading Comprehension"></div>
+        <div><label>Variation Group</label><input id="jmaVariation" placeholder="e.g. FRA-ADD-001"></div>
+        <div><label>Question Type</label><select id="jmaType"><option value="MCQ">MCQ</option></select></div>
+        <div><label>Marks <span style="color:#dc2626">*</span></label><input id="jmaMarks" type="number" min="0.5" step="0.5" value="1"></div>
+        <div><label>Cognitive Level</label><select id="jmaCognitive"><option>Knowledge</option><option>Understanding</option><option>Application</option><option>HOTS</option></select></div>
+        <div><label>Difficulty</label><select id="jmaDifficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:9px;margin-top:12px"><input id="jmaFixed" type="checkbox" style="width:auto"> <b>Mark as Fixed / Mandatory Question</b></label>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">2. Question Image / Diagram (optional)</h3>
+      <input id="jmaImage" type="file" accept="image/*" onchange="jnvstManualImagePreview(this)">
+      <div id="jmaImagePreview" class="small muted" style="margin-top:9px">No image selected. You can attach a diagram, figure or question image.</div>
+    </div>
+    <div id="jmaBilingualWrap">
+      <div class="card" style="border:2px solid #2563eb"><h3 style="margin-top:0">3. English Version</h3>${versionBlock('en','🇬🇧 English')}</div>
+      <div class="card" style="border:2px solid #16a34a"><h3 style="margin-top:0">4. Assamese Version</h3>${versionBlock('as','🇮🇳 Assamese')}</div>
+    </div>
+    <div id="jmaCommonWrap" style="display:none">
+      <div class="card" style="border:2px solid #7c3aed"><h3 style="margin-top:0">3. Common MAT Question</h3>${textField('jma_common_q','Question','',6,'Type the MAT question or use the image above...')}${optionFields('common','Common MAT')}<div class="grid"><div><label>Correct Answer</label><select id="jma_common_ans"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div>${textField('jma_common_ex','Explanation (optional)','',3,'Optional explanation...')}</div></div></div>
+    </div>
+    <div id="jmaPassageWrap" class="card" style="display:none;border:2px solid #f59e0b">
+      <h3 style="margin-top:0">Passage Information (for Passage parts)</h3>
+      <div class="notice">The same passage is linked to the question records. For bilingual questions, enter both language versions.</div>
+      <div class="grid"><div><label>Passage Title — English</label><input id="jmaPassageTitleEn"></div><div><label>Passage Title — Assamese</label><input id="jmaPassageTitleAs"></div><div><label>Question Order</label><input id="jmaQuestionOrder" type="number" min="1" step="1" value="1"></div></div>
+      ${textField('jmaPassageEn','Passage — English','',5,'Full English passage...')}
+      ${textField('jmaPassageAs','Passage — Assamese','',5,'Full Assamese passage...')}
+    </div>
+    <div class="actions" style="margin-top:16px"><button id="jmaSaveBtn" onclick="jnvstManualSaveQuestion(false)">💾 Save Question</button><button onclick="jnvstManualSaveQuestion(true)" class="secondary">💾 Save & Add Another</button><button class="secondary" onclick="jnvstQuestionBankHome()">Cancel</button></div>
+  </div>`);
+  jnvstManualModeChanged();
+  if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
+}
+function jnvstManualModeChanged(){
+  const mode=document.getElementById('jmaMode')?.value||'BILINGUAL';
+  const bilingual=document.getElementById('jmaBilingualWrap'),common=document.getElementById('jmaCommonWrap'),part=document.getElementById('jmaPart');
+  if(bilingual)bilingual.style.display=mode==='BILINGUAL'?'block':'none';
+  if(common)common.style.display=mode==='COMMON'?'block':'none';
+  if(part){
+    if(mode==='COMMON'){part.value='MAT';part.disabled=true;}else{part.disabled=false;if(part.value==='MAT')part.value='ARITHMETIC';}
+  }
+  const passage=(part?.value||'')==='EVS_PASSAGE'||(part?.value||'')==='LANGUAGE_PASSAGE';
+  const pw=document.getElementById('jmaPassageWrap');if(pw)pw.style.display=passage?'block':'none';
+}
+function jnvstManualImagePreview(input){
+  const box=document.getElementById('jmaImagePreview'),file=input?.files?.[0];if(!box)return;
+  if(!file){box.innerHTML='No image selected.';return;}
+  if(!file.type.startsWith('image/')){input.value='';box.innerHTML='';return alert('Please select an image file.');}
+  if(file.size>10*1024*1024){input.value='';box.innerHTML='';return alert('Image size must be 10 MB or less.');}
+  const url=URL.createObjectURL(file);box.innerHTML=`<img class="jnvst-editor-image" src="${esc(url)}" alt="Question image"><div class="small muted" style="margin-top:5px">${esc(file.name)}</div>`;
+}
+async function jnvstManualSaveQuestion(addAnother=false){
+  const subject=document.getElementById('jmaSubject')?.value||'',lesson=document.getElementById('jmaLesson')?.value||'',part=document.getElementById('jmaPart')?.value||'',mode=document.getElementById('jmaMode')?.value||'BILINGUAL';
+  const topic=document.getElementById('jmaTopic')?.value.trim()||'',variation=document.getElementById('jmaVariation')?.value.trim()||null;
+  const marks=Number(document.getElementById('jmaMarks')?.value||0),cognitive=document.getElementById('jmaCognitive')?.value||null,difficulty=document.getElementById('jmaDifficulty')?.value||null;
+  if(!subject)return alert('Please select a JNVST Subject.');
+  if(!lesson)return alert('Please select a Lesson / Sub-lesson.');
+  if(!part)return alert('Please select a Part.');
+  if(!topic)return alert('Please enter the Topic.');
+  if(!Number.isFinite(marks)||marks<=0)return alert('Marks must be greater than 0.');
+  const lessonRow=(jnvstSubjectLessons||[]).find(x=>x.id===lesson),section=(part==='MAT'?'MAT':part==='EVS_MCQ'||part==='EVS_PASSAGE'?'EVS':part==='LANGUAGE_PASSAGE'?'LANGUAGE':'ARITHMETIC');
+  if(!lessonRow)return alert('Selected Lesson / Sub-lesson could not be found.');
+  const getVersion=(prefix)=>({
+    question:jnvstNormalizeMathText(document.getElementById(`jma_${prefix}_q`)?.value||''),
+    a:jnvstNormalizeMathText(document.getElementById(`jma_${prefix}_A`)?.value||''),
+    b:jnvstNormalizeMathText(document.getElementById(`jma_${prefix}_B`)?.value||''),
+    c:jnvstNormalizeMathText(document.getElementById(`jma_${prefix}_C`)?.value||''),
+    d:jnvstNormalizeMathText(document.getElementById(`jma_${prefix}_D`)?.value||''),
+    answer:(document.getElementById(`jma_${prefix}_ans`)?.value||'A').toUpperCase(),
+    explanation:jnvstNormalizeMathText(document.getElementById(`jma_${prefix}_ex`)?.value||'')||null
+  });
+  let versions=[];
+  if(mode==='COMMON') versions=[{language:'COMMON',...getVersion('common')}];
+  else versions=[{language:'ENGLISH',...getVersion('en')},{language:'ASSAMESE',...getVersion('as')}];
+  for(const v of versions){
+    if(!v.question)return alert(`Please enter the ${v.language==='ENGLISH'?'English':v.language==='ASSAMESE'?'Assamese':'Common MAT'} question.`);
+    if(!v.a||!v.b||!v.c||!v.d)return alert(`Please enter all four options for the ${v.language==='ENGLISH'?'English':v.language==='ASSAMESE'?'Assamese':'Common MAT'} version.`);
+    if(!['A','B','C','D'].includes(v.answer))return alert('Correct Answer must be A, B, C or D.');
+  }
+  const passagePart=part==='EVS_PASSAGE'||part==='LANGUAGE_PASSAGE';
+  const passageTextEn=jnvstNormalizeMathText(document.getElementById('jmaPassageEn')?.value||'')||null,passageTextAs=jnvstNormalizeMathText(document.getElementById('jmaPassageAs')?.value||'')||null;
+  const passageId=passagePart?crypto.randomUUID():null,questionOrder=passagePart?Math.max(1,Number(document.getElementById('jmaQuestionOrder')?.value||1)):null;
+  if(passagePart && mode==='BILINGUAL' && (!passageTextEn||!passageTextAs))return alert('For a bilingual Passage question, enter both the English and Assamese passage text.');
+  if(passagePart && mode==='COMMON' && !passageTextEn)return alert('Enter the passage text.');
+  const duplicateKey=(v)=>[subject,lesson,v.language,v.question,v.a,v.b,v.c,v.d].map(x=>String(x??'').trim().toLowerCase()).join('¦');
+  const saveBtn=document.getElementById('jmaSaveBtn');if(saveBtn)saveBtn.disabled=true;
+  try{
+    const {data:old,error:oe}=await sb.from('mock_question_bank').select('id,question_text,option_a,option_b,option_c,option_d,subject_id,lesson_id,language').eq('teacher_id',current.id).eq('active',true);
+    if(oe)throw oe;
+    const oldKeys=new Set((old||[]).map(q=>[q.subject_id,q.lesson_id,q.language,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d].map(x=>String(x??'').trim().toLowerCase()).join('¦')));
+    const duplicates=versions.filter(v=>oldKeys.has(duplicateKey(v)));
+    if(duplicates.length)return alert('This question already exists in the JNVST Question Bank for '+duplicates.map(v=>v.language).join(' and ')+'.');
+    let imageUrl=null;const file=document.getElementById('jmaImage')?.files?.[0];
+    if(file)imageUrl=await uploadMockFile(file,`${current.id}/jnvst-manual/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);
+    const pairId=mode==='BILINGUAL'?crypto.randomUUID():null;
+    const titleEn=document.getElementById('jmaPassageTitleEn')?.value.trim()||null,titleAs=document.getElementById('jmaPassageTitleAs')?.value.trim()||null;
+    const rows=versions.map(v=>({
+      teacher_id:current.id,section_code:section,part_code:part,question_text:v.question,option_a:v.a,option_b:v.b,option_c:v.c,option_d:v.d,correct_option:v.answer,
+      explanation:v.explanation,marks,cognitive_level:cognitive,difficulty,active:true,subject_id:subject,lesson_id:lesson,lesson_code:lessonRow.lesson_code||null,language:v.language,
+      topic,variation_group:variation,is_fixed:!!document.getElementById('jmaFixed')?.checked,question_type:document.getElementById('jmaType')?.value||'MCQ',image_url:imageUrl,
+      source_type:'JNVST_BULK',language_pair_id:pairId,passage_id:passageId,passage_title:v.language==='ASSAMESE'?titleAs:titleEn,passage_text:v.language==='ASSAMESE'?passageTextAs:passageTextEn,question_order:questionOrder
+    }));
+    const {error}=await sb.from('mock_question_bank').insert(rows);if(error)throw error;
+    alert(mode==='BILINGUAL'?'JNVST bilingual question created successfully. English and Assamese versions are linked.':'JNVST MAT question created successfully.');
+    if(addAnother){
+      const keep={subject,lesson,part,topic,variation,marks,cognitive,difficulty};
+      jnvstManualAddQuestion();
+      setTimeout(()=>{
+        const set=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val??''};
+        set('jmaSubject',keep.subject);document.getElementById('jmaLesson').innerHTML=jnvstQbLessonOptions(keep.subject,keep.lesson);set('jmaLesson',keep.lesson);set('jmaPart',keep.part);set('jmaTopic',keep.topic);set('jmaVariation',keep.variation||'');set('jmaMarks',keep.marks);set('jmaCognitive',keep.cognitive);set('jmaDifficulty',keep.difficulty);jnvstManualModeChanged();
+      },50);
+    }else jnvstQuestionBankHome();
+  }catch(e){alert('Could not create JNVST question: '+(e.message||e));}
+  finally{if(saveBtn)saveBtn.disabled=false;}
+}
+
+function jnvstQbEdit(id){
  const q=jnvstQbCache.find(x=>x.id===id);
  if(!q)return alert('Question not found.');
  jnvstQbEditingId=id;
