@@ -1133,6 +1133,95 @@ function qpBuildSetVariants(masterRows,count){
   const codes=qpSetCodes(count);
   return codes.map((code,index)=>({setCode:code,rows:qpRandomizeMasterRows(masterRows,index).map(q=>({...q,_masterNumber:(masterRows.findIndex(m=>m.id===q.id)+1)}))}));
 }
+function qpBuildCommonHtml(rows){
+  const out=[];let current='';
+  for(const q of rows){if(q._partHeading!==current){current=q._partHeading;out.push(`<div class="jnvst-section-head" style="margin-top:16px">${esc(current)}</div>`);}out.push(qpHtmlQuestion(q));}
+  return out.join('');
+}
+function qpHtmlQuestion(q,variant='default'){
+  const hasImage=!!qpNorm(q.image_url);
+  const questionText=(q.question_text && String(q.question_text).trim()!=='[IMAGE QUESTION]')?String(q.question_text).trim():'';
+  // MAT image already contains the question figure and all answer figures/options.
+  // Do not append database option text beneath the image.
+  const isMat=String(q.section_code||'').toUpperCase()==='MAT' || String(q.part_code||'').toUpperCase().startsWith('MAT_') || variant==='mat';
+  const embeddedImageOptions=hasImage && isMat;
+  const opts=embeddedImageOptions?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
+  const imageClass=variant==='arithmetic'?'jnvst-question-image arithmetic-question-image':'jnvst-question-image';
+  return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
+}
+function qpBuildArithmeticHtml(rows){
+  // Render 20-question blocks as two-column content that flows naturally with the header.
+  // Do not force a page break before the first block; the browser may fragment the block across pages as needed.
+  const pages=[];
+  const totalPages=Math.ceil(rows.length/20);
+  for(let start=0;start<rows.length;start+=20){
+    const chunk=rows.slice(start,start+20);
+    const left=chunk.slice(0,10).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
+    const right=chunk.slice(10,20).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
+    const isLast=start+20>=rows.length;
+    pages.push(`<div class="qp-arithmetic-page${isLast?' qp-content-no-break':''}">
+      <div class="qp-arithmetic-columns">
+        <div class="qp-arithmetic-column">${left}</div>
+        <div class="qp-arithmetic-column">${right}</div>
+      </div>
+    </div>`);
+  }
+  return pages.join('');
+}
+function qpBuildEVSHtml(rows){
+  // EVS MCQs must remain in two columns, but the column container itself must
+  // be fragmentable by the print engine. A CSS grid containing all 15 MCQs
+  // was treated as one unbreakable block, so the whole EVS section moved to
+  // page 2 and left page 1 with only the header. Use CSS multi-columns so
+  // questions can flow from page 1 to page 2 naturally.
+  const mcqs=(rows||[]).filter(q=>!qpIsPassage(q));
+  const passageRows=(rows||[]).filter(q=>qpIsPassage(q));
+  const pages=[];
+  if(mcqs.length){
+    pages.push(`<div class="qp-evs-mcq-page"><div class="qp-evs-mcq-flow">${mcqs.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('')}</div></div>`);
+  }
+  const groups=qpPassageGroups(passageRows);
+  groups.forEach((g,index)=>{
+    const title=qpNorm(g.title)||'Passage';
+    const text=g.text||'';
+    const qs=(g.questions||[]);
+    const leftCount=Math.ceil(qs.length/2);
+    const left=qs.slice(0,leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
+    const right=qs.slice(leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
+    const isLast=index===groups.length-1;
+    pages.push(`<div class="qp-evs-passage-wrap${index>0?' qp-evs-passage-next':''}${isLast?' qp-content-no-break':''}">
+      <div class="qp-evs-passage-layout">
+        <div class="qp-evs-passage-text">
+          <div class="qp-passage-number">Passage ${index+1}</div>
+          <div class="qp-passage-title">${esc(title)}</div>
+          <div>${jnvstPdfEscape(text)}</div>
+        </div>
+        <div class="qp-evs-passage-question-columns">
+          <div class="qp-evs-passage-question-column">${left}</div>
+          <div class="qp-evs-passage-question-column">${right}</div>
+        </div>
+      </div>
+    </div>`);
+  });
+  return pages.join('');
+}
+function qpBuildPassageHtml(rows){
+  const out=[];
+  const seen=new Set();
+  let passageNumber=0;
+  for(const q of rows){
+    const pid=q._passageGroup||q.passage_id;
+    if(pid&&!seen.has(pid)){
+      seen.add(pid);
+      passageNumber++;
+      const title=qpNorm(q._passageTitle||q.passage_title)||'Passage';
+      const text=q._passageText||q.passage_text||'';
+      out.push(`<div class="jnvst-passage"><div class="qp-passage-number">Passage ${passageNumber}</div><div class="qp-passage-title">${esc(title)}</div><div>${jnvstPdfEscape(text)}</div></div>`);
+    }
+    out.push(qpHtmlQuestion(q));
+  }
+  return out.join('');
+}
 function qpBuildSetHtml(rows,setCode,serial,title,includeAnswers){
   const subject=qpSubject();
   const answerBlock=includeAnswers?`<div class="jnvst-page"><div class="jnvst-section-head">ANSWER KEY — TEACHER COPY — SET ${esc(setCode)}</div><table class="jnvst-marks-table"><thead><tr><th>Q.No.</th><th>Answer</th><th>Topic</th></tr></thead><tbody>${rows.map(q=>`<tr><td>${q._number}</td><td><b>${esc(q.correct_option||'')}</b></td><td>${esc(qpTopicLabel(q))}</td></tr>`).join('')}</tbody></table></div>`:'';
@@ -1167,7 +1256,7 @@ function downloadSelectedAnswerKeyExcel(){
       baseSerial=qpGetSetSerial(JSON.stringify({subject:qpSubject(),language:qpCurrentLanguage(),mode:qpState.mode,selected:[...qpState.selected].sort(),counts:qpState.commonCounts,sets:count}));
       qpState.lastSetVariants=variants;qpState.multiSetSerial=baseSerial;
     }
-    const wb=qpBuildAnswerWorkbook(variants,title,baseSerial);
+    const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const wb=qpBuildAnswerWorkbook(variants,title,baseSerial);
     XLSX.writeFile(wb,`answer-key-${baseSerial}.xlsx`);
   }catch(e){alert('Could not create Answer Key Excel: '+(e.message||e));}
 }
