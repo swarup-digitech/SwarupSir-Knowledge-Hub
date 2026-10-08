@@ -127,6 +127,8 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Arithmetic Question Paper: fixed two-column JNVST-style layout */
 .qp-arithmetic-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-arithmetic-page:last-child{break-after:auto;page-break-after:auto}
+.qp-arithmetic-chunk{break-inside:auto;page-break-inside:auto}
+.qp-arithmetic-chunk:not(:last-child){break-after:page;page-break-after:always}
 .qp-arithmetic-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0;border-top:1px solid #999;border-bottom:1px solid #999;break-inside:auto;page-break-inside:auto;min-height:0;overflow:visible;align-items:start}
 .qp-arithmetic-column{min-width:0;padding:0 5mm}
 .qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777}
@@ -136,7 +138,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
 .qp-arithmetic-columns .arithmetic-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
-@media print{.qp-arithmetic-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-arithmetic-columns{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;column-gap:0!important;min-height:0!important;overflow:visible!important;break-inside:auto!important;page-break-inside:auto!important}.qp-arithmetic-column{min-width:0!important;padding:0 5mm!important}.qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
+@media print{.qp-arithmetic-page{break-before:auto!important;page-break-before:auto!important;break-after:auto!important;page-break-after:auto!important}.qp-arithmetic-chunk:not(:last-child){break-after:page!important;page-break-after:always!important}.qp-arithmetic-columns{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;column-gap:0!important;min-height:0!important;overflow:visible!important;break-inside:auto!important;page-break-inside:auto!important}.qp-arithmetic-column{min-width:0!important;padding:0 5mm!important}.qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
 /* EVS MCQ Question Paper: two-column layout for each 15-MCQ block */
 .qp-evs-mcq-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-evs-mcq-page:last-child{break-after:auto;page-break-after:auto}
@@ -1333,7 +1335,25 @@ function qpHtmlQuestion(q,variant='default'){
   const imageClass=variant==='arithmetic'?'jnvst-question-image arithmetic-question-image':'jnvst-question-image';
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
-function qpBuildArithmeticHtml(rows){const list=Array.isArray(rows)?rows:[];const split=Math.ceil(list.length/2);const left=list.slice(0,split);const right=list.slice(split);const col=(items)=>items.map(q=>qpHtmlQuestion(q,'arithmetic')).join('');return `<div class="qp-arithmetic-page"><div class="qp-arithmetic-columns"><div class="qp-arithmetic-column">${col(left)}</div><div class="qp-arithmetic-column">${col(right)}</div></div></div>`;}
+function qpBuildArithmeticHtml(rows){
+  const list=Array.isArray(rows)?rows:[];
+  // A 20-question Arithmetic paper is already proven to fit one A4 page.
+  // For 40/60/... questions, never place all questions inside one large CSS
+  // grid: Chromium can treat that grid as an unbreakable block and move the
+  // whole question area to page 2, leaving page 1 with only the header.
+  // Instead, build page-sized 20-question chunks. Each chunk uses the same
+  // two-column layout as the working 20-question paper.
+  const chunks=[];
+  for(let start=0;start<list.length;start+=20){
+    const chunk=list.slice(start,start+20);
+    const split=Math.ceil(chunk.length/2);
+    const left=chunk.slice(0,split), right=chunk.slice(split);
+    const col=items=>items.map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
+    const isLast=start+20>=list.length;
+    chunks.push(`<div class="qp-arithmetic-page qp-arithmetic-chunk"${isLast?'':' style="break-after:page;page-break-after:always"'}><div class="qp-arithmetic-columns"><div class="qp-arithmetic-column">${col(left)}</div><div class="qp-arithmetic-column">${col(right)}</div></div></div>`);
+  }
+  return chunks.join('');
+}
 
 function qpOrderEVSRows(rows){
   const source=(rows||[]).map(q=>({...q}));
