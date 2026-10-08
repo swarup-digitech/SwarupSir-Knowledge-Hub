@@ -127,7 +127,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Arithmetic Question Paper: fixed two-column JNVST-style layout */
 .qp-arithmetic-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-arithmetic-page:last-child{break-after:auto;page-break-after:auto}
-.qp-arithmetic-columns{column-count:2;column-gap:0;column-rule:1px solid #777;border-top:1px solid #999;border-bottom:1px solid #999;column-fill:auto;break-inside:auto;page-break-inside:auto}
+.qp-arithmetic-columns{column-count:2;column-gap:0;column-rule:1px solid #777;border-top:1px solid #999;border-bottom:1px solid #999;column-fill:auto;break-inside:auto;page-break-inside:auto;widows:2;orphans:2}
 .qp-arithmetic-columns .arithmetic-question{padding:0 5mm;break-inside:avoid;page-break-inside:avoid;break-before:auto;page-break-before:auto;margin-bottom:6px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qrow{gap:4px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qnum{min-width:22px}
@@ -1150,23 +1150,13 @@ function qpHtmlQuestion(q,variant='default'){
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
 function qpBuildArithmeticHtml(rows){
-  // Render 20-question blocks as two-column content that flows naturally with the header.
-  // Do not force a page break before the first block; the browser may fragment the block across pages as needed.
-  const pages=[];
-  const totalPages=Math.ceil(rows.length/20);
-  for(let start=0;start<rows.length;start+=20){
-    const chunk=rows.slice(start,start+20);
-    const left=chunk.slice(0,10).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
-    const right=chunk.slice(10,20).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
-    const isLast=start+20>=rows.length;
-    pages.push(`<div class="qp-arithmetic-page${isLast?' qp-content-no-break':''}">
-      <div class="qp-arithmetic-columns">
-        <div class="qp-arithmetic-column">${left}</div>
-        <div class="qp-arithmetic-column">${right}</div>
-      </div>
-    </div>`);
-  }
-  return pages.join('');
+  // Keep all Arithmetic questions in ONE continuous two-column flow.
+  // The previous implementation split every 20 questions into fixed left/right
+  // columns. When a question (especially an image question) was taller than the
+  // remaining space, the browser fragmented the fixed column and left large
+  // unused areas. A single multi-column flow lets the print engine naturally
+  // move questions between columns and pages.
+  return `<div class="qp-arithmetic-page"><div class="qp-arithmetic-columns">${(rows||[]).map(q=>qpHtmlQuestion(q,'arithmetic')).join('')}</div></div>`;
 }
 function qpBuildEVSHtml(rows){
   // EVS MCQs must remain in two columns, but the column container itself must
