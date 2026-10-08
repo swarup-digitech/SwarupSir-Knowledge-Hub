@@ -127,14 +127,14 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Arithmetic Question Paper: fixed two-column JNVST-style layout */
 .qp-arithmetic-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-arithmetic-page:last-child{break-after:auto;page-break-after:auto}
-.qp-arithmetic-columns{column-count:2;column-gap:0;column-rule:1px solid #777;border-top:1px solid #999;border-bottom:1px solid #999;column-fill:auto;break-inside:auto;page-break-inside:auto}
+.qp-arithmetic-columns{column-count:2;column-gap:0;column-rule:1px solid #777;border-top:1px solid #999;border-bottom:1px solid #999;column-fill:auto;break-inside:auto;page-break-inside:auto;height:220mm;min-height:0;overflow:visible}
 .qp-arithmetic-columns .arithmetic-question{padding:0 5mm;break-inside:avoid;page-break-inside:avoid;break-before:auto;page-break-before:auto;margin-bottom:6px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qrow{gap:4px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qnum{min-width:22px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
 .qp-arithmetic-columns .arithmetic-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
-@media print{.qp-arithmetic-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-arithmetic-columns{display:block!important;column-count:2!important;column-gap:0!important;column-rule:1px solid #777!important;column-fill:auto!important;break-inside:auto!important;page-break-inside:auto!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
+@media print{.qp-arithmetic-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-arithmetic-columns{display:block!important;column-count:2!important;column-gap:0!important;column-rule:1px solid #777!important;column-fill:auto!important;height:220mm!important;min-height:0!important;overflow:visible!important;break-inside:auto!important;page-break-inside:auto!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
 /* EVS MCQ Question Paper: two-column layout for each 15-MCQ block */
 .qp-evs-mcq-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-evs-mcq-page:last-child{break-after:auto;page-break-after:auto}
@@ -184,6 +184,10 @@ html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!importan
 .jnvst-paper>.qp-paper-page:first-child{break-before:auto!important;page-break-before:auto!important;margin-top:0!important}
 .qp-content-no-break{break-after:auto!important;page-break-after:auto!important}
 @media print{
+  /* Critical: keep the first question-flow block fragmentable so the browser
+     cannot move the entire two-column question container to page 2. */
+  .qp-paper-page .qp-arithmetic-page{break-before:auto!important;page-break-before:auto!important;break-after:auto!important;page-break-after:auto!important}
+  .qp-paper-page .qp-arithmetic-columns{height:220mm!important;min-height:0!important;overflow:visible!important;break-before:auto!important;page-break-before:auto!important;break-inside:auto!important;page-break-inside:auto!important}
   html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!important;width:210mm!important;min-height:297mm!important;overflow:visible!important}
   .jnvst-paper{display:block!important;margin:0!important;padding:0!important}
   .qp-paper-page{width:210mm!important;min-height:0!important;margin:0!important;padding:8mm 12mm 10mm!important;box-sizing:border-box!important;break-before:auto!important;page-break-before:auto!important;break-after:auto!important;page-break-after:auto!important}
