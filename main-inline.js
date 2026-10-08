@@ -723,7 +723,7 @@ function qpPassageGroups(rows){
   return [...map.entries()].map(([id,qs])=>({id,questions:qs.sort((a,b)=>(Number(a.question_order)||0)-(Number(b.question_order)||0)),title:qpNorm(qs[0]?.passage_title)||`Passage ${id}`,text:qpNorm(qs[0]?.passage_text)}));
 }
 function qpLangMatches(q){const want=qpCurrentLanguage();const lang=qpNorm(q.language).toUpperCase();return want==='COMMON'?lang==='COMMON'||!lang:lang===want;}
-function qpAvailableTopics(){const m=new Map();for(const q of qpState.bank){if(qpIsPassage(q)||!qpLangMatches(q))continue;const key=qpTopicLabel(q);if(!m.has(key))m.set(key,0);m.set(key,m.get(key)+1)}return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]));}
+function qpAvailableTopics(){const subject=qpSubject();const m=new Map();for(const q of qpState.bank){if(qpIsPassage(q)||!qpLangMatches(q)||!qpQuestionBelongsToSubject(q,subject))continue;const key=qpTopicLabel(q);if(!m.has(key))m.set(key,0);m.set(key,m.get(key)+1)}return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]));}
 function qpRenderTopicRows(){const wrap=document.getElementById('qpTopicList');if(!wrap)return;const search=qpNorm(document.getElementById('qpTopicSearch')?.value).toLowerCase();const topics=qpAvailableTopics().filter(([t])=>!search||t.toLowerCase().includes(search));wrap.innerHTML=topics.length?topics.map(([topic,count])=>`<label class="assignment" style="display:flex;align-items:center;gap:10px;margin:6px 0;cursor:pointer"><input type="checkbox" value="${esc(topic)}" ${qpState.selectedTopics?.has(topic)?'checked':''} onchange="qpTopicChanged(this)"><span><b>${esc(topic)}</b><span class="muted small"> — ${count} question(s)</span></span></label>`).join(''):'<div class="muted">No topics found.</div>';}
 function qpTopicChanged(cb){qpState.selectedTopics=qpState.selectedTopics||new Set();cb.checked?qpState.selectedTopics.add(cb.value):qpState.selectedTopics.delete(cb.value);if(qpState.selectedTopics.size){const allowed=new Set(qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpState.selectedTopics.has(qpTopicLabel(q))).map(q=>q.id));[...qpState.selected].forEach(id=>{if(!allowed.has(id))qpState.selected.delete(id);});}qpState.lastRows=null;qpState.lastSignature='';qpRefreshQuestionPool();qpRefreshSubjectSummary();}
 function qpRefreshQuestionPool(){
@@ -731,10 +731,7 @@ function qpRefreshQuestionPool(){
   const subject=qpSubject();
   const pool=qpState.bank.filter(q=>{
     if(qpIsPassage(q)||!qpLangMatches(q)) return false;
-    const section=String(q.section_code||'').toUpperCase();
-    if(subject==='ARITHMETIC' && section!=='ARITHMETIC') return false;
-    if(subject==='EVS' && section!=='EVS') return false;
-    if(subject==='MAT' && section!=='MAT') return false;
+    if(!qpQuestionBelongsToSubject(q,subject)) return false;
     return chosen.size?chosen.has(qpTopicLabel(q)):true;
   });
   const search=qpNorm(document.getElementById('qpQuestionSearch')?.value).toLowerCase();const filtered=pool.filter(q=>!search||[q.question_text,q.part_code,qpTopicLabel(q)].some(v=>qpNorm(v).toLowerCase().includes(search)));
@@ -781,12 +778,12 @@ function qpRenderEVSPanel(){
 function qpEvsCountChanged(){let n=Math.max(1,Number(document.getElementById('qpEvsSetCount')?.value||1));document.getElementById('qpEvsSetCount').value=n;qpState.lastRows=null;qpState.lastSignature='';qpRefreshEVSPools();qpRefreshSubjectSummary();}
 function qpRefreshEVSPools(){
   const search=qpNorm(document.getElementById('qpQuestionSearch')?.value).toLowerCase();
-  const mcqs=qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase()!=='MAT_PATTERN'&&String(q.section_code||'').toUpperCase()==='EVS').filter(q=>!search||[q.question_text,q.topic,q.part_code].some(v=>qpNorm(v).toLowerCase().includes(search)));
+  const mcqs=qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionBelongsToSubject(q,'EVS')).filter(q=>!search||[q.question_text,q.topic,q.part_code].some(v=>qpNorm(v).toLowerCase().includes(search)));
   const ql=document.getElementById('qpEvsQuestionList');if(ql)ql.innerHTML=mcqs.length?mcqs.slice(0,400).map(q=>`<label class="assignment" style="display:flex;gap:8px;align-items:flex-start;margin:5px 0;padding:7px;border:1px solid #e2e8f0;border-radius:8px"><input type="checkbox" style="width:auto;margin-top:4px" ${qpState.selected.has(q.id)?'checked':''} onchange="qpMandatoryChanged('${q.id}',this.checked)"><span style="flex:1;min-width:0">${q.image_url?`<img src="${esc(q.image_url)}" alt="Question preview" loading="lazy" onclick="event.preventDefault();openMockQuestionImage('${esc(q.image_url)}','Question preview')" style="width:110px;height:75px;object-fit:contain;border:1px solid #cbd5e1;border-radius:6px;padding:2px;float:right;margin-left:8px;cursor:zoom-in;background:#fff">`:''}${teacherQuestionPreview(q,{width:'110px',height:'75px'})}<span class="muted small"> — ${esc(q.topic||'EVS')} · ${esc(q.id)}</span></span></label>`).join(''):'<div class="muted">No EVS MCQs found.</div>';
   const pp=document.getElementById('qpPassageList');if(pp){const groups=qpPassageGroups(qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase()==='EVS_PASSAGE').filter(g=>g.questions.length===5));pp.innerHTML=groups.length?groups.map(g=>`<label class="assignment" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" ${g.questions.some(q=>qpState.selected.has(q.id))?'checked':''} onchange="qpToggleMandatoryPassage('${g.id}',this.checked)"><span><b>${esc(g.title)}</b><span class="muted small"> — ${esc(g.id)} · 5 questions</span></span></label>`).join(''):'<div class="muted">No complete EVS passage sets found.</div>';}
   const sets=Number(document.getElementById('qpEvsSetCount')?.value||1);const direct=15*sets;const mandDirect=[...qpState.selected].filter(id=>{const q=qpState.bank.find(x=>x.id===id);return q&&!qpIsPassage(q)&&qpLangMatches(q)&&String(q.section_code||'').toUpperCase()==='EVS'}).length;const groups=qpPassageGroups(qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase()==='EVS_PASSAGE').filter(g=>g.questions.length===5));const mandPass=[...new Set([...qpState.selected].map(id=>qpState.bank.find(x=>x.id===id)?.passage_id).filter(Boolean))];const sum=document.getElementById('qpEvsSummary');if(sum)sum.innerHTML=`Required: <b>${direct} EVS MCQs + ${sets} passage set(s)</b>. Mandatory: <b>${mandDirect} MCQs + ${mandPass.length} passage(s)</b>. Random: <b>${Math.max(0,direct-mandDirect)} MCQs + ${Math.max(0,sets-mandPass.length)} passage(s)</b>. Available passages: ${groups.length}`;
 }
-function qpSelectVisibleEVSMCQs(){const search=qpNorm(document.getElementById('qpQuestionSearch')?.value).toLowerCase();qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&String(q.section_code||'').toUpperCase()==='EVS').filter(q=>!search||[q.question_text,q.topic,q.part_code].some(v=>qpNorm(v).toLowerCase().includes(search))).slice(0,400).forEach(q=>qpState.selected.add(q.id));qpState.lastRows=null;qpState.lastSignature='';qpRefreshEVSPools();qpRefreshSubjectSummary();}
+function qpSelectVisibleEVSMCQs(){const search=qpNorm(document.getElementById('qpQuestionSearch')?.value).toLowerCase();qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionBelongsToSubject(q,'EVS')).filter(q=>!search||[q.question_text,q.topic,q.part_code].some(v=>qpNorm(v).toLowerCase().includes(search))).slice(0,400).forEach(q=>qpState.selected.add(q.id));qpState.lastRows=null;qpState.lastSignature='';qpRefreshEVSPools();qpRefreshSubjectSummary();}
 function qpRenderLanguagePanel(){
   const p=document.getElementById('qpPassagesPanel');if(!p)return;
   p.innerHTML=`<h2>1. Language Question Paper</h2><p class="muted">Each Language passage set contains <b>1 passage + exactly 5 linked questions</b>. Select mandatory questions; their complete passage set is automatically included. Remaining passage sets are random.</p><div class="grid"><div><label>Number of Passage Sets</label><input id="qpLanguageSetCount" type="number" min="1" value="4" oninput="qpLanguageCountChanged()"></div><div><label>Search Question / Passage</label><input id="qpQuestionSearch" placeholder="Search" oninput="qpRefreshLanguagePool()"></div></div><div id="qpLanguageSummary" class="notice small" style="margin-top:10px"></div><div class="actions"><button class="secondary" onclick="qpSelectVisibleLanguageQuestions()">☑ Mark Visible Questions Mandatory</button><button class="secondary" onclick="qpClearQuestions()">Clear Mandatory</button></div><h3>Language Questions</h3><div id="qpLanguageQuestionList" style="max-height:430px;overflow:auto"></div>`;
@@ -817,7 +814,7 @@ async function questionPaperGeneratorPage(){
     <div id="qpSubjectSummary" class="success" style="margin-bottom:12px">Select a subject.</div>
     <div id="qpCommonPanel"></div><div id="qpQuestionsPanel" class="card" style="display:none"></div><div id="qpPassagesPanel" class="card" style="display:none"></div><div id="qpSpecialPanel"></div>
     <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">🗂 Previously Generated Question Papers</h2><p class="muted small" style="margin:6px 0 0">Generated papers and their answer keys are saved with the exact selected questions and generation date/time.</p></div><button class="secondary" onclick="loadGeneratedQuestionPaperHistory()">↻ Refresh</button></div><div id="qpGeneratedHistory" style="margin-top:12px"><p class="muted">Loading…</p></div></div>
-    <div class="card"><div id="qpSummary" class="success">The generated paper will keep mandatory questions and randomly fill the remaining slots.</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download MAT Answer & Metadata Excel</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
+    <div class="card"><div id="qpSummary" class="success">The generated paper will keep mandatory questions and randomly fill the remaining slots.</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="runQuestionPaperQualityControl()" class="secondary">🛡️ Paper Quality Control</button><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download MAT Answer & Metadata Excel</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
   </div>`);
   qpRenderGeneratorMode();
   loadGeneratedQuestionPaperHistory();
@@ -841,7 +838,7 @@ function qpPrepareRows(){
   }
   if(subject==='ARITHMETIC'){
     let wanted=Number(document.getElementById('qpQuestionCount')?.value||0);if(wanted<20||wanted%20!==0)throw new Error('Arithmetic requires 20 questions or a multiple of 20.');
-    const pool=qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&String(q.section_code||'').toUpperCase()==='ARITHMETIC');const mandatory=pool.filter(q=>qpState.selected.has(q.id));if(mandatory.length>wanted)throw new Error(`You marked ${mandatory.length} mandatory Arithmetic questions, but only ${wanted} are required.`);if(pool.length<wanted)throw new Error(`Only ${pool.length} Arithmetic questions are available for ${wanted} requested.`);let randomPool=pool.filter(q=>!qpState.selected.has(q.id));randomPool=qpShuffle(randomPool);let chosen=[...mandatory,...randomPool.slice(0,wanted-mandatory.length)];if(document.getElementById('qpOrder')?.value==='random')chosen=qpShuffle(chosen);else chosen.sort((a,b)=>(Number(a.question_order)||0)-(Number(b.question_order)||0));chosen=qpAssignNumbers(chosen).map(q=>({...q,_selectionType:qpState.selected.has(q.id)?'MANDATORY':'RANDOM'}));const signature=JSON.stringify({subject,wanted,mandatory:[...qpState.selected].sort(),order:document.getElementById('qpOrder')?.value||'random',setCode:document.getElementById('qpSetCode')?.value||qpState.setCode||'A'});qpState.lastSerial=qpGetSetSerial(signature);qpState.lastRows=chosen.map(x=>({...x}));qpState.lastSignature=signature;return chosen;
+    const pool=qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionBelongsToSubject(q,'ARITHMETIC'));const mandatory=pool.filter(q=>qpState.selected.has(q.id));if(mandatory.length>wanted)throw new Error(`You marked ${mandatory.length} mandatory Arithmetic questions, but only ${wanted} are required.`);if(pool.length<wanted)throw new Error(`Only ${pool.length} Arithmetic questions are available for ${wanted} requested.`);let randomPool=pool.filter(q=>!qpState.selected.has(q.id));randomPool=qpShuffle(randomPool);let chosen=[...mandatory,...randomPool.slice(0,wanted-mandatory.length)];if(document.getElementById('qpOrder')?.value==='random')chosen=qpShuffle(chosen);else chosen.sort((a,b)=>(Number(a.question_order)||0)-(Number(b.question_order)||0));chosen=qpAssignNumbers(chosen).map(q=>({...q,_selectionType:qpState.selected.has(q.id)?'MANDATORY':'RANDOM'}));const signature=JSON.stringify({subject,wanted,mandatory:[...qpState.selected].sort(),order:document.getElementById('qpOrder')?.value||'random',setCode:document.getElementById('qpSetCode')?.value||qpState.setCode||'A'});qpState.lastSerial=qpGetSetSerial(signature);qpState.lastRows=chosen.map(x=>({...x}));qpState.lastSignature=signature;return chosen;
   }
   if(subject==='EVS'){
     const sets=Math.max(1,Number(document.getElementById('qpEvsSetCount')?.value||1)),wantedMcq=15*sets;const mcqPool=qpState.bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionBelongsToSubject(q,'EVS'));const mandatoryMcq=mcqPool.filter(q=>qpState.selected.has(q.id));const groups=qpPassageGroups(qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase()==='EVS_PASSAGE')).filter(g=>g.questions.length===5);const mandatoryPassIds=[...new Set([...qpState.selected].map(id=>qpState.bank.find(x=>x.id===id)?.passage_id).filter(Boolean))];if(mandatoryMcq.length>wantedMcq)throw new Error(`You marked ${mandatoryMcq.length} mandatory EVS MCQs, but only ${wantedMcq} are required.`);if(mandatoryPassIds.length>sets)throw new Error(`You marked ${mandatoryPassIds.length} mandatory EVS passage sets, but only ${sets} are required.`);if(mcqPool.length<wantedMcq)throw new Error(`Only ${mcqPool.length} EVS MCQs are available for ${wantedMcq} required.`);if(groups.length<sets)throw new Error(`Only ${groups.length} complete EVS passage sets are available for ${sets} required.`);let randomMcq=qpShuffle(mcqPool.filter(q=>!qpState.selected.has(q.id))).slice(0,wantedMcq-mandatoryMcq.length);let passMap=new Map(groups.map(g=>[g.id,g]));let randomGroups=qpShuffle(groups.filter(g=>!mandatoryPassIds.includes(g.id))).slice(0,sets-mandatoryPassIds.length);let finalMcq=[...mandatoryMcq,...randomMcq];if(document.getElementById('qpOrder')?.value==='random')finalMcq=qpShuffle(finalMcq);else finalMcq.sort((a,b)=>(Number(a.question_order)||0)-(Number(b.question_order)||0));let finalGroups=[...mandatoryPassIds.map(id=>passMap.get(id)).filter(Boolean),...randomGroups];if(document.getElementById('qpOrder')?.value==='random')finalGroups=qpShuffle(finalGroups);const rows=[...finalMcq.map(q=>({...q,_selectionType:qpState.selected.has(q.id)?'MANDATORY':'RANDOM'}))];finalGroups.forEach(g=>g.questions.forEach(q=>rows.push({...q,_passageGroup:g.id,_passageTitle:g.title,_passageText:g.text,_selectionType:qpState.selected.has(q.id)?'MANDATORY':'RANDOM'})));const numbered=qpAssignNumbers(rows);const signature=JSON.stringify({subject,sets,mandatory:[...qpState.selected].sort(),order:document.getElementById('qpOrder')?.value||'random',setCode:document.getElementById('qpSetCode')?.value||qpState.setCode||'A'});qpState.lastSerial=qpGetSetSerial(signature);qpState.lastRows=numbered.map(x=>({...x}));qpState.lastSignature=signature;return numbered;
@@ -851,6 +848,32 @@ function qpPrepareRows(){
   }
   throw new Error('Unsupported subject.');
 }
+function qpPaperQualityControl(rows){
+  const errors=[],warnings=[];const subject=qpSubject();const seen=new Set();
+  (rows||[]).forEach((q,i)=>{
+    const expected=i+1;if(Number(q._number)!==expected)errors.push(`Serial number error at position ${i+1}: found ${q._number}, expected ${expected}.`);
+    if(!q.id)errors.push(`Question ${expected}: missing Question ID.`);else if(seen.has(q.id))errors.push(`Question ${expected}: duplicate Question ID ${q.id}.`);else seen.add(q.id);
+    const hasText=qpNorm(q.question_text)&&!['[IMAGE QUESTION]','[PDF/IMAGE QUESTION]'].includes(qpNorm(q.question_text).toUpperCase());
+    if(!hasText&&!qpNorm(q.image_url))errors.push(`Question ${expected}: no question text or image.`);
+    if(!['A','B','C','D'].includes(String(q.correct_option||'').toUpperCase()))errors.push(`Question ${expected}: invalid correct option.`);
+    if(subject==='EVS'&&!qpQuestionBelongsToSubject(q,'EVS'))errors.push(`Question ${expected}: non-EVS question detected in EVS paper.`);
+    if(subject==='ARITHMETIC'&&!qpQuestionBelongsToSubject(q,'ARITHMETIC'))errors.push(`Question ${expected}: non-Arithmetic question detected in Arithmetic paper.`);
+  });
+  if(subject==='MAT'){
+    const counts=new Map(QP_COMMON_PARTS.map(p=>[p.part,0]));(rows||[]).forEach(q=>counts.set(String(q.part_code||'').toUpperCase(),(counts.get(String(q.part_code||'').toUpperCase())||0)+1));
+    QP_COMMON_PARTS.forEach(p=>{const n=counts.get(p.part)||0;if(n<4||n%4!==0)errors.push(`${p.heading}: ${n} question(s); required 4, 8, 12…`);});
+    if((rows||[]).length<20||(rows||[]).length%20!==0)errors.push(`MAT total must be 20, 40, 60…; found ${(rows||[]).length}.`);
+  }
+  if(subject==='EVS'){
+    const passageGroups=qpPassageGroups((rows||[]).filter(q=>qpIsPassage(q)));
+    passageGroups.forEach(g=>{if(g.questions.length!==5)errors.push(`Passage ${g.id} has ${g.questions.length} questions; exactly 5 are required.`);});
+    const mcqCount=(rows||[]).filter(q=>!qpIsPassage(q)).length;const expected=15*Math.max(1,Number(document.getElementById('qpEvsSetCount')?.value||1));
+    if(mcqCount!==expected)errors.push(`EVS requires ${expected} MCQs; found ${mcqCount}.`);
+  }
+  const duplicateText=new Map();(rows||[]).forEach(q=>{const t=qpNorm(q.question_text).toLowerCase();if(!t)return;duplicateText.set(t,(duplicateText.get(t)||0)+1)});[...duplicateText.entries()].filter(([,n])=>n>1).forEach(([t,n])=>warnings.push(`Duplicate question text appears ${n} times: ${t.slice(0,80)}…`));
+  return {ok:errors.length===0,errors,warnings};
+}
+function qpRunQualityControl(rows,show=true){const r=qpPaperQualityControl(rows);if(show){if(r.ok){alert(`✓ Paper Quality Control passed.\n\n${rows.length} question(s) checked.${r.warnings.length?`\n\nWarnings:\n• ${r.warnings.join('\n• ')}`:''}`);}else{alert(`❌ Paper Quality Control failed.\n\n${r.errors.map(x=>'• '+x).join('\n')}${r.warnings.length?`\n\nWarnings:\n• ${r.warnings.join('\n• ')}`:''}`);}}return r;}
 function downloadSelectedAnswerKeyExcel(){try{const rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');const serial=qpCurrentSetSerial();const setCode=document.getElementById('qpSetCode')?.value||qpState.setCode||'A';const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const wb=XLSX.utils.book_new();const info=[['Question Set Serial No.',serial],['Question Paper Set',`SET ${setCode}`],['Paper Title',title],['Subject',qpSubject()],['Language',qpCurrentLanguage()],['Generated On',new Date().toLocaleString('en-IN')],['Selection Mode',qpIsCommonMode()?'Common / MAT — 5 Parts':qpState.mode==='passages'?'Passage Sets':'Mandatory + Random Questions'],['Total Questions',rows.length],['Total Marks',rows.length],['Passage Sets',[...new Set(rows.map(q=>q._passageGroup||q.passage_id).filter(Boolean))].length]];const wsInfo=XLSX.utils.aoa_to_sheet(info);wsInfo['A1'].s={font:{bold:true}};wsInfo['B1'].s={font:{bold:true,color:{rgb:'17365D'}}};XLSX.utils.book_append_sheet(wb,wsInfo,'Paper Info');const answerRows=qpBuildAnswerRows(rows);const ws=XLSX.utils.json_to_sheet(answerRows);XLSX.utils.book_append_sheet(wb,ws,'Answer Key');const footer=XLSX.utils.aoa_to_sheet([['Question Set Serial No.',serial],['Question Paper Set',`SET ${setCode}`],[],['(c)Swarup Sir, Ph: 98643-90279'],['Classroom OMR Exam Question Paper. Copy-wright materials.']]);XLSX.utils.book_append_sheet(wb,footer,'Credits');XLSX.writeFile(wb,`answer-key-${serial}.xlsx`);}catch(e){alert('Could not create MAT Answer & Metadata Excel: '+(e.message||e))}}
 
 function qpBuildCommonHtml(rows){
@@ -870,60 +893,39 @@ function qpHtmlQuestion(q,variant='default'){
   return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
 function qpBuildArithmeticHtml(rows){
-  // Render 20-question blocks as two-column content that flows naturally with the header.
-  // Do not force a page break before the first block; the browser may fragment the block across pages as needed.
-  const pages=[];
-  const totalPages=Math.ceil(rows.length/20);
-  for(let start=0;start<rows.length;start+=20){
-    const chunk=rows.slice(start,start+20);
-    const left=chunk.slice(0,10).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
-    const right=chunk.slice(10,20).map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
-    const isLast=start+20>=rows.length;
-    pages.push(`<div class="qp-arithmetic-page${isLast?' qp-content-no-break':''}">
-      <div class="qp-arithmetic-columns">
-        <div class="qp-arithmetic-column">${left}</div>
-        <div class="qp-arithmetic-column">${right}</div>
-      </div>
-    </div>`);
-  }
-  return pages.join('');
+  // Continuous two-column flow. The previous fixed grid could become an
+  // unbreakable block when a question contained a large diagram, causing the
+  // entire question area to jump to page 2 and leaving page 1 almost blank.
+  // Keeping one continuous flow lets the browser fragment it naturally while
+  // preserving serial order.
+  return `<div class="qp-arithmetic-flow">${(rows||[]).map(q=>qpHtmlQuestion(q,'arithmetic')).join('')}</div>`;
 }
 function qpBuildEVSHtml(rows){
-  // EVS MCQs must remain in two columns, but the column container itself must
-  // be fragmentable by the print engine. A CSS grid containing all 15 MCQs
-  // was treated as one unbreakable block, so the whole EVS section moved to
-  // page 2 and left page 1 with only the header. Use CSS multi-columns so
-  // questions can flow from page 1 to page 2 naturally.
+  // EVS is rendered as one continuous document flow. MCQs use two columns and
+  // each passage is immediately followed by its five questions. No artificial
+  // page break is inserted between Passage 1 and Passage 2; the print engine
+  // may place Passage 2 on the same page whenever sufficient space remains.
   const mcqs=(rows||[]).filter(q=>!qpIsPassage(q));
   const passageRows=(rows||[]).filter(q=>qpIsPassage(q));
-  const pages=[];
+  const out=[];
   if(mcqs.length){
-    pages.push(`<div class="qp-evs-mcq-page"><div class="qp-evs-mcq-flow">${mcqs.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('')}</div></div>`);
+    out.push(`<div class="qp-evs-mcq-flow">${mcqs.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('')}</div>`);
   }
   const groups=qpPassageGroups(passageRows);
   groups.forEach((g,index)=>{
     const title=qpNorm(g.title)||'Passage';
     const text=g.text||'';
-    const qs=(g.questions||[]);
-    const leftCount=Math.ceil(qs.length/2);
-    const left=qs.slice(0,leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
-    const right=qs.slice(leftCount).map(q=>qpHtmlQuestion(q,'evs-mcq')).join('');
-    const isLast=index===groups.length-1;
-    pages.push(`<div class="qp-evs-passage-wrap${index>0?' qp-evs-passage-next':''}${isLast?' qp-content-no-break':''}">
-      <div class="qp-evs-passage-layout">
-        <div class="qp-evs-passage-text">
-          <div class="qp-passage-number">Passage ${index+1}</div>
-          <div class="qp-passage-title">${esc(title)}</div>
-          <div>${jnvstPdfEscape(text)}</div>
-        </div>
-        <div class="qp-evs-passage-question-columns">
-          <div class="qp-evs-passage-question-column">${left}</div>
-          <div class="qp-evs-passage-question-column">${right}</div>
-        </div>
+    const qs=g.questions||[];
+    out.push(`<div class="qp-evs-passage-wrap">
+      <div class="qp-evs-passage-text">
+        <div class="qp-passage-number">Passage ${index+1}</div>
+        <div class="qp-passage-title">${esc(title)}</div>
+        <div>${jnvstPdfEscape(text)}</div>
       </div>
+      <div class="qp-evs-passage-question-flow">${qs.map(q=>qpHtmlQuestion(q,'evs-mcq')).join('')}</div>
     </div>`);
   });
-  return pages.join('');
+  return out.join('');
 }
 function qpBuildPassageHtml(rows){
   const out=[];
@@ -1100,9 +1102,10 @@ async function deleteGeneratedQuestionPaper(id){
   if(qpState.savedHistoryId===id)qpState.savedHistoryId=null;
   loadGeneratedQuestionPaperHistory();
 }
+function runQuestionPaperQualityControl(){try{const rows=qpPrepareRows();return qpRunQualityControl(rows,true)}catch(e){alert('Paper Quality Control could not run: '+(e.message||e));return false}}
 async function generateSelectedQuestionPaper(){
   try{let rows=qpPrepareRows();if(!rows.length)return alert('Please select questions or passage sets first.');
-    rows=rows.map(x=>({...x}));const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const w=window.open('','_blank','width=1100,height=900');if(!w)return alert('Please allow pop-ups for the PDF/print preview.');const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');const includeAnswers=document.getElementById('qpPdfAnswers')?.value==='yes';
+    rows=rows.map(x=>({...x}));const qc=qpPaperQualityControl(rows);if(!qc.ok){alert(`❌ Paper Quality Control failed.\n\n${qc.errors.map(x=>'• '+x).join('\n')}`);return;}const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const w=window.open('','_blank','width=1100,height=900');if(!w)return alert('Please allow pop-ups for the PDF/print preview.');const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');const includeAnswers=document.getElementById('qpPdfAnswers')?.value==='yes';
     const serial=qpCurrentSetSerial();
     const setCode=document.getElementById('qpSetCode')?.value||qpState.setCode||'A';
     try{await saveGeneratedQuestionPaper(rows);}catch(saveError){return alert('Question paper could not be saved to Generated History: '+(saveError.message||saveError));}
