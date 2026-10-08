@@ -1085,7 +1085,7 @@ async function questionPaperGeneratorPage(){
     <div id="qpSubjectSummary" class="success" style="margin-bottom:12px">Select a subject.</div>
     <div id="qpCommonPanel"></div><div id="qpQuestionsPanel" class="card" style="display:none"></div><div id="qpPassagesPanel" class="card" style="display:none"></div><div id="qpSpecialPanel"></div>
     <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><div><h2 style="margin:0">🗂 Previously Generated Question Papers</h2><p class="muted small" style="margin:6px 0 0">Generated papers and their answer keys are saved with the exact selected questions and generation date/time.</p></div><button class="secondary" onclick="loadGeneratedQuestionPaperHistory()">↻ Refresh</button></div><div id="qpGeneratedHistory" style="margin-top:12px"><p class="muted">Loading…</p></div></div>
-    <div class="card"><div id="qpSummary" class="success">The generated paper will keep mandatory questions and randomly fill the remaining slots.</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download Answer Key Excel</button><button class="secondary" onclick="qpResetAllSelections()">↻ Reset All Selections</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
+    <div class="card"><div id="qpSummary" class="success">The generated paper will keep mandatory questions and randomly fill the remaining slots.</div><div class="grid"><div><label>Question Order</label><select id="qpOrder"><option value="random">Random</option><option value="original">Original bank order</option></select></div><div><label>Include Answers in PDF?</label><select id="qpPdfAnswers"><option value="no">No — Question Paper only</option><option value="yes">Yes — Teacher Copy</option></select></div></div><div class="actions"><button class="secondary" onclick="qpRunQualityControl()">🛡️ Paper Quality Control</button><button onclick="generateSelectedQuestionPaper()">🖨️ Generate / Print PDF</button><button onclick="downloadSelectedQuestionPaperWord()">📝 Download Word File</button><button onclick="downloadSelectedAnswerKeyExcel()">📊 Download Answer Key Excel</button><button class="secondary" onclick="qpResetAllSelections()">↻ Reset All Selections</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div></div>
   </div>`);
   qpRenderGeneratorMode();
   loadGeneratedQuestionPaperHistory();
@@ -1102,6 +1102,115 @@ function qpGetSetSerial(signature){if(qpState.lastSerial&&qpState.lastSignature=
 function qpCurrentSetSerial(){const signature=qpState.lastSignature||JSON.stringify({subject:qpSubject(),language:qpCurrentLanguage(),mode:qpState.mode,selected:[...qpState.selected].sort(),counts:qpState.commonCounts,setCode:document.getElementById('qpSetCode')?.value||qpState.setCode||'A'});if(!qpState.lastSerial||qpState.lastSignature!==signature)qpState.lastSerial=qpGetSetSerial(signature);return qpState.lastSerial;}
 function qpAssignNumbers(rows){return(rows||[]).map((q,i)=>({...q,_number:i+1}));}
 function qpBuildAnswerRows(rows){return(rows||[]).map(q=>({"Q.No.":q._number,"Section":q.section_code||'',"Part":q.part_code||'',"Topic":qpTopicLabel(q),"Selection":q._selectionType||'',"Passage Set":q._passageGroup||q.passage_id||'',"Question ID":q.id||'',"Correct Option":String(q.correct_option||'').toUpperCase()}));}
+
+function qpQualityText(v){return qpNorm(v).replace(/\s+/g,' ').trim()}
+function qpQualityFingerprint(q){
+  return [qpQualityText(q.question_text),qpQualityText(q.option_a),qpQualityText(q.option_b),qpQualityText(q.option_c),qpQualityText(q.option_d)].join('||').toLowerCase();
+}
+function qpExpectedQuestionCount(){
+  const subject=qpSubject();
+  if(subject==='MAT') return qpCommonTotal();
+  if(subject==='ARITHMETIC') return Math.max(0,Math.floor(Number(document.getElementById('qpQuestionCount')?.value||0)));
+  if(subject==='EVS'){const sets=Math.max(1,Math.floor(Number(document.getElementById('qpEvsSetCount')?.value||1)));return sets*20;}
+  if(subject==='LANGUAGE'){const sets=Math.max(1,Math.floor(Number(document.getElementById('qpLanguageSetCount')?.value||1)));return sets*5;}
+  return 0;
+}
+function qpValidatePaperQuality(rows, subjectOverride, setLabel){
+  const subject=String(subjectOverride||qpSubject()).toUpperCase();
+  const result={subject,setLabel:setLabel||'',errors:[],warnings:[],checks:[]};
+  const add=(ok,label,detail='',level='error')=>{result.checks.push({ok,label,detail,level});if(!ok)(level==='warning'?result.warnings:result.errors).push(`${label}${detail?': '+detail:''}`);};
+  const list=Array.isArray(rows)?rows:[];
+  const expected=(()=>{
+    if(subject==='MAT')return qpCommonTotal();
+    if(subject==='ARITHMETIC')return Math.max(0,Math.floor(Number(document.getElementById('qpQuestionCount')?.value||0)));
+    if(subject==='EVS'){const sets=Math.max(1,Math.floor(Number(document.getElementById('qpEvsSetCount')?.value||1)));return sets*20;}
+    if(subject==='LANGUAGE'){const sets=Math.max(1,Math.floor(Number(document.getElementById('qpLanguageSetCount')?.value||1)));return sets*5;}
+    return 0;
+  })();
+  add(list.length===expected,'Question count',`${list.length}/${expected}`,'error');
+  const ids=list.map(q=>qpNorm(q.id)).filter(Boolean),idSet=new Set(ids);
+  add(ids.length===list.length,'Question IDs present',ids.length===list.length?'All selected questions have IDs.':`${list.length-ids.length} question(s) have no ID.`);
+  add(idSet.size===ids.length,'Duplicate question IDs',idSet.size===ids.length?'None':'Duplicate question ID(s) found.');
+  const nums=list.map(q=>Number(q._number));
+  add(nums.length===list.length && nums.every((n,i)=>n===i+1),'Serial numbers','Expected continuous numbering 1–'+list.length+'.');
+  const badAnswers=list.filter(q=>!['A','B','C','D'].includes(String(q.correct_option||'').trim().toUpperCase()));
+  add(!badAnswers.length,'Correct answers','All questions have one valid answer (A/B/C/D).'+(badAnswers.length?` Invalid: ${badAnswers.map(q=>q._number||q.id).join(', ')}.`:''));
+  const missingContent=list.filter(q=>!qpQualityText(q.question_text)&&!qpNorm(q.image_url));
+  add(!missingContent.length,'Question content','Every question has text or an image.'+(missingContent.length?` Missing: ${missingContent.map(q=>q._number).join(', ')}.`:''));
+  const missingOptions=list.filter(q=>{
+    const isMat=subject==='MAT' && !!qpNorm(q.image_url);
+    return !isMat && ['option_a','option_b','option_c','option_d'].some(k=>!qpQualityText(q[k]));
+  });
+  add(!missingOptions.length,'Answer options','All non-image questions have A–D options.'+(missingOptions.length?` Missing options: ${missingOptions.map(q=>q._number).join(', ')}.`:''));
+  const fps=new Map();list.forEach(q=>{const f=qpQualityFingerprint(q);if(f.replace(/\|/g,'').trim()){if(!fps.has(f))fps.set(f,[]);fps.get(f).push(q._number);}});
+  const duplicateContent=[...fps.values()].filter(a=>a.length>1);
+  add(!duplicateContent.length,'Duplicate question content',duplicateContent.length?'Duplicate groups: '+duplicateContent.map(a=>a.join(', ')).join(' | '):'None.','error');
+  const lang=qpCurrentLanguage();
+  const wrongLang=list.filter(q=>!qpLangMatches(q));
+  add(!wrongLang.length,'Language consistency',`All questions match ${lang}.`+(wrongLang.length?` Mismatch: ${wrongLang.map(q=>q._number).join(', ')}.`:''));
+  if(subject==='MAT'){
+    const bad=list.filter(q=>!(String(q.part_code||'').toUpperCase().startsWith('MAT_') || String(q.section_code||'').toUpperCase()==='MAT'));
+    add(!bad.length,'MAT part consistency',bad.length?`Invalid MAT question(s): ${bad.map(q=>q._number).join(', ')}.`:'All questions belong to MAT parts.');
+    const counts=new Map(list.map(q=>[q._commonPart||q.part_code,0]));list.forEach(q=>counts.set(q._commonPart||q.part_code,(counts.get(q._commonPart||q.part_code)||0)+1));
+    const badParts=QP_COMMON_PARTS.filter(p=>Number(qpState.commonCounts[p.part]||0)!==(counts.get(p.part)||0));
+    add(!badParts.length,'MAT part distribution',badParts.length?badParts.map(p=>`${p.part}: expected ${qpState.commonCounts[p.part]||0}, got ${counts.get(p.part)||0}`).join('; '):'All five MAT parts match the requested counts.');
+  }
+  if(subject==='ARITHMETIC'){
+    const bad=list.filter(q=>!qpQuestionSubjectMatches(q)||String(q.part_code||'').toUpperCase()!=='ARITHMETIC');
+    add(!bad.length,'Arithmetic subject isolation',bad.length?`Non-Arithmetic question(s): ${bad.map(q=>q._number).join(', ')}.`:'All questions are Arithmetic.');
+    const groups=new Map();list.forEach(q=>{const g=qpQualityText(q.variation_group).toLowerCase();if(g){if(!groups.has(g))groups.set(g,[]);groups.get(g).push(q._number);}});
+    const dup=[...groups.values()].filter(a=>a.length>1);
+    add(!dup.length,'Variation Group uniqueness',dup.length?`Repeated group(s): ${dup.map(a=>a.join(', ')).join(' | ')}.`:'No Variation Group is repeated.');
+  }
+  if(subject==='EVS'){
+    const passageFlags=list.map(q=>qpIsPassage(q));
+    let firstPass=passageFlags.indexOf(true);if(firstPass<0)firstPass=list.length;
+    const lateMcq=list.slice(firstPass).filter(q=>!qpIsPassage(q));
+    add(!lateMcq.length,'EVS section order','All standalone MCQs appear before Passage questions.');
+    const badMCQ=list.filter(q=>!qpIsPassage(q)&&!qpIsEVSMCQ(q));
+    const badPass=list.filter(q=>qpIsPassage(q)&&!qpIsEVSPassageQuestion(q));
+    add(!badMCQ.length,'EVS MCQ subject isolation',badMCQ.length?`Invalid/non-EVS MCQ(s): ${badMCQ.map(q=>q._number).join(', ')}.`:'All standalone questions are valid EVS MCQs.');
+    add(!badPass.length,'EVS Passage subject isolation',badPass.length?`Invalid passage question(s): ${badPass.map(q=>q._number).join(', ')}.`:'All passage questions are valid EVS passage questions.');
+    const groups=qpPassageGroups(list.filter(q=>qpIsPassage(q)));
+    const badGroups=groups.filter(g=>g.questions.length!==5);
+    add(!badGroups.length,'EVS passage completeness',badGroups.length?badGroups.map(g=>`${g.title||g.id}: ${g.questions.length}/5 questions`).join('; '):`${groups.length} complete passage set(s), 5 questions each.`);
+    const mcqCount=list.filter(q=>!qpIsPassage(q)).length;
+    add(mcqCount===list.length-groups.length*5,'EVS passage placement',`MCQs: ${mcqCount}; passage questions: ${groups.length*5}.`);
+    const forcedBreak=/qp-evs-passage-next/.test(qpBuildEVSHtml(list));
+    add(!forcedBreak,'EVS passage page flow','No forced page break is inserted before Passage 2 or later passages.','warning');
+  }
+  if(subject==='LANGUAGE'){
+    const bad=list.filter(q=>!qpIsPassage(q)||String(q.part_code||'').toUpperCase()!=='LANGUAGE_PASSAGE'||!qpLangMatches(q));
+    add(!bad.length,'Language passage consistency',bad.length?`Invalid language passage question(s): ${bad.map(q=>q._number).join(', ')}.`:'All questions belong to the selected language passage bank.');
+    const groups=qpPassageGroups(list.filter(q=>qpIsPassage(q)));const badGroups=groups.filter(g=>g.questions.length!==5);
+    add(!badGroups.length,'Language passage completeness',badGroups.length?badGroups.map(g=>`${g.title||g.id}: ${g.questions.length}/5`).join('; '):`${groups.length} complete passage set(s).`);
+  }
+  const answerRows=qpBuildAnswerRows(list);
+  const answerOk=answerRows.length===list.length && answerRows.every((r,i)=>Number(r['Q.No.'])===i+1 && ['A','B','C','D'].includes(String(r['Correct Option']).toUpperCase()));
+  add(answerOk,'Answer-key alignment',answerOk?'Answer key has one matching entry for every serial number.':'Answer-key rows do not exactly match the generated serial numbers/answers.');
+  const imageMissing=list.filter(q=>qpNorm(q.image_url)&&!/^https?:\/\//i.test(q.image_url));
+  add(!imageMissing.length,'Image URL format',imageMissing.length?`Invalid image URL(s): ${imageMissing.map(q=>q._number).join(', ')}.`:'All image URLs have a valid HTTP/HTTPS format.','warning');
+  return result;
+}
+function qpShowQualityControl(reports,autoBlock=false){
+  const list=Array.isArray(reports)?reports:[reports];
+  const errors=list.flatMap(r=>r.errors.map(x=>({text:x,set:r.setLabel||'Paper'})));
+  const warnings=list.flatMap(r=>r.warnings.map(x=>({text:x,set:r.setLabel||'Paper'})));
+  const checks=list.reduce((n,r)=>n+r.checks.length,0),passed=list.reduce((n,r)=>n+r.checks.filter(c=>c.ok).length,0);
+  const ok=!errors.length;
+  const status=ok?'✓ PAPER QUALITY CONTROL PASSED':'✕ PAPER QUALITY CONTROL FAILED';
+  const statusClass=ok?'success':'notice';
+  const detail=list.map(r=>`<div style="margin-top:12px"><b>${esc(r.setLabel||'Paper')} — ${r.errors.length?'✕ '+r.errors.length+' error(s)':'✓ No blocking errors'}${r.warnings.length?` · ⚠ ${r.warnings.length} warning(s)`:''}</b><ul style="margin:7px 0 0 20px">${r.checks.map(c=>`<li style="color:${c.ok?'#166534':(c.level==='warning'?'#92400e':'#b91c1c')}">${c.ok?'✓':'✕'} ${esc(c.label)}${c.detail?` — ${esc(c.detail)}`:''}</li>`).join('')}</ul></div>`).join('');
+  const overlay=document.createElement('div');overlay.id='qpQualityOverlay';overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:900px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:20px"><div style="display:flex;justify-content:space-between;gap:15px;align-items:center"><div><h2 style="margin:0">🛡️ Paper Quality Control</h2><div class="small muted" style="margin-top:4px">${passed}/${checks} checks passed${list.length>1?` · ${list.length} set(s) checked`:''}</div></div><button class="secondary" onclick="document.getElementById('qpQualityOverlay')?.remove()">✕ Close</button></div><div class="${statusClass}" style="margin-top:14px;font-size:16px;font-weight:800">${status}</div>${errors.length?`<div class="notice" style="margin-top:12px"><b>Blocking errors</b><ul style="margin:6px 0 0 20px">${errors.map(e=>`<li><b>${esc(e.set)}:</b> ${esc(e.text)}</li>`).join('')}</ul></div>`:''}${warnings.length?`<div style="margin-top:12px;padding:10px 12px;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;color:#92400e"><b>Warnings</b><ul style="margin:6px 0 0 20px">${warnings.map(e=>`<li><b>${esc(e.set)}:</b> ${esc(e.text)}</li>`).join('')}</ul></div>`:''}<div>${detail}</div><div class="actions" style="justify-content:flex-end;margin-top:18px"><button class="secondary" onclick="document.getElementById('qpQualityOverlay')?.remove()">Close</button>${ok?`<button onclick="document.getElementById('qpQualityOverlay')?.remove()">✓ Continue</button>`:''}</div></div>`;
+  document.body.appendChild(overlay);
+  return ok;
+}
+function qpRunQualityControl(){
+  try{const rows=qpMasterRows();const report=qpValidatePaperQuality(rows,qpSubject(),'Current selection');qpShowQualityControl(report);}
+  catch(e){qpShowQualityControl({subject:qpSubject(),setLabel:'Current selection',errors:[e.message||String(e)],warnings:[],checks:[{ok:false,label:'Paper preparation',detail:e.message||String(e),level:'error'}]});}
+}
+function qpQualityGate(rows,label){const report=qpValidatePaperQuality(rows,qpSubject(),label||'Paper');if(report.errors.length){qpShowQualityControl(report,true);return false;}return true;}
 function qpPrepareRows(){
   const subject=qpSubject();
   if(subject==='MAT'){
@@ -1318,9 +1427,13 @@ function downloadSelectedAnswerKeyExcel(){
       count=qpAskSetCount(qpRequestedSetCount());
       if(count===null)return;
       variants=qpBuildSetVariants(master,count);
+      const qcReports=variants.map(v=>qpValidatePaperQuality(v.rows,qpSubject(),`SET ${v.setCode}`));
+      if(qcReports.some(r=>r.errors.length)){qpShowQualityControl(qcReports,true);return;}
       baseSerial=qpGetSetSerial(JSON.stringify({subject:qpSubject(),language:qpCurrentLanguage(),mode:qpState.mode,selected:[...qpState.selected].sort(),counts:qpState.commonCounts,sets:count}));
       qpState.lastSetVariants=variants;qpState.multiSetSerial=baseSerial;qpState.historyMasterRows=master.map(q=>({...q}));
     }
+    const qcReports=variants.map(v=>qpValidatePaperQuality(v.rows,qpSubject(),`SET ${v.setCode}`));
+    if(qcReports.some(r=>r.errors.length)){qpShowQualityControl(qcReports,true);return;}
     const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';const wb=qpBuildAnswerWorkbook(variants,title,baseSerial);
     XLSX.writeFile(wb,`answer-key-${baseSerial}.xlsx`);
   }catch(e){alert('Could not create Answer Key Excel: '+(e.message||e));}
@@ -1375,6 +1488,7 @@ async function downloadSelectedQuestionPaperWord(){
   try{
     const rows=qpPrepareRows();
     if(!rows.length)return alert('Please select questions or passage sets first.');
+    if(!qpQualityGate(rows,'Word Export'))return;
     const d=await qpLoadDocxLibrary();
     const {Document,Packer,Paragraph,TextRun,Table,TableRow,TableCell,WidthType,AlignmentType,BorderStyle,Footer,PageNumber}=d;
     const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';
@@ -1502,6 +1616,8 @@ async function generateSelectedQuestionPaper(){
     const count=qpAskSetCount(qpRequestedSetCount());
     if(count===null)return;
     const variants=qpBuildSetVariants(master,count);
+    const qcReports=variants.map(v=>qpValidatePaperQuality(v.rows,qpSubject(),`SET ${v.setCode}`));
+    if(qcReports.some(r=>r.errors.length)){ qpShowQualityControl(qcReports,true); return; }
     const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';
     const baseSerial=qpGetSetSerial(JSON.stringify({subject:qpSubject(),language:qpCurrentLanguage(),mode:qpState.mode,selected:[...qpState.selected].sort(),counts:qpState.commonCounts,sets:count}));
     qpState.lastSetVariants=variants;qpState.multiSetSerial=baseSerial;
