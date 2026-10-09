@@ -31,7 +31,7 @@ Option shuffling still works: the page remembers which original option (A–D) e
 * Existing policies are **not** dropped (except the broken mock-test ones). V13 adds *restrictive* policies on top, which only affect accounts whose role is `student`. Teachers work exactly as before.
 
 ## 3. Edge Function (`index.ts`)
-* **Login limit.** After 8 wrong passwords for one Roll No (or 60 from one network) within 15 minutes, login is paused for that Roll No. The limit per network is generous because a whole school can share one internet connection.
+* **Login limit.** After 8 wrong passwords for one Roll No within 15 minutes, login is paused for that Roll No only. (There is no per-network limit, because on mobile data many phones share one IP address.)
 * **No Roll No guessing.** An unknown Roll No and a wrong password now give the same message.
 * **Students can't pass as teachers.** A student account can never pass the "owns a class" teacher check.
 * **Unknown actions are refused.** An unknown `action` now returns an error. Before, it silently ran "create students".

@@ -747,17 +747,16 @@ function isValidIsoDate(v: string) {
 // ---- V13 login rate limit (table: public.edge_login_attempts) ----
 const LOGIN_WINDOW_MIN = 15;
 const MAX_FAILS_PER_ROLL = 8;
-const MAX_FAILS_PER_IP = 60;   // a whole school can share one IP, keep this generous
 
-async function loginLimited(admin: any, rollNo: string, ip: string) {
+async function loginLimited(admin: any, rollNo: string, _ip: string) {
+  // Limit per Roll No only. (A per-network limit was removed: on mobile data
+  // many phones share one IP address, so one class could lock everyone out.)
   try {
     const since = new Date(Date.now() - LOGIN_WINDOW_MIN*60*1000).toISOString();
-    const [{ count: byRoll, error: e1 }, { count: byIp, error: e2 }] = await Promise.all([
-      admin.from("edge_login_attempts").select("id",{count:"exact",head:true}).eq("roll_no",rollNo).gte("attempted_at",since),
-      admin.from("edge_login_attempts").select("id",{count:"exact",head:true}).eq("ip",ip).gte("attempted_at",since),
-    ]);
-    if (e1 || e2) return false;            // table missing → no limit
-    return (byRoll ?? 0) >= MAX_FAILS_PER_ROLL || (byIp ?? 0) >= MAX_FAILS_PER_IP;
+    const { count, error } = await admin.from("edge_login_attempts")
+      .select("id",{count:"exact",head:true}).eq("roll_no",rollNo).gte("attempted_at",since);
+    if (error) return false;               // table missing → no limit
+    return (count ?? 0) >= MAX_FAILS_PER_ROLL;
   } catch { return false; }
 }
 async function recordLoginFailure(admin: any, rollNo: string, ip: string) {

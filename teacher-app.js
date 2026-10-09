@@ -105,6 +105,7 @@ function mockTestManagement(){
         <div class="card"><h2>✏️ Manage Question Bank</h2><p class="muted">Edit, activate/deactivate, add images, or delete questions.</p><button onclick="mockBankSummary()">Manage Question Bank</button></div>
         <div class="card"><h2>🎯 Generate Mock Test</h2><p class="muted">Select sets from MAT, EVS, Arithmetic and Language to create the complete test.</p><button onclick="generateMockTestPage()">Generate & Assign Test</button></div><div class="card"><h2>🖨️ Question Paper Generator</h2><p class="muted">Create a teacher-only question paper from one or more topics, or select complete Language/EVS passage sets. Download the designed paper and matching Excel answer key.</p><button onclick="questionPaperGeneratorPage()">Generate Question Paper</button></div>
         <div class="card"><h2>📊 Mock Test Results</h2><p class="muted">View student Mock Test attempts and scores separately from Assignment Results.</p><button onclick="mockTeacherResults()">View Mock Results</button></div>
+        <div class="card"><h2>📥 Import OMR Results</h2><p class="muted">Upload the OMR software Excel for a paper made with the Question Paper Generator. Mistakes are added to each student's Mistake Bank.</p><button onclick="omrImportPage()">Import OMR Excel</button></div>
       </div>
       <div class="card"><h2>🗂 Previous Mock Tests</h2><p class="muted">Edit the title/time limit or delete previously created Mock Tests. Deleting a test also removes its generated questions, student assignments and attempts.</p><div id="previousMockTests"><p class="muted">Loading…</p></div></div>
       <div class="card" style="background:#f8fafc"><h3>JNVST Mock Test Blueprint</h3><div class="grid">
@@ -3193,7 +3194,7 @@ async function deleteJnvstMainGroup(id){
 }
 async function deleteJnvstClass(id){const c=(window._jnvstClasses||[]).find(x=>x.id===id);if(!c)return;if(jnvstBaseKey(c))return notify("JNVST-VI and JNVST-IX are fixed classes and cannot be deleted.");const [{data:members,error:me},{data:assignments,error:ae}]=await Promise.all([sb.from("class_students").select("student_id").eq("class_id",id),sb.from("assignments").select("id,title").eq("class_id",id)]);if(me)return notify(me.message);if(ae)return notify(ae.message);if((members||[]).length)return notify("This class/sub-group has students assigned to it. Move or remove the students before deleting the class.");if((assignments||[]).length)return notify("This class/sub-group has assignments. Delete or reassign those assignments before deleting the class.");if(!confirm(`WARNING: Delete sub-group "${c.name}"?\n\nThis group has no students or assignments. The sub-group definition will be permanently removed. Continue?`))return;const {error}=await sb.from("classes").delete().eq("id",id).eq("teacher_id",current.id);if(error)return notify("Could not delete class: "+error.message);await teacherHome()}
 function renderTeacherAssignmentCards(assignments){
- return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}${(a.assignment_type==="MOCK"||a.assignment_type==="mock")?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
+ return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}${a.adaptive_mode&&a.adaptive_selection_summary?.student_name?`<span class="tag" style="background:#f3e8ff;color:#6b21a8">🎯 ${esc(a.adaptive_selection_summary.student_name)}${a.adaptive_selection_summary.roll_no?' · '+esc(a.adaptive_selection_summary.roll_no):''} · ${Number(a.adaptive_weakness_count||0)} mistakes</span>`:''}${(a.assignment_type==="MOCK"||a.assignment_type==="mock")?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
 }
 function filterTeacherAssignments(){
  const main=document.getElementById("teacherAssignmentMainFilter")?.value||"all",sub=document.getElementById("teacherAssignmentSubFilter")?.value||"all";
@@ -3800,7 +3801,7 @@ async function newAssignment(){
 
  render(`<div class="wrap">${header(schoolTeacherMode?"New School Course Assignment":"New JNVST Assignment")}<div class="card">
  <label>Assignment Type</label><div class="card" style="background:#f8fafc"><label><input type="radio" name="assignmentType" value="video" checked onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">With Video — students watch the lesson first</label><label><input type="radio" name="assignmentType" value="no-video" onchange="toggleAssignmentVideoFields()" style="width:auto;margin-right:8px">Without Video — students go directly to questions</label></div>
-${schoolTeacherMode?`<div class="card" style="border:2px solid #7c3aed;background:#faf5ff;margin-top:12px"><h3 style="margin:0 0 6px">🎯 Assignment Personalization</h3><label><input type="radio" name="schoolAssignmentMode" value="standard" checked onchange="toggleAdaptiveAssignmentFields()" style="width:auto;margin-right:8px">Standard Assignment — keep the existing question-selection workflow</label><label><input type="radio" name="schoolAssignmentMode" value="adaptive" onchange="toggleAdaptiveAssignmentFields()" style="width:auto;margin-right:8px">Adaptive Assignment — customize questions for each student from previous performance</label><div id="adaptiveAssignmentFields" style="display:none;margin-top:10px"><div class="grid"><div><label>Maximum Adaptive / Weakness Questions</label><input id="adaptiveMaxPercent" type="number" min="0" max="60" value="60"><div class="small muted">Maximum allowed is 60%. The system may use fewer when the student has fewer meaningful weaknesses.</div></div><div><label>Adaptive source</label><div class="success" style="margin-top:5px">Uses the selected School Question Bank chapter/range below. Previous wrong questions are preferred, with Variation Group alternatives when available.</div></div></div><div class="notice" style="margin-top:8px"><b>Important:</b> Adaptive mode creates a separate question snapshot for each student. Your existing Standard Assignment workflow is unchanged.</div></div></div>`:''}
+${schoolTeacherMode?`<div class="card" style="border:2px solid #7c3aed;background:#faf5ff;margin-top:12px"><h3 style="margin:0 0 6px">🎯 Assignment Personalization</h3><label><input type="radio" name="schoolAssignmentMode" value="standard" checked onchange="toggleAdaptiveAssignmentFields()" style="width:auto;margin-right:8px">Standard Assignment — keep the existing question-selection workflow</label><label><input type="radio" name="schoolAssignmentMode" value="adaptive" onchange="toggleAdaptiveAssignmentFields()" style="width:auto;margin-right:8px">Adaptive Assignment — customize questions for each student from previous performance</label><div id="adaptiveAssignmentFields" style="display:none;margin-top:10px"><div class="grid"><div><label>Maximum Adaptive / Weakness Questions</label><input id="adaptiveMaxPercent" type="number" min="0" max="60" value="60"><div class="small muted">Maximum allowed is 60%. The system may use fewer when the student has fewer meaningful weaknesses.</div></div><div><label>Adaptive source</label><div class="success" style="margin-top:5px">Uses the selected School Question Bank chapter/range below. Previous wrong questions are preferred, with Variation Group alternatives when available.</div></div></div><div class="notice" style="margin-top:8px"><b>Important:</b> Adaptive mode creates a separate question snapshot for each student. Your existing Standard Assignment workflow is unchanged.</div></div></div>`:jnvstAdaptiveCardHtml()}
  ${assignmentGroupHtml}
  <div class="card" style="background:#f8fafc;border:1px solid #dbeafe"><h3>Assign To</h3><p class="small muted">${schoolTeacherMode?"Select the School Course class, then choose the entire class or one/multiple subdivisions.":"Select students/classes under the selected JNVST main group. The fixed main group and its teacher-created sub-groups are shown below."}</p>
   <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=true);loadNewAssignmentClassStudents()">Select all shown</button><button type="button" class="secondary" onclick="document.querySelectorAll('.newassign-class').forEach(x=>x.checked=false);loadNewAssignmentClassStudents()">Clear all</button></div>
@@ -4043,7 +4044,7 @@ async function openAssignmentMistakeBank(){
  const box=document.getElementById('assignmentBankPicker');if(!box)return;let studentIds=[];try{studentIds=await assignmentMistakeRecipients()}catch(e){return notify('Could not load assignment students: '+(e.message||e))}
  if(!studentIds.length)return notify('Select the students/classes for this assignment first, then open Student Mistakes.');
  box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading student mistakes…</span></div>';
- const {data:perf,error}=await sb.from('student_question_performance').select('student_id,mock_question_id,attempt_count,wrong_count,correct_count,last_wrong_at,last_correct_at').in('student_id',studentIds).gt('wrong_count',0).order('wrong_count',{ascending:false});
+ let {data:perf,error}=await sb.from('student_question_performance').select('*').in('student_id',studentIds).gt('wrong_count',0).order('wrong_count',{ascending:false});if(perf)perf=perf.filter(x=>x.correct_streak===undefined||Number(x.correct_streak||0)<2); /* V14: hide mistakes fixed by two correct answers in a row */
  if(error){box.innerHTML=`<div class="notice">Could not load student mistakes: ${esc(error.message)}</div>`;return;}
  const ids=[...new Set((perf||[]).map(x=>x.mock_question_id).filter(Boolean))];if(!ids.length){box.innerHTML='<div class="card"><b>No mistake questions found.</b><p class="muted">These students have no recorded wrong answers from Mock Test Question Bank questions yet.</p></div>';return;}
  const {data:qs,error:qe}=await sb.from('mock_question_bank').select('id,part_code,topic,question_text,image_url,passage_title,active').in('id',ids).eq('teacher_id',current.id);
@@ -4308,6 +4309,7 @@ async function saveAdaptiveSchoolAssignment(){
 }
 async function saveAssignment(){
  if(isAdaptiveSchoolAssignment())return saveAdaptiveSchoolAssignment();
+ if(isAdaptiveJnvstAssignment())return saveAdaptiveJnvstAssignment();
  const type=document.querySelector('input[name="assignmentType"]:checked')?.value||"video";
  if(assignmentSchoolQbSelected?.ids?.length && (importedQuestions.length || document.querySelectorAll('.q').length || assignmentBankSelected.size)) {
    // A lesson-based Question Bank selection is the authoritative question source.
@@ -5817,3 +5819,267 @@ try{
 }catch(e){console.error('Teacher add-on 5 failed:',e)}
 
 window.__teacherAppLoaded=true;
+
+/* =====================================================================
+ * V14 — Import OMR results (Excel) into the Mistake Bank
+ * ---------------------------------------------------------------------
+ * Reads the OMR software Excel (Roll No, Exam Set, "Q n Options",
+ * "Q n Key", "Q n Marks"), finds the matching paper in Generated Question
+ * Paper history by comparing answer keys, then the database marks every
+ * answer against the SAVED key (teacher_import_omr_results).
+ *   • Blank and multiple marks count as mistakes.
+ *   • Bonus questions (marks given although the answer ≠ key) are skipped.
+ *   • Students with no Exam Set (absent) are skipped.
+ * ===================================================================== */
+let omrState=null;
+function omrCell(v){if(v===null||v===undefined)return '';let s=String(v).trim();if(/^\d+\.0+$/.test(s))s=s.replace(/\.0+$/,'');return s;}
+const OMR_QSET_RE=/QSET-\d{8}-\d{6}-[A-Z0-9]{4}(?:-[A-D])?/;
+function omrParseSheet(aoa){
+  let hi=-1;
+  for(let i=0;i<Math.min(aoa.length,15);i++){const r=(aoa[i]||[]).map(x=>omrCell(x).toLowerCase());if(r.includes('roll no')||r.includes('roll number')||r.includes('rollno')){hi=i;break}}
+  if(hi<0)throw new Error('Could not find the header row (a column named "Roll No").');
+  const h=(aoa[hi]||[]).map(x=>omrCell(x));const low=h.map(x=>x.toLowerCase().replace(/\s+/g,' '));
+  const col=(...names)=>{for(const n of names){const i=low.indexOf(n);if(i>=0)return i}return -1};
+  const cRoll=col('roll no','roll number','rollno'),cName=col('name','student name'),cSet=col('exam set','set','paper set','booklet set','question set'),cExam=col('exam','exam name','test');
+  const qcols=new Map();
+  low.forEach((x,i)=>{const m=x.match(/^q\.?\s*0*(\d+)\s*(options?|answer|response|key|marks?)$/);if(!m)return;const n=Number(m[1]);if(!qcols.has(n))qcols.set(n,{});const t=m[2].startsWith('key')?'key':m[2].startsWith('mark')?'marks':'ans';qcols.get(n)[t]=i});
+  const nums=[...qcols.keys()].filter(n=>qcols.get(n).ans!==undefined).sort((a,b)=>a-b);
+  if(!nums.length)throw new Error('Could not find question columns such as "Q 1 Options".');
+  const N=nums[nums.length-1];
+  const rows=[],absent=[];
+  for(let i=hi+1;i<aoa.length;i++){
+    const r=aoa[i]||[];const roll=omrCell(r[cRoll]);if(!roll)continue;
+    // Exam Set may be a plain letter ("A") or the full paper code ("QSET-20261009-182557-OZJX-A").
+    let set=cSet>=0?omrCell(r[cSet]).toUpperCase().replace(/^SET\s*/,''):'';
+    if(set&&!/^[A-D]$/.test(set)){const m=set.match(OMR_QSET_RE);set=m?((m[0].match(/-([A-D])$/)||[])[1]||''):set;}
+    const name=cName>=0?omrCell(r[cName]):'';
+    const answers=[],keys=[],marks=[];
+    for(let n=1;n<=N;n++){const c=qcols.get(n)||{};answers.push(c.ans!==undefined?omrCell(r[c.ans]).toUpperCase():'');keys.push(c.key!==undefined?omrCell(r[c.key]).toUpperCase():'');marks.push(c.marks!==undefined?Number(omrCell(r[c.marks])||0):null)}
+    if(answers.every(a=>!a)){absent.push({roll,name});continue}   // no answers marked = absent
+    let rowCode='';for(const cell of r){const m=String(cell??'').toUpperCase().match(OMR_QSET_RE);if(m){rowCode=m[0];break}}
+    const codeSet=(rowCode.match(/-([A-D])$/)||[])[1]||'';
+    rows.push({roll,name,sheetSet:set||codeSet,answers,keys,marks,code:rowCode});
+  }
+  const exam=cExam>=0?omrCell((aoa[hi+1]||[])[cExam]):'';
+  const codes=[...new Set([exam,...rows.map(r=>r.code)].map(x=>(String(x||'').toUpperCase().match(OMR_QSET_RE)||[])[0]).filter(Boolean).map(qpHistoryGroupKey))];
+  return {N,rows,absent,exam,hasSetColumn:cSet>=0||rows.some(r=>r.code),codes};
+}
+function omrPaperKey(rec){const m=new Map();((rec?.answer_key_snapshot?.rows)||[]).forEach(x=>m.set(Number(x['Q.No.']),String(x['Correct Option']||'').toUpperCase()));return m;}
+// Which set did this student write? 1) the sheet's own key column (exact),
+// 2) otherwise the student's answers compared with each set's saved key.
+function omrDetectRowSet(row,setKeys,N){
+  const hasKeys=row.keys.some(k=>/^[ABCD]$/.test(k));
+  const scores=Object.entries(setKeys).map(([set,key])=>{let t=0,m=0;for(let q=1;q<=N;q++){const k=key.get(q);if(!k)continue;const v=hasKeys?row.keys[q-1]:row.answers[q-1];if(hasKeys&&!/^[ABCD]$/.test(v))continue;t++;if(v===k)m++}return {set,ratio:t?m/t:0,match:m,total:t}}).sort((a,b)=>b.ratio-a.ratio);
+  const best=scores[0]||{set:'',ratio:0,match:0,total:0},second=scores[1]||{ratio:0,match:0};
+  const margin=best.match-second.match;
+  const sure=hasKeys?(best.ratio>=0.9&&margin>=3):(best.total>0&&best.ratio>=0.4&&margin>=4);
+  return {set:best.set,ratio:best.ratio,margin,method:hasKeys?'sheet key':'answers',sure};
+}
+function omrResolveForGroup(recs,parsed){
+  const setKeys={};recs.forEach(r=>{setKeys[String(r.set_code||'A').toUpperCase()]=omrPaperKey(r)});
+  let sum=0;const resolved=parsed.rows.map(r=>{
+    const d=omrDetectRowSet(r,setKeys,parsed.N);sum+=d.ratio;
+    let set='',source='',problem='';
+    if(r.sheetSet&&setKeys[r.sheetSet]){set=r.sheetSet;source='sheet';if(d.sure&&d.set!==r.sheetSet){set=d.set;source='corrected';problem=`Sheet says Set ${r.sheetSet}, but the ${d.method} match Set ${d.set}`}}
+    else if(d.sure){set=d.set;source='detected'}
+    else{problem=r.sheetSet?`Set ${r.sheetSet} is not in this paper`:`Set could not be detected (best: ${d.set} ${Math.round(d.ratio*100)}%). Add the Exam Set for this student.`}
+    return {...r,set,setSource:source,setMethod:d.method,setRatio:d.ratio,problem};
+  });
+  const sets={};
+  resolved.filter(r=>r.set).forEach(r=>{if(!sets[r.set])sets[r.set]={key:Array(parsed.N).fill(''),bonus:new Set(),count:0,detected:0};const s=sets[r.set];s.count++;if(r.setSource!=='sheet')s.detected++;
+    for(let q=0;q<parsed.N;q++){if(!s.key[q]&&r.keys[q])s.key[q]=r.keys[q];if(r.marks[q]!==null&&r.marks[q]>0&&r.keys[q]&&r.answers[q]!==r.keys[q])s.bonus.add(q+1)}});
+  const perSet={};Object.entries(sets).forEach(([set,s])=>{const key=setKeys[set];let t=0,m=0;for(let q=1;q<=parsed.N;q++){if(s.bonus.has(q)||!s.key[q-1])continue;t++;if(key.get(q)===s.key[q-1])m++}perSet[set]={found:true,total:t,match:m,questions:key.size}});
+  return {score:resolved.length?sum/resolved.length:0,rows:resolved,sets,perSet};
+}
+function omrScorePaperGroups(records,parsed){
+  const groups=new Map();
+  (records||[]).forEach(r=>{const g=qpHistoryGroupKey(r.serial_no);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(r)});
+  const out=[];
+  groups.forEach((recs,g)=>{const res=omrResolveForGroup(recs,parsed);const first=recs[0]||{};
+    out.push({base:g,title:first.title||'',subject:first.subject||'',generated_at:first.generated_at,sets:recs.map(r=>r.set_code).sort().join(', '),score:res.score,res});});
+  return out.sort((a,b)=>b.score-a.score||String(b.generated_at).localeCompare(String(a.generated_at)));
+}
+async function omrImportPage(){
+  omrState=null;
+  render(`<div class="wrap">${header('Import OMR Results')}
+    <div class="card"><h2>📥 Import OMR Results (Excel)</h2>
+      <p class="muted">Upload the result Excel from your OMR software. Each student's answers are checked against the answer key of the matching paper from <b>Question Paper Generator</b> history, and every mistake is added to that student's <b>Mistake Bank</b>, used for 60% adaptive assignments.</p>
+      <ul class="small muted"><li>Needed columns: <b>Roll No</b> and, for every question, <b>Q n Options</b>. <b>Q n Key</b>, <b>Q n Marks</b> and <b>Exam Set</b> are used when present.</li><li><b>Best:</b> put the paper code printed on the question paper (e.g. <code>QSET-20261009-182557-OZJX</code>) in the OMR software's <b>Exam name</b>, or in the file name. The paper is then picked from that code. A code with the set letter (<code>…-OZJX-A</code>) in a student's row also gives that student's set.</li><li><b>Exam Set is optional:</b> if it is missing, each student's set is found by comparing the key column (or the student's answers) with the saved key of every set.</li><li>Blank answers and multiple marks (e.g. “A, C”) count as mistakes. Bonus questions are skipped. Students with no answers marked are treated as absent.</li><li>A student can be imported only once for the same paper.</li></ul>
+      <label>OMR result Excel file</label><input type="file" id="omrFile" accept=".xlsx,.xls,.csv" onchange="omrReadFile(event)">
+      <div id="omrPreview" style="margin-top:14px"></div>
+    </div>
+    <div class="card"><h2>🗂 Previous OMR Imports</h2><div id="omrHistory"><p class="muted">Loading…</p></div></div>
+    <button class="secondary" onclick="mockTestManagement()">← Mock Test Management</button>
+  </div>`);
+  omrLoadHistory();
+}
+async function omrLoadHistory(){
+  const el=document.getElementById('omrHistory');if(!el)return;
+  const {data,error}=await sb.from('omr_imports').select('*').eq('teacher_id',current.id).order('imported_at',{ascending:false}).limit(100);
+  if(error){el.innerHTML=`<div class="notice">Could not load OMR import history: ${esc(error.message)}<br><span class="small">Run <b>V14_OMR_MISTAKES_MIGRATION.sql</b> in Supabase SQL Editor first.</span></div>`;return}
+  el.innerHTML=(data||[]).length?`<div style="overflow:auto"><table><thead><tr><th>Imported</th><th>Exam</th><th>Paper Serial</th><th>Students</th><th>Questions</th><th>Skipped (bonus/key changed)</th></tr></thead><tbody>${data.map(x=>`<tr><td>${esc(qpHistoryDate(x.imported_at))}</td><td>${esc(x.exam_title||'')}</td><td><code>${esc(x.paper_base_serial)}</code></td><td>${x.student_count}</td><td>${x.question_count}</td><td>${esc((x.skipped_questions||[]).join(', ')||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No OMR results imported yet.</p>';
+}
+function omrReadFile(ev){
+  const file=ev.target.files?.[0];if(!file)return;
+  const box=document.getElementById('omrPreview');box.innerHTML='<p class="muted">Reading file…</p>';
+  const fr=new FileReader();
+  fr.onload=async e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+      const parsed=omrParseSheet(aoa);
+      if(!parsed.rows.length)throw new Error('No student answers were found in this file.');
+      const records=await qpLoadHistoryRecords();
+      if(!records.length)throw new Error('No saved papers found in Question Paper Generator history. Generate (and save) the paper first.');
+      const candidates=omrScorePaperGroups(records,parsed);
+      const fileCode=(String(file.name).toUpperCase().match(OMR_QSET_RE)||[])[0];
+      const codes=[...new Set([...parsed.codes,...(fileCode?[qpHistoryGroupKey(fileCode)]:[])])];
+      const byCode=codes.map(c=>candidates.find(x=>x.base===c)).filter(Boolean);
+      omrState={file:file.name,parsed,candidates,base:(byCode[0]||candidates[0])?.base||'',dry:null,codes,codeFound:byCode.length>0};
+      omrRenderPreview();
+    }catch(err){box.innerHTML=`<div class="notice"><b>Could not read this file.</b><br>${esc(err.message||err)}</div>`}
+  };
+  fr.readAsArrayBuffer(file);
+}
+function omrSelectedCandidate(){return (omrState?.candidates||[]).find(c=>c.base===omrState.base)||null}
+function omrRenderPreview(){
+  const box=document.getElementById('omrPreview');if(!box||!omrState)return;
+  const p=omrState.parsed,c=omrSelectedCandidate();const res=c?.res;
+  const pct=x=>Math.round((x||0)*100);
+  const ready=res?res.rows.filter(r=>r.set):[];const problems=res?res.rows.filter(r=>r.problem):[];
+  const detectedCount=ready.filter(r=>r.setSource==='detected').length;
+  box.innerHTML=`<div class="card" style="background:#f8fafc">
+    <h3 style="margin-top:0">${esc(p.exam||omrState.file)}</h3>
+    <p class="small muted">${p.rows.length} student(s) with answers · ${p.absent.length} absent (no answers) · ${p.N} questions${p.hasSetColumn?'':' · <b>No Exam Set column — sets are detected automatically</b>'}</p>
+    ${omrState.codes?.length?(omrState.codeFound?`<div class="success" style="margin:8px 0"><b>Paper code found in the sheet:</b> <code>${esc(omrState.codes.join(', '))}</code> — selected automatically.</div>`:`<div class="notice" style="margin:8px 0"><b>Paper code ${esc(omrState.codes.join(', '))} is in the sheet but was not found in your Question Paper Generator history.</b> The best-matching paper is selected instead — please check.</div>`):''}
+    ${omrState.codes?.length>1?`<div class="notice" style="margin:8px 0">More than one paper code was found in this sheet. Import one paper at a time.</div>`:''}
+    <label>Question paper (from Question Paper Generator history)</label>
+    <select id="omrPaper" onchange="omrState.base=this.value;omrState.dry=null;omrRenderPreview()">${omrState.candidates.slice(0,40).map(x=>`<option value="${esc(x.base)}" ${x.base===omrState.base?'selected':''}>${esc(x.title||'Paper')} — ${esc(x.subject)} — ${esc(qpHistoryDate(x.generated_at))} — Sets ${esc(x.sets)} — match ${pct(x.score)}%</option>`).join('')}</select>
+    ${res?`<div style="overflow:auto;margin-top:10px"><table><thead><tr><th>Set</th><th>Students</th><th>Set found automatically</th><th>Answer keys matching</th><th>Bonus questions (skipped)</th></tr></thead><tbody>${Object.keys(res.sets).sort().map(s=>{const st=res.sets[s],ps=res.perSet[s]||{};const ok=!ps.total||ps.match===ps.total;return `<tr><td><b>${esc(s)}</b></td><td>${st.count}</td><td>${st.detected}</td><td class="${ok?'result-correct':'result-wrong'}">${ps.total?`${ps.match}/${ps.total}`:'— (no key column)'}</td><td>${[...st.bonus].sort((a,b)=>a-b).map(q=>'Q'+q).join(', ')||'—'}</td></tr>`}).join('')}</tbody></table></div>
+    ${detectedCount?`<p class="small muted">${detectedCount} student(s) had no Exam Set; their set was found by matching ${ready.some(r=>r.setSource==='detected'&&r.setMethod==='sheet key')?'the key column / ':''}their answers with each set's saved answer key.</p>`:''}
+    ${problems.length?`<div class="notice" style="margin-top:8px"><b>${problems.length} student(s) need attention:</b><ul style="margin:6px 0 0 18px">${problems.map(r=>`<li>${esc(r.roll)} ${esc(r.name||'')} — ${esc(r.problem)}${r.set?' → will use Set '+esc(r.set):' → will NOT be imported'}</li>`).join('')}</ul></div>`:''}`:''}
+    ${c&&c.score<0.6?`<div class="notice" style="margin-top:10px"><b>This paper does not match the sheet well (${pct(c.score)}%).</b> Check that you selected the correct paper.</div>`:''}
+    <div class="actions" style="margin-top:12px"><button onclick="omrRun(true)">1. Check Students</button><button id="omrImportBtn" ${omrState.dry?'':'disabled'} onclick="omrRun(false)">2. Import into Mistake Bank</button></div>
+    <div id="omrDry" style="margin-top:10px">${omrState.dry?omrReportHtml(omrState.dry):''}</div>
+  </div>`;
+}
+function omrPayloadRows(){
+  const res=omrSelectedCandidate()?.res;if(!res)return [];
+  return res.rows.filter(r=>r.set).map(r=>({roll_no:r.roll,set_code:r.set,answers:r.answers,sheet_keys:r.keys.map((k,i)=>res.sets[r.set]?.bonus.has(i+1)?'BONUS':k)}));
+}
+function omrReportHtml(res){
+  const rows=res.rows||[];const by=s=>rows.filter(x=>x.status===s);
+  const label={student_not_found:'Roll No not found in your classes',set_not_found:'Set not found in the selected paper',already_imported:'Already imported for this paper'};
+  const problems=rows.filter(x=>x.status!=='ok');
+  return `<div class="${res.dry_run?'notice':'success'}"><b>${res.dry_run?'Check result':'Imported'}:</b> ${res.imported} student(s) ${res.dry_run?'ready to import':'added to the Mistake Bank'}.${(res.skipped_questions||[]).length?` Skipped questions: ${esc(res.skipped_questions.join(', '))}.`:''}${problems.length?`<br>${problems.length} row(s) will not be imported:`:''}</div>
+  ${problems.length?`<div style="overflow:auto"><table><thead><tr><th>Roll No</th><th>Name</th><th>Reason</th></tr></thead><tbody>${problems.map(x=>`<tr><td>${esc(x.roll_no)}</td><td>${esc(x.name||'')}</td><td>${esc(label[x.status]||x.status)}${x.set_code?' ('+esc(x.set_code)+')':''}</td></tr>`).join('')}</tbody></table></div>`:''}
+  ${by('ok').length?`<details style="margin-top:8px"><summary>Per-student summary (${by('ok').length})</summary><div style="overflow:auto"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th><th>Correct</th><th>Mistakes</th><th>Skipped</th></tr></thead><tbody>${by('ok').map(x=>`<tr><td>${esc(x.roll_no)}</td><td>${esc(x.name||'')}</td><td>${esc(x.set_code)}</td><td class="result-correct">${x.correct}</td><td class="result-wrong">${x.mistakes}</td><td>${x.skipped}</td></tr>`).join('')}</tbody></table></div></details>`:''}`;
+}
+async function omrRun(dry){
+  if(!omrState?.base)return notify('Select the question paper first.');
+  const c=omrSelectedCandidate();
+  if(!dry&&c&&c.score<0.6&&!confirm(`The sheet matches the selected paper only ${Math.round(c.score*100)}%. Import anyway?`))return;
+  const btns=document.querySelectorAll('#omrPreview button');btns.forEach(b=>b.disabled=true);
+  try{
+    const {data,error}=await sb.rpc('teacher_import_omr_results',{p_paper_base_serial:omrState.base,p_exam_title:omrState.parsed.exam||'',p_file_name:omrState.file,p_rows:omrPayloadRows(),p_dry_run:!!dry});
+    if(error)throw error;
+    if(dry){omrState.dry=data;omrRenderPreview();}
+    else{document.getElementById('omrPreview').innerHTML=omrReportHtml(data);notify(`OMR results imported for ${data.imported} student(s).`,'success');omrLoadHistory();}
+  }catch(e){notify('OMR import failed: '+(e.message||e),'error');omrRenderPreview();}
+}
+
+/* =====================================================================
+ * V14 — JNVST Adaptive Assignment: 60% of each part from the student's
+ * own ACTIVE mistakes (online tests + imported OMR results).
+ * Active mistake = wrong_count > 0 and correct_streak < 2
+ * (fixed after two correct answers in a row; blank = mistake).
+ * Each student gets a personal copy of the assignment.
+ * ===================================================================== */
+const JNVST_ADAPTIVE_PERCENT=60;
+function isAdaptiveJnvstAssignment(){return !schoolTeacherMode&&document.querySelector('input[name="jnvstAssignmentMode"]:checked')?.value==='adaptive';}
+function jnvstAdaptiveCardHtml(){return `<div class="card" style="border:2px solid #7c3aed;background:#faf5ff;margin-top:12px"><h3 style="margin:0 0 6px">🎯 Assignment Personalization</h3>
+ <label><input type="radio" name="jnvstAssignmentMode" value="standard" checked style="width:auto;margin-right:8px">Standard Assignment — every student gets the same questions</label>
+ <label><input type="radio" name="jnvstAssignmentMode" value="adaptive" style="width:auto;margin-right:8px">Adaptive Assignment — ${JNVST_ADAPTIVE_PERCENT}% of each part from the student's own mistakes</label>
+ <div class="small muted" style="margin-top:6px">How it works: build the question set as usual (<b>Build Assignment from JNVST Lesson</b> or <b>Select From JNVST Mock Test Question Bank</b>). That set decides how many questions each part gets. For every student and every part, ${JNVST_ADAPTIVE_PERCENT}% of the questions are replaced with questions that student got wrong — in online tests, assignments or imported OMR exams — and has not yet answered correctly twice in a row. The rest are new questions from the same part (questions the student has never attempted come first). Passage questions (Language / EVS passage) are kept as selected. A student with fewer mistakes simply gets more new questions.</div></div>`;}
+function jnvstAdaptiveIsPassage(q){return !!String(q?.passage_id||'').trim()||/PASSAGE/i.test(String(q?.part_code||''));}
+function jnvstAdaptivePick(blueprint,pool,perfRows){
+  const perf=new Map((perfRows||[]).map(x=>[x.mock_question_id,x]));
+  const parts=[];const byPart=new Map();
+  blueprint.forEach(q=>{const p=String(q.part_code||'OTHER');if(!byPart.has(p)){byPart.set(p,[]);parts.push(p)}byPart.get(p).push(q)});
+  const used=new Set();const out=[];const summary={};
+  for(const part of parts){
+    const bp=byPart.get(part);const n=bp.length;
+    if(bp.some(jnvstAdaptiveIsPassage)){bp.forEach(q=>{out.push({q,reason:'STANDARD_PASSAGE'});used.add(q.id)});summary[part]={total:n,mistakes:0,new:n,passage:true};continue}
+    let target=Math.round(n*JNVST_ADAPTIVE_PERCENT/100);if(n>=2)target=Math.min(target,n-1);
+    const mistakes=pool.filter(q=>String(q.part_code||'OTHER')===part&&!used.has(q.id)&&(()=>{const p=perf.get(q.id);return p&&Number(p.wrong_count||0)>0&&Number(p.correct_streak||0)<2})())
+      .sort((a,b)=>{const pa=perf.get(a.id),pb=perf.get(b.id);return (Number(pb.wrong_count)-Number(pa.wrong_count))||String(pb.last_wrong_at||'').localeCompare(String(pa.last_wrong_at||''))});
+    const chosenMistakes=mistakes.slice(0,target);
+    chosenMistakes.forEach(q=>{out.push({q,reason:'PREVIOUS_MISTAKE',wrongCount:Number(perf.get(q.id)?.wrong_count||0)});used.add(q.id)});
+    const need=n-chosenMistakes.length;
+    const rest=pool.filter(q=>String(q.part_code||'OTHER')===part&&!used.has(q.id)&&!jnvstAdaptiveIsPassage(q));
+    const unseen=adaptiveShuffle(rest.filter(q=>!perf.has(q.id))),seen=adaptiveShuffle(rest.filter(q=>perf.has(q.id)));
+    const fresh=[...unseen,...seen].slice(0,need);
+    fresh.forEach(q=>{out.push({q,reason:perf.has(q.id)?'NEW_ATTEMPTED_BEFORE':'NEW_UNSEEN'});used.add(q.id)});
+    summary[part]={total:n,mistakes:chosenMistakes.length,new:fresh.length,short:need-fresh.length};
+  }
+  return {items:out,summary,short:Object.values(summary).reduce((s,x)=>s+(x.short||0),0)};
+}
+async function saveAdaptiveJnvstAssignment(){
+  const type=document.querySelector('input[name="assignmentType"]:checked')?.value||'video';
+  const title=String(document.getElementById('at')?.value||'').trim();if(!title)return notify('Enter an assignment title.');
+  const videoUrl=type==='video'?(document.getElementById('av')?.value.trim()||''):null;
+  if(type==='video'&&!videoUrl)return notify('Enter the YouTube video URL for this video assignment.');
+  const ids=[...new Set([...(assignmentSchoolQbSelected?.course_type==='JNVST'?assignmentSchoolQbSelected.ids||[]:[]),...assignmentBankSelected])];
+  if(!ids.length)return notify('For an Adaptive Assignment, first build the question set (Build Assignment from JNVST Lesson, or Select From JNVST Mock Test Question Bank). It decides how many questions each part gets.');
+  if(importedQuestions.length||document.querySelectorAll('.q .qt').length&&[...document.querySelectorAll('.q .qt')].some(x=>x.value.trim()))return notify('Adaptive Assignments use Question Bank questions only. Remove uploaded/manual questions or choose Standard Assignment.');
+  let recipientInfo;try{recipientInfo=await getNewAssignmentRecipients();if(!recipientInfo.studentIds.length)return notify('Select at least one student.');}catch(e){return notify(e.message)}
+  const studentIds=[...new Set(recipientInfo.studentIds)];
+  const btn=document.activeElement;if(btn&&btn.tagName==='BUTTON'){btn.disabled=true;btn.dataset.txt=btn.textContent;btn.textContent='Creating personal assignments…'}
+  try{
+    // Pool: lesson builder range if used, otherwise the whole active JNVST bank.
+    let pool=(assignmentSchoolQbMode==='JNVST'&&assignmentSchoolQbSelected?.ids?.length&&assignmentSchoolQbQuestions.length)?assignmentSchoolQbAllowed():null;
+    const {data:allBank,error:be}=await sb.from('mock_question_bank').select('id,question_text,option_a,option_b,option_c,option_d,correct_option,passage_text,image_url,topic,language,passage_id,passage_title,question_order,variation_group,subject_id,lesson_id,part_code,section_code,active').eq('teacher_id',current.id).eq('active',true);
+    if(be)throw be;
+    const bankById=new Map((allBank||[]).map(q=>[q.id,q]));
+    pool=(pool||allBank||[]).map(q=>bankById.get(q.id)).filter(Boolean);
+    const blueprint=ids.map(id=>bankById.get(id)).filter(Boolean);
+    if(!blueprint.length)throw new Error('The selected questions were not found in the active JNVST Question Bank.');
+    // Keep the selected language when the builder restricted it.
+    const lang=String(assignmentSchoolQbSelected?.lang||'').toUpperCase();
+    const langs=new Set(blueprint.map(q=>String(q.language||'').toUpperCase()).filter(Boolean));
+    if(langs.size===1)pool=pool.filter(q=>!q.language||langs.has(String(q.language).toUpperCase()));
+    const [{data:perf,error:pe},{data:profs,error:pre}]=await Promise.all([
+      sb.from('student_question_performance').select('student_id,mock_question_id,wrong_count,correct_streak,last_wrong_at,attempt_count').in('student_id',studentIds),
+      sb.from('profiles').select('id,full_name,roll_no').in('id',studentIds)
+    ]);
+    if(pe)throw new Error('Could not load student mistakes: '+pe.message+(String(pe.message).includes('correct_streak')?' — run V14_OMR_MISTAKES_MIGRATION.sql first.':''));
+    if(pre)throw pre;
+    const profById=new Map((profs||[]).map(p=>[p.id,p]));
+    const primaryClassId=recipientInfo.classIds[0];
+    const jnvstMainClass=(window._newAssignmentClasses||[]).find(c=>c.id===(document.getElementById('aMainGroup')?.value||''));
+    const mainGroup=jnvstMainClass?.name||'JNVST Main Group';
+    const subSel=(window._newAssignmentClasses||[]).find(c=>c.id===String(document.getElementById('aSubGroup')?.value||'').trim());
+    const subNames=[...new Set((recipientInfo.classIds||[]).map(id=>(window._newAssignmentClasses||[]).find(c=>c.id===id)).filter(c=>c&&isJnvstSubGroup(c)).map(c=>c.name))];
+    const subGroup=subSel?.name||(subNames.length===1?subNames[0]:subNames.length>1?'Multiple Sub-groups':'');
+    const batchId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^(crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4)).toString(16));const created=[],errors=[];let totalMistakes=0;
+    for(const sid of studentIds){
+      const pick=jnvstAdaptivePick(blueprint,pool,(perf||[]).filter(x=>x.student_id===sid));
+      const pr=profById.get(sid)||{};
+      if(pick.short>0){errors.push(`${pr.full_name||sid}: ${pick.short} question(s) short — not enough questions in the selected range`);continue}
+      const mistakesUsed=pick.items.filter(x=>x.reason==='PREVIOUS_MISTAKE').length;
+      const {data:a,error:ae}=await sb.from('assignments').insert({class_id:primaryClassId,title,subject:document.getElementById('asub')?.value.trim()||'',description:document.getElementById('adesc')?.value.trim()||'',video_url:videoUrl,assignment_type:type==='video'?'VIDEO':'MCQ',time_limit:null,shuffle_questions:false,shuffle_options:false,main_group:mainGroup,sub_group:subGroup,created_by:current.id,adaptive_mode:true,adaptive_max_percent:JNVST_ADAPTIVE_PERCENT,adaptive_batch_id:batchId,adaptive_for_student_id:sid,adaptive_weakness_count:mistakesUsed,adaptive_normal_count:pick.items.length-mistakesUsed,adaptive_selection_summary:{course:'JNVST',student_name:pr.full_name||'',roll_no:pr.roll_no||'',parts:pick.summary}}).select('id').single();
+      if(ae){errors.push(`${pr.full_name||sid}: ${ae.message}`);continue}
+      const qs=pick.items.map((it,i)=>{const q=it.q;return {assignment_id:a.id,question_text:q.image_url?'[IMAGE QUESTION]':(q.question_text||''),option_a:q.image_url?'Option A':q.option_a,option_b:q.image_url?'Option B':q.option_b,option_c:q.image_url?'Option C':q.option_c,option_d:q.image_url?'Option D':q.option_d,correct_option:q.correct_option,question_order:i+1,image_url:q.image_url||null,explanation:null,source_mock_question_id:q.id,source_variation_group:q.variation_group||null,source_topic:q.topic||null,adaptive_selection_reason:it.reason,adaptive_source_wrong_count:it.wrongCount||0}});
+      const {error:qe}=await sb.from('questions').insert(qs);
+      if(qe){await sb.from('assignments').delete().eq('id',a.id);errors.push(`${pr.full_name||sid}: could not save questions — ${qe.message}`);continue}
+      const {error:re}=await sb.from('assignment_students').insert({assignment_id:a.id,student_id:sid});
+      if(re){await sb.from('questions').delete().eq('assignment_id',a.id);await sb.from('assignments').delete().eq('id',a.id);errors.push(`${pr.full_name||sid}: could not assign — ${re.message}`);continue}
+      created.push(sid);totalMistakes+=mistakesUsed;
+    }
+    if(!created.length)return notify('No adaptive assignments were created.\n'+errors.join('\n'),'error');
+    notify(`Adaptive assignment created for ${created.length} student${created.length===1?'':'s'} (${blueprint.length} questions each). ${totalMistakes} mistake question(s) were used in total.${errors.length?'\n\nNot created:\n'+errors.join('\n'):''}`,errors.length?'info':'success');
+    importedQuestions=[];importedAnswers={};importedExplanations={};importedSingleExcel=false;importedForNewAssignment=false;newAssignmentDraft=null;importedSolutionPdfPages=[];assignmentBankSelected.clear();assignmentBankCache=[];assignmentSchoolQbSelected=null;assignmentSchoolQbQuestions=[];assignmentSchoolQbChapters=[];assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();
+    teacherHome();
+  }catch(e){notify('Could not create the adaptive assignment: '+(e.message||e),'error')}
+  finally{if(btn&&btn.tagName==='BUTTON'&&document.body.contains(btn)){btn.disabled=false;btn.textContent=btn.dataset.txt||btn.textContent}}
+}
