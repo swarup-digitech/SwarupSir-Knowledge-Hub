@@ -510,6 +510,14 @@ function qpAssignNumbers(rows){return(rows||[]).map((q,i)=>({...q,_number:i+1}))
 function qpBuildAnswerRows(rows){return(rows||[]).map(q=>({"Q.No.":q._number,"Section":q.section_code||'',"Part":q.part_code||'',"Topic":qpTopicLabel(q),"Selection":q._selectionType||'',"Passage Set":q._passageGroup||q.passage_id||'',"Question ID":q.id||'',"Correct Option":String(q.correct_option||'').toUpperCase()}));}
 function qpQualityText(v){return qpNorm(v).replace(/\s+/g,' ').trim()}
 function qpQualityFingerprint(q){
+  // Image questions (e.g. MAT from PDF): the picture IS the question. Several
+  // MAT questions share the same instruction text and label-only options, so
+  // comparing text would wrongly mark them all as duplicates. Compare the
+  // image instead (ignoring ?query / #hash so a re-signed URL still matches).
+  const hash=qpNorm(q.source_image_hash);
+  if(hash) return 'imghash::'+hash.toLowerCase();
+  const img=qpNorm(q.image_url);
+  if(img) return 'img::'+img.split('#')[0].split('?')[0].toLowerCase();
   return [qpQualityText(q.question_text),qpQualityText(q.option_a),qpQualityText(q.option_b),qpQualityText(q.option_c),qpQualityText(q.option_d)].join('||').toLowerCase();
 }
 function qpExpectedQuestionCount(){
