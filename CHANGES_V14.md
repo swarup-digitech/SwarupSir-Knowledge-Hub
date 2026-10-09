@@ -81,3 +81,24 @@ V14 is built on V13. If V13 is not installed yet, do the V13 steps first (see `C
   * One personal assignment per student.
 * **Regression:** all 113 teacher-page buttons behave exactly as in V13.
 * **Not tested:** your live Supabase project. Import one paper, then create one small adaptive assignment for two students and open it as a student.
+
+## 3. Install shortcut (home screen / desktop)
+**New file:** `pwa-install.js`. **Changed:** `main.html`, `student-sw.js`, `student-app.webmanifest`.
+
+Browsers never let a website create a shortcut by itself; the student must tap to confirm once. Within that limit:
+* **Every time a student opens the app in a browser and it is not installed**, an install banner appears. Before, it appeared only once, ever. "Later" hides it until the app is opened again. It now shows on both the JNVST and the School student home.
+* **Chrome / Edge / Samsung Internet, on Android and on Windows/Mac computers:**
+  * The browser tells the page whether the app is installed, so the banner appears **again if the shortcut was deleted**.
+  * The button opens the browser's real install dialog.
+* **iPhone / iPad:** Apple does not allow an install button, so the banner shows the 3 steps (Share → Add to Home Screen → Add).
+  * "I have added it" hides it for 30 days.
+  * "Later" hides it for 1 day.
+  * Opening from the home-screen icon never shows it.
+* **Mac Safari:** shows *File → Add to Dock*.
+* **Firefox on computers:** cannot install web apps, so no banner is shown.
+* **Teachers never see it.**
+
+To show the banner **before login** too (on `student-login.html`, `index.html`), add this line inside `<head>` of those pages:
+```html
+<link rel="manifest" href="/student-app.webmanifest"><script src="/pwa-install.js?v=14" defer></script>
+```

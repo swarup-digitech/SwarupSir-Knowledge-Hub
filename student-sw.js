@@ -10,6 +10,8 @@ const APP_SHELL = [
   '/main.html',
   '/common-ui.js',
   '/common-ui.js?v=13',
+  '/pwa-install.js',
+  '/pwa-install.js?v=14',
   '/index.html',
   '/student-course-selection.html',
   '/student-login.html',

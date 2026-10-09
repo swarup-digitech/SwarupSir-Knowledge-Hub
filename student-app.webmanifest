@@ -26,5 +26,12 @@
       "purpose": "maskable"
     }
   ],
-  "scope": "/"
+  "scope": "/",
+  "id": "/student-login.html",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "/student-app.webmanifest"
+    }
+  ]
 }

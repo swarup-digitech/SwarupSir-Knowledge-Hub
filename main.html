@@ -7,7 +7,7 @@
 <link rel="manifest" href="/student-app.webmanifest">
 <link rel="icon" href="/skh-icon-192.png" type="image/png">
 <title>Swarup Sir's Knowledge Hub</title>
-<script src="common-ui.js?v=13"></script><script>window.notify=window.notify||function(m){window.alert(m instanceof Error?m.message:m)};</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="common-ui.js?v=13"></script><script src="pwa-install.js?v=14" defer></script><script>window.notify=window.notify||function(m){window.alert(m instanceof Error?m.message:m)};</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/mathlive.min.js"></script>
 <script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script>
@@ -259,7 +259,6 @@ html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!importan
 </style>
 </head>
 <body><div id="app"></div>
-<div id="installBanner" class="install-banner" role="dialog" aria-live="polite"><div class="install-banner-row"><img class="install-icon" src="/skh-icon-192.png" alt="Knowledge Hub icon"><div><h3>Install Knowledge Hub</h3><p class="muted small">Add a shortcut to this device for quick student access.</p></div></div><div id="installHelp" class="small muted" style="margin-top:8px"></div><div class="install-actions"><button id="installAppBtn" type="button">＋ Add to Home Screen</button><button class="secondary" id="installLaterBtn" type="button">Not now</button></div></div>
 <script>
 /* ---- V13: teacher tools are loaded on demand (teacher-app.js) ---- */
 let __teacherAppPromise=null;
@@ -764,9 +763,11 @@ let deferredInstallPrompt=null;
 const PWA_INSTALL_KEY="sskh_student_install_prompt_v1";
 function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;}
 function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent);}
-function setupPWAInstall(){if("serviceWorker" in navigator)navigator.serviceWorker.register("/student-sw.js").catch(()=>{});window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;});window.addEventListener("appinstalled",()=>{deferredInstallPrompt=null;localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();});}
-function hideInstallBanner(){document.getElementById("installBanner")?.classList.remove("show");}
-function showStudentInstallPrompt(){if(!profile||profile.role!=="student"||isStandalone()||localStorage.getItem(PWA_INSTALL_KEY))return;const b=document.getElementById("installBanner"),help=document.getElementById("installHelp"),btn=document.getElementById("installAppBtn");if(!b||!btn)return;help.textContent=isIOS()&&!deferredInstallPrompt?"On iPhone/iPad: tap Share, then choose “Add to Home Screen”.":"Tap Add to Home Screen and confirm the installation.";b.classList.add("show");btn.onclick=async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();const choice=await deferredInstallPrompt.userChoice.catch(()=>null);deferredInstallPrompt=null;if(choice?.outcome==="accepted")localStorage.setItem(PWA_INSTALL_KEY,"installed");hideInstallBanner();}else if(isIOS()){notify("To add Knowledge Hub: tap Share, then choose “Add to Home Screen”.");}else{notify("If your browser shows an install icon in the address bar or menu, choose “Install” or “Add to Home Screen”.");}};document.getElementById("installLaterBtn").onclick=()=>{localStorage.setItem(PWA_INSTALL_KEY,"later");hideInstallBanner();};}
+function setupPWAInstall(){if("serviceWorker" in navigator)navigator.serviceWorker.register("/student-sw.js").catch(()=>{});}
+// V14: install banner is handled by pwa-install.js (shown every time a student opens the app in a browser and it is not installed).
+window.skhInstallAllowed=()=>profile?.role==="student";
+function hideInstallBanner(){window.SKHInstall?.hide();}
+function showStudentInstallPrompt(){window.SKHInstall?.maybeShow();}
 setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -1886,6 +1887,7 @@ async function schoolStudentAssessments(){
 }
 
 async function schoolStudentHome(){
+  setTimeout(showStudentInstallPrompt,800);
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   const schoolPortal=new URLSearchParams(location.search).get("portal")||"";
   const assessmentOnly=schoolPortal==="SCHOOL_ASSESSMENTS";

@@ -32,7 +32,8 @@ begin
                  where c.relname = 'student_question_performance'
                    and d.description like 'v14:%') then
     update public.student_question_performance
-       set correct_streak = case when last_result then 1 else 0 end;
+       -- last_result may be boolean or text in older projects
+       set correct_streak = case when lower(coalesce(last_result::text,'')) in ('true','t','1','yes','y','correct') then 1 else 0 end;
     comment on table public.student_question_performance is
       'v14: correct_streak added (active mistake = wrong_count>0 and correct_streak<2)';
   end if;
