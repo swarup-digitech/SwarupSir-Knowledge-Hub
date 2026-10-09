@@ -127,8 +127,6 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 /* Arithmetic Question Paper: fixed two-column JNVST-style layout */
 .qp-arithmetic-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-arithmetic-page:last-child{break-after:auto;page-break-after:auto}
-.qp-arithmetic-chunk{break-inside:auto;page-break-inside:auto}
-.qp-arithmetic-chunk:not(:last-child){break-after:page;page-break-after:always}
 .qp-arithmetic-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0;border-top:1px solid #999;border-bottom:1px solid #999;break-inside:auto;page-break-inside:auto;min-height:0;overflow:visible;align-items:start}
 .qp-arithmetic-column{min-width:0;padding:0 5mm}
 .qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777}
@@ -138,7 +136,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
 .qp-arithmetic-columns .arithmetic-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
 .qp-arithmetic-columns .arithmetic-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
-@media print{.qp-arithmetic-page{break-before:auto!important;page-break-before:auto!important;break-after:auto!important;page-break-after:auto!important}.qp-arithmetic-chunk:not(:last-child){break-after:page!important;page-break-after:always!important}.qp-arithmetic-columns{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;column-gap:0!important;min-height:0!important;overflow:visible!important;break-inside:auto!important;page-break-inside:auto!important}.qp-arithmetic-column{min-width:0!important;padding:0 5mm!important}.qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
+@media print{.qp-arithmetic-page{break-after:auto!important;page-break-after:auto!important;break-before:auto!important;page-break-before:auto!important}.qp-arithmetic-columns{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;column-gap:0!important;min-height:0!important;overflow:visible!important;break-inside:auto!important;page-break-inside:auto!important}.qp-arithmetic-column{min-width:0!important;padding:0 5mm!important}.qp-arithmetic-column + .qp-arithmetic-column{border-left:1px solid #777!important}.qp-arithmetic-page:last-child{break-after:auto!important;page-break-after:auto!important}}
 /* EVS MCQ Question Paper: two-column layout for each 15-MCQ block */
 .qp-evs-mcq-page{width:100%;break-after:auto;page-break-after:auto;break-before:auto;page-break-before:auto;margin:0;padding:0}
 .qp-evs-mcq-page:last-child{break-after:auto;page-break-after:auto}
@@ -234,6 +232,30 @@ html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!importan
 .jnvst-upload-status{font-weight:700;color:#1d4ed8;font-size:13px}
 @keyframes jnvstUploadSpin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.jnvst-upload-spinner{animation:none}}
+</style>
+
+<style id="qp-layout-fix">
+/* ===== Question Paper layout fix (v12) =====
+   1. Arithmetic questions flow through a real two-column container (works in Firefox + Chrome print).
+   2. Long unbroken text (Assamese without spaces, long numbers) can never push content outside its column.
+   3. Print-window helper banner is hidden on paper. */
+.jnvst-qbody{min-width:0;overflow-wrap:anywhere;word-break:normal}
+.jnvst-qtext,.jnvst-option{overflow-wrap:anywhere;min-width:0}
+.jnvst-options>*{min-width:0}
+.jnvst-options.long{grid-template-columns:1fr!important}
+.jnvst-question,.jnvst-qrow{min-width:0;max-width:100%}
+.jnvst-question-image{max-width:100%!important;height:auto}
+.qp-arithmetic-flow{display:block;column-count:2;-moz-column-count:2;column-gap:0;-moz-column-gap:0;column-rule:1px solid #777;-moz-column-rule:1px solid #777;border-top:1px solid #999;border-bottom:1px solid #999;orphans:2;widows:2}
+.qp-arithmetic-flow .arithmetic-question{padding:0 5mm;margin:0 0 6px;break-inside:avoid;page-break-inside:avoid;-moz-column-break-inside:avoid;display:block}
+.qp-arithmetic-flow .arithmetic-question .jnvst-qrow{gap:4px}
+.qp-arithmetic-flow .arithmetic-question .jnvst-qnum{min-width:22px}
+.qp-arithmetic-flow .arithmetic-question .jnvst-qtext{font-size:9.5pt;line-height:1.18}
+.qp-arithmetic-flow .arithmetic-question .jnvst-options{gap:2px 8px;margin-top:3px;font-size:9.2pt}
+.qp-arithmetic-flow .arithmetic-question .jnvst-question-image{max-width:100%;max-height:45mm;margin:2px auto 3px}
+.qp-banner{font:13px/1.4 Arial,sans-serif;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;margin:0 0 8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.qp-banner button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}
+.qp-banner.warn{background:#fef3c7;border-color:#fcd34d;color:#78350f}
+@media print{.qp-noprint{display:none!important}}
 </style>
 </head>
 <body><div id="app"></div>
@@ -1331,29 +1353,12 @@ function qpHtmlQuestion(q,variant='default'){
   // Do not append database option text beneath the image.
   const isMat=String(q.section_code||'').toUpperCase()==='MAT' || String(q.part_code||'').toUpperCase().startsWith('MAT_') || variant==='mat';
   const embeddedImageOptions=hasImage && isMat;
-  const opts=embeddedImageOptions?'':`<div class="jnvst-options">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
+  const longOpts=['a','b','c','d'].some(k=>qpPlainMath(q['option_'+k]||'').length>18);
+  const opts=embeddedImageOptions?'':`<div class="jnvst-options${longOpts?' long':''}">${['A','B','C','D'].map(o=>jnvstPdfOption(q,o)).join('')}</div>`;
   const imageClass=variant==='arithmetic'?'jnvst-question-image arithmetic-question-image':'jnvst-question-image';
-  return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="lazy">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
+  return `<div class="jnvst-question ${variant==='arithmetic'?'arithmetic-question':variant==='evs-mcq'?'evs-mcq-question':''}"><div class="jnvst-qrow"><div class="jnvst-qnum">${q._number}.</div><div class="jnvst-qbody">${hasImage?`<img class="${imageClass}" src="${esc(q.image_url)}" alt="" loading="eager" decoding="sync">`:''}${questionText?`<div class="jnvst-qtext">${jnvstPdfEscape(questionText)}</div>`:''}${opts}</div></div></div>`;
 }
-function qpBuildArithmeticHtml(rows){
-  const list=Array.isArray(rows)?rows:[];
-  // A 20-question Arithmetic paper is already proven to fit one A4 page.
-  // For 40/60/... questions, never place all questions inside one large CSS
-  // grid: Chromium can treat that grid as an unbreakable block and move the
-  // whole question area to page 2, leaving page 1 with only the header.
-  // Instead, build page-sized 20-question chunks. Each chunk uses the same
-  // two-column layout as the working 20-question paper.
-  const chunks=[];
-  for(let start=0;start<list.length;start+=20){
-    const chunk=list.slice(start,start+20);
-    const split=Math.ceil(chunk.length/2);
-    const left=chunk.slice(0,split), right=chunk.slice(split);
-    const col=items=>items.map(q=>qpHtmlQuestion(q,'arithmetic')).join('');
-    const isLast=start+20>=list.length;
-    chunks.push(`<div class="qp-arithmetic-page qp-arithmetic-chunk"${isLast?'':' style="break-after:page;page-break-after:always"'}><div class="qp-arithmetic-columns"><div class="qp-arithmetic-column">${col(left)}</div><div class="qp-arithmetic-column">${col(right)}</div></div></div>`);
-  }
-  return chunks.join('');
-}
+function qpBuildArithmeticHtml(rows){const list=Array.isArray(rows)?rows:[];return `<div class="qp-arithmetic-page"><div class="qp-arithmetic-flow">${list.map(q=>qpHtmlQuestion(q,'arithmetic')).join('')}</div></div>`;}
 
 function qpOrderEVSRows(rows){
   const source=(rows||[]).map(q=>({...q}));
@@ -1443,14 +1448,14 @@ function qpBuildAnswerWorkbook(variants,title,baseSerial){
   const credits=XLSX.utils.aoa_to_sheet([['Question Set Serial No.',baseSerial],['Sets Prepared',variants.map(v=>`SET ${v.setCode}`).join(', ')],[],['(c)Swarup Sir, Ph: 98643-90279'],['Classroom OMR Exam Question Paper. Copy-wright materials.']]);XLSX.utils.book_append_sheet(wb,credits,'Credits');
   return wb;
 }
-function downloadSelectedAnswerKeyExcel(){
+async function downloadSelectedAnswerKeyExcel(){
   try{
     let variants=qpState.lastSetVariants;
     let baseSerial=qpState.multiSetSerial||'';
     let count=variants?.length||0;
     if(!variants||!variants.length){
       const master=qpMasterRows();
-      count=qpAskSetCount(qpRequestedSetCount());
+      count=await qpAskSetCountModal(qpRequestedSetCount());
       if(count===null)return;
       variants=qpBuildSetVariants(master,count);
       const qcReports=variants.map(v=>qpValidatePaperQuality(v.rows,qpSubject(),`SET ${v.setCode}`));
@@ -1487,24 +1492,25 @@ async function qpFetchImageData(url){
     const b=await r.arrayBuffer();
     let mime='image/png';
     try{mime=r.headers.get('content-type')||mime}catch(_){ }
-    return {data:b,mime};
+    let width=0,height=0;try{const bmp=await createImageBitmap(new Blob([b]));width=bmp.width;height=bmp.height;bmp.close&&bmp.close();}catch(_){}
+    return {data:b,mime,width,height};
   }catch(e){return null;}
 }
 function qpDocxOptions(q,d){
   const {Paragraph,TextRun,Table,TableRow,TableCell,WidthType,BorderStyle}=d;
-  const vals=[['A',q.option_a],['B',q.option_b],['C',q.option_c],['D',q.option_d]];
+  const vals=[['A',q.option_a],['B',q.option_b],['C',q.option_c],['D',q.option_d]].map(([l,t])=>[l,qpPlainMath(t)]);
   const cells=vals.map(([letter,text])=>new TableCell({children:[new Paragraph({children:[new TextRun({text:`(${letter}) `,bold:true}),new TextRun({text:String(text||'')})]})],width:{size:50,type:WidthType.PERCENT}}));
   return new Table({rows:[new TableRow({children:[cells[0],cells[1]]}),new TableRow({children:[cells[2],cells[3]]})],width:{size:100,type:WidthType.PERCENT},borders:{top:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},bottom:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},left:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},right:{style:BorderStyle.SINGLE,size:4,color:'D9E2EC'},insideHorizontal:{style:BorderStyle.SINGLE,size:4,color:'E5E7EB'},insideVertical:{style:BorderStyle.SINGLE,size:4,color:'E5E7EB'}}});
 }
 async function qpDocxQuestionBlocks(q,d){
   const {Paragraph,TextRun,ImageRun}=d;
   const blocks=[];
-  blocks.push(new Paragraph({spacing:{before:120,after:60},children:[new TextRun({text:`${q._number}. `,bold:true,color:'1D4ED8'}),new TextRun({text:String(q.question_text||'')})]}));
+  blocks.push(new Paragraph({spacing:{before:120,after:60},children:[new TextRun({text:`${q._number}. `,bold:true,color:'1D4ED8'}),new TextRun({text:qpPlainMath(q.question_text)})]}));
   if(q.image_url){
     const img=await qpFetchImageData(q.image_url);
     if(img){
       const type=/jpe?g/i.test(img.mime)?'jpg':'png';
-      blocks.push(new Paragraph({alignment:d.AlignmentType.CENTER,spacing:{after:100},children:[new ImageRun({data:img.data,transformation:{width:500,height:280},type})]}));
+      blocks.push(new Paragraph({alignment:d.AlignmentType.CENTER,spacing:{after:100},children:[new ImageRun({data:img.data,transformation:(()=>{const mw=480,mh=300;let w=img.width||500,h=img.height||280;const k=Math.min(mw/w,mh/h,1);return{width:Math.round(w*k),height:Math.round(h*k)};})(),type})]}));
     }
   }
   if(!q.image_url)blocks.push(qpDocxOptions(q,d));
@@ -1548,7 +1554,7 @@ async function downloadSelectedQuestionPaperWord(){
           seen.add(pid);passageNumber++;
           children.push(new Paragraph({pageBreakBefore:passageNumber>1,spacing:{before:180,after:60},children:[new TextRun({text:`Passage ${passageNumber}`,bold:true,size:22,color:'1D4ED8'})]}));
           children.push(new Paragraph({spacing:{after:70},children:[new TextRun({text:qpNorm(q._passageTitle||q.passage_title)||'Passage',bold:true,size:20})]}));
-          children.push(new Paragraph({spacing:{after:130},children:[new TextRun({text:String(q._passageText||q.passage_text||'')})]}));
+          children.push(new Paragraph({spacing:{after:130},children:[new TextRun({text:qpPlainMath(q._passageText||q.passage_text||'')})]}));
         }
         const blocks=await qpDocxQuestionBlocks(q,d);children.push(...blocks);
       }
@@ -1602,12 +1608,10 @@ function qpOpenSavedPaper(record,includeAnswers){
   const setCode=record.set_code||snap.setCode||'A';
   const subject=record.subject||snap.subject||'';
   const answerBlock=includeAnswers?qpSavedAnswerBlock(rows,subject):'';
-  const body=`<div class="jnvst-paper"><div class="qp-paper-page"><div class="jnvst-topline"><span><span class="qp-set-serial">Serial No.: ${esc(serial)}</span><span class="qp-set-serial" style="margin-left:6px">SET ${esc(setCode)}</span></span><span>Generated: ${esc(qpHistoryDate(record.generated_at))}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR'S KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div></div><table class="jnvst-fields"><tr><td class="label">Subject</td><td>${esc(subject)}</td><td class="label">Language</td><td>${esc(record.language||snap.language||'')}</td></tr><tr><td class="label">Questions</td><td>${rows.length}</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option.</div>${snap.mode==='mat'?qpBuildCommonHtml(rows):subject==='EVS'?qpBuildEVSHtml(rows):snap.mode==='passages'?qpBuildPassageHtml(rows):subject==='ARITHMETIC'?qpBuildArithmeticHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="qp-paper-footer"><span>Serial No.: ${esc(serial)}</span><span>SET ${esc(setCode)}</span><span>(c)Swarup Sir, Ph: 98643-90279</span></div></div>${answerBlock}</div>`;
-  const w=window.open('','_blank','width=1100,height=900');
-  if(!w)return alert('Please allow pop-ups for the saved paper preview.');
-  const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
-  w.document.open();w.document.write(`<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style><script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"],["$","$"]],displayMath:[["\\\\[","\\\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="jnvst-paper">${body}${answerBlock}</div><script>(async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;for(let i=0;i<100&&!window.MathJax?.typesetPromise;i++)await new Promise(r=>setTimeout(r,50));if(window.MathJax?.typesetPromise)await window.MathJax.typesetPromise();}catch(e){console.error('MathJax typeset failed',e);}const imgs=[...document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));const b=document.getElementById('printPaperBtn');if(b){b.disabled=false;b.textContent='Print / Save as PDF';b.onclick=()=>window.print();}else{window.focus();setTimeout(()=>window.print(),150);}})();<\/script>
-</body></html>`);w.document.close();
+  const body=`<div class="qp-paper-page"><div class="jnvst-topline"><span><span class="qp-set-serial">Serial No.: ${esc(serial)}</span><span class="qp-set-serial" style="margin-left:6px">SET ${esc(setCode)}</span></span><span>Generated: ${esc(qpHistoryDate(record.generated_at))}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR'S KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)}</div></div><table class="jnvst-fields"><tr><td class="label">Subject</td><td>${esc(subject)}</td><td class="label">Language</td><td>${esc(record.language||snap.language||'')}</td></tr><tr><td class="label">Questions</td><td>${rows.length}</td><td class="label">Marks</td><td>${rows.length}</td></tr></table><div class="jnvst-directions"><b>Instructions:</b> Read each question carefully and choose the correct option.</div>${snap.mode==='mat'?qpBuildCommonHtml(rows):subject==='EVS'?qpBuildEVSHtml(rows):snap.mode==='passages'?qpBuildPassageHtml(rows):subject==='ARITHMETIC'?qpBuildArithmeticHtml(rows):rows.map(qpHtmlQuestion).join('')}<div class="qp-paper-footer"><span>Serial No.: ${esc(serial)}</span><span>SET ${esc(setCode)}</span><span>(c)Swarup Sir, Ph: 98643-90279</span></div></div>${answerBlock}`;
+  const w=qpOpenPrintWindow();
+  if(!w)return;
+  qpWritePrintWindow(w,title,body);
 }
 function qpHistoryGroupKey(serial){return String(serial||'').replace(/-[ABCD]$/,'')||'UNKNOWN';}
 function qpHistoryGroupDate(v){try{return new Date(v).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});}catch(_){return 'Unknown Date';}}
@@ -1631,19 +1635,22 @@ function qpResetAllSelections(){if(!confirm('Reset all current Question Paper Ge
 
 async function qpGetHistoryGroupRecords(baseSerial){const {data,error}=await sb.from('jnvst_generated_question_papers').select('*').eq('teacher_id',current.id).like('serial_no',`${baseSerial}-%`).order('set_code',{ascending:true});if(error)throw error;return data||[];}
 function qpBuildAllQuestionsHtml(rows,title,serial){const numbered=qpAssignNumbers(rows||[]);return `<div class="qp-set-wrapper"><div class="qp-paper-page"><div class="jnvst-topline"><span><span class="qp-set-serial">Serial No.: ${esc(serial)}</span><span class="qp-set-serial" style="margin-left:6px">ALL QUESTIONS</span></span><span>Exam Date: ${new Date().toLocaleDateString('en-IN')}</span></div><div class="jnvst-header"><div class="jnvst-title">SWARUP SIR'S KNOWLEDGE HUB</div><div class="jnvst-subtitle">${esc(title)} — ALL GENERATED QUESTIONS</div></div><table class="jnvst-fields"><tr><td class="label">Subject</td><td>${esc(qpSubject())}</td><td class="label">Questions</td><td>${numbered.length}</td></tr></table><div class="jnvst-directions"><b>Master Question Set:</b> These are the questions selected before SET A/SET B/SET C/SET D randomization.</div>${qpSubject()==='ARITHMETIC'?qpBuildArithmeticHtml(numbered):qpIsCommonMode()?qpBuildCommonHtml(numbered):qpSubject()==='EVS'?qpBuildEVSHtml(numbered):qpState.mode==='passages'?qpBuildPassageHtml(numbered):numbered.map(qpHtmlQuestion).join('')}<div class="qp-paper-footer"><span>Serial No.: ${esc(serial)}</span><span>ALL QUESTIONS</span><span>(c)Swarup Sir, Ph: 98643-90279</span></div></div></div>`;}
-async function viewGeneratedQuestionPaperGroup(baseSerial){try{const records=await qpGetHistoryGroupRecords(baseSerial);if(!records.length)return alert('No saved sets were found for this generation.');const first=records[0],title=first.title||'JNVST Practice Question Paper';const master=Array.isArray(first.paper_snapshot?.master_rows)?first.paper_snapshot.master_rows:null;const variants=records.map(r=>({setCode:r.set_code||'A',rows:(r.paper_snapshot?.rows||[]).map((q,i)=>({...q,_number:i+1}))}));const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');const body=(master&&master.length?qpBuildAllQuestionsHtml(master,title,baseSerial):'')+variants.map((v,i)=>qpBuildSetHtml(v.rows,v.setCode,`${baseSerial}-${v.setCode}`,title,false,i===variants.length-1)).join('');const w=window.open('','_blank','width=1100,height=900');if(!w)return alert('Please allow pop-ups for the saved paper preview.');w.document.open();w.document.write(`<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><title>${esc(title)} — All Sets</title><style>${css}</style><style>@media print{.qp-set-wrapper{break-after:auto!important;page-break-after:auto!important}.qp-set-wrapper:not(:last-child){break-after:page!important;page-break-after:always!important}.qp-paper-page{break-after:auto!important;page-break-after:auto!important}}</style><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="jnvst-paper">${body}</div><script>(async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;for(let i=0;i<100&&!window.MathJax?.typesetPromise;i++)await new Promise(r=>setTimeout(r,50));if(window.MathJax?.typesetPromise)await window.MathJax.typesetPromise();}catch(e){}const imgs=[...document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));window.focus();setTimeout(()=>window.print(),150);})();<\/script></body></html>`);w.document.close();}catch(e){alert('Could not open all saved sets: '+(e.message||e));}}
+async function viewGeneratedQuestionPaperGroup(baseSerial){try{const records=await qpGetHistoryGroupRecords(baseSerial);if(!records.length)return alert('No saved sets were found for this generation.');const first=records[0],title=first.title||'JNVST Practice Question Paper';const master=Array.isArray(first.paper_snapshot?.master_rows)?first.paper_snapshot.master_rows:null;const variants=records.map(r=>({setCode:r.set_code||'A',rows:(r.paper_snapshot?.rows||[]).map((q,i)=>({...q,_number:i+1}))}));const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');const body=(master&&master.length?qpBuildAllQuestionsHtml(master,title,baseSerial):'')+variants.map((v,i)=>qpBuildSetHtml(v.rows,v.setCode,`${baseSerial}-${v.setCode}`,title,false,i===variants.length-1)).join('');const w=qpOpenPrintWindow();if(!w)return;qpWritePrintWindow(w,`${title} — All Sets`,body);}catch(e){alert('Could not open all saved sets: '+(e.message||e));}}
 function qpBuildSavedAnswerWorkbook(records){const wb=XLSX.utils.book_new(),first=records[0]||{},title=first.title||'JNVST Practice Question Paper',base=qpHistoryGroupKey(first.serial_no),variants=records.map(r=>({setCode:r.set_code||'A',rows:(r.paper_snapshot?.rows||[]).map((q,i)=>({...q,_number:i+1}))}));XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Question Set Serial No.',base],['Paper Title',title],['Subject',first.subject||''],['Language',first.language||''],['Generated On',first.generated_at?qpHistoryDate(first.generated_at):new Date().toLocaleString('en-IN')],['Number of Sets',records.length],['Questions per Set',Number(first.question_count||0)]]),'Paper Info');const max=Math.max(0,...variants.map(v=>v.rows.length)),matrix=[['Q.No.',...variants.map(v=>`SET ${v.setCode}`)]];for(let i=0;i<max;i++)matrix.push([i+1,...variants.map(v=>v.rows[i]?.correct_option||'')]);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(matrix),'Answer Key');for(const v of variants)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(qpBuildAnswerRows(v.rows)),`SET ${v.setCode}`);return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
 async function downloadGeneratedAnswerKeyExcelGroup(baseSerial){try{const records=await qpGetHistoryGroupRecords(baseSerial);if(!records.length)return alert('No saved sets were found for this generation.');const blob=qpBuildSavedAnswerWorkbook(records),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${baseSerial}-All-Answer-Key.xlsx`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200);}catch(e){alert('Could not create Answer Key Excel: '+(e.message||e));}}
 async function deleteGeneratedQuestionPaperGroup(baseSerial){if(!confirm(`Delete all generated sets for ${baseSerial}, including all saved question papers and answer-key data? This cannot be undone.`))return;try{const {error}=await sb.from('jnvst_generated_question_papers').delete().eq('teacher_id',current.id).like('serial_no',`${baseSerial}-%`);if(error)throw error;loadGeneratedQuestionPaperHistory();}catch(e){alert('Could not delete generated paper group: '+(e.message||e));}}
 
 async function generateSelectedQuestionPaper(){
+  let w=null;
   try{
     const master=qpMasterRows();
-    const count=qpAskSetCount(qpRequestedSetCount());
+    const count=await qpAskSetCountModal(qpRequestedSetCount());
     if(count===null)return;
+    w=qpOpenPrintWindow();
+    if(!w)return;
     const variants=qpBuildSetVariants(master,count);
     const qcReports=variants.map(v=>qpValidatePaperQuality(v.rows,qpSubject(),`SET ${v.setCode}`));
-    if(qcReports.some(r=>r.errors.length)){ qpShowQualityControl(qcReports,true); return; }
+    if(qcReports.some(r=>r.errors.length)){ try{w.close();}catch(_){} qpShowQualityControl(qcReports,true); return; }
     const title=document.getElementById('qpTitle')?.value||'JNVST Practice Question Paper';
     const baseSerial=qpGetSetSerial(JSON.stringify({subject:qpSubject(),language:qpCurrentLanguage(),mode:qpState.mode,selected:[...qpState.selected].sort(),counts:qpState.commonCounts,sets:count}));
     qpState.lastSetVariants=variants;qpState.multiSetSerial=baseSerial;
@@ -1658,17 +1665,14 @@ async function generateSelectedQuestionPaper(){
         qpState.savedHistoryId=null;qpState.setCode=oldSet;qpState.lastSerial=oldSerial;qpState.lastSignature=oldSignature;
       }catch(e){saveErrors.push(`SET ${v.setCode}: ${e.message||e}`);qpState.savedHistoryId=null;}
     }
-    if(saveErrors.length)return alert('Some sets could not be saved to Generated History:\n'+saveErrors.join('\n'));
+    if(saveErrors.length)alert('The paper will still open, but some sets could not be saved to Generated History:\n'+saveErrors.join('\n')+'\n\nRun jnvst_generated_question_paper_history.sql in Supabase if the table does not exist.');
     loadGeneratedQuestionPaperHistory();
     const setHtml=variants.map((v,i)=>{
       const rows=v.rows.map((q,n)=>({...q,_number:n+1,_masterNumber:master.findIndex(m=>m.id===q.id)+1}));
       return qpBuildSetHtml(rows,v.setCode,`${baseSerial}-${v.setCode}`,title,includeAnswers,i===variants.length-1);
     }).join('').replace(/style="break-after:page;page-break-after:always"(?=\s*<div class="jnvst-page")/g,'style="break-after:page;page-break-after:always"');
-    const w=window.open('','_blank','width=1100,height=900');
-    if(!w)return alert('Please allow pop-ups for the PDF/print preview.');
-    const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
-    w.document.open();w.document.write(`<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><title>${esc(title)} — ${variants.map(v=>`SET ${v.setCode}`).join(', ')}</title><style>${css}</style><style>@media print{.qp-set-wrapper{break-after:auto!important;page-break-after:auto!important}.qp-set-wrapper:not(:last-child){break-after:page!important;page-break-after:always!important}.qp-paper-page{break-after:auto!important;page-break-after:auto!important}}</style><script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"],["$","$"]],displayMath:[["\\\\[","\\\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script></head><body><div class="jnvst-paper">${setHtml}</div><script>(async()=>{try{if(window.MathJax?.startup?.promise)await window.MathJax.startup.promise;for(let i=0;i<100&&!window.MathJax?.typesetPromise;i++)await new Promise(r=>setTimeout(r,50));if(window.MathJax?.typesetPromise)await window.MathJax.typesetPromise();}catch(e){console.error('MathJax typeset failed',e);}const imgs=[...document.images];await Promise.all(imgs.map(img=>new Promise(resolve=>{if(img.complete)return resolve();img.onload=resolve;img.onerror=resolve;})));window.focus();setTimeout(()=>window.print(),150);})();<\/script></body></html>`);w.document.close();
-  }catch(e){alert('Could not generate Question Paper Sets: '+(e.message||e));}
+    qpWritePrintWindow(w,`${title} — ${variants.map(v=>`SET ${v.setCode}`).join(', ')}`,setHtml);
+  }catch(e){try{if(w)w.close();}catch(_){}alert('Could not generate Question Paper Sets: '+(e.message||e));}
 }
 
 async function editMockQuestion(id){
@@ -1873,6 +1877,120 @@ const JNVST_PDF_DIRECTIONS={
   LANGUAGE:"There are four passages in this Section. Each passage is followed by five questions. Read each passage carefully and answer the questions that follow. For each question, four probable answers as (A), (B), (C) and (D) are given. Only one out of these is correct. Choose the correct answer and darken the circle in the OMR Answer Sheet against the number corresponding to the question."
 };
 
+/* ---------- v12: math sanitising + plain-text fallback (print window, Word export) ---------- */
+function qpPlainMath(v,dollars=true){
+  let s=String(v??'');
+  s=s.replace(/<br\s*\/?\s*>/gi,'\n');
+  s=s.replace(/\\\\(?=[()\[\]a-zA-Z])/g,'\\');
+  if(dollars){s=s.replace(/\$\$([\s\S]*?)\$\$/g,'$1').replace(/(?<!\\)\$([^$\n]+?)(?<!\\)\$/g,'$1');}
+  s=s.replace(/\\[()\[\]]/g,'');
+  for(let n=0;n<4;n++){
+    s=s.replace(/(\d)\s*\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,'$1 $2/$3');
+    s=s.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,(m,a,b)=>/^[\w.]+$/.test(a)&&/^[\w.]+$/.test(b)?a+'/'+b:'('+a+')/('+b+')');
+    s=s.replace(/\\sqrt\s*\{([^{}]*)\}/g,'√($1)');
+    s=s.replace(/\\(?:text|mathrm|mathbf|textbf|mbox)\s*\{([^{}]*)\}/g,'$1');
+  }
+  const sup={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻'};
+  s=s.replace(/\^\{([0-9-]+)\}|\^([0-9])/g,(m,a,b)=>[...(a||b)].map(c=>sup[c]||c).join(''));
+  s=s.replace(/\^\{([^{}]*)\}/g,'^($1)').replace(/_\{([^{}]*)\}/g,'_$1');
+  const map={times:'×',div:'÷',cdot:'·',pi:'π',leq:'≤',le:'≤',geq:'≥',ge:'≥',neq:'≠',ne:'≠',pm:'±',mp:'∓',circ:'°',degree:'°',angle:'∠',triangle:'△',infty:'∞',approx:'≈',therefore:'∴',quad:' ',qquad:'  ',left:'',right:''};
+  s=s.replace(/\\([a-zA-Z]+)/g,(m,c)=>Object.prototype.hasOwnProperty.call(map,c)?map[c]:m);
+  s=s.replace(/\\[,;!]/g,' ').replace(/\\ /g,' ');
+  return s.replace(/[ \t]{2,}/g,' ');
+}
+function qpSanitizeMath(s){
+  s=String(s??'');
+  // doubled backslashes from Excel/JSON imports:  \\( -> \(   \\text -> \text
+  s=s.replace(/\\\\(?=[()\[\]])/g,'\\');
+  s=s.replace(/\\\\(?=(?:text|frac|dfrac|tfrac|sqrt|times|div|cdot|pi|leq|geq|neq|pm|circ|left|right)\b)/g,'\\');
+  // stray single backslashes from broken imports (e.g. "\10 cm", trailing "\")
+  s=s.replace(/\\(?=\d)/g,'').replace(/\\\s*$/,'');
+  // keep only properly paired \( ... \) delimiters
+  const toks=[],re=/\\\(|\\\)/g;let m;while((m=re.exec(s)))toks.push({i:m.index,t:m[0]});
+  if(toks.length){
+    const keep=new Set();let pend=null;
+    for(const k of toks){if(k.t==='\\('){pend=k;}else if(pend){keep.add(pend);keep.add(k);pend=null;}}
+    let out='',last=0;for(const k of toks){out+=s.slice(last,k.i);if(keep.has(k))out+=k.t;last=k.i+2;}
+    s=out+s.slice(last);
+  }
+  // Assamese/Bengali words must never sit inside math mode (they render as garbled italic glyphs)
+  s=s.replace(/\\\(([\s\S]*?)\\\)/g,(all,inner)=>{
+    if(!/[\u0980-\u09FF]/.test(inner))return all;
+    inner=inner.replace(/\\text\{([^{}]*[\u0980-\u09FF][^{}]*)\}/g,'$1');
+    return inner.split(/([\u0980-\u09FF\u200c\u200d]+(?:[ \t.,;:।?'"()\-]*[\u0980-\u09FF\u200c\u200d]+)*)/).map((p,i)=>i%2===1?p:(p.trim()?'\\('+p+'\\)':p)).join('');
+  });
+  return s;
+}
+
+/* ---------- v12: shared print-window runtime (runs INSIDE the pop-up) ---------- */
+function qpPopupRuntime(){
+  const status=document.getElementById('qpPrintStatus'),banner=document.getElementById('qpPrintBanner');
+  const say=(t,warn)=>{if(status)status.textContent=t;if(banner&&warn)banner.classList.add('warn');};
+  const LEFT=/\\[()\[\]]|\\(?:text|frac|dfrac|tfrac|sqrt|times|div|cdot|pi|leq|geq|neq|pm|circ|left|right|mathrm)\b|\^\{/;
+  const loadScript=(src,ms)=>new Promise(res=>{let done=false;const f=ok=>{if(!done){done=true;res(ok);}};const s=document.createElement('script');s.src=src;s.async=true;s.onload=()=>f(true);s.onerror=()=>f(false);setTimeout(()=>f(false),ms);document.head.appendChild(s);});
+  const waitFor=async(test,ms)=>{const t0=Date.now();while(Date.now()-t0<ms){try{if(test())return true;}catch(_){}await new Promise(r=>setTimeout(r,60));}return false;};
+  const plainFallback=root=>{
+    const nodes=[],w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>{const p=n.parentElement;if(!p||p.closest('mjx-container,script,style'))return NodeFilter.FILTER_REJECT;return LEFT.test(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP;}});
+    while(w.nextNode())nodes.push(w.currentNode);
+    nodes.forEach(n=>{n.nodeValue=qpPlainMath(n.nodeValue,false);});
+    return nodes.length;
+  };
+  (async()=>{
+    const root=document.querySelector('.jnvst-paper');
+    let mathOk=false;
+    try{
+      say('Loading maths engine…');
+      window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],processEscapes:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']},startup:{typeset:false}};
+      const urls=window.__QP_MATHJAX_URLS||['https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js','https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-chtml.js','https://unpkg.com/mathjax@3/es5/tex-chtml.js'];
+      let loaded=false;for(const u of urls){if(await loadScript(u,15000)&&await waitFor(()=>window.MathJax&&window.MathJax.typesetPromise,6000)){loaded=true;break;}}
+      if(loaded){
+        say('Typesetting maths…');
+        await window.MathJax.startup.promise;
+        await window.MathJax.typesetPromise([root]);
+        // any expression MathJax could not parse -> readable plain text instead of an error box
+        try{(window.MathJax.startup.document.math||[]).forEach(it=>{const r=it.typesetRoot;if(r&&r.querySelector&&r.querySelector('mjx-merror,[data-mjx-error]')){r.replaceWith(document.createTextNode(qpPlainMath(it.math,false)));}});}catch(_){}
+        mathOk=true;
+      }
+    }catch(e){console.error('MathJax failed',e);}
+    const leftovers=plainFallback(root);
+    if(!mathOk)say('Maths engine unavailable (offline?). Simple text version used for formulas.',true);
+    say(mathOk?'Waiting for images…':'Waiting for images… (formulas shown as plain text)',!mathOk);
+    const imgs=[...document.images];
+    imgs.forEach(i=>{i.loading='eager';});
+    await Promise.all(imgs.map(img=>new Promise(res=>{if(img.complete)return res();img.onload=res;img.onerror=res;setTimeout(res,20000);})));
+    const broken=imgs.filter(i=>!i.naturalWidth).length;
+    try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(_){}
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    const extra=[];if(broken)extra.push(broken+' image(s) could not be loaded');if(leftovers&&mathOk)extra.push(leftovers+' formula(s) converted to plain text');
+    say('Ready — '+imgs.length+' image(s) loaded'+(extra.length?' · '+extra.join(' · '):'')+'.',broken>0);
+    window.__qpReady=true;
+    setTimeout(()=>{try{window.focus();window.print();}catch(_){}} ,300);
+  })();
+}
+function qpPrintDocHtml(title,css,body){
+  return `<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}</style><style>@page{size:A4 portrait;margin:0}</style></head><body><div id="qpPrintBanner" class="qp-noprint qp-banner"><b id="qpPrintStatus">Preparing…</b><span>In the print dialog choose <b>Paper size: A4</b>, <b>Margins: None</b>, <b>Scale: 100%</b>, tick <b>Print backgrounds</b>.</span><button type="button" onclick="window.print()">🖨 Print / Save as PDF</button></div><div class="jnvst-paper">${body}</div><script>${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`;
+}
+function qpWritePrintWindow(w,title,body){
+  const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
+  w.document.open();w.document.write(qpPrintDocHtml(title,css,body));w.document.close();
+}
+function qpOpenPrintWindow(){
+  const w=window.open('','_blank','width=1100,height=900');
+  if(!w){alert('Your browser blocked the pop-up.\n\nFirefox: click the shield/pop-up icon in the address bar and choose "Allow pop-ups for this site", then try again.');return null;}
+  try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial,sans-serif;padding:30px">Preparing question paper…</body>');}catch(_){}
+  return w;
+}
+function qpAskSetCountModal(defaultCount=4){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100001;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)"><h3 style="margin:0 0 6px">How many question sets?</h3><p class="muted small" style="margin:0 0 12px">The same questions are re-ordered randomly into each set (SET A–D), each with its own answer key.</p><div class="actions" style="gap:8px">${[1,2,3,4].map(n=>`<button type="button" data-n="${n}" class="${n===defaultCount?'':'secondary'}">${n}</button>`).join('')}</div><div class="actions" style="margin-top:14px"><button type="button" class="secondary" data-cancel="1">Cancel</button></div></div>`;
+    const onKey=e=>{if(e.key==='Escape')done(null);};
+    const done=v=>{ov.remove();document.removeEventListener('keydown',onKey);if(v!==null)qpState.setCount=v;resolve(v);};
+    ov.addEventListener('click',e=>{const b=e.target.closest('button');if(b)done(b.dataset.cancel?null:Number(b.dataset.n));else if(e.target===ov)done(null);});
+    document.addEventListener('keydown',onKey);document.body.appendChild(ov);
+  });
+}
+
 function jnvstPdfMathHtml(v){
   let s=String(v??'');
   if(!s)return '';
@@ -1886,6 +2004,7 @@ function jnvstPdfMathHtml(v){
   // Treat those tags as line breaks instead of printing the tag text (e.g. <br>).
   s=s.replace(/<br\s*\/?\s*>/gi,'\n');
   s=jnvstNormalizeMathText(s);
+  s=qpSanitizeMath(s);
   const safe=esc(s).replace(/\n/g,'<br>');
   return safe.replace(/\\\((.*?)\\\)/gs,'\\($1\\)').replace(/\\\[(.*?)\\\]/gs,'\\[$1\\]');
 }
