@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://jupefjdquakqsizapzbv.supabase.co"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://jupefjdquakqsizapzbv.supabase.co"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><title>School Teacher Dashboard — Swarup Sir's Knowledge Hub</title><script src="common-ui.js?v=13"></script><script>window.notify=window.notify||function(m){window.alert(m instanceof Error?m.message:m)};</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script><script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script defer src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script><script>
 window.MathJax={
   tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]],processEscapes:true,processEnvironments:true},
@@ -6,7 +6,7 @@ window.MathJax={
   startup:{typeset:false}
 };
 </script>
-<script id="school-mathjax-primary" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer onerror="this.dataset.failed='1';var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js';s.defer=true;document.head.appendChild(s);"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{width:100%;max-width:none;margin:0;padding:18px 24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
+<script id="school-mathjax-primary" src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" defer onerror="this.dataset.failed='1';var s=document.createElement('script');s.src='https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js';s.defer=true;document.head.appendChild(s);"></script><script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/mathlive.min.js"></script><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#172033}.wrap{width:100%;max-width:none;margin:0;padding:18px 24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 5px 22px #0000000d;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;margin:0}.btn,button{border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}.secondary{background:#e8eef8;color:#172033}.danger{background:#dc2626!important;color:#fff}.muted{color:#64748b}.stat{font-size:28px;font-weight:800}label{font-weight:700;display:block;margin:9px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5e2;border-radius:9px;font:inherit}table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:700}.notice{padding:11px;border-radius:10px;background:#fff7ed;color:#9a3412}.success{padding:11px;border-radius:10px;background:#ecfdf5;color:#166534}.student-card{border:1px solid #dbe3ee;border-radius:12px;padding:13px;margin-top:9px}.gp-fixed-item{display:grid!important;grid-template-columns:34px minmax(0,1fr) 190px;gap:14px;align-items:start;background:#fff;cursor:pointer;margin:9px 0!important;padding:14px!important}.gp-fixed-check{width:20px!important;height:20px!important;margin:4px 0 0 2px!important;accent-color:#2563eb;cursor:pointer}.gp-fixed-main{min-width:0}.gp-fixed-meta{min-width:0;border-left:1px solid #e2e8f0;padding-left:14px;color:#172033}.gp-fixed-meta b{display:block;font-size:16px;line-height:1.25}.gp-fixed-meta .tag{margin-top:6px}.gp-fixed-item:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-row{display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #dbe3ee;border-radius:12px;padding:14px;margin-top:10px;background:#fff}.school-paper-history-row:hover{border-color:#93c5fd;box-shadow:0 3px 12px #2563eb18}.school-paper-history-title{font-weight:800;font-size:16px}.school-paper-history-actions{flex:0 0 auto}.school-paper-history-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc}@media(max-width:700px){.school-paper-history-row{align-items:flex-start;flex-direction:column}.school-paper-history-actions{width:100%}}.gp-fixed-preview img{max-width:100%!important;height:auto!important}.gp-fixed-preview-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#2563eb;color:#fff}.searchgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}@media(max-width:700px){.searchgrid{grid-template-columns:1fr}.wrap{padding:10px}table{min-width:850px}}
 .qb-math-inline{font-family:"Times New Roman",serif;font-size:1.05em}.qb-math-text{font-style:normal}.qb-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 2px}.qb-frac-num{border-bottom:1px solid currentColor;padding:0 3px}.qb-frac-den{padding:1px 3px 0}.qb-sqrt{display:inline-flex;align-items:flex-start}.qb-radicand{border-top:1px solid currentColor;margin-top:2px;padding:0 2px}.qb-math-inline sup,.qb-math-inline sub{line-height:0}.qb-math-cell{font-size:16px;line-height:1.45}.eq-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 7px}.eq-toolbar button{padding:7px 11px;font-size:13px}.eq-hint{font-size:12px;color:#64748b}.eq-preview{margin:6px 0 10px;padding:9px 11px;border:1px dashed #cbd5e1;border-radius:9px;background:#f8fafc;min-height:24px;white-space:normal}.math-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;z-index:99999;padding:15px}.math-modal-card{width:min(820px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.28)}.math-editor-input{display:block;width:100%;min-height:110px;font-size:22px;line-height:1.5;border:1px solid #cbd5e1;border-radius:10px;padding:12px;background:#fff;resize:vertical;font-family:Arial,sans-serif}.math-live-preview{margin-top:10px;min-height:55px;border:1px dashed #cbd5e1;border-radius:10px;padding:12px;background:#f8fafc;font-size:24px}.math-symbols{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.math-symbols button{padding:7px 10px;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:8px} .mathfield-shell{border:1px solid #cbd5e1;border-radius:12px;background:#fff;padding:4px;margin-top:10px;box-shadow:inset 0 1px 2px #00000008}.mathfield-shell math-field{display:block;width:100%;min-height:105px;padding:18px 14px;font-size:30px;border:0;outline:0;background:#fff;border-radius:10px;--selection-background-color:#dbeafe;--contains-highlight-background-color:#eff6ff;--caret-color:#2563eb}.mathfield-status{font-size:12px;color:#64748b;margin-top:7px}.mathfield-latex{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px dashed #cbd5e1;font-family:Consolas,monospace;font-size:13px;word-break:break-all}.math-modal-card.math-visual{width:min(900px,97vw)}.math-help{font-size:13px;color:#475569;margin:8px 0}.math-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.qb-math-inline{display:inline-block;font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:1.05em;line-height:1.35;white-space:nowrap}.qb-math-text{font-family:Arial,sans-serif;font-style:normal}.qb-math-inline sup,.qb-math-inline sub{font-size:.72em;line-height:0}.qb-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1.05;margin:0 .12em}.qb-frac-num{border-bottom:1px solid currentColor;padding:0 .18em}.qb-frac-den{padding:0 .18em}.qb-sqrt{display:inline-flex;align-items:flex-start;font-family:"Cambria Math","Times New Roman",serif}.qb-radicand{border-top:1px solid currentColor;padding:0 .08em}
 /* School Question Bank bulk-import lock/progress UI */
 #qbBulkImportOverlay{
@@ -101,44 +101,44 @@ function home(){document.getElementById('app').innerHTML=`${header('School Teach
 <button onclick="location.href='main.html?mode=teacher&portal=SCHOOL&action=downloadAllResultsExcel'">⬇ All Results (Excel)</button>
 </div>
 </div><div class="card" style="border:2px solid #2563eb;background:#fbfdff"><h2>📝 School Assessments</h2><p class="muted">Create assessments, add questions, upload questions, review submissions, and manage recipients.</p><div class="actions" style="margin-top:12px"><button onclick="newAssessment()">+ New School Assessment</button><button onclick="manageSchoolAssessments()">📝 Manage School Assessments</button></div></div>`}
-function addStudent(){if(!classes.length)return alert('Create a School class first.');document.getElementById('app').innerHTML=`${header('Add School Student')}<div class="card"><label>Student Name</label><input id="sn"><label>Roll No</label><input id="sr"><label>Password</label><input id="sp" type="text" placeholder="At least 6 characters"><label>Class</label><select id="sc" onchange="refreshSchoolStudentGroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>School Course Sub-division</label><select id="sg"></select><div id="sm"></div><div class="actions" style="margin-top:12px"><button onclick="saveStudent()">Create Student</button><button class="secondary" onclick="home()">Cancel</button></div></div>`;refreshSchoolStudentGroups()}
+function addStudent(){if(!classes.length)return notify('Create a School class first.');document.getElementById('app').innerHTML=`${header('Add School Student')}<div class="card"><label>Student Name</label><input id="sn"><label>Roll No</label><input id="sr"><label>Password</label><input id="sp" type="text" placeholder="At least 6 characters"><label>Class</label><select id="sc" onchange="refreshSchoolStudentGroups()">${classes.map((c,i)=>`<option value="${c.id}" ${i===0?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>School Course Sub-division</label><select id="sg"></select><div id="sm"></div><div class="actions" style="margin-top:12px"><button onclick="saveStudent()">Create Student</button><button class="secondary" onclick="home()">Cancel</button></div></div>`;refreshSchoolStudentGroups()}
 function refreshSchoolStudentGroups(){const classId=document.getElementById('sc')?.value,sel=document.getElementById('sg');if(!sel)return;const opts=groups.filter(g=>g.class_id===classId).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');sel.innerHTML='<option value="">No subdivision</option>'+opts}
-async function saveStudent(){try{const j=await fn({action:'createStudents',students:[{name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value,course:'SCHOOL',school_group_id:sg.value||null}]});const r=j.results?.[0];if(!r?.success)throw Error(r?.error||'Could not create student');alert('Student created successfully.');await load();home()}catch(e){sm.innerHTML=msg(e.message)}}
+async function saveStudent(){try{const j=await fn({action:'createStudents',students:[{name:sn.value.trim(),roll_no:sr.value.trim(),password:sp.value,class_id:sc.value,course:'SCHOOL',school_group_id:sg.value||null}]});const r=j.results?.[0];if(!r?.success)throw Error(r?.error||'Could not create student');notify('Student created successfully.');await load();home()}catch(e){sm.innerHTML=msg(e.message)}}
 function bulkImport(){bulkRows=[];document.getElementById('app').innerHTML=`${header('Bulk School Students — Excel')}<div class="card"><p><b>Columns:</b> Name | Roll No | Class | Password | Subdivision (optional)</p><div class="notice">Course is automatically set to <b>SCHOOL</b>. Email is not required.</div><label>Excel file</label><input type="file" accept=".xlsx,.xls" onchange="readBulk(event)"><div id="bulkPreview"></div><div class="actions"><button onclick="uploadBulk()">Create All Students</button><button class="secondary" onclick="home()">Cancel</button></div></div>`}
 function readBulk(ev){const f=ev.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});const h=raw[0].map(x=>String(x).trim().toLowerCase().replace(/[_\s]+/g,' ')),idx=(...a)=>a.map(x=>h.indexOf(x)).find(x=>x>=0);const ni=idx('name','student name'),ri=idx('roll no','roll number'),ci=idx('class','class name'),pi=idx('password'),gi=idx('subdivision','school subdivision','school course subdivision');if([ni,ri,ci,pi].some(x=>x<0))throw Error('Required columns: Name, Roll No, Class, Password.');bulkRows=raw.slice(1).map((row,i)=>({row:i+2,name:String(row[ni]||'').trim(),roll_no:String(row[ri]||'').trim(),className:String(row[ci]||'').trim(),password:String(row[pi]||''),groupName:gi>=0?String(row[gi]||'').trim():''})).filter(x=>x.name||x.roll_no||x.className||x.password);const errs=[];bulkRows.forEach(x=>{if(!x.name)errs.push(`Row ${x.row}: Name missing`);if(!x.roll_no)errs.push(`Row ${x.row}: Roll No missing`);if(!x.className)errs.push(`Row ${x.row}: Class missing`);if(!x.password||x.password.length<6)errs.push(`Row ${x.row}: Password must contain at least 6 characters`)});if(errs.length){bulkPreview.innerHTML=msg(errs.join(' | '));return}bulkPreview.innerHTML=`<div class="success">Loaded ${bulkRows.length} rows.</div><div style="overflow:auto"><table><tr><th>Name</th><th>Roll</th><th>Class</th><th>Password</th><th>Subdivision</th></tr>${bulkRows.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.roll_no)}</td><td>${esc(x.className)}</td><td>${esc(x.password)}</td><td>${esc(x.groupName)}</td></tr>`).join('')}</table></div>`}catch(e){bulkPreview.innerHTML=msg('Could not read Excel: '+e.message)}};r.readAsArrayBuffer(f)}
-async function uploadBulk(){if(!bulkRows.length)return alert('Upload an Excel file first.');const cmap=new Map(classes.map(c=>[c.name.trim().toLowerCase(),c.id])),gmap=new Map(groups.map(g=>[g.name.trim().toLowerCase(),g.id]));const bad=bulkRows.filter(x=>!cmap.has(x.className.toLowerCase())|| (x.groupName&&!gmap.has(x.groupName.toLowerCase())));if(bad.length)return alert('Class or subdivision not found: '+bad.map(x=>x.name).join(', '));const payload=bulkRows.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase()),course:'SCHOOL',school_group_id:x.groupName?gmap.get(x.groupName.toLowerCase()):null}));try{const j=await fn({action:'createStudents',students:payload});const ok=(j.results||[]).filter(x=>x.success),fail=(j.results||[]).filter(x=>!x.success);document.getElementById('app').innerHTML=`${header('Bulk Import Result')}<div class="card"><div class="success">${ok.length} student(s) created.</div>${fail.length?msg(fail.map(x=>`${x.name||''} — Roll ${x.roll_no||''}: ${x.error}`).join('\n')):''}<div class="actions"><button onclick="load().then(home)">Dashboard</button><button class="secondary" onclick="bulkImport()">Add More</button></div></div>`}catch(e){alert(e.message)}}
+async function uploadBulk(){if(!bulkRows.length)return notify('Upload an Excel file first.');const cmap=new Map(classes.map(c=>[c.name.trim().toLowerCase(),c.id])),gmap=new Map(groups.map(g=>[g.name.trim().toLowerCase(),g.id]));const bad=bulkRows.filter(x=>!cmap.has(x.className.toLowerCase())|| (x.groupName&&!gmap.has(x.groupName.toLowerCase())));if(bad.length)return notify('Class or subdivision not found: '+bad.map(x=>x.name).join(', '));const payload=bulkRows.map(x=>({name:x.name,roll_no:x.roll_no,password:x.password,class_id:cmap.get(x.className.toLowerCase()),course:'SCHOOL',school_group_id:x.groupName?gmap.get(x.groupName.toLowerCase()):null}));try{const j=await fn({action:'createStudents',students:payload});const ok=(j.results||[]).filter(x=>x.success),fail=(j.results||[]).filter(x=>!x.success);document.getElementById('app').innerHTML=`${header('Bulk Import Result')}<div class="card"><div class="success">${ok.length} student(s) created.</div>${fail.length?msg(fail.map(x=>`${x.name||''} — Roll ${x.roll_no||''}: ${x.error}`).join('\n')):''}<div class="actions"><button onclick="load().then(home)">Dashboard</button><button class="secondary" onclick="bulkImport()">Add More</button></div></div>`}catch(e){notify(e.message)}}
 function manageStudents(){const classOptions=classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');document.getElementById('app').innerHTML=`${header('School Students')}<div class="card"><div class="searchgrid"><input id="ss" placeholder="Search name / roll" oninput="renderStudentTable()"><select id="sf" onchange="renderStudentTable()"><option value="all">All Classes</option>${classOptions}</select><select id="sgf" onchange="renderStudentTable()"><option value="all">All Sub-divisions</option>${groups.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></div><div id="studentTable" style="overflow:auto;margin-top:12px"></div><button class="secondary" onclick="home()" style="margin-top:12px">← Dashboard</button></div>`;renderStudentTable()}
 function renderStudentTable(){const q=(document.getElementById('ss')?.value||'').toLowerCase(),cf=document.getElementById('sf')?.value||'all',gf=document.getElementById('sgf')?.value||'all';const rows=students.filter(s=>(!q||`${s.full_name} ${s.roll_no}`.toLowerCase().includes(q))&&(cf==='all'||s.class_id===cf)&&(gf==='all'||s.school_group_id===gf));document.getElementById('studentTable').innerHTML=`<table><thead><tr><th>Student</th><th>Roll No</th><th>Password</th><th>Class</th><th>Subdivision</th><th>Actions</th></tr></thead><tbody>${rows.map(s=>`<tr><td><b>${esc(s.full_name)}</b></td><td>${esc(s.roll_no||'—')}</td><td><code>${esc(s.password||'—')}</code></td><td>${esc(s.className)}</td><td>${esc(groups.find(g=>g.id===s.school_group_id)?.name||'—')}</td><td><div class="actions"><button onclick="editStudent('${s.id}')">✎ Edit All</button><button class="secondary" onclick="changeClass('${s.id}')">Change Class</button><button class="secondary" onclick="changeGroup('${s.id}')">Subdivision</button><button class="danger" onclick="deleteStudent('${s.id}')">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="6">No School students found.</td></tr>'}</tbody></table>`}
 function studentEditForm(s){const classOptions=classes.map(c=>`<option value="${c.id}" ${c.id===s.class_id?'selected':''}>${esc(c.name)}</option>`).join('');const classGroups=groups.filter(g=>g.class_id===s.class_id);const groupOptions=`<option value="">No subdivision</option>${classGroups.map(g=>`<option value="${g.id}" ${g.id===s.school_group_id?'selected':''}>${esc(g.name)}</option>`).join('')}`;document.getElementById('app').innerHTML=`${header('Edit School Student')}<div class="card"><div class="notice">You can edit <b>Name, Roll No, Password, Class and Subdivision</b>. Leave Password blank to keep the current password.</div><div class="grid"><div><label>Student Name</label><input id="esName" value="${esc(s.full_name||'')}"></div><div><label>Roll No</label><input id="esRoll" value="${esc(s.roll_no||'')}"></div><div><label>Password</label><input id="esPassword" value="" placeholder="Leave blank to keep current"></div><div><label>Class</label><select id="esClass" onchange="refreshEditStudentGroups()">${classOptions}</select></div><div><label>Subdivision</label><select id="esGroup">${groupOptions}</select></div></div><div id="esMsg"></div><div class="actions"><button onclick="saveStudentEdit('${s.id}')">💾 Save All Changes</button><button class="secondary" onclick="manageStudents()">Cancel</button></div></div>`}
 function refreshEditStudentGroups(){const classId=document.getElementById('esClass')?.value,sel=document.getElementById('esGroup');if(!sel)return;const opts=groups.filter(g=>g.class_id===classId).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');sel.innerHTML='<option value="">No subdivision</option>'+opts}
 async function editStudent(id){const s=students.find(x=>x.id===id);if(!s)return;studentEditForm(s)}
-async function saveStudentEdit(id){const s=students.find(x=>x.id===id);if(!s)return;const name=document.getElementById('esName').value.trim(),roll=document.getElementById('esRoll').value.trim(),password=document.getElementById('esPassword').value,cls=document.getElementById('esClass').value,group=document.getElementById('esGroup').value||null;if(!name||!roll||!cls)return alert('Name, Roll No and Class are required.');if(password&&password.length<6)return alert('Password must contain at least 6 characters.');try{if(name!==String(s.full_name||''))await fn({action:'setStudentName',student_id:id,full_name:name});if(roll!==String(s.roll_no||''))await fn({action:'setStudentRollNo',student_id:id,roll_no:roll});if(cls!==String(s.class_id||''))await fn({action:'setStudentClass',student_id:id,class_id:cls});const currentGroupAfterClass=cls===String(s.class_id||'')?String(s.school_group_id||''):'';if(group!==currentGroupAfterClass)await fn({action:'setStudentSchoolGroup',student_id:id,school_group_id:group});if(password)await fn({action:'setStudentPassword',student_id:id,password});alert('Student details updated successfully.');await load();manageStudents()}catch(e){alert('Could not update student.\n\n'+(e.message||String(e)))}}
-async function changeClass(id){const s=students.find(x=>x.id===id);if(!s)return;const choice=prompt(`Change class for ${s.full_name}.\n\n${classes.map((c,i)=>`${i+1}. ${c.name}`).join('\n')}\n\nEnter class number:`);if(choice===null)return;const n=Number(choice)-1;if(!classes[n])return alert('Invalid class.');try{await fn({action:'setStudentClass',student_id:id,class_id:classes[n].id});alert('Class changed successfully.');await load();manageStudents()}catch(e){alert(e.message||String(e))}}
-async function changeGroup(id){const s=students.find(x=>x.id===id);if(!s)return;const available=groups.filter(g=>g.class_id===s.class_id);const text=`${available.map((g,i)=>`${i+1}. ${g.name}`).join('\n')}\n\nEnter number, or 0 for no subdivision.`;const currentIndex=available.findIndex(g=>g.id===s.school_group_id);const v=prompt(available.length?text:'No subdivisions exist for this class. Enter 0 for no subdivision.',''+(currentIndex>=0?currentIndex+1:0));if(v===null)return;const n=Number(v);if(!Number.isInteger(n)||n<0||n>available.length)return alert('Invalid subdivision.');try{await fn({action:'setStudentSchoolGroup',student_id:id,school_group_id:n===0?null:available[n-1].id});alert('Subdivision updated successfully.');await load();manageStudents()}catch(e){alert(e.message||String(e))}}
-async function deleteStudent(id){const s=students.find(x=>x.id===id);if(!s)return;if(!confirm(`Delete ${s.full_name}? This removes the login account and related records.`))return;try{await fn({action:'deleteStudent',student_id:id});alert('Student deleted successfully.');await load();manageStudents()}catch(e){alert(e.message||String(e))}}
+async function saveStudentEdit(id){const s=students.find(x=>x.id===id);if(!s)return;const name=document.getElementById('esName').value.trim(),roll=document.getElementById('esRoll').value.trim(),password=document.getElementById('esPassword').value,cls=document.getElementById('esClass').value,group=document.getElementById('esGroup').value||null;if(!name||!roll||!cls)return notify('Name, Roll No and Class are required.');if(password&&password.length<6)return notify('Password must contain at least 6 characters.');try{if(name!==String(s.full_name||''))await fn({action:'setStudentName',student_id:id,full_name:name});if(roll!==String(s.roll_no||''))await fn({action:'setStudentRollNo',student_id:id,roll_no:roll});if(cls!==String(s.class_id||''))await fn({action:'setStudentClass',student_id:id,class_id:cls});const currentGroupAfterClass=cls===String(s.class_id||'')?String(s.school_group_id||''):'';if(group!==currentGroupAfterClass)await fn({action:'setStudentSchoolGroup',student_id:id,school_group_id:group});if(password)await fn({action:'setStudentPassword',student_id:id,password});notify('Student details updated successfully.');await load();manageStudents()}catch(e){notify('Could not update student.\n\n'+(e.message||String(e)))}}
+async function changeClass(id){const s=students.find(x=>x.id===id);if(!s)return;const choice=prompt(`Change class for ${s.full_name}.\n\n${classes.map((c,i)=>`${i+1}. ${c.name}`).join('\n')}\n\nEnter class number:`);if(choice===null)return;const n=Number(choice)-1;if(!classes[n])return notify('Invalid class.');try{await fn({action:'setStudentClass',student_id:id,class_id:classes[n].id});notify('Class changed successfully.');await load();manageStudents()}catch(e){notify(e.message||String(e))}}
+async function changeGroup(id){const s=students.find(x=>x.id===id);if(!s)return;const available=groups.filter(g=>g.class_id===s.class_id);const text=`${available.map((g,i)=>`${i+1}. ${g.name}`).join('\n')}\n\nEnter number, or 0 for no subdivision.`;const currentIndex=available.findIndex(g=>g.id===s.school_group_id);const v=prompt(available.length?text:'No subdivisions exist for this class. Enter 0 for no subdivision.',''+(currentIndex>=0?currentIndex+1:0));if(v===null)return;const n=Number(v);if(!Number.isInteger(n)||n<0||n>available.length)return notify('Invalid subdivision.');try{await fn({action:'setStudentSchoolGroup',student_id:id,school_group_id:n===0?null:available[n-1].id});notify('Subdivision updated successfully.');await load();manageStudents()}catch(e){notify(e.message||String(e))}}
+async function deleteStudent(id){const s=students.find(x=>x.id===id);if(!s)return;if(!confirm(`Delete ${s.full_name}? This removes the login account and related records.`))return;try{await fn({action:'deleteStudent',student_id:id});notify('Student deleted successfully.');await load();manageStudents()}catch(e){notify(e.message||String(e))}}
 
 function schoolSubjectOptions(selected='',includeBlank=true){const out=[];if(includeBlank)out.push('<option value="">Select Subject</option>');(schoolSubjects||[]).forEach(x=>out.push(`<option value="${esc(x.id)}" ${String(selected)===String(x.id)?'selected':''}>${esc(x.name)}</option>`));return out.join('')}
 function schoolSubjectName(id){return (schoolSubjects||[]).find(x=>String(x.id)===String(id))?.name||''}
 async function manageSchoolSubjects(){
-  try{const {data,error}=await sb.from('school_subjects').select('*').eq('teacher_id',teacher.id).order('active',{ascending:false}).order('name');if(error)throw error;schoolSubjects=data||[]}catch(e){return alert('Could not load School Subjects: '+e.message)}
+  try{const {data,error}=await sb.from('school_subjects').select('*').eq('teacher_id',teacher.id).order('active',{ascending:false}).order('name');if(error)throw error;schoolSubjects=data||[]}catch(e){return notify('Could not load School Subjects: '+e.message)}
   document.getElementById('app').innerHTML=`${header('📚 School Course — Subjects')}<div class="card"><h2 style="margin-top:0">Add Subject</h2><div class="grid"><div><label>Subject Name</label><input id="schoolSubjectName" placeholder="Mathematics"></div><div><label>Subject Code <span class="small muted">(optional)</span></label><input id="schoolSubjectCode" placeholder="MAT"></div></div><div class="actions" style="margin-top:10px"><button onclick="saveSchoolSubject()">+ Add Subject</button><button class="secondary" onclick="home()">← Dashboard</button></div><div class="notice small" style="margin-top:10px">Subjects are teacher-specific. School Question Bank, Chapters, Assessments, Assignments and Paper Generator use the same Subject list.</div></div><div class="card"><h2 style="margin-top:0">Existing Subjects</h2>${schoolSubjects.length?schoolSubjects.map(x=>`<div class="student-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><b>${esc(x.name)}</b>${x.code?` <span class="tag">${esc(x.code)}</span>`:''}<div class="small muted">${x.active?'Active':'Inactive'}</div></div><div class="actions"><button class="secondary" onclick="renameSchoolSubject('${x.id}')">✎ Edit</button>${x.active?`<button class="secondary" onclick="toggleSchoolSubject('${x.id}',false)">Deactivate</button>`:`<button onclick="toggleSchoolSubject('${x.id}',true)">Activate</button>`}</div></div></div>`).join(''):'<div class="muted">No subjects yet.</div>'}</div>`;
 }
-async function saveSchoolSubject(){const name=document.getElementById('schoolSubjectName')?.value.trim(),code=document.getElementById('schoolSubjectCode')?.value.trim()||null;if(!name)return alert('Enter Subject Name.');const {error}=await sb.from('school_subjects').insert({teacher_id:teacher.id,name,code,active:true});if(error)return alert(error.message);await load();manageSchoolSubjects()}
-async function renameSchoolSubject(id){const s=schoolSubjects.find(x=>x.id===id);if(!s)return;const name=prompt('Subject name:',s.name);if(name===null||!name.trim())return;const code=prompt('Subject code (optional):',s.code||'');const {error}=await sb.from('school_subjects').update({name:name.trim(),code:code?.trim()||null,updated_at:new Date().toISOString()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);await load();manageSchoolSubjects()}
-async function toggleSchoolSubject(id,active){const {error}=await sb.from('school_subjects').update({active,updated_at:new Date().toISOString()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);await load();manageSchoolSubjects()}
+async function saveSchoolSubject(){const name=document.getElementById('schoolSubjectName')?.value.trim(),code=document.getElementById('schoolSubjectCode')?.value.trim()||null;if(!name)return notify('Enter Subject Name.');const {error}=await sb.from('school_subjects').insert({teacher_id:teacher.id,name,code,active:true});if(error)return notify(error.message);await load();manageSchoolSubjects()}
+async function renameSchoolSubject(id){const s=schoolSubjects.find(x=>x.id===id);if(!s)return;const name=prompt('Subject name:',s.name);if(name===null||!name.trim())return;const code=prompt('Subject code (optional):',s.code||'');const {error}=await sb.from('school_subjects').update({name:name.trim(),code:code?.trim()||null,updated_at:new Date().toISOString()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return notify(error.message);await load();manageSchoolSubjects()}
+async function toggleSchoolSubject(id,active){const {error}=await sb.from('school_subjects').update({active,updated_at:new Date().toISOString()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return notify(error.message);await load();manageSchoolSubjects()}
 
 function manageClasses(){document.getElementById('app').innerHTML=`${header('School Classes')}<div class="card"><h2>Create Class</h2><label>Class Name</label><input id="cn" placeholder="Class VIII"><label>Description</label><textarea id="cd"></textarea><button onclick="saveClass()">+ Create Class</button></div><div class="card"><h2>Existing Classes</h2>${classes.map(c=>`<div class="student-card"><b>${esc(c.name)}</b><div class="muted">${esc(c.description||'')}</div><div class="small">${students.filter(s=>s.class_id===c.id).length} School student(s)</div></div>`).join('')||'<p class="muted">No classes.</p>'}<button class="secondary" onclick="home()">← Dashboard</button></div>`}
-async function saveClass(){if(!cn.value.trim())return alert('Enter class name.');const {error}=await sb.from('classes').insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:teacher.id,course:'SCHOOL'});if(error)return alert(error.message);await load();manageClasses()}
+async function saveClass(){if(!cn.value.trim())return notify('Enter class name.');const {error}=await sb.from('classes').insert({name:cn.value.trim(),description:cd.value.trim(),teacher_id:teacher.id,course:'SCHOOL'});if(error)return notify(error.message);await load();manageClasses()}
 function manageGroups(){document.getElementById('app').innerHTML=`${header('School Course Sub-divisions')}<div class="card"><h2>▣ Create Sub-division</h2><p class="muted">Create subdivisions under a specific School Class. Example: Class VIII → Section A, Section B.</p><label>Class</label><select id="gclass">${classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select><label>Sub-division Name</label><input id="gn" placeholder="Section A"><label>Description</label><textarea id="gd"></textarea><button onclick="saveGroup()">+ Create Sub-division</button></div><div class="card"><h2>Existing Sub-divisions</h2>${groups.map(g=>`<div class="student-card"><b>${esc(g.name)}</b><div class="muted">Class: ${esc(classes.find(c=>c.id===g.class_id)?.name||'Unassigned')}</div><div class="muted">${esc(g.description||'')}</div><div class="small">${students.filter(s=>s.school_group_id===g.id).length} student(s)</div><div class="actions" style="margin-top:8px"><button class="secondary" onclick="renameGroup('${g.id}')">✎ Rename</button><button class="danger" onclick="deleteGroup('${g.id}')">Delete</button></div></div>`).join('')||'<p class="muted">No subdivisions created yet.</p>'}<button class="secondary" onclick="home()">← Dashboard</button></div>`}
-async function saveGroup(){if(!gn.value.trim())return alert('Enter subdivision name.');if(!gclass.value)return alert('Select a Class.');const {error}=await sb.from('school_course_groups').insert({name:gn.value.trim(),description:gd.value.trim(),teacher_id:teacher.id,class_id:gclass.value});if(error)return alert(error.message);await load();manageGroups()}
-async function renameGroup(id){const g=groups.find(x=>x.id===id);const n=prompt('Subdivision name:',g.name);if(n===null||!n.trim())return;const {error}=await sb.from('school_course_groups').update({name:n.trim()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);await load();manageGroups()}
-async function deleteGroup(id){if(students.some(s=>s.school_group_id===id))return alert('Move students out of this subdivision before deleting it.');if(!confirm('Delete this subdivision?'))return;const {error}=await sb.from('school_course_groups').delete().eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);await load();manageGroups()}
+async function saveGroup(){if(!gn.value.trim())return notify('Enter subdivision name.');if(!gclass.value)return notify('Select a Class.');const {error}=await sb.from('school_course_groups').insert({name:gn.value.trim(),description:gd.value.trim(),teacher_id:teacher.id,class_id:gclass.value});if(error)return notify(error.message);await load();manageGroups()}
+async function renameGroup(id){const g=groups.find(x=>x.id===id);const n=prompt('Subdivision name:',g.name);if(n===null||!n.trim())return;const {error}=await sb.from('school_course_groups').update({name:n.trim()}).eq('id',id).eq('teacher_id',teacher.id);if(error)return notify(error.message);await load();manageGroups()}
+async function deleteGroup(id){if(students.some(s=>s.school_group_id===id))return notify('Move students out of this subdivision before deleting it.');if(!confirm('Delete this subdivision?'))return;const {error}=await sb.from('school_course_groups').delete().eq('id',id).eq('teacher_id',teacher.id);if(error)return notify(error.message);await load();manageGroups()}
 
 let bulkAssessmentRows=[], bulkAssessmentPdfPages=[], bulkAssessmentSolutionPdfPages=[];
 
 async function bulkQuestionUpload(preselectId=''){
   if(!assessments.length){
-    return alert('Create a School Assessment first, then upload questions to it.');
+    return notify('Create a School Assessment first, then upload questions to it.');
   }
   bulkAssessmentRows=[]; bulkAssessmentPdfPages=[]; bulkAssessmentSolutionPdfPages=[];
   document.getElementById('app').innerHTML=`${header('Bulk Questions Upload')}<div class="card">
@@ -395,7 +395,7 @@ async function readBulkAssessmentPdf(ev){
 
 async function saveBulkAssessmentQuestions(){
   const aid=document.getElementById('bqaAssessment')?.value;
-  if(!aid)return alert('Select an assessment.');
+  if(!aid)return notify('Select an assessment.');
   let rows=[];
   if(bulkAssessmentRows.length){
     rows=bulkAssessmentRows.map(x=>({
@@ -406,9 +406,9 @@ async function saveBulkAssessmentQuestions(){
       hint:x.hint||''
     }));
   }else if(bulkAssessmentPdfPages.length){
-    if(!Object.keys(bulkAssessmentPdfMeta).length)return alert('Upload the Marks / Hint Excel for the PDF first.');
+    if(!Object.keys(bulkAssessmentPdfMeta).length)return notify('Upload the Marks / Hint Excel for the PDF first.');
     const missing=bulkAssessmentPdfPages.filter(x=>!bulkAssessmentPdfMeta[x.no]||!Number.isFinite(bulkAssessmentPdfMeta[x.no].marks));
-    if(missing.length)return alert('Marks are missing for PDF question/page: '+missing.map(x=>x.no).join(', '));
+    if(missing.length)return notify('Marks are missing for PDF question/page: '+missing.map(x=>x.no).join(', '));
     rows=bulkAssessmentPdfPages.map(x=>{
       const meta=bulkAssessmentPdfMeta[x.no];
       return {
@@ -421,11 +421,11 @@ async function saveBulkAssessmentQuestions(){
       };
     });
   }else{
-    return alert('Upload an Excel file or a PDF + Marks Excel file first.');
+    return notify('Upload an Excel file or a PDF + Marks Excel file first.');
   }
 
   if(bulkAssessmentSolutionPdfPages.length && bulkAssessmentSolutionPdfPages.length!==rows.length){
-    return alert(`Solution PDF page count (${bulkAssessmentSolutionPdfPages.length}) must exactly match the number of newly uploaded questions (${rows.length}).\n\nSolution page 1 maps to the first uploaded question, page 2 to the second, and so on.`);
+    return notify(`Solution PDF page count (${bulkAssessmentSolutionPdfPages.length}) must exactly match the number of newly uploaded questions (${rows.length}).\n\nSolution page 1 maps to the first uploaded question, page 2 to the second, and so on.`);
   }
 
   try{
@@ -498,11 +498,11 @@ async function saveBulkAssessmentQuestions(){
       }
     }
 
-    alert(`${dbRows.length} question(s) added successfully${bulkAssessmentSolutionPdfPages.length?` with ${bulkAssessmentSolutionPdfPages.length} solution image(s)`:''}.`);
+    notify(`${dbRows.length} question(s) added successfully${bulkAssessmentSolutionPdfPages.length?` with ${bulkAssessmentSolutionPdfPages.length} solution image(s)`:''}.`);
     bulkAssessmentRows=[];bulkAssessmentPdfPages=[];bulkAssessmentSolutionPdfPages=[];bulkAssessmentPdfMeta={};
     await load(); editQuestions(aid);
   }catch(e){
-    alert('Could not add questions: '+e.message);
+    notify('Could not add questions: '+e.message);
   }
 }
 
@@ -558,10 +558,10 @@ function filterSchoolAssessments(){
  document.querySelectorAll('#schoolAssessmentsManageList .school-assessment-row').forEach(r=>{r.style.display=(c==='all'||r.dataset.class===c)&&(g==='all'||r.dataset.group===g)?'block':'none';});
 }
 async function manageSchoolAssessmentRecipients(id){
- const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return alert(ae.message);
- const {data:links,error:le}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id);if(le)return alert(le.message);
+ const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae)return notify(ae.message);
+ const {data:links,error:le}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id);if(le)return notify(le.message);
  const ids=(links||[]).map(x=>x.student_id);
- const {data:ps,error:pe}=ids.length?await sb.from('profiles').select('id,full_name,roll_no,school_group_id').in('id',ids).order('full_name'):{data:[],error:null};if(pe)return alert(pe.message);
+ const {data:ps,error:pe}=ids.length?await sb.from('profiles').select('id,full_name,roll_no,school_group_id').in('id',ids).order('full_name'):{data:[],error:null};if(pe)return notify(pe.message);
  const group=groups.find(g=>g.id===a.school_group_id),cls=classes.find(c=>c.id===a.class_id);
  document.getElementById('app').innerHTML=`${header('Recipients — '+esc(a.title))}<div class="card"><div class="notice">Current target: <b>${esc(cls?.name||'Class')}</b> → <b>${esc(group?.name||'Entire class')}</b>. Use <b>Re-assign Missing</b> to add students who are not already recipients, or <b>Fresh Assign</b> to replace all previous recipients and reset their current submissions.</div><div class="actions"><button onclick="reassignSchoolAssessment('${id}')">↻ Re-assign Missing</button><button class="secondary" onclick="reassignSchoolAssessmentFresh('${id}')">↻ Fresh Assign</button><button class="secondary" onclick="manageSchoolAssessments()">← Manage Assessments</button></div></div><div class="card"><h2>Recipients (${ps?.length||0})</h2>${(ps||[]).map(s=>`<div class="student-card"><b>${esc(s.full_name)}</b><span class="muted"> — ${esc(s.roll_no||'')}</span></div>`).join('')||'<p class="muted">No recipients yet.</p>'}</div>`;
 }
@@ -593,22 +593,22 @@ async function seedSchoolAssessmentRecipients(assessmentId,classId,groupId=null)
  if(ids.length){const {error}=await sb.from('school_assessment_students').insert(ids.map(student_id=>({assessment_id:assessmentId,student_id})));if(error && !String(error.message||'').toLowerCase().includes('duplicate'))throw error;}
 }
 async function saveAssessment(){
- if(!at.value.trim())return alert('Enter assessment name.');
- if(!ac.value)return alert('Select a class.');
- const subjectId=as.value||null,subjectName=schoolSubjectName(subjectId); if(!subjectId)return alert('Select a Subject.'); const payload={title:at.value.trim(),subject:subjectName,class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id,subject_id:subjectId};
+ if(!at.value.trim())return notify('Enter assessment name.');
+ if(!ac.value)return notify('Select a class.');
+ const subjectId=as.value||null,subjectName=schoolSubjectName(subjectId); if(!subjectId)return notify('Select a Subject.'); const payload={title:at.value.trim(),subject:subjectName,class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id,subject_id:subjectId};
  const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
- if(error)return alert(error.message);
- try{await seedSchoolAssessmentRecipients(data.id,payload.class_id,payload.school_group_id);}catch(e){await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);return alert('Could not assign assessment recipients: '+(e.message||e));}
+ if(error)return notify(error.message);
+ try{await seedSchoolAssessmentRecipients(data.id,payload.class_id,payload.school_group_id);}catch(e){await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);return notify('Could not assign assessment recipients: '+(e.message||e));}
  await load();
  editQuestions(data.id);
 }
 async function saveAssessmentAndBulk(){
- if(!at.value.trim())return alert('Enter assessment name.');
- if(!ac.value)return alert('Select a class.');
- const subjectId=as.value||null,subjectName=schoolSubjectName(subjectId); if(!subjectId)return alert('Select a Subject.'); const payload={title:at.value.trim(),subject:subjectName,class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id,subject_id:subjectId};
+ if(!at.value.trim())return notify('Enter assessment name.');
+ if(!ac.value)return notify('Select a class.');
+ const subjectId=as.value||null,subjectName=schoolSubjectName(subjectId); if(!subjectId)return notify('Select a Subject.'); const payload={title:at.value.trim(),subject:subjectName,class_id:ac.value,school_group_id:ag.value||null,deadline:ad.value?new Date(ad.value).toISOString():null,created_by:teacher.id,subject_id:subjectId};
  const {data,error}=await sb.from('school_assessments').insert(payload).select().single();
- if(error)return alert(error.message);
- try{await seedSchoolAssessmentRecipients(data.id,payload.class_id,payload.school_group_id);}catch(e){await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);return alert('Could not assign assessment recipients: '+(e.message||e));}
+ if(error)return notify(error.message);
+ try{await seedSchoolAssessmentRecipients(data.id,payload.class_id,payload.school_group_id);}catch(e){await sb.from('school_assessments').delete().eq('id',data.id).eq('created_by',teacher.id);return notify('Could not assign assessment recipients: '+(e.message||e));}
  await load();
  bulkQuestionUpload(data.id);
 }
@@ -631,7 +631,7 @@ function solutionListHtml(qid,solutions){
 }
 async function editAssessmentDetails(id){
  const {data:a,error}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
- if(error||!a)return alert(error?.message||'Assessment not found.');
+ if(error||!a)return notify(error?.message||'Assessment not found.');
  const localDeadline=a.deadline?new Date(a.deadline).toISOString().slice(0,16):'';
  document.getElementById('app').innerHTML=`${header('Edit Assessment — '+esc(a.title))}<div class="card">
  <label>Assessment Name</label><input id="ea_title" value="${esc(a.title||'')}">
@@ -646,21 +646,21 @@ async function editAssessmentDetails(id){
 }
 function refreshEditAssessmentGroups(){const c=document.getElementById('ea_class')?.value,sel=document.getElementById('ea_group');if(!sel)return;sel.innerHTML='<option value="">Entire class</option>'+groups.filter(g=>g.class_id===c).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');if(window._editAssessmentGroupId)sel.value=window._editAssessmentGroupId;}
 async function saveAssessmentDetails(id){
- const title=document.getElementById('ea_title')?.value.trim(); if(!title)return alert('Assessment name is required.');
- const classId=document.getElementById('ea_class')?.value,groupId=document.getElementById('ea_group')?.value||null;if(!classId)return alert('Select a class.');
- if(groupId && !groups.some(g=>g.id===groupId && g.class_id===classId))return alert('Selected subdivision does not belong to the selected class.');
- const deadline=document.getElementById('ea_deadline')?.value; const subjectId=document.getElementById('ea_subject')?.value||null; if(!subjectId)return alert('Select a Subject.'); const payload={title,subject:schoolSubjectName(subjectId)||null,subject_id:subjectId,class_id:classId,school_group_id:groupId,deadline:deadline?new Date(deadline).toISOString():null};
- const {error}=await sb.from('school_assessments').update(payload).eq('id',id).eq('created_by',teacher.id); if(error)return alert(error.message); await load(); alert('Assessment details saved.'); manageSchoolAssessments();
+ const title=document.getElementById('ea_title')?.value.trim(); if(!title)return notify('Assessment name is required.');
+ const classId=document.getElementById('ea_class')?.value,groupId=document.getElementById('ea_group')?.value||null;if(!classId)return notify('Select a class.');
+ if(groupId && !groups.some(g=>g.id===groupId && g.class_id===classId))return notify('Selected subdivision does not belong to the selected class.');
+ const deadline=document.getElementById('ea_deadline')?.value; const subjectId=document.getElementById('ea_subject')?.value||null; if(!subjectId)return notify('Select a Subject.'); const payload={title,subject:schoolSubjectName(subjectId)||null,subject_id:subjectId,class_id:classId,school_group_id:groupId,deadline:deadline?new Date(deadline).toISOString():null};
+ const {error}=await sb.from('school_assessments').update(payload).eq('id',id).eq('created_by',teacher.id); if(error)return notify(error.message); await load(); notify('Assessment details saved.'); manageSchoolAssessments();
 }
 async function editQuestions(id){
  currentEditingAssessmentId=id;
  const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
- if(ae)return alert(ae.message);
+ if(ae)return notify(ae.message);
  const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');
- if(qe)return alert(qe.message);
+ if(qe)return notify(qe.message);
  const qids=(q||[]).map(x=>x.id);
  let solutions=[];
- if(qids.length){const {data:so,error:soe}=await sb.from('school_question_solutions').select('*').in('question_id',qids).order('display_order').order('created_at');if(soe)return alert(soe.message);solutions=so||[];}
+ if(qids.length){const {data:so,error:soe}=await sb.from('school_question_solutions').select('*').in('question_id',qids).order('display_order').order('created_at');if(soe)return notify(soe.message);solutions=so||[];}
  const smap=new Map(); for(const x of solutions){if(!smap.has(x.question_id))smap.set(x.question_id,[]);smap.get(x.question_id).push(x)}
  const group=groups.find(g=>g.id===a.school_group_id),total=(q||[]).reduce((n,x)=>n+Number(x.marks||0),0);
  document.getElementById('app').innerHTML=`${header('Questions & Solutions — '+esc(a.title))}
@@ -695,67 +695,67 @@ async function editQuestions(id){
  </div>`}).join('')||'<div class="card"><div class="notice">No questions have been added yet.</div></div>'}</div>`;
  if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise().catch(()=>{});
 }
-async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return alert(error.message);editQuestions(id)}
+async function addQ(id){const {data:q}=await sb.from('school_questions').select('question_order').eq('assessment_id',id).order('question_order',{ascending:false}).limit(1);const n=(q?.[0]?.question_order||0)+1;const {error}=await sb.from('school_questions').insert({assessment_id:id,question_order:n,question_text:'New question',marks:1});if(error)return notify(error.message);editQuestions(id)}
 async function saveQ(qid,aid){
  const t=document.getElementById('qt_'+qid),m=document.getElementById('qm_'+qid),h=document.getElementById('qh_'+qid); const value=Number(m?.value);
- if(!Number.isFinite(value)||value<0)return alert('Marks must be 0 or more.');
+ if(!Number.isFinite(value)||value<0)return notify('Marks must be 0 or more.');
  const payload={marks:value,hint:h?.value?.trim()||null};
- if(t){if(!t.value.trim())return alert('Question text is required.');payload.question_text=t.value.trim();}
- const {error}=await sb.from('school_questions').update(payload).eq('id',qid).eq('assessment_id',aid);if(error)return alert(error.message);editQuestions(aid);
+ if(t){if(!t.value.trim())return notify('Question text is required.');payload.question_text=t.value.trim();}
+ const {error}=await sb.from('school_questions').update(payload).eq('id',qid).eq('assessment_id',aid);if(error)return notify(error.message);editQuestions(aid);
 }
-async function delQ(qid,aid){if(!confirm('Delete question?'))return;const {error}=await sb.from('school_questions').delete().eq('id',qid);if(error)return alert(error.message);editQuestions(aid)}
+async function delQ(qid,aid){if(!confirm('Delete question?'))return;const {error}=await sb.from('school_questions').delete().eq('id',qid);if(error)return notify(error.message);editQuestions(aid)}
 async function saveWrittenSolution(qid,aid){
  const content=document.getElementById('st_'+qid)?.value.trim()||'';
  const {data:old}=await sb.from('school_question_solutions').select('id').eq('question_id',qid).eq('solution_type','text').limit(1);
- if(old?.[0]){const {error}=await sb.from('school_question_solutions').update({content,title:'Written Explanation'}).eq('id',old[0].id);if(error)return alert(error.message);}
- else if(content){const {error}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'text',title:'Written Explanation',content,display_order:10});if(error)return alert(error.message);}
- else return alert('Enter a written explanation first.');
- alert('Written explanation saved.');editQuestions(aid);
+ if(old?.[0]){const {error}=await sb.from('school_question_solutions').update({content,title:'Written Explanation'}).eq('id',old[0].id);if(error)return notify(error.message);}
+ else if(content){const {error}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'text',title:'Written Explanation',content,display_order:10});if(error)return notify(error.message);}
+ else return notify('Enter a written explanation first.');
+ notify('Written explanation saved.');editQuestions(aid);
 }
 async function saveVideoSolution(qid,aid){
- const url=document.getElementById('sv_'+qid)?.value.trim()||'';if(!url)return alert('Enter a YouTube link.');if(!youtubeEmbed(url))return alert('Please enter a valid YouTube video link.');
+ const url=document.getElementById('sv_'+qid)?.value.trim()||'';if(!url)return notify('Enter a YouTube link.');if(!youtubeEmbed(url))return notify('Please enter a valid YouTube video link.');
  const {data:old}=await sb.from('school_question_solutions').select('id').eq('question_id',qid).eq('solution_type','youtube').limit(1);
- if(old?.[0]){const {error}=await sb.from('school_question_solutions').update({youtube_url:url,title:'YouTube Solution'}).eq('id',old[0].id);if(error)return alert(error.message);}
- else {const {error}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'youtube',title:'YouTube Solution',youtube_url:url,display_order:20});if(error)return alert(error.message);}
- alert('YouTube solution saved.');editQuestions(aid);
+ if(old?.[0]){const {error}=await sb.from('school_question_solutions').update({youtube_url:url,title:'YouTube Solution'}).eq('id',old[0].id);if(error)return notify(error.message);}
+ else {const {error}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'youtube',title:'YouTube Solution',youtube_url:url,display_order:20});if(error)return notify(error.message);}
+ notify('YouTube solution saved.');editQuestions(aid);
 }
 function sanitizeSolutionFileName(name){return String(name||'solution').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-100)||'solution';}
 async function uploadQuestionSolutionFile(qid,aid){
- const input=document.getElementById('sf_'+qid),file=input?.files?.[0];if(!file)return alert('Choose a PDF, Word or image file.');
- const max=20*1024*1024;if(file.size>max)return alert('Solution file is larger than 20 MB.');
+ const input=document.getElementById('sf_'+qid),file=input?.files?.[0];if(!file)return notify('Choose a PDF, Word or image file.');
+ const max=20*1024*1024;if(file.size>max)return notify('Solution file is larger than 20 MB.');
  try{
   const path=`${teacher.id}/${aid}/${qid}/${crypto.randomUUID()}-${sanitizeSolutionFileName(file.name)}`;
   const {error:ue}=await sb.storage.from('school-question-solutions').upload(path,file,{contentType:file.type||'application/octet-stream',upsert:false});if(ue)throw ue;
   const {data:pu}=sb.storage.from('school-question-solutions').getPublicUrl(path);
   const {error:ie}=await sb.from('school_question_solutions').insert({question_id:qid,solution_type:'file',title:file.name,file_name:file.name,file_url:pu.publicUrl,storage_path:path,mime_type:file.type||null,file_size_bytes:file.size,display_order:30});
   if(ie){await sb.storage.from('school-question-solutions').remove([path]);throw ie;}
-  alert('Solution file uploaded.');editQuestions(aid);
- }catch(e){alert('Could not upload solution: '+(e.message||e));}
+  notify('Solution file uploaded.');editQuestions(aid);
+ }catch(e){notify('Could not upload solution: '+(e.message||e));}
 }
 async function toggleSolutionRelease(qid,checked){
- const {error}=await sb.from('school_questions').update({show_solution:!!checked}).eq('id',qid);if(error){alert('Could not change solution visibility: '+error.message);editQuestions(currentEditingAssessmentId);}
+ const {error}=await sb.from('school_questions').update({show_solution:!!checked}).eq('id',qid);if(error){notify('Could not change solution visibility: '+error.message);editQuestions(currentEditingAssessmentId);}
 }
 let currentEditingAssessmentId='';
 async function deleteQuestionSolution(solutionId,qid){
  if(!confirm('Delete this solution?'))return;
- const {data:s,error:se}=await sb.from('school_question_solutions').select('storage_path').eq('id',solutionId).single();if(se)return alert(se.message);
+ const {data:s,error:se}=await sb.from('school_question_solutions').select('storage_path').eq('id',solutionId).single();if(se)return notify(se.message);
  if(s?.storage_path)await sb.storage.from('school-question-solutions').remove([s.storage_path]);
- const {error}=await sb.from('school_question_solutions').delete().eq('id',solutionId);if(error)return alert(error.message);
+ const {error}=await sb.from('school_question_solutions').delete().eq('id',solutionId);if(error)return notify(error.message);
  editQuestions(currentEditingAssessmentId);
 }
 async function reviewAssessment(id){
  const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();
- if(ae)return alert(ae.message);
+ if(ae)return notify(ae.message);
  const {data:q,error:qe}=await sb.from('school_questions').select('*').eq('assessment_id',id).order('question_order');
- if(qe)return alert(qe.message);
+ if(qe)return notify(qe.message);
  const {data:subs,error:se}=await sb.from('school_answer_submissions').select('id,assessment_id,question_id,student_id,submission_no,is_current,status,awarded_marks,teacher_comment,submitted_at,reviewed_at').eq('assessment_id',id).eq('is_current',true).order('submitted_at',{ascending:false});
- if(se)return alert(se.message);
+ if(se)return notify(se.message);
  const sids=[...new Set((subs||[]).map(x=>x.student_id))];
  const {data:ps,error:pe}=sids.length?await sb.from('profiles').select('id,full_name,roll_no').in('id',sids):{data:[],error:null};
- if(pe)return alert(pe.message);
+ if(pe)return notify(pe.message);
  const subids=(subs||[]).map(x=>x.id);
  const {data:files,error:fe}=subids.length?await sb.from('school_answer_files').select('id,submission_id,page_no,file_name,drive_url,mime_type,file_size_bytes').in('submission_id',subids).order('page_no'):{data:[],error:null};
- if(fe)return alert(fe.message);
+ if(fe)return notify(fe.message);
  const pmap=new Map((ps||[]).map(x=>[x.id,x]));
  const qmap=new Map((q||[]).map(x=>[x.id,x]));
  const fmap=new Map();
@@ -788,13 +788,13 @@ async function reviewAssessment(id){
  html+='<div class="actions" style="margin-top:15px"><button class="secondary" onclick="home()">← Dashboard</button><button class="secondary" onclick="editQuestions(\''+id+'\')">← Questions</button></div></div>';
  document.getElementById('app').innerHTML=html;
 }
-async function saveReview(submissionId,maxMarks,assessmentId){const marks=Number(document.getElementById('rm_'+submissionId)?.value);const comment=document.getElementById('rc_'+submissionId)?.value||'';if(!Number.isFinite(marks)||marks<0||marks>Number(maxMarks))return alert('Marks must be between 0 and '+maxMarks+'.');const {error}=await sb.from('school_answer_submissions').update({awarded_marks:marks,teacher_comment:comment,status:'reviewed',reviewed_at:new Date().toISOString(),reviewed_by:teacher.id}).eq('id',submissionId);if(error)return alert(error.message);reviewAssessment(assessmentId)}
+async function saveReview(submissionId,maxMarks,assessmentId){const marks=Number(document.getElementById('rm_'+submissionId)?.value);const comment=document.getElementById('rc_'+submissionId)?.value||'';if(!Number.isFinite(marks)||marks<0||marks>Number(maxMarks))return notify('Marks must be between 0 and '+maxMarks+'.');const {error}=await sb.from('school_answer_submissions').update({awarded_marks:marks,teacher_comment:comment,status:'reviewed',reviewed_at:new Date().toISOString(),reviewed_by:teacher.id}).eq('id',submissionId);if(error)return notify(error.message);reviewAssessment(assessmentId)}
 async function reassignSchoolAssessment(id,options={}){
  const fresh=!!options.fresh;
- const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae||!a)return alert(ae?.message||'Assessment not found.');
- const {data:classRows,error:ce}=await sb.from('classes').select('id,name').eq('teacher_id',teacher.id).eq('course','SCHOOL').order('name');if(ce)return alert(ce.message);
- const {data:groupRows,error:ge}=await sb.from('school_course_groups').select('id,name,class_id').eq('teacher_id',teacher.id).order('name');if(ge)return alert(ge.message);
- const cls=(classRows||[]).find(c=>c.id===a.class_id)||(classRows||[])[0];if(!cls)return alert('No School class is available.');
+ const {data:a,error:ae}=await sb.from('school_assessments').select('*').eq('id',id).eq('created_by',teacher.id).single();if(ae||!a)return notify(ae?.message||'Assessment not found.');
+ const {data:classRows,error:ce}=await sb.from('classes').select('id,name').eq('teacher_id',teacher.id).eq('course','SCHOOL').order('name');if(ce)return notify(ce.message);
+ const {data:groupRows,error:ge}=await sb.from('school_course_groups').select('id,name,class_id').eq('teacher_id',teacher.id).order('name');if(ge)return notify(ge.message);
+ const cls=(classRows||[]).find(c=>c.id===a.class_id)||(classRows||[])[0];if(!cls)return notify('No School class is available.');
  window._saReassignGroups=groupRows||[];window._saReassignFresh=fresh;
  document.getElementById('app').innerHTML=`${header(fresh?'Fresh Assign School Assessment':'Re-assign School Assessment')}<div class="card"><h2>${esc(a.title)}</h2><div class="${fresh?'notice':'success'}">${fresh?'Fresh mode removes all previous recipient links and current submissions. Choose the new class/subdivision/students.':'Re-assign Missing mode keeps existing recipients and adds only students who are not already assigned.'}</div><label>Class</label><select id="sar_class" onchange="loadSchoolAssessmentRecipientPicker('${id}')">${(classRows||[]).map(c=>`<option value="${c.id}" ${c.id===cls.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><label>Sub-division</label><select id="sar_group" onchange="loadSchoolAssessmentRecipientPicker('${id}')"><option value="">Entire class</option></select><div class="card" style="background:#f8fafc"><h3>Assign To</h3><label><input type="radio" name="sar_mode" value="class" checked onchange="loadSchoolAssessmentRecipientPicker('${id}')" style="width:auto;margin-right:8px">Entire selected class/subdivision</label><label><input type="radio" name="sar_mode" value="students" onchange="loadSchoolAssessmentRecipientPicker('${id}')" style="width:auto;margin-right:8px">Selected students</label><div id="sar_picker" class="small muted">Loading students...</div></div><div class="actions"><button onclick="saveSchoolAssessmentRecipients('${id}',${fresh})">💾 ${fresh?'Save Fresh Assignment':'Add Missing Recipients'}</button><button class="secondary" onclick="manageSchoolAssessments()">Cancel</button></div></div>`;
  refreshSchoolAssessmentReassignGroups();await loadSchoolAssessmentRecipientPicker(id);
@@ -811,23 +811,23 @@ async function loadSchoolAssessmentRecipientPicker(id){
  box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${available.length} student(s) available. ${existing.size&&!fresh?existing.size+' already assigned and will not be duplicated.':''}</div>`+(mode==='class'?'<div class="success">The selected class/subdivision will be assigned as a whole.</div>':`<div class="actions" style="margin-bottom:8px"><button type="button" class="secondary" onclick="document.querySelectorAll('.sar-student').forEach(x=>x.checked=true)">Select all</button><button type="button" class="secondary" onclick="document.querySelectorAll('.sar-student').forEach(x=>x.checked=false)">Clear all</button></div>`+(available.length?available.map(s=>`<label style="display:block;padding:6px 0"><input class="sar-student" type="checkbox" value="${esc(s.id)}" style="width:auto;margin-right:8px"><b>${esc(s.full_name)}</b> <span class="muted small">${esc(s.roll_no||'')}</span></label>`).join(''):'<div class="notice">No new students are available.</div>'));
 }
 async function saveSchoolAssessmentRecipients(id,fresh=false){
- const classId=document.getElementById('sar_class')?.value,groupId=document.getElementById('sar_group')?.value||null;if(!classId)return alert('Select a class.');
- let ids=[];const {data:members,error:me}=await sb.from('class_students').select('student_id').eq('class_id',classId);if(me)return alert(me.message);ids=(members||[]).map(x=>x.student_id);
- if(groupId){const {data:gp,error:ge}=await sb.from('profiles').select('id').eq('school_group_id',groupId).in('id',ids);if(ge)return alert(ge.message);ids=(gp||[]).map(x=>x.id);}
+ const classId=document.getElementById('sar_class')?.value,groupId=document.getElementById('sar_group')?.value||null;if(!classId)return notify('Select a class.');
+ let ids=[];const {data:members,error:me}=await sb.from('class_students').select('student_id').eq('class_id',classId);if(me)return notify(me.message);ids=(members||[]).map(x=>x.student_id);
+ if(groupId){const {data:gp,error:ge}=await sb.from('profiles').select('id').eq('school_group_id',groupId).in('id',ids);if(ge)return notify(ge.message);ids=(gp||[]).map(x=>x.id);}
  if(document.querySelector('input[name="sar_mode"]:checked')?.value==='students')ids=[...document.querySelectorAll('.sar-student:checked')].map(x=>x.value);
- ids=[...new Set(ids)];if(!ids.length)return alert('No students selected.');
+ ids=[...new Set(ids)];if(!ids.length)return notify('No students selected.');
  if(fresh){
-   const {error:de}=await sb.from('school_assessment_students').delete().eq('assessment_id',id);if(de)return alert(de.message);
-   const {error:se}=await sb.from('school_answer_submissions').delete().eq('assessment_id',id);if(se)return alert(se.message);
+   const {error:de}=await sb.from('school_assessment_students').delete().eq('assessment_id',id);if(de)return notify(de.message);
+   const {error:se}=await sb.from('school_answer_submissions').delete().eq('assessment_id',id);if(se)return notify(se.message);
  }else{
-   const {data:existing,error:ee}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id).in('student_id',ids);if(ee)return alert(ee.message);const ex=new Set((existing||[]).map(x=>x.student_id));ids=ids.filter(x=>!ex.has(x));
+   const {data:existing,error:ee}=await sb.from('school_assessment_students').select('student_id').eq('assessment_id',id).in('student_id',ids);if(ee)return notify(ee.message);const ex=new Set((existing||[]).map(x=>x.student_id));ids=ids.filter(x=>!ex.has(x));
  }
- if(!ids.length)return alert('All selected students are already assigned. Nothing was added.');
- const {error:ie}=await sb.from('school_assessment_students').insert(ids.map(student_id=>({assessment_id:id,student_id})));if(ie)return alert(ie.message);
- const {error:ae}=await sb.from('school_assessments').update({class_id:classId,school_group_id:groupId}).eq('id',id).eq('created_by',teacher.id);if(ae)return alert(ae.message);
- alert(`${fresh?'Fresh assignment':'Re-assignment'} saved for ${ids.length} student(s).`);await load();manageSchoolAssessments();
+ if(!ids.length)return notify('All selected students are already assigned. Nothing was added.');
+ const {error:ie}=await sb.from('school_assessment_students').insert(ids.map(student_id=>({assessment_id:id,student_id})));if(ie)return notify(ie.message);
+ const {error:ae}=await sb.from('school_assessments').update({class_id:classId,school_group_id:groupId}).eq('id',id).eq('created_by',teacher.id);if(ae)return notify(ae.message);
+ notify(`${fresh?'Fresh assignment':'Re-assignment'} saved for ${ids.length} student(s).`);await load();manageSchoolAssessments();
 }
-async function deleteAssessment(id){if(!confirm('Delete this assessment? All questions and answer submissions for it will also be removed.'))return;const {error}=await sb.from('school_assessments').delete().eq('id',id).eq('created_by',teacher.id);if(error)return alert(error.message);await load();home()}
+async function deleteAssessment(id){if(!confirm('Delete this assessment? All questions and answer submissions for it will also be removed.'))return;const {error}=await sb.from('school_assessments').delete().eq('id',id).eq('created_by',teacher.id);if(error)return notify(error.message);await load();home()}
 async function logout(){await sb.auth.signOut();location.replace('teacher-login.html')}
 init();
 
@@ -996,7 +996,7 @@ function questionBankHome(){
     </div>
     <div class="card"><div id="qbTable"></div></div>`;
     qbRenderTable();
-  }).catch(e=>alert('Could not load Question Bank: '+e.message));
+  }).catch(e=>notify('Could not load Question Bank: '+e.message));
 }
 function qbQuestionLanguage(q){
   const en=String(q?.question_text_en||'').trim().length>0;
@@ -1045,7 +1045,7 @@ function qbVariationQuestionText(q,lang){
 function qbShowVariationGroup(group){
   group=String(group||'').trim();if(!group)return;
   const rows=(qbQuestions||[]).filter(q=>String(q?.variation_group||'').trim()===group).sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-  if(!rows.length)return alert('No questions found in Variation Group: '+group);
+  if(!rows.length)return notify('No questions found in Variation Group: '+group);
   let m=document.getElementById('qbVariationModal');
   if(!m){m=document.createElement('div');m.id='qbVariationModal';m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';document.body.appendChild(m);}
   m.innerHTML=`<div style="width:min(1180px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 70px rgba(0,0,0,.35)">
@@ -1094,7 +1094,7 @@ function qbRenderTable(){
 }
 function qbDownloadExistingChapters(){
   try{
-    if(typeof XLSX==='undefined') return alert('Excel library is not loaded. Please refresh the page and try again.');
+    if(typeof XLSX==='undefined') return notify('Excel library is not loaded. Please refresh the page and try again.');
     const rows=(qbChapters||[]).slice().sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>{
       const parent=c.parent_chapter_id ? qbChapters.find(x=>x.id===c.parent_chapter_id) : null;
       return {
@@ -1105,13 +1105,13 @@ function qbDownloadExistingChapters(){
         'Description': c.description||''
       };
     });
-    if(!rows.length) return alert('No chapters or subchapters are currently uploaded.');
+    if(!rows.length) return notify('No chapters or subchapters are currently uploaded.');
     const ws=XLSX.utils.json_to_sheet(rows,{header:['Subject','Chapter No','Parent Chapter No','Chapter Name','Description']});
     ws['!cols']=[{wch:20},{wch:16},{wch:20},{wch:38},{wch:60}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Chapters');
     XLSX.writeFile(wb,'School_Question_Bank_Chapters_Existing.xlsx');
-  }catch(e){alert('Could not create Excel file: '+e.message)}
+  }catch(e){notify('Could not create Excel file: '+e.message)}
 }
 function qbChapterManager(){
   loadQuestionBank().then(()=>{
@@ -1127,23 +1127,23 @@ function qbChapterManager(){
       <div><h3>Existing Chapters</h3>${qbChapters.slice().sort((a,b)=>qbChapterCode(a).localeCompare(qbChapterCode(b),undefined,{numeric:true})).map(c=>`<div class="student-card"><b>${qbChapterDisplay(c)}</b><div class="small muted">Subject: <b>${qbEsc(schoolSubjectName(c.subject_id)||'Mathematics')}</b></div><div class="small muted">${qbEsc(c.description||'')}</div><button class="danger" style="margin-top:7px" onclick="qbDeleteChapter('${c.id}')">Delete</button></div>`).join('')||'<div class="muted">No chapters yet.</div>'}</div>
     </div></div>
     <div class="actions"><button onclick="qbBulkChapterUpload()">📚 Bulk Upload Chapters (Excel)</button><button class="secondary" onclick="qbDownloadExistingChapters()">⬇ Download Existing Chapters + Subchapters (Excel)</button><a class="btn secondary" href="Question_Bank_Chapter_Bulk_Upload_Template.xlsx" download>⬇ Blank Chapter/Subchapter Template</a><button class="secondary" onclick="questionBankHome()">← Question Bank</button></div>`;
-  }).catch(e=>alert(e.message));
+  }).catch(e=>notify(e.message));
 }
 async function qbAddChapter(){
-  const subjectId=document.getElementById('qbcSubject')?.value||null;const code=document.getElementById('qbcCode').value.trim(),name=document.getElementById('qbcName').value.trim(),parentId=document.getElementById('qbcParent').value||null;if(!subjectId)return alert('Select Subject.');
-  if(!/^\d+(\.\d+)*$/.test(code)||!name)return alert('Enter a valid Chapter/Subchapter No. (for example 1 or 1.1) and name.');
-  if(parentId && !code.startsWith(qbChapterCode(qbChapters.find(c=>c.id===parentId))+'.'))return alert('Subchapter number must begin with its parent chapter number, e.g. parent 1 → subchapter 1.1.');
-  const exists=qbChapters.find(c=>qbChapterCode(c)===code&&(!c.subject_id||String(c.subject_id)===String(subjectId))); if(exists)return alert('This Chapter/Subchapter No. already exists.');
+  const subjectId=document.getElementById('qbcSubject')?.value||null;const code=document.getElementById('qbcCode').value.trim(),name=document.getElementById('qbcName').value.trim(),parentId=document.getElementById('qbcParent').value||null;if(!subjectId)return notify('Select Subject.');
+  if(!/^\d+(\.\d+)*$/.test(code)||!name)return notify('Enter a valid Chapter/Subchapter No. (for example 1 or 1.1) and name.');
+  if(parentId && !code.startsWith(qbChapterCode(qbChapters.find(c=>c.id===parentId))+'.'))return notify('Subchapter number must begin with its parent chapter number, e.g. parent 1 → subchapter 1.1.');
+  const exists=qbChapters.find(c=>qbChapterCode(c)===code&&(!c.subject_id||String(c.subject_id)===String(subjectId))); if(exists)return notify('This Chapter/Subchapter No. already exists.');
   const top=Number(code.split('.')[0]);
   const {error}=await sb.from('school_question_bank_chapters').insert({teacher_id:teacher.id,chapter_number:top,chapter_code:code,parent_chapter_id:parentId,subject_id:subjectId,chapter_name:name,description:document.getElementById('qbcDesc').value.trim()||null});
-  if(error)return alert(error.message);qbChapterManager();
+  if(error)return notify(error.message);qbChapterManager();
 }
 async function qbDeleteChapter(id){
-  if(qbQuestions.some(q=>q.chapter_id===id))return alert('This chapter/subchapter has questions. Move/delete the questions first.');
-  if(qbChapters.some(c=>c.parent_chapter_id===id))return alert('This chapter has subchapters. Delete or move the subchapters first.');
+  if(qbQuestions.some(q=>q.chapter_id===id))return notify('This chapter/subchapter has questions. Move/delete the questions first.');
+  if(qbChapters.some(c=>c.parent_chapter_id===id))return notify('This chapter has subchapters. Delete or move the subchapters first.');
   if(!confirm('Delete this chapter/subchapter?'))return;
   const {error}=await sb.from('school_question_bank_chapters').delete().eq('id',id).eq('teacher_id',teacher.id);
-  if(error)return alert(error.message);qbChapterManager();
+  if(error)return notify(error.message);qbChapterManager();
 }
 
 function qbBulkChapterUpload(){
@@ -1164,8 +1164,8 @@ function qbReadChapterExcel(ev){
   }catch(e){qbBulkChapterRows=[];qbBulkSetPreview('qbChapterBulkPreview',msg('Could not read Chapter Excel: '+e.message))}};r.readAsArrayBuffer(f);
 }
 async function qbImportChapterExcel(){
-  if(!qbBulkChapterRows.length)return alert('Upload the Chapter/Subchapter Excel file first.');
-  const invalid=qbBulkChapterRows.filter(x=>!/^(\d+)(\.\d+)*$/.test(x.chapterNo)||!x.chapterName||(x.parentNo&&!/^\d+(\.\d+)*$/.test(x.parentNo)));if(invalid.length)return alert('Invalid row(s): '+invalid.map(x=>x.row).join(', '));
+  if(!qbBulkChapterRows.length)return notify('Upload the Chapter/Subchapter Excel file first.');
+  const invalid=qbBulkChapterRows.filter(x=>!/^(\d+)(\.\d+)*$/.test(x.chapterNo)||!x.chapterName||(x.parentNo&&!/^\d+(\.\d+)*$/.test(x.parentNo)));if(invalid.length)return notify('Invalid row(s): '+invalid.map(x=>x.row).join(', '));
   const defaultSubjectId=document.getElementById('qbChapterBulkSubject')?.value||schoolSubjects.find(x=>x.name==='Mathematics')?.id||null; const action=document.getElementById('qbChapterDuplicateAction')?.value||'skip',status=document.getElementById('qbChapterBulkStatus');let created=0,updated=0,skipped=0;
   try{
     const {data:existing,error}=await sb.from('school_question_bank_chapters').select('*').eq('teacher_id',teacher.id);if(error)throw error;
@@ -1348,19 +1348,19 @@ async function qbImportBulk(){
   else if(pdf.length){
     if(!Object.keys(qbBulkPdfMeta).length){
       if(btn){btn.disabled=false;btn.textContent='✅ Import Questions'}
-      return alert('Upload the PDF Metadata Excel first.');
+      return notify('Upload the PDF Metadata Excel first.');
     }
     rows=pdf.map(x=>({...qbBulkPdfMeta[x.page],page:x.page,row:x.page,image:x.image}));
   }else{
     if(btn){btn.disabled=false;btn.textContent='✅ Import Questions'}
-    return alert('Upload an Excel, Word, or PDF + Metadata Excel file first.');
+    return notify('Upload an Excel, Word, or PDF + Metadata Excel file first.');
   }
 
   const sourceType=excel.length?'excel':word.length?'word':'pdf';
   const invalid=rows.filter(x=>qbBulkValid(x,0,sourceType).length);
   if(invalid.length){
     if(btn){btn.disabled=false;btn.textContent='✅ Import Questions'}
-    return alert('Please correct invalid row/page(s): '+invalid.slice(0,20).map(x=>x.row||x.page).join(', '));
+    return notify('Please correct invalid row/page(s): '+invalid.slice(0,20).map(x=>x.row||x.page).join(', '));
   }
 
   qbBulkImportBusy=true;
@@ -1449,8 +1449,8 @@ function qbNewVariationGroup(){
 }
 async function qbGenerateSimilar(id){
   const source=qbQuestions.find(x=>x.id===id);
-  if(!source)return alert('Source question not found.');
-  if(String(source.course_type||'SCHOOL').toUpperCase()!=='SCHOOL')return alert('Generate Similar Question is available only for School Course questions.');
+  if(!source)return notify('Source question not found.');
+  if(String(source.course_type||'SCHOOL').toUpperCase()!=='SCHOOL')return notify('Generate Similar Question is available only for School Course questions.');
   let group=String(source.variation_group||'').trim();
   try{
     if(!group){
@@ -1460,7 +1460,7 @@ async function qbGenerateSimilar(id){
     }
     await loadQuestionBank();
     qbEditor(id,true);
-  }catch(e){alert('Could not start Similar Question mode: '+e.message)}
+  }catch(e){notify('Could not start Similar Question mode: '+e.message)}
 }
 async function qbEditor(id=null, similar=false){
   qbSimilarSourceId=similar?id:null;
@@ -1507,7 +1507,7 @@ async function qbEditor(id=null, similar=false){
       qbEditorBlocks=(br.data||[]).map(b=>({...b,id:null}));
       qbEditorOptions=(op.data||[]).map(o=>({...o,id:null}));
       qbRenderBlocks();qbRenderOptions();
-    }).catch(e=>alert('Could not load question content: '+e.message));
+    }).catch(e=>notify('Could not load question content: '+e.message));
   }
   qbTypeChanged();
 }
@@ -1520,12 +1520,12 @@ function qbChapterSelectionChanged(){
 function qbTextBookStatusChanged(){
   const tb=document.getElementById('qbTextBook');
   const chapter=document.getElementById('qbChapter');
-  if(tb?.value==='YES'&&!chapter?.value){alert('Select the Chapter / Subchapter first. The selected Chapter/Subchapter is used as the textbook source.');if(tb)tb.value='NO';}
+  if(tb?.value==='YES'&&!chapter?.value){notify('Select the Chapter / Subchapter first. The selected Chapter/Subchapter is used as the textbook source.');if(tb)tb.value='NO';}
 }
 
 function qbTypeChanged(){const t=document.getElementById('qbType')?.value;const c=document.getElementById('qbOptionsCard');if(c)c.style.display=t==='MCQ'?'block':'none';}
 function qbAddTextBlock(){qbEditorBlocks.push({id:null,block_type:'TEXT',text_en:'',text_as:''});qbRenderBlocks()}
-function qbAddImageBlock(){const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;try{const path=`${teacher.id}/${crypto.randomUUID()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from('school-question-bank-images').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});if(error)throw error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);qbEditorBlocks.push({id:null,block_type:'IMAGE',image_url:u.publicUrl,image_width:70,alt_text:f.name});const ir=document.getElementById('qbImageRequired');if(ir)ir.value='YES';qbRenderBlocks()}catch(e){alert('Image upload failed: '+e.message)}};input.click()}
+function qbAddImageBlock(){const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;try{const path=`${teacher.id}/${crypto.randomUUID()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from('school-question-bank-images').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});if(error)throw error;const {data:u}=sb.storage.from('school-question-bank-images').getPublicUrl(path);qbEditorBlocks.push({id:null,block_type:'IMAGE',image_url:u.publicUrl,image_width:70,alt_text:f.name});const ir=document.getElementById('qbImageRequired');if(ir)ir.value='YES';qbRenderBlocks()}catch(e){notify('Image upload failed: '+e.message)}};input.click()}
 function qbMathHtml(text){
   let s=String(text??'');
   if(!s)return '';
@@ -1571,7 +1571,7 @@ function qbCloseMathEditor(){
 }
 function qbOpenMathEditor(targetId){
   const target=document.getElementById(targetId);
-  if(!target){alert('Question text box not found. Please refresh the page and try again.');return;}
+  if(!target){notify('Question text box not found. Please refresh the page and try again.');return;}
   qbCloseMathEditor();
   // Capture the text selection/cursor BEFORE opening the modal. Clicking the
   // toolbar button normally blurs the textarea and can otherwise destroy the
@@ -1621,7 +1621,7 @@ function qbOpenMathEditor(targetId){
     const cancelBtn=document.getElementById('qbMathCancel');
     const status=document.getElementById('qbMathStatus');
     const latexBox=document.getElementById('qbMathLatex');
-    if(!mf||!insertBtn||!cancelBtn){alert('Equation editor could not be initialized.');qbCloseMathEditor();return;}
+    if(!mf||!insertBtn||!cancelBtn){notify('Equation editor could not be initialized.');qbCloseMathEditor();return;}
     // Only load an existing LaTeX math token if the USER SELECTED that token.
     // Plain Assamese/English question text must NEVER be copied into the math field.
     const rawSelected=target.value.slice(qbMathEditorState.start,qbMathEditorState.end);
@@ -1678,9 +1678,9 @@ function qbConfirmMathEditor(){
   const mf=document.getElementById('qbMathField');
   const state=qbMathEditorState||{};
   const target=state.target;
-  if(!mf||!target){alert('Question text box is no longer available. Please close the editor and try again.');return;}
+  if(!mf||!target){notify('Question text box is no longer available. Please close the editor and try again.');return;}
   const latex=(mf.value||'').trim();
-  if(!latex){alert('Please enter a mathematical expression first.');try{mf.focus()}catch(e){};return;}
+  if(!latex){notify('Please enter a mathematical expression first.');try{mf.focus()}catch(e){};return;}
   const start=Math.max(0,Math.min(Number(state.start)||0,target.value.length));
   const end=Math.max(start,Math.min(Number(state.end)||start,target.value.length));
   const insertion='\\('+latex+'\\)';
@@ -1711,11 +1711,11 @@ function qbRemoveBlock(i){qbEditorBlocks.splice(i,1);qbRenderBlocks()}
 function qbAddOption(){qbEditorOptions.push({option_label:String.fromCharCode(65+qbEditorOptions.length),option_text_en:'',option_text_as:'',is_correct:false,image_url:null});qbRenderOptions()}
 function qbRenderOptions(){const el=document.getElementById('qbOptions');if(!el)return;el.innerHTML=qbEditorOptions.map((o,i)=>`<div class="student-card"><div class="grid"><div><label>Option ${o.option_label}</label><div class="eq-toolbar"><button type="button" class="secondary" onmousedown="event.preventDefault()" onclick="qbOpenMathEditor('qb_opt_en_${i}')">∑ Equation Editor</button></div><textarea id="qb_opt_en_${i}" rows="2" oninput="qbEditorOptions[${i}].option_text_en=this.value;qbRefreshMathPreview('qb_opt_prev_en_${i}',this.value)">${qbEsc(o.option_text_en||'')}</textarea><div id="qb_opt_prev_en_${i}" class="eq-preview">${qbMathPreview(o.option_text_en||'')}</div></div><div><label>Assamese</label><div class="eq-toolbar"><button type="button" class="secondary" onmousedown="event.preventDefault()" onclick="qbOpenMathEditor('qb_opt_as_${i}')">∑ Equation Editor</button></div><textarea id="qb_opt_as_${i}" rows="2" oninput="qbEditorOptions[${i}].option_text_as=this.value;qbRefreshMathPreview('qb_opt_prev_as_${i}',this.value)">${qbEsc(o.option_text_as||'')}</textarea><div id="qb_opt_prev_as_${i}" class="eq-preview">${qbMathPreview(o.option_text_as||'')}</div></div></div><label><input type="radio" name="qbCorrect" ${o.is_correct?'checked':''} onchange="qbEditorOptions.forEach(x=>x.is_correct=false);qbEditorOptions[${i}].is_correct=true"> Correct answer</label></div>`).join('');if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([el]).catch(()=>{})}
 async function qbSave(){
-  if(!qbChapters.length)return alert('Create at least one chapter first.');
-  if(!qbEditorBlocks.length)return alert('Add at least one text or image block.');
+  if(!qbChapters.length)return notify('Create at least one chapter first.');
+  if(!qbEditorBlocks.length)return notify('Add at least one text or image block.');
   const type=document.getElementById('qbType').value;
-  if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return alert('MCQ needs at least 2 options and exactly one correct answer.');
-  const subjectId=document.getElementById('qbSubject')?.value||null;if(!subjectId)return alert('Select Subject.');const payload={teacher_id:teacher.id,course_type:'SCHOOL',subject_id:subjectId,chapter_id:document.getElementById('qbChapter').value,medium:(document.getElementById('qbMedium')?.value||((qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))&&(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'BOTH':(qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))?'ENGLISH':(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'ASSAMESE':null)),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||(qbSimilarSourceId?qbNewVariationGroup():null),topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,image_required:document.getElementById('qbImageRequired')?.value==='YES',image_description:document.getElementById('qbImageDescription')?.value.trim()||null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
+  if(type==='MCQ'&&(qbEditorOptions.length<2||qbEditorOptions.filter(o=>o.is_correct).length!==1))return notify('MCQ needs at least 2 options and exactly one correct answer.');
+  const subjectId=document.getElementById('qbSubject')?.value||null;if(!subjectId)return notify('Select Subject.');const payload={teacher_id:teacher.id,course_type:'SCHOOL',subject_id:subjectId,chapter_id:document.getElementById('qbChapter').value,medium:(document.getElementById('qbMedium')?.value||((qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))&&(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'BOTH':(qbEditorBlocks.some(b=>String(b.text_en||'').trim())||qbEditorOptions.some(o=>String(o.option_text_en||'').trim()))?'ENGLISH':(qbEditorBlocks.some(b=>String(b.text_as||'').trim())||qbEditorOptions.some(o=>String(o.option_text_as||'').trim()))?'ASSAMESE':null)),question_type:type,marks:Number(document.getElementById('qbMarks').value),cognitive_level:document.getElementById('qbLevel').value,difficulty:document.getElementById('qbDifficulty').value,variation_group:document.getElementById('qbVariation').value.trim()||(qbSimilarSourceId?qbNewVariationGroup():null),topic:document.getElementById('qbTopic')?.value.trim()||null,text_book:document.getElementById('qbTextBook')?.value==='YES',textbook_reference:null,image_required:document.getElementById('qbImageRequired')?.value==='YES',image_description:document.getElementById('qbImageDescription')?.value.trim()||null,explanation:document.getElementById('qbExplanation').value.trim()||null,correct_answer:type==='MCQ'?(qbEditorOptions.find(o=>o.is_correct)?.option_label||null):null,question_text_en:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_en||'').join('\n').trim(),question_text_as:qbEditorBlocks.filter(b=>b.block_type==='TEXT').map(b=>b.text_as||'').join('\n').trim(),has_images:qbEditorBlocks.some(b=>b.block_type==='IMAGE')};
   try{
     if(qbSimilarSourceId && !String(document.getElementById('qbVariation')?.value||'').trim()){
       const g=qbNewVariationGroup();
@@ -1729,11 +1729,11 @@ async function qbSave(){
     const blocks=qbEditorBlocks.map((b,i)=>({question_id:qid,block_order:i+1,block_type:b.block_type,text_en:b.text_en||null,text_as:b.text_as||null,image_url:b.image_url||null,image_width:Number(b.image_width||70),alt_text:b.alt_text||null}));
     const {error:be}=await sb.from('school_question_bank_blocks').insert(blocks);if(be)throw be;
     if(type==='MCQ'){const opts=qbEditorOptions.map((o,i)=>({question_id:qid,display_order:i+1,option_label:o.option_label||String.fromCharCode(65+i),option_text_en:o.option_text_en||null,option_text_as:o.option_text_as||null,is_correct:!!o.is_correct,image_url:o.image_url||null}));const {error:oe}=await sb.from('school_question_bank_options').insert(opts);if(oe)throw oe;}
-    alert('Question saved successfully.');questionBankHome();
-  }catch(e){alert('Could not save question: '+e.message)}
+    notify('Question saved successfully.');questionBankHome();
+  }catch(e){notify('Could not save question: '+e.message)}
 }
 async function qbEdit(id){qbEditor(id)}
-async function qbDelete(id){if(!confirm('Delete this question and its images/options?'))return;const {error}=await sb.from('school_question_bank_questions').delete().eq('id',id).eq('teacher_id',teacher.id);if(error)return alert(error.message);questionBankHome()}
+async function qbDelete(id){if(!confirm('Delete this question and its images/options?'))return;const {error}=await sb.from('school_question_bank_questions').delete().eq('id',id).eq('teacher_id',teacher.id);if(error)return notify(error.message);questionBankHome()}
 function qbQuestionForPaper(q,blocks,opts,lang){
   const bs=blocks.filter(b=>b.question_id===q.id).sort((a,b)=>a.block_order-b.block_order);
   const os=opts.filter(o=>o.question_id===q.id).sort((a,b)=>a.display_order-b.display_order);
@@ -1742,8 +1742,8 @@ function qbQuestionForPaper(q,blocks,opts,lang){
   return {q,bs,os,useAs,useEn};
 }
 async function generateBankPaper(){
-  await loadQuestionBank().catch(e=>{alert(e.message)});
-  if(!qbQuestions.length)return alert('Add questions to the Question Bank first.');
+  await loadQuestionBank().catch(e=>{notify(e.message)});
+  if(!qbQuestions.length)return notify('Add questions to the Question Bank first.');
   gpFixedIds=new Set();
   gpSelectedChapterIds=new Set();
   gpChapterRangeValues={};
@@ -1771,7 +1771,7 @@ function gpRangeFindHeader(headers,...names){for(const n of names){const i=heade
 function gpDownloadChapterRangeTemplate(){const rows=[['Chapter No','Chapter Name','Minimum Marks','Maximum Marks']];gpRootChapters().forEach(c=>rows.push([qbChapterCode(c),c.chapter_name,0,'']));const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows),ins=XLSX.utils.aoa_to_sheet([['Chapter-wise Marks Range Bulk Upload'],['Required columns: Chapter No, Chapter Name, Minimum Marks, Maximum Marks'],['Chapter No must match the Question Bank chapter number.'],['Chapter Name is optional for matching but recommended.'],['Minimum Marks and Maximum Marks must be non-negative numbers; minimum cannot exceed maximum.'],['Subchapter rows are not used as separate range rules; their marks count under the main chapter.']]);XLSX.utils.book_append_sheet(wb,ws,'Chapter Marks Range');XLSX.utils.book_append_sheet(wb,ins,'Instructions');XLSX.writeFile(wb,'Chapter_Wise_Marks_Range_Bulk_Upload_Template.xlsx')}
 function gpBulkChapterRangeUpload(){const box=document.getElementById('gpChapterRangeBulkBox');if(!box)return;box.innerHTML=`<div class="card" style="margin:0;background:#f8fbff;border:1px solid #bfdbfe"><div class="actions" style="justify-content:space-between;align-items:center"><div><b>Bulk Upload Chapter-wise Marks Range</b><div class="small muted">Upload Excel to fill the minimum/maximum fields below. Values apply to this generated paper only.</div></div><button class="secondary" onclick="document.getElementById('gpChapterRangeFile').click()">Choose Excel</button></div><input id="gpChapterRangeFile" type="file" accept=".xlsx,.xls" style="display:none" onchange="gpReadChapterRangeExcel(event)"><div id="gpChapterRangePreview" class="small" style="margin-top:10px">No file selected.</div></div>`}
 function gpReadChapterRangeExcel(ev){const file=ev.target.files?.[0],preview=document.getElementById('gpChapterRangePreview');if(!file||!preview)return;const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(raw.length<2)throw Error('The Excel file contains no chapter range rows.');const headers=raw[0].map(gpRangeHeader),ci=gpRangeFindHeader(headers,'Chapter No','Chapter Number','Chapter'),ni=gpRangeFindHeader(headers,'Chapter Name','Name'),mini=gpRangeFindHeader(headers,'Minimum Marks','Minimum','Min Marks'),maxi=gpRangeFindHeader(headers,'Maximum Marks','Maximum','Max Marks');if(ci<0||mini<0||maxi<0)throw Error('Required columns: Chapter No, Minimum Marks and Maximum Marks. Chapter Name is optional.');const rows=raw.slice(1).map((r,i)=>({row:i+2,code:String(r[ci]??'').trim(),name:ni>=0?String(r[ni]??'').trim():'',min:mini>=0?Number(r[mini]):NaN,max:maxi>=0?(String(r[maxi]??'').trim()===''?null:Number(r[maxi])):null})).filter(x=>x.code||x.name||Number.isFinite(x.min)||x.max!==null);const errors=[],matched=[],seen=new Set();for(const r of rows){if(!r.code&&!r.name){errors.push(`Row ${r.row}: Chapter No or Chapter Name is required.`);continue}if(!Number.isFinite(r.min)||r.min<0){errors.push(`Row ${r.row}: Minimum Marks must be a non-negative number.`);continue}if(r.max!==null&&(!Number.isFinite(r.max)||r.max<0)){errors.push(`Row ${r.row}: Maximum Marks must be blank or a non-negative number.`);continue}if(r.max!==null&&r.min>r.max){errors.push(`Row ${r.row}: Minimum Marks cannot exceed Maximum Marks.`);continue}let c=qbChapters.find(x=>r.code&&qbChapterCode(x)===r.code);if(!c&&r.name)c=qbChapters.find(x=>x.chapter_name.trim().toLowerCase()===r.name.toLowerCase());if(!c){errors.push(`Row ${r.row}: Chapter not found — ${r.code||r.name}.`);continue}if(c.parent_chapter_id){errors.push(`Row ${r.row}: ${qbChapterCode(c)} is a subchapter. Use the main chapter number; subchapter marks are counted under the main chapter.`);continue}if(seen.has(c.id)){errors.push(`Row ${r.row}: Duplicate entry for Chapter ${qbChapterCode(c)}.`);continue}seen.add(c.id);matched.push({id:c.id,min:r.min,max:r.max,code:qbChapterCode(c)})}window._gpChapterRangeImportRows=matched;preview.innerHTML=`<div class="${errors.length?'notice':'success'}"><b>Loaded ${rows.length} row(s).</b> Matched ${matched.length} chapter(s). ${errors.length?`<br><span style="color:#b91c1c">${errors.slice(0,12).map(x=>qbEsc(x)).join('<br>')}${errors.length>12?'<br>…':''}</span>`:'All rows passed validation.'}</div><div class="actions" style="margin-top:8px"><button ${errors.length?'disabled':''} onclick="gpApplyChapterRangeRows()">Apply to Generator</button></div>`}catch(err){window._gpChapterRangeImportRows=[];preview.innerHTML=msg('Could not read Excel: '+(err.message||err))}};reader.readAsArrayBuffer(file)}
-function gpApplyChapterRangeRows(){try{const rows=window._gpChapterRangeImportRows||[];if(!rows.length)return alert('No valid chapter ranges are ready to apply.');rows.forEach(r=>{gpChapterRangeValues[r.id]={min:r.min,max:r.max===null?'':r.max};const min=document.getElementById('gpMin_'+r.id),max=document.getElementById('gpMax_'+r.id);if(min)min.value=r.min;if(max)max.value=r.max===null?'':r.max});gpRecalc();const box=document.getElementById('gpChapterRangePreview');if(box)box.innerHTML='<div class="success"><b>Chapter-wise marks ranges applied successfully.</b> Review the table below before generating the paper.</div>'}catch(e){alert('Could not apply Chapter-wise Marks Range: '+(e.message||e))}}
+function gpApplyChapterRangeRows(){try{const rows=window._gpChapterRangeImportRows||[];if(!rows.length)return notify('No valid chapter ranges are ready to apply.');rows.forEach(r=>{gpChapterRangeValues[r.id]={min:r.min,max:r.max===null?'':r.max};const min=document.getElementById('gpMin_'+r.id),max=document.getElementById('gpMax_'+r.id);if(min)min.value=r.min;if(max)max.value=r.max===null?'':r.max});gpRecalc();const box=document.getElementById('gpChapterRangePreview');if(box)box.innerHTML='<div class="success"><b>Chapter-wise marks ranges applied successfully.</b> Review the table below before generating the paper.</div>'}catch(e){notify('Could not apply Chapter-wise Marks Range: '+(e.message||e))}}
 function gpRecalc(){const total=Number(document.getElementById('gpTotal')?.value||0),p=QB_LEVELS.map((_,i)=>Number(document.getElementById('gpPct'+i)?.value||0));p.forEach((x,i)=>{const e=document.getElementById('gpMark'+i);if(e)e.textContent=(total*x/100).toFixed(2)+' marks'});const m=document.getElementById('gpDistMsg');if(m)m.textContent='Distribution total: '+p.reduce((a,b)=>a+b,0)+'%'+(p.reduce((a,b)=>a+b,0)===100?' ✓':' — must equal 100%');const cm=document.getElementById('gpChapterMsg');if(cm){const rules=gpChapterRules();const mins=rules.reduce((a,r)=>a+r.min,0),maxs=rules.reduce((a,r)=>a+r.max,0);cm.textContent=rules.length?`Chapter minimum total: ${mins} marks · Chapter maximum total: ${maxs} marks${mins<=total&&total<=maxs?' ✓':' — adjust the ranges to cover the paper total.'}`:'';}}
 function gpTypeMsg(){const p=QB_TYPES.map((_,i)=>Number(document.getElementById('gpTypePct'+i)?.value||0));const e=document.getElementById('gpTypeMsg');if(e)e.textContent='Question-type total: '+p.reduce((a,b)=>a+b,0)+'%'+(p.reduce((a,b)=>a+b,0)===100?' ✓':' (set 100% or leave 100/0/0)')}
 function gpSubsetClosest(items,target){target=Math.round(target);let states=new Map([[0,[]]]);for(let i=0;i<items.length;i++){const m=Number(items[i].marks);if(!Number.isFinite(m)||m<=0)continue;const next=new Map(states);for(const [sum,arr] of states){const ns=sum+m;if(ns>target+10)continue;if(!next.has(ns))next.set(ns,arr.concat(i));}states=next;if(states.size>3000){const arr=[...states.entries()].sort((a,b)=>Math.abs(target-a[0])-Math.abs(target-b[0])).slice(0,2000);states=new Map(arr)}}let best=0,bestArr=[];for(const [sum,arr] of states){if(Math.abs(target-sum)<Math.abs(target-best)){best=sum;bestArr=arr}else if(sum===target){best=sum;bestArr=arr;break}}return {sum:best,indices:bestArr}}
@@ -1881,24 +1881,24 @@ function gpRepair(res,fixedIds,pool,total,targets,rules,typeP){
 }
 async function gpGenerate(){
   const total=Number(document.getElementById('gpTotal').value||0),p=QB_LEVELS.map((_,i)=>Number(document.getElementById('gpPct'+i).value||0));
-  if(!total||p.reduce((a,b)=>a+b,0)!==100)return alert('Total marks must be set and cognitive percentages must total 100%.');
+  if(!total||p.reduce((a,b)=>a+b,0)!==100)return notify('Total marks must be set and cognitive percentages must total 100%.');
   const lang=document.getElementById('gpLang').value;
   const allowedCh=gpSelectedAllowedIds();
   const typeP=QB_TYPES.map((_,i)=>Number(document.getElementById('gpTypePct'+i).value||0));
-  if(typeP.reduce((a,b)=>a+b,0)!==100)return alert('Question-type percentages must total 100%.');
+  if(typeP.reduce((a,b)=>a+b,0)!==100)return notify('Question-type percentages must total 100%.');
   const rules=gpChapterRules();
-  for(const r of rules)if(r.min>r.max)return alert(`Chapter ${r.code}: minimum marks cannot exceed maximum marks.`);
+  for(const r of rules)if(r.min>r.max)return notify(`Chapter ${r.code}: minimum marks cannot exceed maximum marks.`);
   const mins=rules.reduce((a,r)=>a+r.min,0),maxs=rules.reduce((a,r)=>a+r.max,0);
-  if(mins>total||maxs<total)return alert(`Chapter marks ranges cannot produce a ${total}-mark paper. Minimum total=${mins}, maximum total=${maxs}.`);
-  const subjectId=document.getElementById('gpSubject')?.value||''; if(!subjectId)return alert('Select Subject.'); let candidates=qbQuestions.filter(q=>String(q.subject_id||'')===String(subjectId)&&qbLanguageAvailable(q,lang)&&(!allowedCh||allowedCh.has(q.chapter_id)));
+  if(mins>total||maxs<total)return notify(`Chapter marks ranges cannot produce a ${total}-mark paper. Minimum total=${mins}, maximum total=${maxs}.`);
+  const subjectId=document.getElementById('gpSubject')?.value||''; if(!subjectId)return notify('Select Subject.'); let candidates=qbQuestions.filter(q=>String(q.subject_id||'')===String(subjectId)&&qbLanguageAvailable(q,lang)&&(!allowedCh||allowedCh.has(q.chapter_id)));
   const fixed=qbQuestions.filter(q=>gpFixedIds.has(q.id));
   const invalidFixed=fixed.filter(q=>!qbLanguageAvailable(q,lang));
-  if(invalidFixed.length)return alert(`${invalidFixed.length} fixed question(s) do not have the selected ${qbPaperMedium(lang)} version. Remove them or choose another medium.`);
-  if(fixed.some(q=>allowedCh&&!allowedCh.has(q.chapter_id)))return alert('A fixed question is outside the selected chapter filter. Remove it or change the chapter filter.');
-  const fixedGroups=fixed.flatMap(gpDupKeys);if(new Set(fixedGroups).size!==fixedGroups.length)return alert('Two or more fixed questions are duplicates (same Variation Group, or the same question wording and options). Keep only one of them.');
-  const fixedSum=fixed.reduce((a,q)=>a+Number(q.marks),0);if(fixedSum>total)return alert('Fixed questions already exceed the paper total.');
+  if(invalidFixed.length)return notify(`${invalidFixed.length} fixed question(s) do not have the selected ${qbPaperMedium(lang)} version. Remove them or choose another medium.`);
+  if(fixed.some(q=>allowedCh&&!allowedCh.has(q.chapter_id)))return notify('A fixed question is outside the selected chapter filter. Remove it or change the chapter filter.');
+  const fixedGroups=fixed.flatMap(gpDupKeys);if(new Set(fixedGroups).size!==fixedGroups.length)return notify('Two or more fixed questions are duplicates (same Variation Group, or the same question wording and options). Keep only one of them.');
+  const fixedSum=fixed.reduce((a,q)=>a+Number(q.marks),0);if(fixedSum>total)return notify('Fixed questions already exceed the paper total.');
   const fixedChapter=Object.fromEntries(rules.map(r=>[r.id,0]));for(const q of fixed){const r=gpQuestionChapterRule(q,rules);if(r)fixedChapter[r.id]+=Number(q.marks)}
-  for(const r of rules)if(fixedChapter[r.id]>r.max)return alert(`Fixed questions exceed the maximum marks for Chapter ${r.code}.`);
+  for(const r of rules)if(fixedChapter[r.id]>r.max)return notify(`Fixed questions exceed the maximum marks for Chapter ${r.code}.`);
   const fixedLevel=Object.fromEntries(QB_LEVELS.map(x=>[x,0]));fixed.forEach(q=>fixedLevel[q.cognitive_level]+=Number(q.marks));
   const targets=Object.fromEntries(QB_LEVELS.map((x,i)=>[x,total*p[i]/100]));
   const pool=candidates.filter(q=>!gpFixedIds.has(q.id));
@@ -1912,8 +1912,8 @@ async function gpGenerate(){
     if(!best||r.score<best.score)best=r;
     if(r.exactTotal&&r.chapterOk&&r.varOk&&r.cogErr<0.001&&r.typeErr<0.001)break;
   }
-  if(!best||!best.selected.length)return alert('No feasible paper could be generated with the selected constraints.');
-  if(best.sum!==total||!best.chapterOk||!best.varOk)return alert(`No paper satisfies all hard constraints. Best attempt: ${best.sum}/${total} marks; chapter minimum/maximum constraints were not all satisfied. Please widen a chapter range, reduce fixed questions, or add more suitable questions.`);
+  if(!best||!best.selected.length)return notify('No feasible paper could be generated with the selected constraints.');
+  if(best.sum!==total||!best.chapterOk||!best.varOk)return notify(`No paper satisfies all hard constraints. Best attempt: ${best.sum}/${total} marks; chapter minimum/maximum constraints were not all satisfied. Please widen a chapter range, reduce fixed questions, or add more suitable questions.`);
   const selected=best.selected,blocks=(await sb.from('school_question_bank_blocks').select('*').in('question_id',selected.map(q=>q.id)).order('block_order')).data||[],opts=(await sb.from('school_question_bank_options').select('*').in('question_id',selected.map(q=>q.id)).order('display_order')).data||[];
   const report=QB_LEVELS.map(level=>({level,target:targets[level],actual:best.levelMarks[level],diff:best.levelMarks[level]-targets[level]}));
   const typeReport=typeTargets?QB_TYPES.map(t=>`${t}: ${best.typeMarks[t]||0}/${(typeTargets[t]||0).toFixed(2)}`).join(' | '):'';
@@ -2010,7 +2010,7 @@ function restoreSchoolPaperSnapshot(p){
 }
 async function viewPreviousSchoolPaper(id){
   try{const p=await getPreviousSchoolPaper(id);restoreSchoolPaperSnapshot(p);previewQuestionPaper();}
-  catch(e){alert('Could not load the question paper: '+e.message);}
+  catch(e){notify('Could not load the question paper: '+e.message);}
 }
 async function duplicatePreviousSchoolPaper(id){
   try{
@@ -2031,8 +2031,8 @@ async function duplicatePreviousSchoolPaper(id){
     const {error}=await sb.from('school_generated_question_papers').insert(payload);
     if(error)throw error;
     await loadPreviousSchoolGeneratedPapers();
-    alert('Question paper duplicated successfully.');
-  }catch(e){alert('Could not duplicate the question paper: '+e.message);}
+    notify('Question paper duplicated successfully.');
+  }catch(e){notify('Could not duplicate the question paper: '+e.message);}
 }
 async function deletePreviousSchoolPaper(id){
   if(!confirm('Delete this generated question paper?\n\nThe questions in the School Question Bank will NOT be deleted.'))return;
@@ -2040,7 +2040,7 @@ async function deletePreviousSchoolPaper(id){
     const {error}=await sb.from('school_generated_question_papers').delete().eq('id',id).eq('teacher_id',teacher.id).eq('course_type','SCHOOL');
     if(error)throw error;
     await loadPreviousSchoolGeneratedPapers();
-  }catch(e){alert('Could not delete the question paper: '+e.message);}
+  }catch(e){notify('Could not delete the question paper: '+e.message);}
 }
 
 function bankBlockHtml(b,lang){
@@ -2288,7 +2288,7 @@ html,body{margin:0;padding:0}
     printStyle.remove();
     stage.remove();
     document.title=previousTitle;
-    alert('Mathematics could not be rendered. Please refresh the Teacher Dashboard and try again.\n\n'+(e.message||e));
+    notify('Mathematics could not be rendered. Please refresh the Teacher Dashboard and try again.\n\n'+(e.message||e));
     return null;
   }
 }

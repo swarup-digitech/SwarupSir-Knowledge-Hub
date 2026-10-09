@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,21 +28,33 @@ Deno.serve(async (req) => {
       const password = String(body.password ?? "");
       if (!rollNo || !password) return json({error:"Roll No and Password are required."},400);
 
+      // V13: limit repeated wrong passwords (per Roll No, and per network
+      // address). Uses public.edge_login_attempts from the V13 SQL; if that
+      // table does not exist yet, login still works without the limit.
+      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
+      const limited = await loginLimited(admin, rollNo, ip);
+      if (limited) return json({error:"Too many wrong attempts. Please wait 15 minutes and try again, or ask your teacher."},429);
+      const fail = async () => {
+        await recordLoginFailure(admin, rollNo, ip);
+        return json({error:"Invalid Roll No or Password."},401);
+      };
+
       const { data: student, error: se } = await admin
         .from("profiles")
         .select("id, full_name, roll_no")
         .eq("roll_no", rollNo)
         .eq("role", "student")
         .maybeSingle();
-      if (se) return json({error:se.message},400);
-      if (!student) return json({error:"Invalid Roll No or Password."},401);
+      if (se) return json({error:"Login is temporarily unavailable. Please try again."},500);
+      if (!student) return await fail();
 
       const { data: cred, error: ce } = await admin
         .from("student_credentials")
         .select("email")
         .eq("student_id", student.id)
         .maybeSingle();
-      if (ce || !cred?.email) return json({error:"Student login is not configured for this Roll No."},401);
+      // Same message as a wrong password, so Roll Nos cannot be discovered.
+      if (ce || !cred?.email) return await fail();
 
       const publicKey = Deno.env.get("SUPABASE_ANON_KEY")!;
       const authClient = createClient(supabaseUrl, publicKey, {
@@ -52,7 +64,8 @@ Deno.serve(async (req) => {
         email: cred.email,
         password
       });
-      if (le || !login.session) return json({error:"Invalid Roll No or Password."},401);
+      if (le || !login.session) return await fail();
+      await clearLoginFailures(admin, rollNo);
 
       return json({
         success:true,
@@ -78,8 +91,11 @@ Deno.serve(async (req) => {
     // failing with the misleading "Profile not found" error.
     const { data: teacher } = await admin.from("profiles")
       .select("id, role").eq("id", caller.user.id).maybeSingle();
-    let teacherAuthorized = teacher?.role === "teacher";
-    if (!teacherAuthorized) {
+    const callerRole = String(teacher?.role ?? "").toLowerCase();
+    let teacherAuthorized = callerRole === "teacher";
+    // V13: the class-ownership fallback is only for teacher accounts whose
+    // profile row is missing. A student profile is never treated as teacher.
+    if (!teacherAuthorized && callerRole !== "student") {
       const { data: ownedClasses, error: ownerErr } = await admin
         .from("classes").select("id").eq("teacher_id", caller.user.id).limit(1);
       if (ownerErr) return json({error:ownerErr.message},400);
@@ -516,7 +532,7 @@ Deno.serve(async (req) => {
         const amount = Number(body.amount ?? 0);
         if (!Number.isFinite(amount) || amount <= 0) return json({error:"Amount must be greater than 0."},400);
         const paymentDate = String(body.payment_date ?? "").trim() || new Date().toISOString().slice(0,10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) return json({error:"Invalid payment date."},400);
+        if (!isValidIsoDate(paymentDate)) return json({error:"Invalid payment date."},400);
 
         let { data: account, error: ae } = await admin
           .from("student_fee_accounts")
@@ -580,6 +596,7 @@ Deno.serve(async (req) => {
       const rows = Array.isArray(body.rows) ? body.rows : [];
       const mode = String(body.mode || "payments").toLowerCase();
       if (!rows.length) return json({error:"No fee rows supplied."},400);
+      if (rows.length > 2000) return json({error:"Too many rows in one import (maximum 2000). Please split the file."},400);
       if (!["payments","setup"].includes(mode)) return json({error:"Invalid fee import mode."},400);
 
       const results:any[] = [];
@@ -598,8 +615,10 @@ Deno.serve(async (req) => {
         }
         if (mode === "payments") {
           const amount = Number(row.amount_paid ?? row.amount ?? 0);
-          const paymentDate = String(row.payment_date || new Date().toISOString().slice(0,10));
+          const paymentDate = String(row.payment_date || "").trim() || new Date().toISOString().slice(0,10);
           if (!Number.isFinite(amount) || amount <= 0) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:"Invalid amount."}); continue; }
+          if (!isValidIsoDate(paymentDate)) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:"Invalid payment date (use YYYY-MM-DD)."}); continue; }
+          const referenceNo = String(row.reference_no||"").trim() || null;
           let { data:account, error:ae } = await admin.from("student_fee_accounts").select("*").eq("student_id",check.student.id).eq("teacher_id",caller.user.id).maybeSingle();
           if (ae) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:ae.message}); continue; }
           if (!account) {
@@ -607,10 +626,13 @@ Deno.serve(async (req) => {
             if (ce) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:ce.message}); continue; }
             account=created;
           }
-          const { data:dup } = await admin.from("student_fee_payments").select("id").eq("fee_account_id",account.id).eq("student_id",check.student.id).eq("payment_date",paymentDate).eq("amount",amount).limit(1);
+          let dq = admin.from("student_fee_payments").select("id").eq("fee_account_id",account.id).eq("student_id",check.student.id).eq("payment_date",paymentDate).eq("amount",amount);
+          if (referenceNo) dq = dq.eq("reference_no",referenceNo);
+          const { data:dup, error:de } = await dq.limit(1);
+          if (de) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:de.message}); continue; }
           if ((dup||[]).length) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"duplicate",error:"Duplicate payment."}); continue; }
           if (body.validate_only) { results.push({row:row.__row||0,roll_no:String(row.roll_no||""),status:"valid"}); continue; }
-          const {error:pe}=await admin.from("student_fee_payments").insert({fee_account_id:account.id,student_id:check.student.id,amount,payment_date:paymentDate,payment_mode:String(row.payment_mode||"").trim()||null,reference_no:String(row.reference_no||"").trim()||null,remarks:String(row.remarks||"").trim()||null,import_batch_id:String(body.batch_id||"").trim()||null,source_row_number:Number(row.__row||0)||null,created_by:caller.user.id});
+          const {error:pe}=await admin.from("student_fee_payments").insert({fee_account_id:account.id,student_id:check.student.id,amount,payment_date:paymentDate,payment_mode:String(row.payment_mode||"").trim()||null,reference_no:referenceNo,remarks:String(row.remarks||"").trim()||null,import_batch_id:String(body.batch_id||"").trim()||null,source_row_number:Number(row.__row||0)||null,created_by:caller.user.id});
           results.push(pe?{row:row.__row||0,roll_no:String(row.roll_no||""),status:"error",error:pe.message}:{row:row.__row||0,roll_no:String(row.roll_no||""),status:"valid"});
         } else {
           const total=Number(row.total_course_fee||0), discount=Number(row.discount_amount||0);
@@ -626,8 +648,14 @@ Deno.serve(async (req) => {
 
     // ------------------------------------------------------------
     // Existing bulk/single student creation flow
+    // V13: only for action "createStudents" (or old callers that send no
+    // action). Any other unknown action is rejected instead of silently
+    // trying to create a student from it.
     // ------------------------------------------------------------
+    if (body.action && body.action !== "createStudents")
+      return json({error:`Unknown action: ${String(body.action).slice(0,60)}`},400);
     const items = Array.isArray(body.students) ? body.students : [body];
+    if (items.length > 500) return json({error:"Too many students in one request (maximum 500)."},400);
     if (!items.length) return json({error:"No students supplied."},400);
 
     const results = [];
@@ -705,9 +733,44 @@ Deno.serve(async (req) => {
 
     return json({success:true, results});
   } catch (e) {
-    return json({error:e instanceof Error ? e.message : String(e)},500);
+    console.error("create-students failed:", e);
+    return json({error:"Server error. Please try again."},500);
   }
 });
+
+function isValidIsoDate(v: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(v + "T00:00:00Z");
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0,10) === v;
+}
+
+// ---- V13 login rate limit (table: public.edge_login_attempts) ----
+const LOGIN_WINDOW_MIN = 15;
+const MAX_FAILS_PER_ROLL = 8;
+const MAX_FAILS_PER_IP = 60;   // a whole school can share one IP, keep this generous
+
+async function loginLimited(admin: any, rollNo: string, ip: string) {
+  try {
+    const since = new Date(Date.now() - LOGIN_WINDOW_MIN*60*1000).toISOString();
+    const [{ count: byRoll, error: e1 }, { count: byIp, error: e2 }] = await Promise.all([
+      admin.from("edge_login_attempts").select("id",{count:"exact",head:true}).eq("roll_no",rollNo).gte("attempted_at",since),
+      admin.from("edge_login_attempts").select("id",{count:"exact",head:true}).eq("ip",ip).gte("attempted_at",since),
+    ]);
+    if (e1 || e2) return false;            // table missing → no limit
+    return (byRoll ?? 0) >= MAX_FAILS_PER_ROLL || (byIp ?? 0) >= MAX_FAILS_PER_IP;
+  } catch { return false; }
+}
+async function recordLoginFailure(admin: any, rollNo: string, ip: string) {
+  try {
+    await admin.from("edge_login_attempts").insert({roll_no:rollNo, ip});
+    if (Math.random() < 0.05) {   // occasional clean-up of old rows
+      await admin.from("edge_login_attempts").delete().lt("attempted_at", new Date(Date.now()-24*3600*1000).toISOString());
+    }
+  } catch { /* ignore */ }
+}
+async function clearLoginFailures(admin: any, rollNo: string) {
+  try { await admin.from("edge_login_attempts").delete().eq("roll_no",rollNo); } catch { /* ignore */ }
+}
 
 function json(data: unknown, status=200) {
   return new Response(JSON.stringify(data), {

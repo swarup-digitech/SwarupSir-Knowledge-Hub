@@ -1,9 +1,23 @@
 # Swarup Sir's Knowledge Hub
 
-GitHub-ready build. Mock Test is a separate module from normal Assignments.
+Student and teacher portal for the JNVST and School courses, built on Supabase.
 
-Features include teacher/student login, MCQ assignments, multiple-class assignment, correct/wrong answer review, hints, solution videos, automatic low-score retry, PWA support, and separate Mock Test Management with four question banks: MAT, EVS, Arithmetic and Language.
+| File | What it is |
+|---|---|
+| `main.html` | Login, student app (assignments, mock tests, results, profile) and the shell of the JNVST teacher app |
+| `teacher-app.js` | JNVST teacher tools – loaded by `main.html` only after a teacher logs in |
+| `teacher-dashboard.html` | School Course teacher dashboard |
+| `common-ui.js` | Shared helpers (toast messages `notify()`) |
+| `student-sw.js`, `student-app.webmanifest`, `manifest.webmanifest`, `skh-icon*.png` | Installable student app (PWA) |
+| `index.ts` | Supabase Edge Function `create-students` (student accounts, login by Roll No, fees) |
+| `V13_SECURE_SCORING_MIGRATION.sql` | The database change to run for V13 |
+| `supabase/migrations/` | All database changes in order – see `supabase/README.md` |
+| `*_Template.xlsx` | Bulk-upload templates for teachers |
+| `docs/` | Notes from earlier versions |
 
-Mock Test blueprint: 80 questions, 100 marks, 2 hours.
+Not in this package (they live only on the website): `index.html`, `student-login.html`,
+`teacher-login.html`, `school-login.html`, `school-dashboard.html`,
+`student-course-selection.html`, and the `get-omr-result` Edge Function.
+Add them here so the whole site is versioned together.
 
-See `SETUP_GITHUB_CLOUDFLARE_SUPABASE.md` for deployment.
+See `CHANGES_V13.md` for what changed and how to install it.
