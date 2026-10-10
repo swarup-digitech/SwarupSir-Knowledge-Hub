@@ -1328,7 +1328,7 @@ function qpPopupRuntime(){
   })();
 }
 function qpPrintDocHtml(title,css,body){
-  return `<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}</style><style>@page{size:A4 portrait;margin:0}</style></head><body><div id="qpPrintBanner" class="qp-noprint qp-banner"><b id="qpPrintStatus">Preparing…</b><span>In the print dialog choose <b>Paper size: A4</b>, <b>Margins: None</b>, <b>Scale: 100%</b>, tick <b>Print backgrounds</b>.</span><button type="button" onclick="window.print()">🖨 Print / Save as PDF</button></div><div class="jnvst-paper">${body}</div><script>${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`;
+  return `<!doctype html><html class="qp-print-root"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}</style><style>@page{size:A4 portrait;margin:10mm 0 0 0}@media print{.jnvst-paper .qp-paper-page{padding-top:0!important}.jnvst-paper .jnvst-page{min-height:0!important;padding-top:0!important}}</style></head><body><div id="qpPrintBanner" class="qp-noprint qp-banner"><b id="qpPrintStatus">Preparing…</b><span>In the print dialog choose <b>Paper size: A4</b>, <b>Margins: Default</b>, <b>Scale: 100%</b>, tick <b>Print backgrounds</b>.</span><button type="button" onclick="window.print()">🖨 Print / Save as PDF</button></div><div class="jnvst-paper">${body}</div><script>${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`;
 }
 function qpWritePrintWindow(w,title,body){
   const css=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
