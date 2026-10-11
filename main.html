@@ -267,8 +267,14 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=16";
-      s.onload=()=>{window.__teacherAppLoaded=true;resolve()};
+      s.src="teacher-app.js?v=17";
+      s.onload=()=>{
+        // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
+        const c=document.createElement("script");
+        c.src="custom-adaptive.js?v=1";
+        c.onload=c.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+        document.head.appendChild(c);
+      };
       s.onerror=()=>{__teacherAppPromise=null;s.remove();reject(new Error("Could not load the teacher tools. Please check your internet connection and reload the page."))};
       document.head.appendChild(s);
     });
