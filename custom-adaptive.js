@@ -139,6 +139,20 @@ async function inChunks(ids,fn){
 }
 const q$=id=>document.getElementById(id);
 const snippet=(t,n=90)=>{t=String(t||'').replace(/\s+/g,' ').trim();return t.length>n?t.slice(0,n-1)+'…':t;};
+// Question text for display. Math written as LaTeX ($..$, \\(..\\), \\frac{}{} ...) is converted by the
+// app's own jnvstMathPreview() and then typeset by MathJax (see typeset()). Text containing math is
+// never cut short, because cutting would break the formula.
+const hasMath=t=>/\$|\\\(|\\\[|\\[a-zA-Z]+/.test(String(t||''));
+function qHtml(t){
+  t=String(t||'');
+  const shown=hasMath(t)?t:snippet(t,90);
+  return typeof jnvstMathPreview==='function'?jnvstMathPreview(shown):esc(shown);
+}
+function typeset(){
+  const nodes=['caPreview','caProfile'].map(id=>q$(id)).filter(Boolean);
+  if(typeof jnvstTypesetWhenReady==='function')jnvstTypesetWhenReady(nodes);
+  else if(window.MathJax&&window.MathJax.typesetPromise)window.MathJax.typesetPromise(nodes).catch(()=>{});
+}
 const REASON={
   PREVIOUS_MISTAKE:['Mistake','#fee2e2','#991b1b'],
   VARIATION_OF_MISTAKE:['Variation of mistake','#ffedd5','#9a3412'],
@@ -314,7 +328,8 @@ function caProfile(id){
     <h3>${S.school?'Chapters':'Parts'} — weakest first</h3>
     ${areas.length?`<div style="overflow:auto"><table><thead><tr><th>${S.school?'Chapter':'Part'}</th><th>Answers</th><th>Accuracy</th><th>Active mistakes</th><th></th></tr></thead><tbody>${areas.map(a=>`<tr><td>${esc(a.area)}</td><td>${a.attempts}</td><td>${a.accuracy==null?'—':a.accuracy+'%'}</td><td>${a.active}</td><td><button class="secondary" style="padding:4px 9px;font-size:12px" data-a="${esc(a.area)}" onclick="caToggleFocus(this.dataset.a)">${S.focus.has(a.area)?'✓ In focus':'Focus on this'}</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No recorded answers for this student yet.</p>'}
     <h3>Most frequently wrong questions</h3>
-    ${weak.length?`<table><thead><tr><th>Question</th><th>${S.school?'Chapter':'Part'}</th><th>Wrong</th><th>Status</th></tr></thead><tbody>${weak.map(([qid,p])=>{const q=S.catalogById.get(qid);return `<tr><td>${esc(snippet(q?q.text:'(question no longer in bank)'))}</td><td>${esc(q?q.area:'')}</td><td>${p.wrong}</td><td>${isActiveMistake(p,S.school)?'<span class="tag" style="background:#fee2e2;color:#991b1b">Active</span>':'<span class="tag" style="background:#dcfce7;color:#166534">Fixed</span>'}</td></tr>`}).join('')}</tbody></table>`:'<p class="muted">No mistakes recorded.</p>'}`;
+    ${weak.length?`<table><thead><tr><th>Question</th><th>${S.school?'Chapter':'Part'}</th><th>Wrong</th><th>Status</th></tr></thead><tbody>${weak.map(([qid,p])=>{const q=S.catalogById.get(qid);return `<tr><td class="ca-q">${q?qHtml(q.text):'(question no longer in bank)'}</td><td>${esc(q?q.area:'')}</td><td>${p.wrong}</td><td>${isActiveMistake(p,S.school)?'<span class="tag" style="background:#fee2e2;color:#991b1b">Active</span>':'<span class="tag" style="background:#dcfce7;color:#166534">Fixed</span>'}</td></tr>`}).join('')}</tbody></table>`:'<p class="muted">No mistakes recorded.</p>'}`;
+  typeset();
   q$('caProfileCard').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
@@ -373,7 +388,7 @@ function paintPreview(){
   const blocks=[...S.plans.entries()].map(([sid,plan])=>{
     const s=S.students.find(x=>x.id===sid)||{};
     const weak=plan.items.filter(x=>x.reason==='PREVIOUS_MISTAKE'||x.reason==='VARIATION_OF_MISTAKE').length;
-    const rows=plan.items.map((it,i)=>`<tr><td>${i+1}</td><td>${tag(it.reason)}</td><td>${esc(snippet(it.q.text))}</td><td class="small muted">${esc(it.q.area)}</td>
+    const rows=plan.items.map((it,i)=>`<tr><td>${i+1}</td><td>${tag(it.reason)}</td><td class="ca-q">${qHtml(it.q.text)}</td><td class="small muted">${esc(it.q.area)}</td>
       <td style="white-space:nowrap"><button class="secondary" style="padding:4px 9px;font-size:12px" title="Replace with another question" onclick="caSwap('${esc(sid)}',${i})">⇄</button> <button class="danger" style="padding:4px 9px;font-size:12px" title="Remove" onclick="caRemove('${esc(sid)}',${i})">✕</button></td></tr>`).join('');
     return `<details class="card" ${S.plans.size<=3?'open':''}><summary style="cursor:pointer;font-weight:700">${esc(s.full_name||'Student')} ${s.roll_no?`(${esc(s.roll_no)})`:''} — ${plan.items.length} questions · ${weak} from mistakes${plan.short?` · <span style="color:#b91c1c">${plan.short} short</span>`:''}</summary>
       <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Why</th><th>Question</th><th>${S.school?'Chapter':'Part'}</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="muted">No questions.</td></tr>'}</tbody></table></div>
@@ -381,6 +396,7 @@ function paintPreview(){
   }).join('');
   q$('caPreview').innerHTML=`<div class="card" style="border:2px solid #16a34a;background:#f0fdf4"><h2 style="margin:0">3. Review & assign</h2><p class="muted" style="margin:6px 0 0">Each student below gets a separate assignment. Remove (✕), replace (⇄) or add questions as you like.</p></div>${blocks}
     <div class="card"><div class="actions"><button onclick="caAssign()">✔ Assign to ${S.plans.size} student${S.plans.size===1?'':'s'}</button><button class="secondary" onclick="caGenerate()">↻ Regenerate all</button></div><div id="caResult"></div></div>`;
+  typeset();
 }
 function candidatesFor(sid,plan,sameArea){
   const have=new Set(plan.items.map(x=>x.q.id));

@@ -271,7 +271,7 @@ function loadTeacherApp(){
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
-        c.src="custom-adaptive.js?v=1";
+        c.src="custom-adaptive.js?v=2";
         c.onload=c.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
         document.head.appendChild(c);
       };
