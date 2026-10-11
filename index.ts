@@ -662,24 +662,38 @@ Deno.serve(async (req) => {
     for (const item of items) {
       const name = String(item.name ?? "").trim();
       const rollNo = String(item.roll_no ?? item.rollNo ?? "").trim();
-      const email = String(item.email ?? "").trim().toLowerCase();
       const password = String(item.password ?? "");
       const classId = String(item.class_id ?? "").trim();
+      const schoolGroupId = item.school_group_id ? String(item.school_group_id).trim() : null;
 
-      if (!name || !rollNo || !email || !password || !classId) {
-        results.push({success:false,name,email,roll_no:rollNo,error:"Name, roll no, email, password and class are required."});
+      // Students log in with Roll No + Password only. The email is just an
+      // internal Supabase Auth identifier, so it is generated automatically
+      // when none is supplied, e.g. student_1010_0ba15daa@knowledgehub.local
+      let email = String(item.email ?? "").trim().toLowerCase();
+      if (!email) email = makeStudentEmail(rollNo);
+
+      if (!name || !rollNo || !password || !classId) {
+        results.push({success:false,name,roll_no:rollNo,error:"Name, roll no, password and class are required."});
         continue;
       }
       if (password.length < 6) {
-        results.push({success:false,name,email,error:"Password must contain at least 6 characters."});
+        results.push({success:false,name,roll_no:rollNo,error:"Password must contain at least 6 characters."});
         continue;
       }
 
       const { data: cls, error: classErr } = await admin.from("classes")
-        .select("id, teacher_id").eq("id", classId).single();
+        .select("id, teacher_id, course, jnvst_parent_id").eq("id", classId).single();
       if (classErr || !cls || cls.teacher_id !== caller.user.id) {
-        results.push({success:false,name,email,error:"Invalid class for this teacher."});
+        results.push({success:false,name,roll_no:rollNo,error:"Invalid class for this teacher."});
         continue;
+      }
+
+      // Student login checks profiles.course, so set it from the class
+      // (a JNVST sub-group inherits the course of its main group).
+      let course = String(item.course ?? cls.course ?? "").trim();
+      if (!course && cls.jnvst_parent_id) {
+        const { data: parent } = await admin.from("classes").select("course").eq("id", cls.jnvst_parent_id).maybeSingle();
+        course = String(parent?.course ?? "").trim();
       }
 
       const { data: duplicateRoll } = await admin.from("profiles").select("id").eq("roll_no", rollNo).maybeSingle();
@@ -698,9 +712,12 @@ Deno.serve(async (req) => {
       }
 
       const studentId = created.user.id;
-      const { error: profileErr } = await admin.from("profiles").insert({
+      const profileRow: Record<string, unknown> = {
         id:studentId, full_name:name, username:email, roll_no:rollNo, role:"student"
-      });
+      };
+      if (course) profileRow.course = course;
+      if (schoolGroupId) profileRow.school_group_id = schoolGroupId;
+      const { error: profileErr } = await admin.from("profiles").insert(profileRow);
       if (profileErr) {
         await admin.auth.admin.deleteUser(studentId);
         results.push({success:false,name,email,error:profileErr.message});
@@ -737,6 +754,13 @@ Deno.serve(async (req) => {
     return json({error:"Server error. Please try again."},500);
   }
 });
+
+// Internal login email for a student. Never shown to or typed by the student.
+function makeStudentEmail(rollNo: string) {
+  const safeRoll = rollNo.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) || "x";
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  return `student_${safeRoll}_${suffix}@knowledgehub.local`;
+}
 
 function isValidIsoDate(v: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;

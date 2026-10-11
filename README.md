@@ -9,6 +9,7 @@ Student and teacher portal for the JNVST and School courses, built on Supabase.
 | `teacher-dashboard.html` | School Course teacher dashboard |
 | `common-ui.js` | Shared helpers (toast messages `notify()`) |
 | `student-sw.js`, `student-app.webmanifest`, `manifest.webmanifest`, `skh-icon*.png` | Installable student app (PWA) |
+| `custom-adaptive.js` | V15 Custom Adaptive Assignment (teacher-controlled personal sets) |
 | `index.ts` | Supabase Edge Function `create-students` (student accounts, login by Roll No, fees) |
 | `V13_SECURE_SCORING_MIGRATION.sql` | Database change for V13 (security, server-side marking) |
 | `V14_OMR_MISTAKES_MIGRATION.sql` | Database change for V14 (OMR import, mistake streaks) |

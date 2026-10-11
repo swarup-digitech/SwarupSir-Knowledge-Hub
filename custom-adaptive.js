@@ -250,7 +250,7 @@ function paint(){
       ${school
         ?`<div><label>Subject *</label><select id="caSubject" onchange="caPoolChanged()">${subjects||'<option value="">No subjects</option>'}</select></div>
           <div><label>Medium</label><select id="caMedium" onchange="caPoolChanged()"><option value="">Any</option>${mediums}</select></div>
-          <div><label>Question language</label><select id="caLang"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">Both</option></select></div>`
+          <div><label>Question language</label><select id="caLang" onchange="caLangChanged()"><option value="EN">English</option><option value="AS">Assamese</option><option value="BOTH">Both</option></select></div>`
         :`<div><label>Subject (label)</label><input id="caSubject" placeholder="e.g. Mixed practice"></div>
           <div><label>Part / Area</label><select id="caPart" onchange="caPoolChanged()"><option value="">All parts</option>${parts}</select></div>
           <div><label>Language</label><select id="caLangFilter" onchange="caPoolChanged()"><option value="">Any</option>${langs}</select></div>`}
@@ -379,16 +379,49 @@ async function caGenerate(){
       const r=pickForStudent(pool,S.perf.get(id),sched.get(id)||new Set(),o);
       S.plans.set(id,{items:r.items,short:r.short});
     });
-    S.sched=sched;S.opts=o;
+    S.sched=sched;S.opts=o;S.snaps=new Map();
+    await ensureSnaps([...S.plans.values()].flatMap(p=>p.items.map(x=>x.q.id)));
     paintPreview();
   }catch(e){q$('caPreview').innerHTML=`<div class="card">${message('Could not generate: '+(e.message||e))}</div>`;}
 }
 
+/* Full display data of a question: image + real text + options (+ correct option).
+ * JNVST: from the catalogue. School: from snapshots loaded for the chosen questions. */
+const PLACEHOLDER_Q=/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i, PLACEHOLDER_OPT=/^Option [A-D]$/i;
+const realQ=t=>{t=String(t==null?'':t).trim();return t&&!PLACEHOLDER_Q.test(t)?t:'';};
+const realO=t=>{t=String(t==null?'':t).trim();return t&&!PLACEHOLDER_OPT.test(t)?t:'';};
+function displayOf(q){
+  const src=S.school?(S.snaps&&S.snaps.get(q.id)):S.catalogById.get(q.id);
+  if(!src)return {image:'',text:realQ(q.text),opts:['','','',''],correct:'',loading:S.school};
+  return {image:src.image_url||'',text:realQ(src.question_text),opts:[src.option_a,src.option_b,src.option_c,src.option_d].map(realO),correct:String(src.correct_option||'').toUpperCase()};
+}
+function questionCell(q){
+  const d=displayOf(q);
+  const img=d.image?`<img src="${esc(d.image)}" alt="Question image" loading="lazy" style="display:block;max-width:100%;width:340px;max-height:240px;object-fit:contain;border:1px solid #cbd5e1;border-radius:6px;padding:3px;background:#fff;margin:0 0 6px">`:'';
+  const txt=d.text?`<div style="line-height:1.45">${typeof jnvstMathPreview==='function'?jnvstMathPreview(d.text):esc(d.text)}</div>`:'';
+  const opts=d.opts.some(Boolean)?`<div class="small" style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:3px 14px">${d.opts.map((o,i)=>{const L='ABCD'[i];const ok=d.correct===L;return o?`<div style="${ok?'font-weight:700;color:#166534':''}">${L}. ${typeof jnvstMathPreview==='function'?jnvstMathPreview(o):esc(o)}${ok?' ✓':''}</div>`:'';}).join('')}</div>`:(d.image&&d.correct?`<div class="small muted" style="margin-top:4px">Options are in the image · correct: <b>${esc(d.correct)}</b></div>`:'');
+  const body=img+txt+opts;
+  return body||`<span class="muted">${d.loading?'Loading…':'[Image question]'}</span>`;
+}
+async function ensureSnaps(ids){
+  if(!S.school)return;
+  const lang=q$('caLang')?.value||'EN';
+  const need=[...new Set(ids)].filter(id=>!(S.snaps&&S.snaps.has(id)));
+  if(!need.length)return;
+  const m=await loadSchoolAdaptiveSnapshots(need,lang);
+  S.snaps=S.snaps||new Map();m.forEach((v,k)=>S.snaps.set(k,v));
+}
+async function caLangChanged(){
+  if(!S.school||!S.plans.size)return;
+  S.snaps=new Map();
+  try{await ensureSnaps([...S.plans.values()].flatMap(p=>p.items.map(x=>x.q.id)));}catch(e){notify('Could not reload questions: '+(e.message||e));}
+  paintPreview();
+}
 function paintPreview(){
   const blocks=[...S.plans.entries()].map(([sid,plan])=>{
     const s=S.students.find(x=>x.id===sid)||{};
     const weak=plan.items.filter(x=>x.reason==='PREVIOUS_MISTAKE'||x.reason==='VARIATION_OF_MISTAKE').length;
-    const rows=plan.items.map((it,i)=>`<tr><td>${i+1}</td><td>${tag(it.reason)}</td><td class="ca-q">${qHtml(it.q.text)}</td><td class="small muted">${esc(it.q.area)}</td>
+    const rows=plan.items.map((it,i)=>`<tr><td>${i+1}</td><td>${tag(it.reason)}</td><td class="ca-q" style="min-width:260px">${questionCell(it.q)}</td><td class="small muted">${esc(it.q.area)}</td>
       <td style="white-space:nowrap"><button class="secondary" style="padding:4px 9px;font-size:12px" title="Replace with another question" onclick="caSwap('${esc(sid)}',${i})">⇄</button> <button class="danger" style="padding:4px 9px;font-size:12px" title="Remove" onclick="caRemove('${esc(sid)}',${i})">✕</button></td></tr>`).join('');
     return `<details class="card" ${S.plans.size<=3?'open':''}><summary style="cursor:pointer;font-weight:700">${esc(s.full_name||'Student')} ${s.roll_no?`(${esc(s.roll_no)})`:''} — ${plan.items.length} questions · ${weak} from mistakes${plan.short?` · <span style="color:#b91c1c">${plan.short} short</span>`:''}</summary>
       <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>#</th><th>Why</th><th>Question</th><th>${S.school?'Chapter':'Part'}</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="muted">No questions.</td></tr>'}</tbody></table></div>
@@ -407,19 +440,21 @@ function candidatesFor(sid,plan,sameArea){
   const inArea=sameArea?c.filter(q=>q.area===sameArea):[];
   return inArea.length?inArea:c;
 }
-function caSwap(sid,i){
+async function caSwap(sid,i){
   const plan=S.plans.get(sid),old=plan.items[i];if(!old)return;
   const c=candidatesFor(sid,plan,old.q.area);
   if(!c.length)return notify('No other questions are available to swap in.');
   const q=c[Math.floor(Math.random()*c.length)];
+  try{await ensureSnaps([q.id]);}catch(e){return notify('Could not load the question: '+(e.message||e));}
   plan.items[i]={q,reason:S.perf.get(sid).has(q.id)?'NEW_ATTEMPTED_BEFORE':'NEW_UNSEEN'};
   paintPreview();
 }
 function caRemove(sid,i){const plan=S.plans.get(sid);plan.items.splice(i,1);plan.short=Math.max(0,S.opts.total-plan.items.length);paintPreview();}
-function caAdd(sid){
+async function caAdd(sid){
   const plan=S.plans.get(sid),c=candidatesFor(sid,plan,null);
   if(!c.length)return notify('No more questions are available to add.');
   const q=c[Math.floor(Math.random()*c.length)];
+  try{await ensureSnaps([q.id]);}catch(e){return notify('Could not load the question: '+(e.message||e));}
   plan.items.push({q,reason:'TEACHER_ADDED'});plan.short=Math.max(0,S.opts.total-plan.items.length);paintPreview();
 }
 
@@ -441,7 +476,7 @@ async function caAssign(){
     let snaps=new Map();
     if(S.school){
       const ids=[...new Set([...S.plans.values()].flatMap(p=>p.items.map(x=>x.q.id)))];
-      snaps=await loadSchoolAdaptiveSnapshots(ids,lang);
+      snaps=await loadSchoolAdaptiveSnapshots(ids,lang);   // fresh copy in the chosen language
     }
     for(const [sid,plan] of S.plans){
       const s=S.students.find(x=>x.id===sid)||{},name=s.full_name||sid;
@@ -478,7 +513,12 @@ function schoolGroupName(s){
 }
 function questionRowJnvst(it,aid,i){
   const q=S.catalogById.get(it.q.id);if(!q)return null;
-  return {assignment_id:aid,question_text:q.image_url?'[IMAGE QUESTION]':(q.question_text||''),option_a:q.image_url?'Option A':q.option_a,option_b:q.image_url?'Option B':q.option_b,option_c:q.image_url?'Option C':q.option_c,option_d:q.image_url?'Option D':q.option_d,
+  const img=!!q.image_url;
+  // With an image, keep the real question text and option texts when the bank has them;
+  // otherwise use the app's placeholders (the picture then contains everything).
+  const qt=img?(realQ(q.question_text)||'[IMAGE QUESTION]'):(q.question_text||'');
+  const op=(v,L)=>img?(realO(v)||'Option '+L):v;
+  return {assignment_id:aid,question_text:qt,option_a:op(q.option_a,'A'),option_b:op(q.option_b,'B'),option_c:op(q.option_c,'C'),option_d:op(q.option_d,'D'),
     correct_option:q.correct_option,question_order:i+1,image_url:q.image_url||null,explanation:null,source_mock_question_id:q.id,source_variation_group:q.variation_group||null,source_topic:q.topic||null,
     adaptive_selection_reason:it.reason,adaptive_source_wrong_question_id:null,adaptive_source_wrong_count:it.wrongCount||0};
 }
@@ -487,5 +527,5 @@ function questionRowSchool(snaps,it,aid,i){
   return Object.assign({},snap,{assignment_id:aid,question_order:i+1,adaptive_selection_reason:it.reason,adaptive_source_wrong_question_id:it.wrongSourceId||null,adaptive_source_wrong_count:it.wrongCount||0});
 }
 
-Object.assign(root,{customAdaptiveHome,caFilter,caSelectVisible,caToggleStudent,caToggleFocus,caProfile,caPoolChanged,caGenerate,caSwap,caRemove,caAdd,caAssign,q$});
+Object.assign(root,{customAdaptiveHome,caFilter,caSelectVisible,caToggleStudent,caToggleFocus,caProfile,caPoolChanged,caLangChanged,caGenerate,caSwap,caRemove,caAdd,caAssign,q$});
 })(typeof window!=='undefined'?window:globalThis);

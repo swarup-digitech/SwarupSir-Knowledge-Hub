@@ -1996,11 +1996,13 @@ async function teacherHome(){
  window._jnvstClasses=classes;window._jnvstStudents=students;window._jnvstAssignments=assignments;
  render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}
   <div class="card" style="border:2px solid #2563eb;background:#eff6ff"><h2 style="margin:0;color:#1d4ed8">📚 JNVST Course</h2><p class="muted" style="margin:6px 0 0">JNVST-VI (Class-IV) • JNVST-IX (Class IX)</p>${window._jnvstMigration?.groupsMigrated?.length?`<div class="success" style="margin-top:10px"><b>Previous Navodaya groups migrated:</b> ${esc(window._jnvstMigration.groupsMigrated.join(" • "))}. Students are now under the JNVST-VI (Class-IV) sub-groups.</div>`:""}</div>
-  <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${normalAssignments.length}</div></div></div>
+  <div class="grid"><div class="card"><div class="muted">Fixed JNVST Classes</div><div class="stat">2</div></div><div class="card"><div class="muted">Sub-groups</div><div class="stat">${classes.filter(c=>!!jnvstSubgroupParent(c)).length}</div></div><div class="card"><div class="muted">JNVST Students</div><div class="stat">${students.length}</div></div><div class="card"><div class="muted">Assignments</div><div class="stat">${teacherAssignmentCount(normalAssignments)}</div></div></div>
   <div class="card"><div class="actions"><button onclick="manageJnvstClasses()">🏫 Manage Groups & Subjects</button><button onclick="jnvstQuestionBankHome()">📚 JNVST Question Bank</button><button onclick="jnvstManualAddQuestion()">➕ Add JNVST Question</button><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button onclick="addStudent()">+ Add Student</button><button onclick="bulkImportStudents()">↑ Bulk Students (Excel)</button><button onclick="newAssignment()">+ New Assignment</button><button onclick="customAdaptiveHome()" style="background:#7c3aed">🎯 Custom Adaptive Assignment</button><button onclick="teacherResultsDashboard()">📊 Assignment Results</button><button onclick="mockTestManagement()">🎯 Mock Test Management</button><button onclick="downloadAllResultsExcel()">⬇ All Results (Excel)</button><button onclick="manageStudentAccounts()">👥 Student Accounts</button><button onclick="manageStudentFees()">💰 Students Fees</button></div></div>
   <div class="card"><h2>JNVST Classes</h2>${renderJnvstClassManager(classes,students,assignments)}</div>
-  <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${jnvstMainGroups(classes).map(g=>`<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${[...new Set(classes.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))].sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentCards(assignments)}</div></div>
+  <div class="card"><h2>Assignments</h2><div class="grid" style="margin-bottom:12px"><div><label>Main Group</label><select id="teacherAssignmentMainFilter" onchange="filterTeacherAssignments()"><option value="all">All Main Groups</option>${jnvstMainGroups(classes).map(g=>`<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("")}</select></div><div><label>Sub-Group</label><select id="teacherAssignmentSubFilter" onchange="filterTeacherAssignments()"><option value="all">All Sub-Groups</option>${[...new Set(classes.filter(c=>isJnvstSubGroup(c)).map(c=>c.name))].sort().map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("")}</select></div></div><div id="teacherAssignmentsList">${renderTeacherAssignmentsPanel(assignments)}</div></div>
  </div>`);
+ applyTeacherAssignmentView();
+ if(window._taState&&window._taState.tab==='ad')teacherLoadAdaptiveProgress();
 }
 async function schoolAssignmentManagement(){
   schoolTeacherMode=true;
@@ -3226,11 +3228,119 @@ async function deleteJnvstMainGroup(id){
 }
 async function deleteJnvstClass(id){const c=(window._jnvstClasses||[]).find(x=>x.id===id);if(!c)return;if(jnvstBaseKey(c))return notify("JNVST-VI and JNVST-IX are fixed classes and cannot be deleted.");const [{data:members,error:me},{data:assignments,error:ae}]=await Promise.all([sb.from("class_students").select("student_id").eq("class_id",id),sb.from("assignments").select("id,title").eq("class_id",id)]);if(me)return notify(me.message);if(ae)return notify(ae.message);if((members||[]).length)return notify("This class/sub-group has students assigned to it. Move or remove the students before deleting the class.");if((assignments||[]).length)return notify("This class/sub-group has assignments. Delete or reassign those assignments before deleting the class.");if(!confirm(`WARNING: Delete sub-group "${c.name}"?\n\nThis group has no students or assignments. The sub-group definition will be permanently removed. Continue?`))return;const {error}=await sb.from("classes").delete().eq("id",id).eq("teacher_id",current.id);if(error)return notify("Could not delete class: "+error.message);await teacherHome()}
 function renderTeacherAssignmentCards(assignments){
- return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}${a.adaptive_mode&&a.adaptive_selection_summary?.student_name?`<span class="tag" style="background:#f3e8ff;color:#6b21a8">🎯 ${esc(a.adaptive_selection_summary.student_name)}${a.adaptive_selection_summary.roll_no?' · '+esc(a.adaptive_selection_summary.roll_no):''} · ${Number(a.adaptive_weakness_count||0)} mistakes</span>`:''}${(a.assignment_type==="MOCK"||a.assignment_type==="mock")?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
+ return assignments.map(a=>`<div class="assignment teacher-assignment-row" data-main-group="${esc(a.main_group||"")}" data-sub-group="${esc(a.sub_group||"")}" data-title="${esc(String(a.title||"").toLowerCase())}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>${esc(a.title)}</h3><p class="muted">${esc(a.subject||"")}</p></div><div class="actions">${groupBadge(a)}${a.adaptive_mode&&a.adaptive_selection_summary?.student_name?`<span class="tag" style="background:#f3e8ff;color:#6b21a8">🎯 ${esc(a.adaptive_selection_summary.student_name)}${a.adaptive_selection_summary.roll_no?' · '+esc(a.adaptive_selection_summary.roll_no):''} · ${Number(a.adaptive_weakness_count||0)} mistakes</span>`:''}${(a.assignment_type==="MOCK"||a.assignment_type==="mock")?`<span class="mock-badge">📝 MOCK TEST</span>`:`<span class="tag">${a.video_url?"MCQ + Video":"MCQ"}</span>`}<span class="tag">${a.deadline?`Deadline: ${new Date(a.deadline).toLocaleDateString()}`:"Active"}</span></div></div><div class="actions"><button onclick="viewAssignment('${a.id}')">View</button><button onclick="editAssignmentDetails('${a.id}')">✎ Edit Details</button><button onclick="editAssignmentGroup('${a.id}')">▣ Edit Group</button><button onclick="editAssignmentQuestions('${a.id}')">✎ Edit Questions</button><button onclick="editAssignmentSupport('${a.id}','hint')">💡 Add Hints</button><button onclick="editAssignmentSupport('${a.id}','video')">🎥 Add Solution Video</button><button onclick="editAssignmentSupport('${a.id}','explanation')">📖 Add Explanation</button><button onclick="reassignAssignment('${a.id}')">Assign / Reassign</button><button onclick="reassignFresh('${a.id}')">↻ Reassign Fresh</button><button class="secondary" onclick="results('${a.id}')">Results</button><button class="danger" onclick="deleteAssignment('${a.id}')">Delete</button></div></div>`).join("")||"<p class='muted'>No assignments yet.</p>";
 }
-function filterTeacherAssignments(){
- const main=document.getElementById("teacherAssignmentMainFilter")?.value||"all",sub=document.getElementById("teacherAssignmentSubFilter")?.value||"all";
- document.querySelectorAll(".teacher-assignment-row").forEach(row=>{const ok=(main==="all"||row.dataset.mainGroup===main)&&(sub==="all"||row.dataset.subGroup===sub);row.style.display=ok?"block":"none";});
+/* ===== V15.1: tidy assignment list — personalised (adaptive) assignments are grouped per batch ===== */
+const TA_PAGE=10;
+function taBatchKey(a){return a.adaptive_batch_id?String(a.adaptive_batch_id):'solo:'+a.id;}
+function teacherAdaptiveBatches(list){
+  const m=new Map();
+  (list||[]).filter(a=>a.adaptive_mode).forEach(a=>{
+    const k=taBatchKey(a);
+    if(!m.has(k))m.set(k,{key:k,title:a.title,subject:a.subject||'',created_at:a.created_at||'',main:a.main_group||'',subs:new Set(),items:[]});
+    const b=m.get(k);b.items.push(a);if(a.sub_group)b.subs.add(a.sub_group);
+    if(a.created_at&&String(a.created_at)>String(b.created_at))b.created_at=a.created_at;
+  });
+  return [...m.values()].sort((x,y)=>String(y.created_at).localeCompare(String(x.created_at)));
+}
+function teacherAssignmentCount(list){return (list||[]).filter(a=>!a.adaptive_mode).length+teacherAdaptiveBatches(list).length;}
+function taStudentOf(a){
+  const s=(window._jnvstStudents||[]).find(x=>x.id===a.adaptive_for_student_id);
+  const sum=a.adaptive_selection_summary||{};
+  return {name:(s&&s.full_name)||sum.student_name||'Student',roll:(s&&s.roll_no)||sum.roll_no||''};
+}
+function taBatchCard(b){
+  const n=b.items.length,subs=[...b.subs],k=esc(b.key);
+  return `<div class="assignment teacher-batch-row" data-main-group="${esc(b.main)}" data-subs="${esc(subs.join('|'))}" data-title="${esc(String(b.title||'').toLowerCase())}">
+   <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap"><div><h3>🎯 ${esc(b.title)}</h3><p class="muted">${esc(b.subject)}${b.created_at?(b.subject?' • ':'')+new Date(b.created_at).toLocaleDateString():''}</p></div>
+   <div class="actions">${b.main?`<span class="tag">${esc(b.main)}</span>`:''}${subs.length?`<span class="tag">${esc(subs.length>2?subs.length+' sub-groups':subs.join(', '))}</span>`:''}<span class="tag" style="background:#f3e8ff;color:#6b21a8">${n} student${n===1?'':'s'}</span><span class="tag" id="taProg_${k}" style="background:#f1f5f9">…</span></div></div>
+   <div class="actions" style="margin-top:8px"><button type="button" onclick="teacherToggleBatch('${k}')">👥 Students</button><button class="secondary" type="button" onclick="teacherBatchResults('${k}')">📊 Results</button><button class="danger" type="button" onclick="teacherDeleteBatch('${k}')">Delete batch</button></div>
+   <div id="taBody_${k}" style="display:none;margin-top:10px"></div></div>`;
+}
+function renderTeacherAssignmentsPanel(assignments){
+  const std=(assignments||[]).filter(a=>!a.adaptive_mode),batches=teacherAdaptiveBatches(assignments);
+  window._taBatches=new Map(batches.map(b=>[b.key,b]));
+  window._taState={tab:(std.length||!batches.length)?'std':'ad',limit:TA_PAGE,progress:null};
+  const students=batches.reduce((n,b)=>n+b.items.length,0);
+  return `<div class="actions" style="margin:4px 0 12px;align-items:center"><button id="taTabStd" type="button" onclick="teacherAssignTab('std')">📝 Standard (${std.length})</button><button id="taTabAd" type="button" class="secondary" onclick="teacherAssignTab('ad')">🎯 Personalised (${batches.length} batch${batches.length===1?'':'es'} · ${students} student${students===1?'':'s'})</button><input id="taSearch" placeholder="Search by title…" oninput="applyTeacherAssignmentView()" style="max-width:240px;margin:0"></div>
+   <div id="taStdList">${renderTeacherAssignmentCards(std)}<div id="taMore" class="actions" style="justify-content:center;margin-top:8px"></div></div>
+   <div id="taAdList" style="display:none">${batches.map(taBatchCard).join('')||"<p class='muted'>No personalised assignments yet. Create them with 🎯 Custom Adaptive Assignment.</p>"}</div>`;
+}
+function applyTeacherAssignmentView(){
+  const st=window._taState;if(!st||!document.getElementById('taStdList'))return;
+  const v=id=>document.getElementById(id)?.value||'';
+  const main=v('teacherAssignmentMainFilter')||'all',sub=v('teacherAssignmentSubFilter')||'all',q=v('taSearch').trim().toLowerCase();
+  const stdBtn=document.getElementById('taTabStd'),adBtn=document.getElementById('taTabAd');
+  if(stdBtn)stdBtn.classList.toggle('secondary',st.tab!=='std');if(adBtn)adBtn.classList.toggle('secondary',st.tab!=='ad');
+  document.getElementById('taStdList').style.display=st.tab==='std'?'':'none';
+  document.getElementById('taAdList').style.display=st.tab==='ad'?'':'none';
+  let shown=0,total=0;
+  document.querySelectorAll('#taStdList .teacher-assignment-row').forEach(row=>{
+    const ok=(main==='all'||row.dataset.mainGroup===main)&&(sub==='all'||row.dataset.subGroup===sub)&&(!q||String(row.dataset.title||'').includes(q));
+    if(!ok){row.style.display='none';return;}
+    total++;if(q||shown<st.limit){shown++;row.style.display='block';}else row.style.display='none';
+  });
+  const more=document.getElementById('taMore');
+  if(more)more.innerHTML=total>shown?`<button class="secondary" type="button" onclick="teacherAssignMore()">Show ${Math.min(TA_PAGE,total-shown)} more · ${total-shown} hidden</button>`:'';
+  document.querySelectorAll('#taAdList .teacher-batch-row').forEach(row=>{
+    const subs=String(row.dataset.subs||'').split('|').filter(Boolean);
+    const ok=(main==='all'||row.dataset.mainGroup===main)&&(sub==='all'||subs.includes(sub))&&(!q||String(row.dataset.title||'').includes(q));
+    row.style.display=ok?'block':'none';
+  });
+}
+function filterTeacherAssignments(){applyTeacherAssignmentView();}
+function teacherAssignMore(){const st=window._taState;if(!st)return;st.limit+=TA_PAGE;applyTeacherAssignmentView();}
+async function teacherAssignTab(tab){
+  const st=window._taState;if(!st)return;st.tab=tab;applyTeacherAssignmentView();
+  if(tab==='ad'&&!st.progress)await teacherLoadAdaptiveProgress();
+}
+async function teacherLoadAdaptiveProgress(){
+  const st=window._taState;if(!st)return;
+  const ids=[...(window._taBatches||new Map()).values()].flatMap(b=>b.items.map(a=>a.id));
+  const prog=new Map();
+  try{
+    for(let i=0;i<ids.length;i+=80){
+      const {data,error}=await sb.from('attempts').select('assignment_id,score,total_questions,submitted_at').in('assignment_id',ids.slice(i,i+80)).order('submitted_at',{ascending:false});
+      if(error)throw error;
+      (data||[]).forEach(r=>{if(!prog.has(r.assignment_id))prog.set(r.assignment_id,r);});   // latest attempt
+    }
+  }catch(e){console.warn('Could not load progress',e);for(const b of (window._taBatches||new Map()).values()){const el=document.getElementById('taProg_'+b.key);if(el)el.textContent='progress unavailable';}return;}
+  st.progress=prog;taPaintProgress();
+}
+function taPaintProgress(){
+  const st=window._taState;if(!st||!st.progress)return;
+  (window._taBatches||new Map()).forEach(b=>{
+    const done=b.items.filter(a=>st.progress.has(a.id)),n=b.items.length;
+    const avg=done.length?Math.round(done.reduce((s,a)=>{const p=st.progress.get(a.id);return s+Number(p.score||0)*100/Math.max(1,Number(p.total_questions||1));},0)/done.length):null;
+    const el=document.getElementById('taProg_'+b.key);
+    if(el){el.textContent=`${done.length}/${n} submitted${avg==null?'':' · avg '+avg+'%'}`;el.style.background=done.length===n?'#dcfce7':done.length?'#fef9c3':'#f1f5f9';el.style.color=done.length===n?'#166534':done.length?'#854d0e':'#475569';}
+    const body=document.getElementById('taBody_'+b.key);if(body&&body.style.display!=='none')taPaintBatchBody(b.key);
+  });
+}
+function taPaintBatchBody(key){
+  const b=(window._taBatches||new Map()).get(key),body=document.getElementById('taBody_'+key);if(!b||!body)return;
+  const prog=window._taState&&window._taState.progress;
+  const rows=b.items.map(a=>Object.assign({a,mist:Number(a.adaptive_weakness_count||0),p:prog?prog.get(a.id):null},taStudentOf(a)))
+    .sort((x,y)=>String(x.name).localeCompare(String(y.name),undefined,{numeric:true}));
+  body.innerHTML=`<div style="overflow:auto"><table><thead><tr><th>Student</th><th>Roll</th><th>From mistakes</th><th>Status</th><th>Score</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>{
+    const pct=r.p?Math.round(Number(r.p.score||0)*100/Math.max(1,Number(r.p.total_questions||1))):null;
+    const status=!prog?'<span class="muted small">…</span>':r.p?'<span class="tag" style="background:#ecfdf5;color:#166534">Submitted</span>':'<span class="tag" style="background:#fff7ed;color:#c2410c">Not submitted</span>';
+    return `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.roll||'—')}</td><td>${r.mist}</td><td>${status}</td><td>${r.p?`<b>${r.p.score}/${r.p.total_questions}</b> <span class="small">(${pct}%)</span>`:'—'}</td>
+      <td style="white-space:nowrap"><button class="secondary" style="padding:5px 10px;font-size:13px" onclick="viewAssignment('${esc(r.a.id)}')">View</button> <button class="secondary" style="padding:5px 10px;font-size:13px" onclick="editAssignmentQuestions('${esc(r.a.id)}')">Edit</button> ${r.p?`<button style="padding:5px 10px;font-size:13px" onclick="results('${esc(r.a.id)}')">Result</button> `:''}<button class="danger" style="padding:5px 10px;font-size:13px" onclick="deleteAssignment('${esc(r.a.id)}')">Delete</button></td></tr>`;}).join('')}</tbody></table></div>`;
+}
+function teacherToggleBatch(key){
+  const body=document.getElementById('taBody_'+key);if(!body)return;
+  const open=body.style.display==='none';body.style.display=open?'block':'none';
+  if(open){taPaintBatchBody(key);const st=window._taState;if(st&&!st.progress)teacherLoadAdaptiveProgress();}
+}
+function teacherBatchResults(key){return teacherResultsDashboard(String(key).startsWith('solo:')?String(key).slice(5):'batch:'+key);}
+async function teacherDeleteBatch(key){
+  const b=(window._taBatches||new Map()).get(key);if(!b)return;
+  if(!confirm(`Delete the whole personalised batch "${b.title}"?\n\nThis permanently removes ${b.items.length} student assignment(s) with their questions, attempts and submitted answers.`))return;
+  const errors=[];let done=0;
+  for(const a of b.items){try{await deleteAssignmentCascade(a.id);done++;}catch(e){errors.push((taStudentOf(a).name)+': '+(e.message||e));}}
+  notify(`Deleted ${done} of ${b.items.length} assignment(s).${errors.length?'\n\nNot deleted:\n'+errors.join('\n'):''}`);
+  teacherHome();
 }
 async function editAssignmentDetails(assignmentId){
  if(schoolTeacherMode)try{await ensureSchoolSubjects()}catch(e){return notify('Could not load School Subjects: '+e.message)}
@@ -3303,10 +3413,10 @@ async function saveSchoolAssignmentGroupEdit(assignmentId){
  if(ids.length){const {error:ins}=await sb.from("assignment_students").insert([...new Set(ids)].map(student_id=>({assignment_id:assignmentId,student_id})));if(ins)return notify("Group updated, but recipients could not be saved: "+ins.message)}
  notify(`Assignment group updated. ${ids.length} student${ids.length===1?"":"s"} are now assigned.`);await schoolAssignmentManagement();
 }
-async function teacherResultsDashboard(){
+async function teacherResultsDashboard(preset){
   try{
     const [{data:allAssignments,error:ae},{data:allClasses,error:ce},{data:allStudents,error:se}]=await Promise.all([
-      sb.from("assignments").select("id,title,subject,class_id,video_url,created_at,main_group,sub_group").eq("created_by",current.id).order("created_at",{ascending:false}),
+      sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
       sb.from("classes").select("id,name,course,description,jnvst_group_type,jnvst_parent_id").eq("teacher_id",current.id).order("name"),
       sb.from("profiles").select("id,full_name,roll_no,course").eq("role","student").order("full_name")
     ]);
@@ -3338,9 +3448,12 @@ async function teacherResultsDashboard(){
       }
     }
     window._teacherResults={assignments,classes,students,attempts,links,memberships};
+    if(typeof preset==="string"&&preset)window._teacherResults.filters={assignment:preset,mainGroup:"all",subGroup:"all",classId:"all",student:"all",status:"all",minScore:"",maxScore:"",sort:"submitted_desc"};
     renderTeacherResultsDashboard();
   }catch(e){notify("Could not load assignment results: "+(e.message||e));}
 }
+// One key per assignment — or per personalised batch, so a batch is a single entry in filters and lists.
+function resultAssignmentKey(a){return a&&a.adaptive_mode&&a.adaptive_batch_id?"batch:"+a.adaptive_batch_id:(a?a.id:"");}
 function resultAssignmentGroup(a, classMap){
   const c=classMap.get(a?.class_id);
   let main=String(a?.main_group||"").trim();
@@ -3391,7 +3504,8 @@ function updateTeacherResultsAssignmentOptions(){
   const d=window._teacherResults;if(!d)return;
   const main=document.getElementById("trMainGroup")?.value||"all",sub=document.getElementById("trSubGroup")?.value||"all",sel=document.getElementById("trAssignment");if(!sel)return;
   const filtered=(d.assignments||[]).filter(a=>resultAssignmentGroups(d,a).some(g=>(main==="all"||g.main===main)&&(sub==="all"||g.sub===sub)));
-  const current=sel.value;sel.innerHTML=`<option value="all">All Assignments</option>${filtered.map(a=>`<option value="${a.id}">${esc(a.title)}</option>`).join("")}`;sel.value=filtered.some(a=>a.id===current)?current:"all";
+  const uniq=new Map();filtered.forEach(a=>{const k=resultAssignmentKey(a),e=uniq.get(k)||{a,n:0};e.n++;uniq.set(k,e);});
+  const current=sel.value;sel.innerHTML=`<option value="all">All Assignments</option>${[...uniq.entries()].map(([k,e])=>`<option value="${esc(k)}">${k.startsWith("batch:")?"🎯 "+esc(e.a.title)+" ("+e.n+" students)":esc(e.a.title)}</option>`).join("")}`;sel.value=uniq.has(current)?current:"all";
 }
 function updateTeacherResultsStudentOptions(){
   const d=window._teacherResults;if(!d)return; const sel=document.getElementById("trStudent");if(!sel)return;
@@ -3417,7 +3531,7 @@ function renderTeacherResultsDashboard(){
   rows=rows.filter(r=>{
     if(!r.a)return false;
     const groups=r.groups||resultRecipientGroups(d,r.a.id,r.p.id);
-    return (f.assignment==="all"||r.a.id===f.assignment) &&
+    return (f.assignment==="all"||resultAssignmentKey(r.a)===f.assignment) &&
       (f.mainGroup==="all"||groups.some(g=>g.main===f.mainGroup)) &&
       (f.subGroup==="all"||groups.some(g=>g.sub===f.subGroup)) &&
       (f.classId==="all"||r.a.class_id===f.classId) &&
@@ -3445,8 +3559,9 @@ function renderTeacherResultsDashboard(){
     const sm=tree.get(g.main);
     if(!sm.has(g.sub))sm.set(g.sub,new Map());
     const am=sm.get(g.sub);
-    if(!am.has(r.a.id))am.set(r.a.id,{a:r.a,rows:[]});
-    am.get(r.a.id).rows.push(r);
+    const ak=resultAssignmentKey(r.a);
+    if(!am.has(ak))am.set(ak,{a:r.a,rows:[],batch:ak.startsWith("batch:")});
+    am.get(ak).rows.push(r);
   }
 
   const escAttr=v=>esc(v);
@@ -3454,9 +3569,13 @@ function renderTeacherResultsDashboard(){
     const a=item.a, rr=item.rows;
     const submitted=rr.filter(x=>x.type==="submitted").length;
     const avg=submitted?Math.round(rr.filter(x=>x.type==="submitted").reduce((n,x)=>n+Number(x.at.score||0)*100/Math.max(1,Number(x.at.total_questions||1)),0)/submitted):0;
-    return `<details open style="margin:8px 0 12px;border:1px solid #dbeafe;border-radius:12px;background:#fff">
+    const nStudents=new Set(rr.map(x=>x.p&&x.p.id)).size;
+    // A personalised batch is one block (collapsed unless it was picked in the Assignment filter).
+    const openAttr=(!item.batch||f.assignment!=="all")?"open":"";
+    return `<details ${openAttr} style="margin:8px 0 12px;border:1px solid ${item.batch?"#e9d5ff":"#dbeafe"};border-radius:12px;background:#fff">
       <summary style="cursor:pointer;padding:12px 14px;font-weight:700;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <span>📝 ${esc(a.title||"Untitled Assignment")}</span>
+        <span>${item.batch?"🎯":"📝"} ${esc(a.title||"Untitled Assignment")}</span>
+        ${item.batch?`<span class="tag" style="background:#f3e8ff;color:#6b21a8">Personalised · ${nStudents} student${nStudents===1?"":"s"}</span>`:""}
         <span class="tag">${submitted} submitted</span>
         ${submitted?`<span class="small muted">Average ${avg}%</span>`:""}
       </summary>
@@ -3536,7 +3655,7 @@ function getFilteredTeacherResultRows(){
   rows=rows.filter(r=>{
     if(!r.a)return false;
     const groups=r.groups||resultRecipientGroups(d,r.a.id,r.p.id);
-    return (!f.assignment||f.assignment==="all"||r.a.id===f.assignment) &&
+    return (!f.assignment||f.assignment==="all"||resultAssignmentKey(r.a)===f.assignment) &&
       (!f.mainGroup||f.mainGroup==="all"||groups.some(g=>g.main===f.mainGroup)) &&
       (!f.subGroup||f.subGroup==="all"||groups.some(g=>g.sub===f.subGroup)) &&
       (!f.classId||f.classId==="all"||r.a.class_id===f.classId) &&
@@ -3614,11 +3733,8 @@ async function downloadFilteredTeacherResultsExcel(){
     XLSX.writeFile(wb,`SwarupSir_${courseName}_Filtered_Assessment_Results_${stamp}.xlsx`);
   }catch(e){notify("Could not download filtered results: "+(e.message||e));}
 }
-async function deleteAssignment(assignmentId){
- const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
- if(error||!a)return notify(error?.message||"Assignment not found.");
- if(!confirm(`Delete "${a.title}"?\\n\\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
- try{
+// Removes one assignment with everything that belongs to it (throws on error).
+async function deleteAssignmentCascade(assignmentId){
    const {data:ats,error:ae}=await sb.from("attempts").select("id").eq("assignment_id",assignmentId);if(ae)throw ae;
    const attemptIds=(ats||[]).map(x=>x.id);
    if(attemptIds.length){
@@ -3628,6 +3744,13 @@ async function deleteAssignment(assignmentId){
    const {error:e3}=await sb.from("assignment_students").delete().eq("assignment_id",assignmentId);if(e3)throw e3;
    const {error:e4}=await sb.from("questions").delete().eq("assignment_id",assignmentId);if(e4)throw e4;
    const {error:e5}=await sb.from("assignments").delete().eq("id",assignmentId).eq("created_by",current.id);if(e5)throw e5;
+}
+async function deleteAssignment(assignmentId){
+ const {data:a,error}=await sb.from("assignments").select("id,title").eq("id",assignmentId).eq("created_by",current.id).single();
+ if(error||!a)return notify(error?.message||"Assignment not found.");
+ if(!confirm(`Delete "${a.title}"?\\n\\nThis will permanently remove the assignment, questions, student assignments, attempts and submitted answers.`))return;
+ try{
+   await deleteAssignmentCascade(assignmentId);
    notify("Assignment deleted successfully.");teacherHome();
  }catch(e){notify("Could not delete assignment.\\n\\n"+(e.message||e)+"\\n\\nIf this is an RLS policy error, run teacher_management.sql in Supabase.")}
 }
@@ -4221,7 +4344,7 @@ async function loadSchoolAdaptiveSnapshots(ids,lang){
     const textFromBlocks=bs.filter(b=>b.block_type==='TEXT').map(b=>lang==='AS'?(b.text_as||b.text_en||''):lang==='BOTH'?[b.text_en,b.text_as].filter(Boolean).join('\n'):(b.text_en||b.text_as||'')).filter(Boolean).join('\n').trim();
     const text=textFromBlocks||(lang==='AS'?(q.question_text_as||q.question_text_en||''):lang==='BOTH'?[q.question_text_en,q.question_text_as].filter(Boolean).join('\n'):(q.question_text_en||q.question_text_as||''));
     const image=(bs.find(b=>b.block_type==='IMAGE')||{}).image_url||null;
-    out.set(q.id,{assignment_id:null,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:image?'Option A':getOpt('A'),option_b:image?'Option B':getOpt('B'),option_c:image?'Option C':getOpt('C'),option_d:image?'Option D':getOpt('D'),correct_option:q.correct_answer,question_order:0,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id||null,source_topic:q.topic||null,source_subject:q.subject_id||null,source_medium:q.medium||null});
+    out.set(q.id,{assignment_id:null,question_text:image&&!text?'[IMAGE QUESTION]':text,option_a:getOpt('A')||(image?'Option A':''),option_b:getOpt('B')||(image?'Option B':''),option_c:getOpt('C')||(image?'Option C':''),option_d:getOpt('D')||(image?'Option D':''),correct_option:q.correct_answer,question_order:0,image_url:image,explanation:q.explanation||null,source_school_question_bank_id:q.id,source_variation_group:q.variation_group||null,source_chapter_id:q.chapter_id||null,source_topic:q.topic||null,source_subject:q.subject_id||null,source_medium:q.medium||null});
   });
   return out;
 }
