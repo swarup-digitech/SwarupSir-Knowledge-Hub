@@ -1,0 +1,368 @@
+/* Swarup Sir's Knowledge Hub — OMR engine (V17)
+ * Pure JavaScript, no libraries. Works in the browser and in Node (for tests).
+ *
+ *   sheetHtml(opts)      printable A4 OMR answer sheet for one student
+ *   locateSheet(...)     finds the 4 corner marks in a photo/scan, straightens it, reads the sheet code
+ *   readAnswers(...)     reads the A-D bubbles of a straightened sheet, with a flag for doubtful rows
+ *   reportHtml(data)     printable result report (used for teachers and for students)
+ *
+ * Sheet geometry is fixed in millimetres on A4 (210 x 297). The 4 black corner squares let the
+ * scanner undo tilt, perspective and scale, so the sheet may be photographed from a phone, held at
+ * any rotation, and printed at any scale.
+ */
+(function(root){
+'use strict';
+
+/* ================================ geometry ================================ */
+const PAGE={w:210,h:297};
+const MARK_SIZE=8;                                            // corner square, mm
+const MARKS=[[12,12],[198,12],[198,285],[12,285]];            // centres: TL, TR, BR, BL (clockwise)
+const CODE={bits:48,cellW:3.4,cellH:4.4,y:22,prefix:0xA5};    // 8 prefix + 24 batch + 8 index + 8 crc
+CODE.x0=(PAGE.w-CODE.bits*CODE.cellW)/2;
+const BUB={r:2.6,inner:1.9,ring0:3.1,ring1:3.9,dx:8.2,off:13};  // bubble radius, sampling radius, background ring, spacing
+const GRID={cols:4,colW:42,x0:21,top:70,bottom:272,maxPitch:9.5,maxQ:100};
+const PXMM=4;                                                  // straightened image: 4 px per mm
+const CW=PAGE.w*PXMM,CH=PAGE.h*PXMM;
+const FILLED=0.45,FAINT=0.18;                                  // share of dark pixels inside a bubble
+
+function layout(N){
+  N=Math.floor(N);
+  if(!(N>=1&&N<=GRID.maxQ))throw new Error('An OMR sheet holds 1 to '+GRID.maxQ+' questions.');
+  const rows=Math.ceil(N/GRID.cols);
+  const pitch=Math.min(GRID.maxPitch,(GRID.bottom-GRID.top)/rows);
+  const out=[];
+  for(let q=0;q<N;q++){
+    const col=Math.floor(q/rows),r=q%rows,cx=GRID.x0+col*GRID.colW,y=GRID.top+(r+0.5)*pitch;
+    out.push({q:q+1,col,row:r,numX:cx+9,y,x:[0,1,2,3].map(i=>cx+BUB.off+i*BUB.dx)});
+  }
+  return {N,rows,pitch,items:out};
+}
+
+/* ============================ sheet code (48 bits) ============================ */
+function hash24(str){                       // FNV-1a, folded to 24 bits
+  let h=0x811c9dc5;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
+  return ((h>>>24)^h)&0xFFFFFF;
+}
+function crc8(bytes){
+  let c=0;
+  for(const b of bytes){c^=b;for(let i=0;i<8;i++)c=(c&0x80)?((c<<1)^0x07)&0xFF:(c<<1)&0xFF;}
+  return c;
+}
+function encodeCode(hash,idx){
+  const b=[CODE.prefix,(hash>>>16)&255,(hash>>>8)&255,hash&255,idx&255];
+  b.push(crc8(b.slice(1)));
+  const bits=[];b.forEach(v=>{for(let i=7;i>=0;i--)bits.push((v>>i)&1);});
+  return bits;
+}
+function decodeCode(bits){
+  if(!bits||bits.length!==CODE.bits)return null;
+  const b=[];for(let i=0;i<6;i++){let v=0;for(let k=0;k<8;k++)v=(v<<1)|(bits[i*8+k]?1:0);b.push(v);}
+  if(b[0]!==CODE.prefix)return null;
+  if(crc8(b.slice(1,5))!==b[5])return null;
+  return {hash:(b[1]<<16)|(b[2]<<8)|b[3],idx:b[4]};
+}
+
+/* ================================== sheet HTML ================================== */
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const mm=n=>(Math.round(n*100)/100)+'mm';
+const box=(x,y,w,h,style,inner)=>`<div style="position:absolute;left:${mm(x)};top:${mm(y)};width:${mm(w)};height:${mm(h)};${style||''}">${inner||''}</div>`;
+
+// opts: {title,name,roll,className,serial,hash,idx,N,note, fill?:[{opt,style}] (tests only)}
+function sheetHtml(o){
+  const L=layout(o.N),bits=encodeCode(o.hash>>>0,o.idx);
+  const p=[];
+  MARKS.forEach(c=>p.push(box(c[0]-MARK_SIZE/2,c[1]-MARK_SIZE/2,MARK_SIZE,MARK_SIZE,'background:#000')));
+  bits.forEach((b,i)=>p.push(box(CODE.x0+i*CODE.cellW,CODE.y-CODE.cellH/2,CODE.cellW,CODE.cellH,b?'background:#000':'box-sizing:border-box;border:0.25mm solid #000')));
+  p.push(box(20,26.5,170,5,'font:600 3mm Arial,sans-serif;text-align:center;color:#444','Sheet code · '+esc(o.serial||'')));
+  p.push(box(20,32,170,7,'font:700 5.2mm Arial,sans-serif;text-align:center',"SWARUP SIR'S KNOWLEDGE HUB — OMR ANSWER SHEET"));
+  p.push(box(20,40,170,5,'font:600 3.6mm Arial,sans-serif;text-align:center',esc(o.title||'')));
+  p.push(box(20,47.5,100,6,'font:700 4.4mm Arial,sans-serif','Name: '+esc(o.name||'')));
+  p.push(box(125,47.5,65,6,'font:700 4.4mm Arial,sans-serif;text-align:right','Roll No.: '+esc(o.roll||'')));
+  p.push(box(20,54,170,4.5,'font:3mm Arial,sans-serif;color:#333',esc(o.className||'')+(o.className&&o.note?' · ':'')+esc(o.note||'')));
+  p.push(box(20,59,170,5,'font:2.8mm Arial,sans-serif;color:#222','Use a dark pen or pencil. Fill ONE circle completely for each question. Do not write inside the black squares or on the code. Keep the sheet flat; do not fold it.'));
+  for(let c=0;c<GRID.cols;c++){
+    const first=L.items.find(i=>i.col===c);if(!first)continue;
+    ['A','B','C','D'].forEach((ch,i)=>p.push(box(first.x[i]-2.5,GRID.top-4.6,5,3.4,'font:700 2.8mm Arial,sans-serif;text-align:center;line-height:3.4mm',ch)));
+  }
+  const fillOf=q=>(o.fill&&o.fill[q-1])||null;
+  L.items.forEach(it=>{
+    p.push(box(it.numX-8,it.y-2,8,4,'font:700 3.2mm Arial,sans-serif;text-align:right;line-height:4mm',String(it.q)));
+    ['A','B','C','D'].forEach((ch,i)=>{
+      p.push(box(it.x[i]-BUB.r,it.y-BUB.r,BUB.r*2,BUB.r*2,'box-sizing:border-box;border:0.3mm solid #000;border-radius:50%'));
+    });
+    const f=fillOf(it.q);
+    if(f){(Array.isArray(f)?f:[f]).forEach(m=>{const i='ABCD'.indexOf(m.opt);if(i<0)return;
+      const rad=m.r||({full:2.4,light:2.3,partial:1.5,tick:0.9,dot:0.8}[m.style||'full']);
+      const col=m.color||({full:'#101040',light:'#8a8a8a',partial:'#101040',tick:'#101040',dot:'#202020'}[m.style||'full']);
+      p.push(box(it.x[i]-rad+(m.dx||0),it.y-rad+(m.dy||0),rad*2,rad*2,`background:${col};border-radius:50%`));});}
+  });
+  p.push(box(20,278,170,4,'font:2.6mm Arial,sans-serif;color:#666;text-align:center',esc(o.serial||'')+' · '+L.N+' questions'));
+  return `<div class="omr-sheet" style="position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;page-break-after:always;break-after:page">${p.join('')}</div>`;
+}
+const sheetDoc=(title,sheets)=>`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;background:#fff}.omr-sheet:last-child{page-break-after:auto;break-after:auto}.omr-banner{font:13px/1.4 Arial,sans-serif;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.omr-banner button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}@media print{.omr-banner{display:none!important}}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><div class="omr-banner"><b>OMR answer sheets</b><span>Print on plain white A4 paper: <b>Scale 100%</b>, <b>Margins: None</b>, tick <b>Background graphics</b>. Use a laser/inkjet at normal quality.</span><button onclick="window.print()">🖨 Print / Save as PDF</button></div>${sheets.join('')}</body></html>`;
+
+/* ================================ image helpers ================================ */
+function toGray(rgba,w,h){
+  const g=new Uint8ClampedArray(w*h);
+  for(let i=0,j=0;i<g.length;i++,j+=4)g[i]=(rgba[j]*299+rgba[j+1]*587+rgba[j+2]*114)/1000;
+  return g;
+}
+// Box-filter shrink so the longest side is at most maxSide.
+function shrink(gray,w,h,maxSide){
+  const s=Math.max(w,h)/maxSide;
+  if(s<=1)return {gray,w,h,scale:1};
+  const nw=Math.round(w/s),nh=Math.round(h/s),out=new Uint8ClampedArray(nw*nh);
+  for(let y=0;y<nh;y++){
+    const y0=Math.floor(y*s),y1=Math.max(y0+1,Math.min(h,Math.floor((y+1)*s)));
+    for(let x=0;x<nw;x++){
+      const x0=Math.floor(x*s),x1=Math.max(x0+1,Math.min(w,Math.floor((x+1)*s)));
+      let t=0,n=0;for(let yy=y0;yy<y1;yy++){const r=yy*w;for(let xx=x0;xx<x1;xx++){t+=gray[r+xx];n++;}}
+      out[y*nw+x]=t/n;
+    }
+  }
+  return {gray:out,w:nw,h:nh,scale:s};
+}
+function binarize(gray,w,h){
+  const win=Math.max(15,(Math.round(Math.max(w,h)/10))|1),half=win>>1;
+  const I=new Uint32Array((w+1)*(h+1));
+  for(let y=0;y<h;y++){let row=0;for(let x=0;x<w;x++){row+=gray[y*w+x];I[(y+1)*(w+1)+x+1]=I[y*(w+1)+x+1]+row;}}
+  const dark=new Uint8Array(w*h);
+  for(let y=0;y<h;y++){
+    const y0=Math.max(0,y-half),y1=Math.min(h,y+half+1);
+    for(let x=0;x<w;x++){
+      const x0=Math.max(0,x-half),x1=Math.min(w,x+half+1);
+      const sum=I[y1*(w+1)+x1]-I[y0*(w+1)+x1]-I[y1*(w+1)+x0]+I[y0*(w+1)+x0];
+      const mean=sum/((x1-x0)*(y1-y0)),g=gray[y*w+x];
+      dark[y*w+x]=(g<mean*0.68&&g<150)?1:0;
+    }
+  }
+  return dark;
+}
+function components(dark,w,h,minA,maxA){
+  const lab=new Int32Array(w*h),stack=new Int32Array(w*h),out=[];let id=0;
+  for(let s=0;s<dark.length;s++){
+    if(!dark[s]||lab[s])continue;
+    id++;let sp=0;stack[sp++]=s;lab[s]=id;
+    let area=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,minx=w,maxx=0,miny=h,maxy=0;
+    while(sp){
+      const p=stack[--sp],x=p%w,y=(p-x)/w;
+      area++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
+      if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
+      if(x>0&&dark[p-1]&&!lab[p-1]){lab[p-1]=id;stack[sp++]=p-1;}
+      if(x<w-1&&dark[p+1]&&!lab[p+1]){lab[p+1]=id;stack[sp++]=p+1;}
+      if(y>0&&dark[p-w]&&!lab[p-w]){lab[p-w]=id;stack[sp++]=p-w;}
+      if(y<h-1&&dark[p+w]&&!lab[p+w]){lab[p+w]=id;stack[sp++]=p+w;}
+    }
+    if(area<minA||area>maxA)continue;
+    const cx=sx/area,cy=sy/area,vxx=sxx/area-cx*cx,vyy=syy/area-cy*cy,vxy=sxy/area-cx*cy;
+    const tr=vxx+vyy,det=vxx*vyy-vxy*vxy,d=Math.sqrt(Math.max(0,tr*tr/4-det));
+    const l1=tr/2+d,l2=Math.max(1e-6,tr/2-d);
+    out.push({area,cx,cy,minx,maxx,miny,maxy,ecc:Math.sqrt(l1/l2),rect:area/(12*Math.sqrt(l1*l2)),border:(minx<=1||miny<=1||maxx>=w-2||maxy>=h-2)});
+  }
+  return out;
+}
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+// Find the 4 corner squares: compact, solid, similar-sized blobs forming a page-shaped quadrilateral.
+function findMarks(gray,w,h){
+  const dark=binarize(gray,w,h);
+  const minA=Math.max(30,w*h*0.00012),maxA=w*h*0.03;
+  let c=components(dark,w,h,minA,maxA).filter(b=>!b.border&&b.ecc<1.6&&b.rect>0.85&&b.rect<1.2);
+  c.sort((a,b)=>b.area-a.area);c=c.slice(0,14);
+  const target=(PAGE.w-24)/(PAGE.h-24);        // width/height of the mark rectangle = 186/273
+  let best=null;
+  for(let a=0;a<c.length;a++)for(let b=a+1;b<c.length;b++)for(let d=b+1;d<c.length;d++)for(let e=d+1;e<c.length;e++){
+    const q=[c[a],c[b],c[d],c[e]];
+    const amax=Math.max(...q.map(z=>z.area)),amin=Math.min(...q.map(z=>z.area));
+    if(amax/amin>1.9)continue;
+    const mx=q.reduce((t,z)=>t+z.cx,0)/4,my=q.reduce((t,z)=>t+z.cy,0)/4;
+    q.sort((u,v)=>Math.atan2(u.cy-my,u.cx-mx)-Math.atan2(v.cy-my,v.cx-mx));
+    const pts=q.map(z=>[z.cx,z.cy]);
+    const s01=dist(pts[0],pts[1]),s12=dist(pts[1],pts[2]),s23=dist(pts[2],pts[3]),s30=dist(pts[3],pts[0]);
+    const r=((s01+s23)/2)/((s12+s30)/2);
+    const err=Math.min(Math.abs(Math.log(r/target)),Math.abs(Math.log(r*target)));
+    // convex quadrilateral
+    let ok=true,sign=0;
+    for(let i=0;i<4;i++){const p0=pts[i],p1=pts[(i+1)%4],p2=pts[(i+2)%4];const cr=(p1[0]-p0[0])*(p2[1]-p1[1])-(p1[1]-p0[1])*(p2[0]-p1[0]);if(!sign)sign=Math.sign(cr);else if(Math.sign(cr)!==sign)ok=false;}
+    if(!ok)continue;
+    // the corner squares are the biggest compact blobs, so among page-shaped quadrilaterals prefer the largest
+    const sc=-q.reduce((t,z)=>t+z.area,0)*(1-Math.min(0.5,err));
+    if(err<0.30&&(!best||sc<best.sc))best={sc,pts};
+  }
+  return best?best.pts:null;
+}
+function solveHomography(src,dst){            // src[i] (page mm) -> dst[i] (image px)
+  const A=[],b=[];
+  for(let i=0;i<4;i++){
+    const [x,y]=src[i],[u,v]=dst[i];
+    A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);
+    A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v);
+  }
+  const n=8;
+  for(let i=0;i<n;i++){
+    let m=i;for(let r=i+1;r<n;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;
+    [A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];
+    if(Math.abs(A[i][i])<1e-12)return null;
+    for(let r=i+1;r<n;r++){const f=A[r][i]/A[i][i];for(let c=i;c<n;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i];}
+  }
+  const x=new Array(n);
+  for(let i=n-1;i>=0;i--){let s=b[i];for(let c=i+1;c<n;c++)s-=A[i][c]*x[c];x[i]=s/A[i][i];}
+  return x;
+}
+function warp(gray,w,h,H){
+  const out=new Uint8ClampedArray(CW*CH);
+  for(let Y=0;Y<CH;Y++){
+    const y=Y/PXMM;
+    for(let X=0;X<CW;X++){
+      const x=X/PXMM,den=H[6]*x+H[7]*y+1;
+      const u=(H[0]*x+H[1]*y+H[2])/den,v=(H[3]*x+H[4]*y+H[5])/den;
+      if(u<0||v<0||u>=w-1||v>=h-1){out[Y*CW+X]=255;continue;}
+      const x0=u|0,y0=v|0,fx=u-x0,fy=v-y0,i=y0*w+x0;
+      out[Y*CW+X]=(gray[i]*(1-fx)+gray[i+1]*fx)*(1-fy)+(gray[i+w]*(1-fx)+gray[i+w+1]*fx)*fy;
+    }
+  }
+  return out;
+}
+function discStats(img,cx,cy,r){                // mean gray and pixel list helper
+  const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(CW-1,Math.ceil(cx+r)),y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(CH-1,Math.ceil(cy+r));
+  const vals=[];
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(Math.hypot(x-cx,y-cy)<=r)vals.push(img[y*CW+x]);
+  return vals;
+}
+function ringVals(img,cx,cy,r0,r1){
+  const x0=Math.max(0,Math.floor(cx-r1)),x1=Math.min(CW-1,Math.ceil(cx+r1)),y0=Math.max(0,Math.floor(cy-r1)),y1=Math.min(CH-1,Math.ceil(cy+r1));
+  const vals=[];
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const d=Math.hypot(x-cx,y-cy);if(d>=r0&&d<=r1)vals.push(img[y*CW+x]);}
+  return vals;
+}
+function readCode(canon){
+  const cells=[];
+  for(let i=0;i<CODE.bits;i++){
+    const cx=(CODE.x0+(i+0.5)*CODE.cellW)*PXMM,cy=CODE.y*PXMM;
+    const v=discStats(canon,cx,cy,1.0*PXMM);
+    cells.push(v.reduce((a,b)=>a+b,0)/Math.max(1,v.length));
+  }
+  const s=[...cells].sort((a,b)=>a-b),lo=s[Math.floor(s.length*0.1)],hi=s[Math.floor(s.length*0.9)];
+  if(hi-lo<60)return null;
+  const thr=(lo+hi)/2;
+  return decodeCode(cells.map(v=>v<thr?1:0));
+}
+
+/* Find the sheet in a grayscale picture and straighten it. Returns
+ * {ok:true, canon, code:{hash,idx}, quality} or {ok:false, reason}. */
+function locateSheet(gray,w,h){
+  const sm=shrink(gray,w,h,1500);
+  const marks=findMarks(sm.gray,sm.w,sm.h);
+  if(!marks)return {ok:false,reason:'corners',message:'The four black corner squares were not found. Photograph the whole sheet, flat and well lit, with all four corners visible.'};
+  const pts=marks.map(p=>[p[0]*sm.scale,p[1]*sm.scale]);   // back to original resolution
+  const work=shrink(gray,w,h,2400);                         // full-resolution copy used for straightening
+  const wp=pts.map(p=>[p[0]/work.scale,p[1]/work.scale]);
+  for(let s=0;s<4;s++){
+    const dst=[0,1,2,3].map(i=>wp[(i+s)%4]);
+    const H=solveHomography(MARKS,dst);if(!H)continue;
+    const canon=warp(work.gray,work.w,work.h,H);
+    const code=readCode(canon);
+    if(code)return {ok:true,canon,code,rotation:s*90,H};
+  }
+  return {ok:false,reason:'code',message:'The sheet code (the row of small black boxes under the top squares) could not be read. Check that all four black corner squares are inside the photo, the sheet is flat and the light is even, then retake it — or choose the student by hand.',marksFound:true,pts:wp};
+}
+// Same as locateSheet but the code is not needed (teacher picked the student). Tries the 4 turns and
+// keeps the one where the answer grid looks most like a printed grid.
+function straightenWithoutCode(gray,w,h,N){
+  const sm=shrink(gray,w,h,1500);const marks=findMarks(sm.gray,sm.w,sm.h);if(!marks)return null;
+  const wp=marks.map(p=>[p[0]*sm.scale,p[1]*sm.scale]);const L=layout(N);let best=null;
+  for(let s=0;s<4;s++){
+    const H=solveHomography(MARKS,[0,1,2,3].map(i=>wp[(i+s)%4]));if(!H)continue;
+    const canon=warp(gray,w,h,H);let score=0;
+    L.items.slice(0,40).forEach(it=>{const v=ringVals(canon,it.x[0]*PXMM,it.y*PXMM,(BUB.r-0.15)*PXMM,(BUB.r+0.15)*PXMM);score+=255-v.reduce((a,b)=>a+b,0)/Math.max(1,v.length);});
+    if(!best||score>best.score)best={score,canon,H,rotation:s*90};
+  }
+  return best;
+}
+
+/* Read the answers of a straightened sheet.  Each question: {q, ans, f:[A,B,C,D shares], flag} */
+function readAnswers(canon,N){
+  const L=layout(N),res=[];let paper=[];
+  L.items.forEach(it=>{
+    const f=[],ps=[];
+    for(let i=0;i<4;i++){
+      const cx=it.x[i]*PXMM,cy=it.y*PXMM;
+      const ring=ringVals(canon,cx,cy,BUB.ring0*PXMM,BUB.ring1*PXMM).sort((a,b)=>a-b);
+      const P=ring.length?ring[Math.floor(ring.length*0.75)]:230;ps.push(P);
+      const inner=discStats(canon,cx,cy,BUB.inner*PXMM);
+      const thr=0.70*Math.max(P,60);
+      f.push(inner.length?inner.filter(v=>v<thr).length/inner.length:0);
+    }
+    paper.push(...ps);
+    const filled=[];f.forEach((v,i)=>{if(v>=FILLED)filled.push(i);});
+    let ans='',flag='';
+    if(filled.length===1){
+      ans='ABCD'[filled[0]];
+      const other=Math.max(...f.filter((v,i)=>i!==filled[0]));
+      if(other>=0.30)flag='check';
+    }else if(filled.length>=2){
+      ans=filled.map(i=>'ABCD'[i]).join(', ');flag='multiple';
+    }else{
+      const mx=Math.max(...f);
+      if(mx>=FAINT){ans='ABCD'[f.indexOf(mx)];flag='faint';}
+    }
+    res.push({q:it.q,ans,f:f.map(v=>Math.round(v*100)/100),flag});
+  });
+  paper.sort((a,b)=>a-b);
+  return {answers:res,paperLevel:paper[Math.floor(paper.length/2)]||0};
+}
+// A 2nd opinion on cropped rows for the review screen: returns the sub-image of one question row.
+function rowCrop(canon,N,q){
+  const it=layout(N).items[q-1];
+  const x0=Math.max(0,Math.round((it.numX-9)*PXMM)),x1=Math.min(CW,Math.round((it.x[3]+4)*PXMM));
+  const y0=Math.max(0,Math.round((it.y-4.5)*PXMM)),y1=Math.min(CH,Math.round((it.y+4.5)*PXMM));
+  const w=x1-x0,h=y1-y0,out=new Uint8ClampedArray(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)out[y*w+x]=canon[(y0+y)*CW+x0+x];
+  return {gray:out,w,h};
+}
+
+/* ================================== result report ================================== */
+// data: {title,subject,studentName,rollNo,date,total,correct,rows:[{no,selected,correct_option,is_correct,q:{...}}],fmt?:fn, label?:fn}
+function reportHtml(d){
+  const fmt=typeof d.fmt==='function'?d.fmt:esc;
+  const rows=d.rows||[];
+  const total=d.total||rows.length,correct=d.correct!=null?d.correct:rows.filter(r=>r.is_correct).length;
+  const pct=total?Math.round(correct*100/total):0;
+  const wrong=rows.filter(r=>!r.is_correct);
+  const blank=rows.filter(r=>!String(r.selected||'').trim()).length;
+  const groups=new Map();
+  rows.forEach(r=>{const g=(r.q&&(r.q._partHeading||r.q.topic))||'All questions';const x=groups.get(g)||{t:0,c:0};x.t++;if(r.is_correct)x.c++;groups.set(g,x);});
+  const qBlock=r=>{
+    const q=r.q||{};
+    const text=String(q.question_text||'').trim();
+    const realText=text&&!/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i.test(text)?text:'';
+    const opts=['a','b','c','d'].map((k,i)=>{const v=String(q['option_'+k]||'').trim();return v&&!/^Option [A-D]$/i.test(v)?`<span class="o ${'ABCD'[i]===String(r.correct_option||'').toUpperCase()?'ok':''} ${'ABCD'[i]===String(r.selected||'').toUpperCase()&&!r.is_correct?'bad':''}">${'ABCD'[i]}. ${fmt(v)}</span>`:'';}).join('');
+    return `<div class="q"><div class="qn">Q${r.no}</div><div class="qb">${q._passageTitle?`<div class="pt">${esc(q._passageTitle)}</div>`:''}${q.image_url?`<img src="${esc(q.image_url)}" alt="">`:''}${realText?`<div>${fmt(realText)}</div>`:''}${opts?`<div class="opts">${opts}</div>`:''}
+      <div class="ans">Your answer: <b class="${r.is_correct?'g':'r'}">${esc(String(r.selected||'').trim()||'— (blank)')}</b> &nbsp; Correct answer: <b class="g">${esc(r.correct_option||'')}</b></div></div></div>`;
+  };
+  const css=`*{box-sizing:border-box}body{font:13px/1.45 Arial,sans-serif;color:#111;margin:0}.pg{width:210mm;min-height:297mm;padding:12mm 14mm;margin:0 auto;background:#fff;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
+h1{font-size:18px;margin:0}h2{font-size:14px;margin:16px 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px}.top{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #17365D;padding-bottom:6px;margin-bottom:10px}
+.score{display:flex;gap:10px;margin:8px 0}.box{flex:1;border:1px solid #cbd5e1;border-radius:8px;padding:8px;text-align:center}.box b{display:block;font-size:20px}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;padding:4px 7px;text-align:left}th{background:#f1f5f9}
+.q{display:flex;gap:8px;border:1px solid #e2e8f0;border-radius:8px;padding:7px;margin:6px 0;break-inside:avoid}.qn{font-weight:700;color:#17365D;min-width:34px}.qb{flex:1}.qb img{max-width:100%;max-height:70mm;display:block;margin:4px 0}.opts{display:flex;flex-wrap:wrap;gap:4px 16px;margin:4px 0}.o.ok{color:#166534;font-weight:700}.o.bad{color:#b91c1c;text-decoration:line-through}.pt{font-weight:700}
+.g{color:#166534}.r{color:#b91c1c}.small{font-size:11px;color:#475569}.chips span{display:inline-block;border:1px solid #cbd5e1;border-radius:6px;padding:1px 6px;margin:2px;font-size:12px}.chips .w{background:#fee2e2;border-color:#fecaca}.chips .c{background:#dcfce7;border-color:#bbf7d0}`;
+  const body=`<div class="pg"><div class="top"><div><h1>SWARUP SIR'S KNOWLEDGE HUB</h1><div class="small">OMR Result Report</div></div><div style="text-align:right"><b>${esc(d.studentName||'')}</b><br><span class="small">Roll No. ${esc(d.rollNo||'')}</span></div></div>
+    <div><b>${esc(d.title||'')}</b> <span class="small">${esc(d.subject||'')} ${d.date?'· '+esc(d.date):''}</span></div>
+    <div class="score"><div class="box"><b>${correct}/${total}</b>Score</div><div class="box"><b>${pct}%</b>Percentage</div><div class="box"><b class="r">${wrong.length}</b>Mistakes</div><div class="box"><b>${blank}</b>Not attempted</div></div>
+    <h2>Part-wise performance</h2><table><thead><tr><th>Part / topic</th><th>Correct</th><th>Total</th><th>%</th></tr></thead><tbody>${[...groups].map(([g,x])=>`<tr><td>${esc(g)}</td><td>${x.c}</td><td>${x.t}</td><td>${Math.round(x.c*100/x.t)}%</td></tr>`).join('')}</tbody></table>
+    <h2>Answer overview</h2><div class="chips">${rows.map(r=>`<span class="${r.is_correct?'c':'w'}">${r.no}. ${esc(String(r.selected||'').trim()||'–')}${r.is_correct?' ✓':' ✗ ('+esc(r.correct_option||'')+')'}</span>`).join('')}</div>
+    <p class="small" style="margin-top:12px">Questions you got wrong are saved in your Mistake Bank. They come back in your next personal practice until you answer them correctly twice in a row.</p></div>
+    ${wrong.length?`<div class="pg"><h2 style="margin-top:0">Questions to revise (${wrong.length})</h2>${wrong.map(qBlock).join('')}</div>`:''}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc((d.studentName||'Student')+' — '+(d.title||'OMR Result'))}</title><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script><style>@page{size:A4 portrait;margin:0}${css}.bn{font:13px Arial;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 14px;display:flex;gap:12px;align-items:center}.bn button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}@media print{.bn{display:none!important}}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><div class="bn"><b>Result report</b><button onclick="window.print()">🖨 Print / Save as PDF</button></div>${body}</body></html>`;
+}
+// Several students in one document (teacher print-all)
+function reportDocMany(list){
+  const docs=list.map(reportHtml);
+  const head=docs[0].match(/^[\s\S]*?<\/div>(?=<div class="pg">)/)[0];
+  return head+docs.map(d=>d.replace(/^[\s\S]*?<\/div>(?=<div class="pg">)/,'').replace(/<\/body><\/html>$/,'')).join('')+'</body></html>';
+}
+
+const api={PAGE,MARKS,MARK_SIZE,CODE,BUB,GRID,PXMM,CW,CH,FILLED,FAINT,layout,hash24,crc8,encodeCode,decodeCode,sheetHtml,sheetDoc,toGray,shrink,findMarks,solveHomography,locateSheet,straightenWithoutCode,readAnswers,rowCrop,reportHtml,reportDocMany};
+if(typeof module!=='undefined'&&module.exports)module.exports=api;
+root.OMR=api;
+})(typeof window!=='undefined'?window:globalThis);

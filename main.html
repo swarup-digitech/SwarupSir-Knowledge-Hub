@@ -267,12 +267,29 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=19";
+      s.src="teacher-app.js?v=21";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
         c.src="custom-adaptive.js?v=3";
-        c.onload=c.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+        c.onload=c.onerror=()=>{
+          // V16: Custom Adaptive Question Paper module (needs custom-adaptive.js; optional)
+          const p=document.createElement("script");
+          p.src="custom-adaptive-paper.js?v=1";
+          p.onload=p.onerror=()=>{
+            // V17: personal OMR sheets / scanning (optional)
+            const e=document.createElement("script");
+            e.src="omr-engine.js?v=1";
+            e.onload=e.onerror=()=>{
+              const o=document.createElement("script");
+              o.src="custom-omr.js?v=1";
+              o.onload=o.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+              document.head.appendChild(o);
+            };
+            document.head.appendChild(e);
+          };
+          document.head.appendChild(p);
+        };
         document.head.appendChild(c);
       };
       s.onerror=()=>{__teacherAppPromise=null;s.remove();reject(new Error("Could not load the teacher tools. Please check your internet connection and reload the page."))};
@@ -2352,6 +2369,13 @@ async function studentHome(){
   setTimeout(showStudentInstallPrompt,300);
 }
 
+// V17: results of sheets scanned in the app (student-omr.js is loaded only when this page opens)
+function studentOmrBoot(){
+  return new Promise((res,rej)=>{
+    if(typeof window.studentOmrLoadApp==="function"&&!window.studentOmrLoadApp.__stub)return res();
+    const s=document.createElement("script");s.src="student-omr.js?v=1";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
+  }).then(()=>window.studentOmrLoadApp()).catch(e=>console.warn("OMR app results:",e));
+}
 function revokeStudentOmrUrl(){
   if(window._studentOmrObjectUrl){
     try{ URL.revokeObjectURL(window._studentOmrObjectUrl); }catch(_){}
@@ -2376,9 +2400,11 @@ async function studentOmrResult(){
       <p class="muted" style="margin-top:15px">Checking your OMR examination report…</p>
       <div id="omrResultStatus" class="notice">Please wait.</div>
     </div>
+    <div id="omrAppResults"></div>
     <button class="secondary" onclick="studentHome()">← Back to Dashboard</button>
   </div>`);
 
+  studentOmrBoot();
   try{
     const {data,error}=await sb.functions.invoke("get-omr-result",{body:{}});
     if(error) throw error;
