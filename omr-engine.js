@@ -17,25 +17,35 @@
 const PAGE={w:210,h:297};
 const MARK_SIZE=8;                                            // corner square, mm
 const MARKS=[[12,12],[198,12],[198,285],[12,285]];            // centres: TL, TR, BR, BL (clockwise)
-const CODE={bits:48,cellW:3.4,cellH:4.4,y:22,prefix:0xA5};    // 8 prefix + 24 batch + 8 index + 8 crc
+// Two sheet formats. 'full' = one A4 sheet (up to 100 questions). 'half' = a 210 x 140 mm sheet, two on one
+// A4 page (cut along the dashed line), up to 40 questions. Both carry the same code strip and corner squares.
+const FORMATS={
+  full:{key:'full',h:297,marks:MARKS,top:70,bottom:272,maxQ:100},
+  half:{key:'half',h:140,marks:[[12,12],[198,12],[198,128],[12,128]],top:53,bottom:125,maxQ:40}
+};
+const HALF_SLOT=148.5;                                         // height of one half on the A4 page
+const fmtOf=f=>(f&&typeof f==='object')?f:(FORMATS[f]||FORMATS.full);
+const CODE={bits:48,cellW:3.4,cellH:4.4,y:22,prefix:0xA5,prefixHalf:0x5A};   // the first byte also tells the sheet format    // 8 prefix + 24 batch + 8 index + 8 crc
 CODE.x0=(PAGE.w-CODE.bits*CODE.cellW)/2;
 const BUB={r:2.6,inner:1.9,ring0:3.1,ring1:3.9,dx:8.2,off:13};  // bubble radius, sampling radius, background ring, spacing
 const GRID={cols:4,colW:42,x0:21,top:70,bottom:272,maxPitch:9.5,maxQ:100};
 const PXMM=4;                                                  // straightened image: 4 px per mm
 const CW=PAGE.w*PXMM,CH=PAGE.h*PXMM;
+const cwOf=f=>PAGE.w*PXMM,chOf=f=>fmtOf(f).h*PXMM;
 const FILLED=0.45,FAINT=0.18;                                  // share of dark pixels inside a bubble
 
-function layout(N){
+function layout(N,format){
+  const F=fmtOf(format);
   N=Math.floor(N);
-  if(!(N>=1&&N<=GRID.maxQ))throw new Error('An OMR sheet holds 1 to '+GRID.maxQ+' questions.');
+  if(!(N>=1&&N<=F.maxQ))throw new Error('An OMR sheet of this size holds 1 to '+F.maxQ+' questions.');
   const rows=Math.ceil(N/GRID.cols);
-  const pitch=Math.min(GRID.maxPitch,(GRID.bottom-GRID.top)/rows);
+  const pitch=Math.min(GRID.maxPitch,(F.bottom-F.top)/rows);
   const out=[];
   for(let q=0;q<N;q++){
-    const col=Math.floor(q/rows),r=q%rows,cx=GRID.x0+col*GRID.colW,y=GRID.top+(r+0.5)*pitch;
+    const col=Math.floor(q/rows),r=q%rows,cx=GRID.x0+col*GRID.colW,y=F.top+(r+0.5)*pitch;
     out.push({q:q+1,col,row:r,numX:cx+9,y,x:[0,1,2,3].map(i=>cx+BUB.off+i*BUB.dx)});
   }
-  return {N,rows,pitch,items:out};
+  return {N,rows,pitch,items:out,F};
 }
 
 /* ============================ sheet code (48 bits) ============================ */
@@ -49,8 +59,8 @@ function crc8(bytes){
   for(const b of bytes){c^=b;for(let i=0;i<8;i++)c=(c&0x80)?((c<<1)^0x07)&0xFF:(c<<1)&0xFF;}
   return c;
 }
-function encodeCode(hash,idx){
-  const b=[CODE.prefix,(hash>>>16)&255,(hash>>>8)&255,hash&255,idx&255];
+function encodeCode(hash,idx,format){
+  const b=[fmtOf(format).key==='half'?CODE.prefixHalf:CODE.prefix,(hash>>>16)&255,(hash>>>8)&255,hash&255,idx&255];
   b.push(crc8(b.slice(1)));
   const bits=[];b.forEach(v=>{for(let i=7;i>=0;i--)bits.push((v>>i)&1);});
   return bits;
@@ -58,9 +68,9 @@ function encodeCode(hash,idx){
 function decodeCode(bits){
   if(!bits||bits.length!==CODE.bits)return null;
   const b=[];for(let i=0;i<6;i++){let v=0;for(let k=0;k<8;k++)v=(v<<1)|(bits[i*8+k]?1:0);b.push(v);}
-  if(b[0]!==CODE.prefix)return null;
+  if(b[0]!==CODE.prefix&&b[0]!==CODE.prefixHalf)return null;
   if(crc8(b.slice(1,5))!==b[5])return null;
-  return {hash:(b[1]<<16)|(b[2]<<8)|b[3],idx:b[4]};
+  return {hash:(b[1]<<16)|(b[2]<<8)|b[3],idx:b[4],fmt:b[0]===CODE.prefixHalf?'half':'full'};
 }
 
 /* ================================== sheet HTML ================================== */
@@ -68,22 +78,32 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;'
 const mm=n=>(Math.round(n*100)/100)+'mm';
 const box=(x,y,w,h,style,inner)=>`<div style="position:absolute;left:${mm(x)};top:${mm(y)};width:${mm(w)};height:${mm(h)};${style||''}">${inner||''}</div>`;
 
-// opts: {title,name,roll,className,serial,hash,idx,N,note, fill?:[{opt,style}] (tests only)}
+// opts: {title,name,roll,className,serial,hash,idx,N,note,format:'full'|'half', fill?:[{opt,style}] (tests only)}
 function sheetHtml(o){
-  const L=layout(o.N),bits=encodeCode(o.hash>>>0,o.idx);
+  const F=fmtOf(o.format),half=F.key==='half';
+  const L=layout(o.N,F),bits=encodeCode(o.hash>>>0,o.idx,F);
   const p=[];
-  MARKS.forEach(c=>p.push(box(c[0]-MARK_SIZE/2,c[1]-MARK_SIZE/2,MARK_SIZE,MARK_SIZE,'background:#000')));
+  F.marks.forEach(c=>p.push(box(c[0]-MARK_SIZE/2,c[1]-MARK_SIZE/2,MARK_SIZE,MARK_SIZE,'background:#000')));
   bits.forEach((b,i)=>p.push(box(CODE.x0+i*CODE.cellW,CODE.y-CODE.cellH/2,CODE.cellW,CODE.cellH,b?'background:#000':'box-sizing:border-box;border:0.25mm solid #000')));
-  p.push(box(20,26.5,170,5,'font:600 3mm Arial,sans-serif;text-align:center;color:#444','Sheet code · '+esc(o.serial||'')));
-  p.push(box(20,32,170,7,'font:700 5.2mm Arial,sans-serif;text-align:center',"SWARUP SIR'S KNOWLEDGE HUB — OMR ANSWER SHEET"));
-  p.push(box(20,40,170,5,'font:600 3.6mm Arial,sans-serif;text-align:center',esc(o.title||'')));
-  p.push(box(20,47.5,100,6,'font:700 4.4mm Arial,sans-serif','Name: '+esc(o.name||'')));
-  p.push(box(125,47.5,65,6,'font:700 4.4mm Arial,sans-serif;text-align:right','Roll No.: '+esc(o.roll||'')));
-  p.push(box(20,54,170,4.5,'font:3mm Arial,sans-serif;color:#333',esc(o.className||'')+(o.className&&o.note?' · ':'')+esc(o.note||'')));
-  p.push(box(20,59,170,5,'font:2.8mm Arial,sans-serif;color:#222','Use a dark pen or pencil. Fill ONE circle completely for each question. Do not write inside the black squares or on the code. Keep the sheet flat; do not fold it.'));
+  if(half){
+    p.push(box(20,25.2,170,4.6,'font:700 4mm Arial,sans-serif;text-align:center',"SWARUP SIR'S KNOWLEDGE HUB — OMR ANSWER SHEET"));
+    p.push(box(20,30.2,170,4,'font:600 3.2mm Arial,sans-serif;text-align:center',esc(o.title||'')));
+    p.push(box(20,34.8,105,5.4,'font:700 4.2mm Arial,sans-serif','Name: '+esc(o.name||'')));
+    p.push(box(125,34.8,65,5.4,'font:700 4.2mm Arial,sans-serif;text-align:right','Roll No.: '+esc(o.roll||'')));
+    p.push(box(20,40.6,170,3.6,'font:2.8mm Arial,sans-serif;color:#333',esc(o.className||'')+(o.className&&o.note?' · ':'')+esc(o.note||'')));
+    p.push(box(20,44.2,170,3.4,'font:2.5mm Arial,sans-serif;color:#222','Use a dark pen or pencil. Fill ONE circle completely for each question. Do not write inside the black squares or on the code.'));
+  }else{
+    p.push(box(20,26.5,170,5,'font:600 3mm Arial,sans-serif;text-align:center;color:#444','Sheet code · '+esc(o.serial||'')));
+    p.push(box(20,32,170,7,'font:700 5.2mm Arial,sans-serif;text-align:center',"SWARUP SIR'S KNOWLEDGE HUB — OMR ANSWER SHEET"));
+    p.push(box(20,40,170,5,'font:600 3.6mm Arial,sans-serif;text-align:center',esc(o.title||'')));
+    p.push(box(20,47.5,100,6,'font:700 4.4mm Arial,sans-serif','Name: '+esc(o.name||'')));
+    p.push(box(125,47.5,65,6,'font:700 4.4mm Arial,sans-serif;text-align:right','Roll No.: '+esc(o.roll||'')));
+    p.push(box(20,54,170,4.5,'font:3mm Arial,sans-serif;color:#333',esc(o.className||'')+(o.className&&o.note?' · ':'')+esc(o.note||'')));
+    p.push(box(20,59,170,5,'font:2.8mm Arial,sans-serif;color:#222','Use a dark pen or pencil. Fill ONE circle completely for each question. Do not write inside the black squares or on the code. Keep the sheet flat; do not fold it.'));
+  }
   for(let c=0;c<GRID.cols;c++){
     const first=L.items.find(i=>i.col===c);if(!first)continue;
-    ['A','B','C','D'].forEach((ch,i)=>p.push(box(first.x[i]-2.5,GRID.top-4.6,5,3.4,'font:700 2.8mm Arial,sans-serif;text-align:center;line-height:3.4mm',ch)));
+    ['A','B','C','D'].forEach((ch,i)=>p.push(box(first.x[i]-2.5,F.top-4.6,5,3.4,'font:700 2.8mm Arial,sans-serif;text-align:center;line-height:3.4mm',ch)));
   }
   const fillOf=q=>(o.fill&&o.fill[q-1])||null;
   L.items.forEach(it=>{
@@ -97,10 +117,27 @@ function sheetHtml(o){
       const col=m.color||({full:'#101040',light:'#8a8a8a',partial:'#101040',tick:'#101040',dot:'#202020'}[m.style||'full']);
       p.push(box(it.x[i]-rad+(m.dx||0),it.y-rad+(m.dy||0),rad*2,rad*2,`background:${col};border-radius:50%`));});}
   });
-  p.push(box(20,278,170,4,'font:2.6mm Arial,sans-serif;color:#666;text-align:center',esc(o.serial||'')+' · '+L.N+' questions'));
+  const foot=esc(o.serial||'')+' · '+L.N+' questions';
+  if(half){
+    p.push(box(20,126.4,170,3.2,'font:2.4mm Arial,sans-serif;color:#666;text-align:center',foot));
+    return `<div class="omr-half" style="position:relative;width:210mm;height:${HALF_SLOT}mm;overflow:hidden;background:#fff">${p.join('')}</div>`;
+  }
+  p.push(box(20,278,170,4,'font:2.6mm Arial,sans-serif;color:#666;text-align:center',foot));
   return `<div class="omr-sheet" style="position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;page-break-after:always;break-after:page">${p.join('')}</div>`;
 }
-const sheetDoc=(title,sheets)=>`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;background:#fff}.omr-sheet:last-child{page-break-after:auto;break-after:auto}.omr-banner{font:13px/1.4 Arial,sans-serif;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.omr-banner button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}@media print{.omr-banner{display:none!important}}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><div class="omr-banner"><b>OMR answer sheets</b><span>Print on plain white A4 paper: <b>Scale 100%</b>, <b>Margins: None</b>, tick <b>Background graphics</b>. Use a laser/inkjet at normal quality.</span><button onclick="window.print()">🖨 Print / Save as PDF</button></div>${sheets.join('')}</body></html>`;
+// Half-size sheets are put two to an A4 page with a cut line between them; full sheets are one per page.
+function sheetDoc(title,sheets){
+  const out=[];let pend=[];
+  const flush=()=>{if(!pend.length)return;
+    out.push(`<div class="omr-sheet" style="position:relative;width:210mm;height:297mm;overflow:hidden;background:#fff;page-break-after:always;break-after:page">${pend[0]}${pend[1]?`<div style="position:absolute;left:0;top:${HALF_SLOT}mm;width:210mm;height:${HALF_SLOT}mm;overflow:hidden">${pend[1]}</div>`:''}<div style="position:absolute;left:0;right:0;top:${HALF_SLOT}mm;border-top:0.3mm dashed #777"></div><div style="position:absolute;left:0;right:0;top:${HALF_SLOT-3.2}mm;text-align:center;font:2.4mm Arial,sans-serif;color:#777;line-height:3mm">✂ cut / tear along this line</div></div>`);pend=[];};
+  sheets.forEach(h=>{
+    if(/class="omr-half"/.test(h)){pend.push(h);if(pend.length===2)flush();}
+    else{flush();out.push(h);}
+  });
+  flush();
+  const banner='<div class="omr-banner"><b>OMR answer sheets</b><span>Print on plain white A4 paper: <b>Scale 100%</b>, <b>Margins: None</b>, tick <b>Background graphics</b>. Use a laser/inkjet at normal quality.</span><button onclick="window.print()">🖨 Print / Save as PDF</button></div>';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;background:#fff}.omr-sheet:last-child{page-break-after:auto;break-after:auto}.omr-banner{font:13px/1.4 Arial,sans-serif;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.omr-banner button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}@media print{.omr-banner{display:none!important}}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${banner}${out.join('')}</body></html>`;
+}
 
 /* ================================ image helpers ================================ */
 function toGray(rgba,w,h){
@@ -209,87 +246,146 @@ function solveHomography(src,dst){            // src[i] (page mm) -> dst[i] (ima
   for(let i=n-1;i>=0;i--){let s=b[i];for(let c=i+1;c<n;c++)s-=A[i][c]*x[c];x[i]=s/A[i][i];}
   return x;
 }
-function warp(gray,w,h,H){
-  const out=new Uint8ClampedArray(CW*CH);
-  for(let Y=0;Y<CH;Y++){
+function warp(gray,w,h,H,format){
+  const cw=cwOf(format),ch=chOf(format);
+  const out=new Uint8ClampedArray(cw*ch);
+  for(let Y=0;Y<ch;Y++){
     const y=Y/PXMM;
-    for(let X=0;X<CW;X++){
+    for(let X=0;X<cw;X++){
       const x=X/PXMM,den=H[6]*x+H[7]*y+1;
       const u=(H[0]*x+H[1]*y+H[2])/den,v=(H[3]*x+H[4]*y+H[5])/den;
-      if(u<0||v<0||u>=w-1||v>=h-1){out[Y*CW+X]=255;continue;}
+      if(u<0||v<0||u>=w-1||v>=h-1){out[Y*cw+X]=255;continue;}
       const x0=u|0,y0=v|0,fx=u-x0,fy=v-y0,i=y0*w+x0;
-      out[Y*CW+X]=(gray[i]*(1-fx)+gray[i+1]*fx)*(1-fy)+(gray[i+w]*(1-fx)+gray[i+w+1]*fx)*fy;
+      out[Y*cw+X]=(gray[i]*(1-fx)+gray[i+1]*fx)*(1-fy)+(gray[i+w]*(1-fx)+gray[i+w+1]*fx)*fy;
     }
   }
   return out;
 }
-function discStats(img,cx,cy,r){                // mean gray and pixel list helper
-  const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(CW-1,Math.ceil(cx+r)),y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(CH-1,Math.ceil(cy+r));
+function discStats(img,cx,cy,r,cw,ch){          // pixel values inside a disc
+  cw=cw||CW;ch=ch||CH;
+  const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(cw-1,Math.ceil(cx+r)),y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(ch-1,Math.ceil(cy+r));
   const vals=[];
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(Math.hypot(x-cx,y-cy)<=r)vals.push(img[y*CW+x]);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(Math.hypot(x-cx,y-cy)<=r)vals.push(img[y*cw+x]);
   return vals;
 }
-function ringVals(img,cx,cy,r0,r1){
-  const x0=Math.max(0,Math.floor(cx-r1)),x1=Math.min(CW-1,Math.ceil(cx+r1)),y0=Math.max(0,Math.floor(cy-r1)),y1=Math.min(CH-1,Math.ceil(cy+r1));
+function ringVals(img,cx,cy,r0,r1,cw,ch){
+  cw=cw||CW;ch=ch||CH;
+  const x0=Math.max(0,Math.floor(cx-r1)),x1=Math.min(cw-1,Math.ceil(cx+r1)),y0=Math.max(0,Math.floor(cy-r1)),y1=Math.min(ch-1,Math.ceil(cy+r1));
   const vals=[];
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const d=Math.hypot(x-cx,y-cy);if(d>=r0&&d<=r1)vals.push(img[y*CW+x]);}
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const d=Math.hypot(x-cx,y-cy);if(d>=r0&&d<=r1)vals.push(img[y*cw+x]);}
   return vals;
 }
-function readCode(canon){
+// Read the 48-bit code straight from the photo through a homography (no full warp needed).
+function readCodeH(gray,w,h,H,fmtKey){
   const cells=[];
   for(let i=0;i<CODE.bits;i++){
-    const cx=(CODE.x0+(i+0.5)*CODE.cellW)*PXMM,cy=CODE.y*PXMM;
-    const v=discStats(canon,cx,cy,1.0*PXMM);
-    cells.push(v.reduce((a,b)=>a+b,0)/Math.max(1,v.length));
+    const mx=CODE.x0+(i+0.5)*CODE.cellW;let t=0,n=0;
+    for(let dy=-0.8;dy<=0.81;dy+=0.4)for(let dx=-0.8;dx<=0.81;dx+=0.4){
+      if(dx*dx+dy*dy>0.8)continue;
+      const x=mx+dx,y=CODE.y+dy,den=H[6]*x+H[7]*y+1;
+      const u=(H[0]*x+H[1]*y+H[2])/den,v=(H[3]*x+H[4]*y+H[5])/den;
+      if(u<0||v<0||u>=w-1||v>=h-1)continue;
+      const x0=u|0,y0=v|0,fx=u-x0,fy=v-y0,k=y0*w+x0;
+      t+=(gray[k]*(1-fx)+gray[k+1]*fx)*(1-fy)+(gray[k+w]*(1-fx)+gray[k+w+1]*fx)*fy;n++;
+    }
+    if(!n)return null;
+    cells.push(t/n);
   }
   const s=[...cells].sort((a,b)=>a-b),lo=s[Math.floor(s.length*0.1)],hi=s[Math.floor(s.length*0.9)];
   if(hi-lo<60)return null;
   const thr=(lo+hi)/2;
-  return decodeCode(cells.map(v=>v<thr?1:0));
+  const c=decodeCode(cells.map(v=>v<thr?1:0));
+  return c&&(!fmtKey||c.fmt===fmtKey)?c:null;      // a half-sheet code under a full-sheet hypothesis (or the reverse) is rejected
 }
 
-/* Find the sheet in a grayscale picture and straighten it. Returns
- * {ok:true, canon, code:{hash,idx}, quality} or {ok:false, reason}. */
+// Candidate corner-square quadrilaterals (page-shaped, for either sheet format), best first.
+function quadCandidates(gray,w,h){
+  const dark=binarize(gray,w,h);
+  const minA=Math.max(30,w*h*0.00012),maxA=w*h*0.03;
+  let c=components(dark,w,h,minA,maxA).filter(b=>!b.border&&b.ecc<1.6&&b.rect>0.85&&b.rect<1.2);
+  c.sort((a,b)=>b.area-a.area);c=c.slice(0,16);
+  const targets=Object.values(FORMATS).map(F=>({F,t:(PAGE.w-24)/(F.h-24)}));
+  const out=[];
+  for(let a=0;a<c.length;a++)for(let b=a+1;b<c.length;b++)for(let d=b+1;d<c.length;d++)for(let e=d+1;e<c.length;e++){
+    const idx=[a,b,d,e],q=idx.map(i=>c[i]);
+    const amax=Math.max(...q.map(z=>z.area)),amin=Math.min(...q.map(z=>z.area));
+    if(amax/amin>2.8)continue;
+    const mx=q.reduce((t,z)=>t+z.cx,0)/4,my=q.reduce((t,z)=>t+z.cy,0)/4;
+    const order=q.map((z,i)=>({z,i:idx[i]})).sort((u,v)=>Math.atan2(u.z.cy-my,u.z.cx-mx)-Math.atan2(v.z.cy-my,v.z.cx-mx));
+    const pts=order.map(o=>[o.z.cx,o.z.cy]),ids=order.map(o=>o.i);
+    const s01=dist(pts[0],pts[1]),s12=dist(pts[1],pts[2]),s23=dist(pts[2],pts[3]),s30=dist(pts[3],pts[0]);
+    const r=((s01+s23)/2)/((s12+s30)/2);
+    let ok=true,sign=0;
+    for(let i=0;i<4;i++){const p0=pts[i],p1=pts[(i+1)%4],p2=pts[(i+2)%4];const cr=(p1[0]-p0[0])*(p2[1]-p1[1])-(p1[1]-p0[1])*(p2[0]-p1[0]);if(!sign)sign=Math.sign(cr);else if(Math.sign(cr)!==sign)ok=false;}
+    if(!ok)continue;
+    const fm=targets.map(T=>({F:T.F,err:Math.min(Math.abs(Math.log(r/T.t)),Math.abs(Math.log(r*T.t)))})).filter(x=>x.err<0.30).sort((u,v)=>u.err-v.err);
+    if(!fm.length)continue;
+    const area=q.reduce((t,z)=>t+z.area,0);
+    out.push({pts,ids,fm,sc:-area*(1-Math.min(0.5,fm[0].err))});
+  }
+  out.sort((u,v)=>u.sc-v.sc);
+  return out;
+}
+
+/* Find every sheet in a grayscale picture (one sheet, a torn half, or a whole page holding two halves),
+ * straighten each and read its code. Returns {ok:true, sheets:[{canon,code,fmt,rotation,H}], ...first sheet's fields}
+ * or {ok:false, reason, message}. */
 function locateSheet(gray,w,h){
   const sm=shrink(gray,w,h,1500);
-  const marks=findMarks(sm.gray,sm.w,sm.h);
-  if(!marks)return {ok:false,reason:'corners',message:'The four black corner squares were not found. Photograph the whole sheet, flat and well lit, with all four corners visible.'};
-  const pts=marks.map(p=>[p[0]*sm.scale,p[1]*sm.scale]);   // back to original resolution
-  const work=shrink(gray,w,h,2400);                         // full-resolution copy used for straightening
-  const wp=pts.map(p=>[p[0]/work.scale,p[1]/work.scale]);
-  for(let s=0;s<4;s++){
-    const dst=[0,1,2,3].map(i=>wp[(i+s)%4]);
-    const H=solveHomography(MARKS,dst);if(!H)continue;
-    const canon=warp(work.gray,work.w,work.h,H);
-    const code=readCode(canon);
-    if(code)return {ok:true,canon,code,rotation:s*90,H};
+  const cands=quadCandidates(sm.gray,sm.w,sm.h);
+  if(!cands.length)return {ok:false,reason:'corners',message:'The four black corner squares were not found. Photograph the whole sheet, flat and well lit, with all four corners visible.'};
+  const work=shrink(gray,w,h,2400),k=sm.scale/work.scale;      // preview coordinates -> working-image coordinates
+  const used=new Set(),found=[];
+  for(const cd of cands.slice(0,80)){
+    if(cd.ids.some(i=>used.has(i)))continue;
+    const wp=cd.pts.map(p=>[p[0]*k,p[1]*k]);
+    let hit=null;
+    for(const f of cd.fm){
+      for(let s=0;s<4&&!hit;s++){
+        const dst=[0,1,2,3].map(i=>wp[(i+s)%4]);
+        const H=solveHomography(f.F.marks,dst);if(!H)continue;
+        const code=readCodeH(work.gray,work.w,work.h,H,f.F.key);
+        if(code)hit={F:f.F,H,code,rotation:s*90};
+      }
+      if(hit)break;
+    }
+    if(hit){
+      cd.ids.forEach(i=>used.add(i));
+      found.push({canon:warp(work.gray,work.w,work.h,hit.H,hit.F),code:hit.code,fmt:hit.F.key,rotation:hit.rotation,H:hit.H});
+    }
   }
-  return {ok:false,reason:'code',message:'The sheet code (the row of small black boxes under the top squares) could not be read. Check that all four black corner squares are inside the photo, the sheet is flat and the light is even, then retake it — or choose the student by hand.',marksFound:true,pts:wp};
+  if(!found.length)return {ok:false,reason:'code',message:'The sheet code (the row of small black boxes under the top squares) could not be read. Check that all four black corner squares are inside the photo, the sheet is flat and the light is even, then retake it — or choose the student yourself.'};
+  return Object.assign({ok:true,sheets:found},found[0]);
 }
-// Same as locateSheet but the code is not needed (teacher picked the student). Tries the 4 turns and
-// keeps the one where the answer grid looks most like a printed grid.
-function straightenWithoutCode(gray,w,h,N){
-  const sm=shrink(gray,w,h,1500);const marks=findMarks(sm.gray,sm.w,sm.h);if(!marks)return null;
-  const wp=marks.map(p=>[p[0]*sm.scale,p[1]*sm.scale]);const L=layout(N);let best=null;
-  for(let s=0;s<4;s++){
-    const H=solveHomography(MARKS,[0,1,2,3].map(i=>wp[(i+s)%4]));if(!H)continue;
-    const canon=warp(gray,w,h,H);let score=0;
-    L.items.slice(0,40).forEach(it=>{const v=ringVals(canon,it.x[0]*PXMM,it.y*PXMM,(BUB.r-0.15)*PXMM,(BUB.r+0.15)*PXMM);score+=255-v.reduce((a,b)=>a+b,0)/Math.max(1,v.length);});
-    if(!best||score>best.score)best={score,canon,H,rotation:s*90};
+// Same as locateSheet but the code is not needed (teacher picked the student). Tries the 4 turns (and both
+// sheet sizes unless one is given) and keeps the one where the answer grid looks most like a printed grid.
+function straightenWithoutCode(gray,w,h,N,format){
+  const sm=shrink(gray,w,h,1500);const cands=quadCandidates(sm.gray,sm.w,sm.h);if(!cands.length)return null;
+  const forms=(format?[fmtOf(format)]:Object.values(FORMATS)).filter(F=>N<=F.maxQ);let best=null;
+  for(const F of forms){
+    const cd=cands.find(c=>c.fm.some(x=>x.F.key===F.key));if(!cd)continue;
+    const wp=cd.pts.map(p=>[p[0]*sm.scale,p[1]*sm.scale]),L=layout(N,F),cw=cwOf(F),ch=chOf(F);
+    for(let s=0;s<4;s++){
+      const H=solveHomography(F.marks,[0,1,2,3].map(i=>wp[(i+s)%4]));if(!H)continue;
+      const canon=warp(gray,w,h,H,F);let score=0,n=0;
+      L.items.slice(0,40).forEach(it=>{const v=ringVals(canon,it.x[0]*PXMM,it.y*PXMM,(BUB.r-0.15)*PXMM,(BUB.r+0.15)*PXMM,cw,ch);score+=255-v.reduce((a,b)=>a+b,0)/Math.max(1,v.length);n++;});
+      score/=Math.max(1,n);
+      if(!best||score>best.score)best={score,canon,H,rotation:s*90,fmt:F.key};
+    }
   }
   return best;
 }
 
 /* Read the answers of a straightened sheet.  Each question: {q, ans, f:[A,B,C,D shares], flag} */
-function readAnswers(canon,N){
-  const L=layout(N),res=[];let paper=[];
+function readAnswers(canon,N,format){
+  const L=layout(N,format),cw=cwOf(format),ch=chOf(format),res=[];let paper=[];
   L.items.forEach(it=>{
     const f=[],ps=[];
     for(let i=0;i<4;i++){
       const cx=it.x[i]*PXMM,cy=it.y*PXMM;
-      const ring=ringVals(canon,cx,cy,BUB.ring0*PXMM,BUB.ring1*PXMM).sort((a,b)=>a-b);
+      const ring=ringVals(canon,cx,cy,BUB.ring0*PXMM,BUB.ring1*PXMM,cw,ch).sort((a,b)=>a-b);
       const P=ring.length?ring[Math.floor(ring.length*0.75)]:230;ps.push(P);
-      const inner=discStats(canon,cx,cy,BUB.inner*PXMM);
+      const inner=discStats(canon,cx,cy,BUB.inner*PXMM,cw,ch);
       const thr=0.70*Math.max(P,60);
       f.push(inner.length?inner.filter(v=>v<thr).length/inner.length:0);
     }
@@ -312,12 +408,12 @@ function readAnswers(canon,N){
   return {answers:res,paperLevel:paper[Math.floor(paper.length/2)]||0};
 }
 // A 2nd opinion on cropped rows for the review screen: returns the sub-image of one question row.
-function rowCrop(canon,N,q){
-  const it=layout(N).items[q-1];
-  const x0=Math.max(0,Math.round((it.numX-9)*PXMM)),x1=Math.min(CW,Math.round((it.x[3]+4)*PXMM));
-  const y0=Math.max(0,Math.round((it.y-4.5)*PXMM)),y1=Math.min(CH,Math.round((it.y+4.5)*PXMM));
+function rowCrop(canon,N,q,format){
+  const it=layout(N,format).items[q-1],cw=cwOf(format),ch=chOf(format);
+  const x0=Math.max(0,Math.round((it.numX-9)*PXMM)),x1=Math.min(cw,Math.round((it.x[3]+4)*PXMM));
+  const y0=Math.max(0,Math.round((it.y-4.5)*PXMM)),y1=Math.min(ch,Math.round((it.y+4.5)*PXMM));
   const w=x1-x0,h=y1-y0,out=new Uint8ClampedArray(w*h);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++)out[y*w+x]=canon[(y0+y)*CW+x0+x];
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)out[y*w+x]=canon[(y0+y)*cw+x0+x];
   return {gray:out,w,h};
 }
 
@@ -362,7 +458,8 @@ function reportDocMany(list){
   return head+docs.map(d=>d.replace(/^[\s\S]*?<\/div>(?=<div class="pg">)/,'').replace(/<\/body><\/html>$/,'')).join('')+'</body></html>';
 }
 
-const api={PAGE,MARKS,MARK_SIZE,CODE,BUB,GRID,PXMM,CW,CH,FILLED,FAINT,layout,hash24,crc8,encodeCode,decodeCode,sheetHtml,sheetDoc,toGray,shrink,findMarks,solveHomography,locateSheet,straightenWithoutCode,readAnswers,rowCrop,reportHtml,reportDocMany};
+const VERSION='17.4';
+const api={VERSION,quadCandidates,readCodeH,PAGE,FORMATS,HALF_SLOT,MARKS,MARK_SIZE,CODE,BUB,GRID,PXMM,CW,CH,FILLED,FAINT,layout,hash24,crc8,encodeCode,decodeCode,sheetHtml,sheetDoc,toGray,shrink,findMarks,solveHomography,locateSheet,straightenWithoutCode,readAnswers,rowCrop,reportHtml,reportDocMany};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.OMR=api;
 })(typeof window!=='undefined'?window:globalThis);

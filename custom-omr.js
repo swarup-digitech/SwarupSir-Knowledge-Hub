@@ -10,11 +10,27 @@
 'use strict';
 const q$=id=>document.getElementById(id);
 let B=null;   // open batch  {base,title,subject,recs,byIdx}
-let SC=null;  // scan session {entries,imported}
+let SC=null;
+let H=new Map();  // batch list: base -> {rs, free}  // scan session {entries,imported}
 const chunk=(a,n)=>{const r=[];for(let i=0;i<a.length;i+=n)r.push(a.slice(i,i+n));return r;};
 const pIdx=serial=>{const m=String(serial||'').match(/-P(\d+)$/);return m?parseInt(m[1],10):null;};
 const isCustom=r=>r&&(r.is_custom==='true'||r.is_custom===true||!!(r.paper_snapshot&&r.paper_snapshot.custom));
 const fmtDate=d=>{try{return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});}catch(_){return '';}};
+// Students whose OMR results are already imported for a batch: Set of student ids per base serial.
+async function loadScanned(base){
+  const by=new Map();
+  const add=r=>{if(!by.has(r.paper_base_serial))by.set(r.paper_base_serial,new Set());by.get(r.paper_base_serial).add(r.student_id);};
+  for(let from=0;;from+=1000){
+    let q=sb.from('omr_responses').select('paper_base_serial,student_id').eq('question_no',1);
+    if(base)q=q.eq('paper_base_serial',base);
+    const {data,error}=await q.order('id').range(from,from+999);
+    if(error)throw error;(data||[]).forEach(add);if(!data||data.length<1000)break;
+  }
+  return by;
+}
+const sidOf=r=>r.student_id||(r.paper_snapshot&&r.paper_snapshot.student_id)||'';
+// A paper may be deleted only when its student's OMR is not imported (an unknown student is kept, to be safe).
+const isScanned=(r,set)=>!sidOf(r)||(set&&set.has(sidOf(r)));
 const rollSort=(a,b)=>String(a.roll_no||'').localeCompare(String(b.roll_no||''),undefined,{numeric:true});
 
 /* --------------------------------- batch list --------------------------------- */
@@ -24,14 +40,17 @@ async function customOmrHome(){
     const recs=(await qpLoadHistoryRecords()).filter(isCustom);
     const groups=new Map();
     recs.forEach(r=>{const k=qpHistoryGroupKey(r.serial_no);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
+    let scannedBy=new Map();try{scannedBy=await loadScanned();}catch(_){}
+    H=new Map();
     let imports=[];try{const {data}=await sb.from('omr_imports').select('paper_base_serial,student_count,imported_at').eq('teacher_id',current.id);imports=data||[];}catch(_){}
     const cards=[...groups].map(([base,rs])=>{
       const first=rs[0],imp=imports.filter(i=>i.paper_base_serial===base);
-      const n=imp.reduce((t,i)=>t+(i.student_count||0),0);
+      const set=scannedBy.get(base),free=rs.filter(r=>!isScanned(r,set));H.set(base,{rs,free});
+      const n=rs.filter(r=>set&&set.has(sidOf(r))).length||(set?0:imp.reduce((t,i)=>t+(i.student_count||0),0));
       return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
         <div><b>${esc(first.title||'Personal paper')}</b><div class="small muted">${esc(first.subject||'')} · ${esc(fmtDate(first.generated_at))} · ${rs.length} student${rs.length===1?'':'s'} · ${Number(first.question_count||0)} questions · <code>${esc(base)}</code></div>
-        ${n?`<span class="tag" style="background:#dcfce7;color:#166534">✓ ${n} sheet${n===1?'':'s'} imported</span>`:'<span class="tag">Not scanned yet</span>'}</div>
-        <button onclick="customOmrBatch('${esc(base)}')">Open</button></div></div>`;}).join('');
+        ${n?`<span class="tag" style="background:#dcfce7;color:#166534">✓ ${n} of ${rs.length} scanned &amp; imported</span>`:'<span class="tag">Not scanned yet</span>'}</div>
+        <div class="actions" style="margin:0"><button onclick="customOmrBatch('${esc(base)}')">Open</button>${free.length?`<button class="danger" onclick="customOmrDeleteUnscanned('${esc(base)}')">🗑 ${free.length===rs.length?'Delete batch':'Delete not-scanned ('+free.length+')'}</button>`:''}</div></div></div>`;}).join('');
     render(`<div class="wrap">${header('Personal OMR Sheets')}
       <div class="card" style="border:2px solid #0f766e;background:#f0fdfa"><h2 style="margin:0">🧾 Personal OMR sheets, scanning and result reports</h2>
         <p class="muted" style="margin:6px 0 0">For papers made with <b>Custom Adaptive Papers</b>: print each student's own OMR sheet, scan the filled sheets with a phone or scanner, and the answers go straight into the Mistake Bank. Students download their result PDF from their own login.</p></div>
@@ -49,17 +68,22 @@ async function customOmrBatch(base){
     const recs=(await qpLoadHistoryRecords()).filter(r=>isCustom(r)&&qpHistoryGroupKey(r.serial_no)===base).sort(rollSort);
     if(!recs.length)throw new Error('This batch was not found in Generated History.');
     const byIdx=new Map();recs.forEach(r=>{const i=pIdx(r.serial_no);if(i!=null)byIdx.set(i,r);});
-    B={base,title:recs[0].title||'Personal paper',subject:recs[0].subject||'',recs,byIdx};
+    let scanned=new Set();try{scanned=(await loadScanned(base)).get(base)||new Set();}catch(_){}
+    B={base,title:recs[0].title||'Personal paper',subject:recs[0].subject||'',recs,byIdx,scanned};
     SC={entries:[],imported:false,busy:false};
     const maxQ=Math.max(...recs.map(r=>Number(r.question_count||0)));
     render(`<div class="wrap">${header('Personal OMR Sheets')}
-      <div class="card"><h2 style="margin:0">${esc(B.title)}</h2><div class="small muted">${esc(B.subject)} · ${recs.length} students · ${maxQ} questions · <code>${esc(base)}</code></div></div>
+      <div class="card"><h2 style="margin:0">${esc(B.title)}</h2><div class="small muted">${esc(B.subject)} · ${recs.length} students · ${maxQ} questions · <code>${esc(base)}</code></div><div class="small muted">OMR tools version ${esc(OMR.VERSION||'old')}</div></div>
+      <div class="card"><h2 style="margin-top:0">Papers in this batch</h2><div id="omrPapers"></div></div>
       <div class="card"><h2 style="margin-top:0">1. Print OMR sheets</h2>
         <p class="muted">One sheet per student with their name, roll no. and a sheet code the scanner reads. Print on plain white A4 at <b>100% scale</b>. Students fill <b>one circle per question</b> with a dark pen or pencil.</p>
-        ${maxQ>OMR.GRID.maxQ?`<div class="notice">A sheet holds up to ${OMR.GRID.maxQ} questions; this paper has ${maxQ}.</div>`:`<div class="actions"><button onclick="customOmrPrintSheets()">🖨 Print ${recs.length} OMR sheet${recs.length===1?'':'s'}</button><button class="secondary" onclick="customOmrPrintSheets(true)">🖨 Print one blank test sheet</button></div>`}
+        ${maxQ>OMR.FORMATS.full.maxQ?`<div class="notice">A sheet holds up to ${OMR.FORMATS.full.maxQ} questions; this paper has ${maxQ}.</div>`:`
+        <div style="margin:8px 0"><label style="display:block;margin:4px 0"><input type="radio" name="omrSize" value="half" ${maxQ<=OMR.FORMATS.half.maxQ?'checked':'disabled'}> <b>Two sheets on one A4 page</b> — cut or tear along the dashed line (up to ${OMR.FORMATS.half.maxQ} questions)${maxQ>OMR.FORMATS.half.maxQ?' <span class="small muted">— not available: this paper has '+maxQ+' questions</span>':''}</label>
+          <label style="display:block;margin:4px 0"><input type="radio" name="omrSize" value="full" ${maxQ<=OMR.FORMATS.half.maxQ?'':'checked'}> <b>One sheet per A4 page</b> (up to ${OMR.FORMATS.full.maxQ} questions)</label></div>
+        <div class="actions"><button onclick="customOmrPrintSheets()">🖨 Print ${recs.length} OMR sheet${recs.length===1?'':'s'}</button><button class="secondary" onclick="customOmrPrintSheets(true)">🖨 Print one blank test sheet</button></div>`}
       </div>
       <div class="card"><h2 style="margin-top:0">2. Scan filled sheets &amp; import</h2>
-        <p class="muted">Take a clear photo of each sheet (all four black corner squares visible, flat, even light) or scan to image/PDF. You can select many files at once; a PDF may contain many pages. Any sheet may be turned in any direction.</p>
+        <p class="muted">Take a clear photo of each sheet (all four black corner squares visible, flat, even light) or scan to image/PDF. You can select many files at once; a PDF may contain many pages. Any sheet may be turned in any direction. For two-per-page sheets you can photograph/scan each torn half, or the whole page before tearing (both sheets on it are read).</p>
         <input id="omrFiles" type="file" accept="image/*,application/pdf" multiple onchange="customOmrScanFiles(this.files)">
         <div id="omrProg" class="small muted" style="margin-top:8px"></div>
         <div id="omrSheets" style="margin-top:10px"></div>
@@ -70,9 +94,51 @@ async function customOmrBatch(base){
         <p class="muted">After importing, print every student's report (score, part-wise result, the questions they got wrong). Students can also download their own report from the <b>OMR Test Result</b> page in their login.</p>
         <div class="actions"><button onclick="customOmrPrintReports()">🖨 Print result reports (all students)</button></div></div>
       <div class="actions"><button class="secondary" onclick="customOmrHome()">← All batches</button></div></div>`);
+    paintPapers();
   }catch(e){
     render(`<div class="wrap">${header('Personal OMR Sheets')}<div class="card">${message(e.message||String(e))}<div class="actions"><button class="secondary" onclick="customOmrHome()">← Back</button></div></div></div>`);
   }
+}
+function paintPapers(){
+  const box=q$('omrPapers');if(!box||!B)return;
+  const free=B.recs.filter(r=>!isScanned(r,B.scanned));
+  box.innerHTML=`<div class="small muted" style="margin-bottom:6px">Papers whose OMR sheet has already been imported are kept (they hold the student's result). Papers not scanned yet can be deleted.</div>
+    <div style="max-height:260px;overflow:auto">${B.recs.map(r=>{const sc=isScanned(r,B.scanned);
+      return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid #e5e7eb"><span>${esc(r.roll_no||'')} · ${esc(r.student_name||'')}</span>
+      <span>${sc?'<span class="tag" style="background:#dcfce7;color:#166534">✓ OMR imported</span>':`<span class="tag">Not scanned</span> <button class="danger" style="padding:3px 8px" onclick="customOmrDeleteOne('${esc(r.id)}')">🗑</button>`}</span></div>`;}).join('')}</div>
+    ${free.length?`<div class="actions" style="margin-top:8px"><button class="danger" onclick="customOmrDeleteUnscanned('${esc(B.base)}')">🗑 Delete all not-scanned papers (${free.length})</button></div>`:''}`;
+}
+async function deleteRecords(recs,label){
+  const ids=recs.map(r=>r.id);if(!ids.length)return false;
+  if(!confirm(`Delete ${label}? Their saved question papers and answer keys are removed. This cannot be undone.\n\nPapers whose OMR sheet is already imported are never deleted.`))return false;
+  for(const c of chunk(ids,100)){
+    const {error}=await sb.from('jnvst_generated_question_papers').delete().eq('teacher_id',current.id).in('id',c);
+    if(error){notify('Could not delete: '+(error.message||error));return false;}
+  }
+  return true;
+}
+async function customOmrDeleteUnscanned(base){
+  try{
+    // always re-check against the database right before deleting
+    const recs=(await qpLoadHistoryRecords()).filter(r=>isCustom(r)&&qpHistoryGroupKey(r.serial_no)===base);
+    const set=(await loadScanned(base)).get(base);
+    const free=recs.filter(r=>!isScanned(r,set));
+    if(!free.length)return notify('Every paper in this batch has already been scanned, so nothing can be deleted.');
+    const label=free.length===recs.length?`this whole batch (${free.length} paper${free.length===1?'':'s'}, none scanned)`:`${free.length} not-scanned paper${free.length===1?'':'s'} (${recs.length-free.length} scanned paper${recs.length-free.length===1?' is':'s are'} kept)`;
+    if(!await deleteRecords(free,label))return;
+    if(B&&B.base===base&&free.length<recs.length)return customOmrBatch(base);
+    customOmrHome();
+  }catch(e){notify('Could not delete: '+(e.message||e));}
+}
+async function customOmrDeleteOne(id){
+  if(!B)return;const r=B.recs.find(x=>x.id===id);if(!r)return;
+  try{
+    const set=(await loadScanned(B.base)).get(B.base);
+    if(isScanned(r,set)){B.scanned=set||new Set();paintPapers();return notify('This student\'s OMR sheet has already been imported, so the paper is kept.');}
+    if(!await deleteRecords([r],`the paper of ${r.student_name||r.roll_no||'this student'}`))return;
+    if(B.recs.length<=1)return customOmrHome();
+    customOmrBatch(B.base);
+  }catch(e){notify('Could not delete: '+(e.message||e));}
 }
 
 /* -------------------------------------- printing -------------------------------------- */
@@ -84,11 +150,16 @@ function openDoc(){
 }
 function customOmrPrintSheets(blank){
   if(!B)return;
+  if(!OMR.FORMATS||!OMR.VERSION)return notify('An old copy of omr-engine.js is loaded. Upload the new omr-engine.js and press Ctrl+Shift+R to reload.');
   const w=openDoc();if(!w)return;
   try{
     const hash=OMR.hash24(B.base);
     const list=blank?[B.recs[0]]:B.recs;
-    const sheets=list.map(r=>OMR.sheetHtml({
+    const chosen=document.querySelector('input[name="omrSize"]:checked');
+    const maxQ=Math.max(...list.map(r=>Number(r.question_count||0)));
+    let format=chosen&&chosen.value==='full'?'full':'half';
+    if(format==='half'&&maxQ>OMR.FORMATS.half.maxQ)format='full';
+    const sheets=list.map(r=>OMR.sheetHtml({format,
       title:B.title,name:blank?'(test sheet)':(r.student_name||''),roll:blank?'':String(r.roll_no||''),note:B.subject,
       serial:r.serial_no,hash,idx:pIdx(r.serial_no)||1,N:Number(r.question_count||0)}));
     w.document.open();w.document.write(OMR.sheetDoc(B.title+' — OMR sheets',sheets));w.document.close();
@@ -123,19 +194,20 @@ async function getPdf(file){
   pdfCache.set(file,pdf);return pdf;
 }
 function keyOf(rec){const m=new Map();((rec.answer_key_snapshot&&rec.answer_key_snapshot.rows)||[]).forEach(x=>m.set(Number(x['Q.No.']),String(x['Correct Option']||'').toUpperCase()));return m;}
-function cropUrl(canon,N,q){
-  const c=OMR.rowCrop(canon,N,q),cv=document.createElement('canvas');cv.width=c.w;cv.height=c.h;
+function cropUrl(canon,N,q,fmt){
+  const c=OMR.rowCrop(canon,N,q,fmt),cv=document.createElement('canvas');cv.width=c.w;cv.height=c.h;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(c.w,c.h);
   for(let i=0;i<c.gray.length;i++){const v=c.gray[i];im.data[i*4]=v;im.data[i*4+1]=v;im.data[i*4+2]=v;im.data[i*4+3]=255;}
   ctx.putImageData(im,0,0);return cv.toDataURL('image/png');
 }
-function fillEntry(e,canon,rec){
+function fillEntry(e,canon,rec,fmt){
   const N=Number(rec.question_count||0);
-  const rd=OMR.readAnswers(canon,N);
+  e.fmt=fmt||'full';
+  const rd=OMR.readAnswers(canon,N,e.fmt);
   e.rec=rec;e.status='ok';e.message='';
   e.answers=rd.answers.map(a=>a.ans);
   e.flags=rd.answers.filter(a=>a.flag).map(a=>({q:a.q,flag:a.flag,f:a.f,done:false}));
-  e.crops={};e.flags.forEach(f=>{try{e.crops[f.q]=cropUrl(canon,N,f.q);}catch(_){}});
+  e.crops={};e.flags.forEach(f=>{try{e.crops[f.q]=cropUrl(canon,N,f.q,e.fmt);}catch(_){}});
   e.blank=e.answers.filter(a=>!a).length;
 }
 async function customOmrScanFiles(fileList){
@@ -155,21 +227,28 @@ async function customOmrScanFiles(fileList){
     for(const src of sources){
       i++;if(prog)prog.textContent=`Reading sheet ${i} of ${sources.length}…`;
       await new Promise(r=>setTimeout(r,0));
-      const e={id:SC.entries.length,src,status:'error',message:'',answers:[],flags:[],crops:{},include:true};
       try{
         const img=await decodeSource(src);
         const r=OMR.locateSheet(img.gray,img.w,img.h);
-        if(!r.ok){e.message=r.message;e.canManual=r.reason==='code';}
-        else{
-          const rec=B.byIdx.get(r.code.idx);
-          if(r.code.hash!==OMR.hash24(B.base)||!rec){e.message='This sheet belongs to a different paper batch (sheet code does not match).';}
-          else fillEntry(e,r.canon,rec);
+        if(!r.ok){
+          const e={id:SC.entries.length,src,status:'error',message:r.message,canManual:r.reason==='code',answers:[],flags:[],crops:{},include:true};
+          SC.entries.push(e);
+        }else{
+          const many=r.sheets.length>1;
+          r.sheets.forEach((sh,k)=>{
+            const e={id:SC.entries.length,src:many?{...src,name:src.name+` · sheet ${k+1} of ${r.sheets.length}`}:src,status:'error',message:'',answers:[],flags:[],crops:{},include:true};
+            const rec=B.byIdx.get(sh.code.idx);
+            if(sh.code.hash!==OMR.hash24(B.base)||!rec){e.message='This sheet belongs to a different paper batch (sheet code does not match).';}
+            else fillEntry(e,sh.canon,rec,sh.fmt);
+            SC.entries.push(e);
+          });
         }
-      }catch(err){e.message='Could not read this file: '+(err.message||err);}
-      SC.entries.push(e);
+      }catch(err){
+        SC.entries.push({id:SC.entries.length,src,status:'error',message:'Could not read this file: '+(err.message||err),answers:[],flags:[],crops:{},include:true});
+      }
     }
     markDuplicates();
-    if(prog)prog.textContent=`${sources.length} sheet${sources.length===1?'':'s'} read.`;
+    if(prog)prog.textContent=`${sources.length} file${sources.length===1?'':'s'} read.`;
   }finally{SC.busy=false;}
   paintScan();
 }
@@ -261,7 +340,7 @@ async function customOmrManual(id){
     const img=await decodeSource(e.src);
     const s=OMR.straightenWithoutCode(img.gray,img.w,img.h,Number(rec.question_count||0));
     if(!s)return notify('The corner squares could not be found in this picture. Please retake it.');
-    fillEntry(e,s.canon,rec);e.include=true;markDuplicates();paintScan();
+    fillEntry(e,s.canon,rec,s.fmt);e.include=true;markDuplicates();paintScan();
   }catch(err){notify('Could not read this file: '+(err.message||err));}
 }
 
@@ -284,7 +363,7 @@ async function customOmrImport(){
     if(!confirm(msg)){if(btn)btn.disabled=false;return;}
     const {data,error}=await sb.rpc('teacher_import_omr_results',{...args,p_dry_run:false});
     if(error)throw error;
-    SC.imported=true;paintScan();
+    SC.imported=true;try{B.scanned=(await loadScanned(B.base)).get(B.base)||B.scanned;}catch(_){}paintScan();paintPapers();
     res.innerHTML=`${omrReportHtml(data)}<div class="actions" style="margin-top:8px"><button onclick="customOmrPrintReports()">🖨 Print result reports</button></div>`;
     notify(`Imported ${data.imported} student${data.imported===1?'':'s'} into the Mistake Bank.`,'success');
   }catch(e){
@@ -316,5 +395,5 @@ async function customOmrPrintReports(){
   }catch(e){try{w.close();}catch(_){}notify('Could not prepare the reports: '+(e.message||e));}
 }
 
-Object.assign(root,{customOmrHome,customOmrBatch,customOmrPrintSheets,customOmrScanFiles,customOmrOpened,customOmrSet,customOmrDone,customOmrInclude,customOmrDrop,customOmrManual,customOmrImport,customOmrPrintReports,customOmrState:()=>({B,SC})});
+Object.assign(root,{customOmrHome,customOmrBatch,customOmrPrintSheets,customOmrScanFiles,customOmrOpened,customOmrSet,customOmrDone,customOmrInclude,customOmrDrop,customOmrManual,customOmrImport,customOmrPrintReports,customOmrDeleteUnscanned,customOmrDeleteOne,customOmrState:()=>({B,SC})});
 })(typeof window!=='undefined'?window:globalThis);

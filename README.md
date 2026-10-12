@@ -10,9 +10,15 @@ Student and teacher portal for the JNVST and School courses, built on Supabase.
 | `common-ui.js` | Shared helpers (toast messages `notify()`) |
 | `student-sw.js`, `student-app.webmanifest`, `manifest.webmanifest`, `skh-icon*.png` | Installable student app (PWA) |
 | `custom-adaptive.js` | V15 Custom Adaptive Assignment (teacher-controlled personal sets) |
+| `custom-adaptive-paper.js` | V16 Custom Adaptive Question Paper (one personal JNVST paper per student) |
 | `index.ts` | Supabase Edge Function `create-students` (student accounts, login by Roll No, fees) |
 | `V13_SECURE_SCORING_MIGRATION.sql` | Database change for V13 (security, server-side marking) |
 | `V14_OMR_MISTAKES_MIGRATION.sql` | Database change for V14 (OMR import, mistake streaks) |
+| `V16_ADAPTIVE_PAPER_OMR.sql` | Database change for V16 (OMR import finds each student's personal paper) |
+| `omr-engine.js` | V17 OMR sheet layout, sheet reader, result report layout |
+| `custom-omr.js` | V17 teacher screens: print sheets, scan, review, import, reports |
+| `student-omr.js` | V17 student list and PDF download of scanned OMR results |
+| `V17_STUDENT_OMR_REPORTS.sql` | Database change for V17 (student result functions) |
 | `supabase/migrations/` | All database changes in order – see `supabase/README.md` |
 | `*_Template.xlsx` | Bulk-upload templates for teachers |
 | `docs/` | Notes from earlier versions |

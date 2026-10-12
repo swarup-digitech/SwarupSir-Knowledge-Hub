@@ -300,7 +300,7 @@ function paint(){
   </div>
 
   <div class="card"><h2 style="margin-top:0">3. Generate &amp; check</h2>
-    <div class="actions"><button onclick="capGenerate()">⚙ Generate personal papers</button><button class="secondary" onclick="questionPaperGeneratorPage()">← Question Paper Generator</button></div>
+    <div class="actions"><button onclick="capGenerate()">⚙ Generate personal papers</button><button class="secondary" onclick="window.customOmrHome?customOmrHome():notify('Please reload the page.')">📚 Past personal papers, OMR &amp; delete</button><button class="secondary" onclick="questionPaperGeneratorPage()">← Question Paper Generator</button></div>
     <div id="capPreview" style="margin-top:12px"></div>
   </div>
   </div>`);

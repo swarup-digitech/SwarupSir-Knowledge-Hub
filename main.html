@@ -267,7 +267,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=21";
+      s.src="teacher-app.js?v=23";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -275,14 +275,14 @@ function loadTeacherApp(){
         c.onload=c.onerror=()=>{
           // V16: Custom Adaptive Question Paper module (needs custom-adaptive.js; optional)
           const p=document.createElement("script");
-          p.src="custom-adaptive-paper.js?v=1";
+          p.src="custom-adaptive-paper.js?v=2";
           p.onload=p.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");
-            e.src="omr-engine.js?v=1";
+            e.src="omr-engine.js?v=4";
             e.onload=e.onerror=()=>{
               const o=document.createElement("script");
-              o.src="custom-omr.js?v=1";
+              o.src="custom-omr.js?v=4";
               o.onload=o.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
               document.head.appendChild(o);
             };
@@ -795,22 +795,63 @@ setupPWAInstall();
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const render=x=>{
+  try{navNoteRender();}catch(_){}
   const qs=new URLSearchParams(location.search);
   const isJnvst=qs.get("portal")==="JNVST" || (qs.get("mode")==="teacher" && !schoolTeacherMode);
   document.body.classList.toggle("jnvst-fullscreen",!!isJnvst);
   document.getElementById("app").innerHTML=x;
 };
-function getHomeHref(){if(profile?.role==="student"){return String(profile.course||"").toUpperCase()==="SCHOOL"?"/main.html?mode=student&portal=SCHOOL":"/main.html?mode=student"}if(profile?.role==="teacher"){return schoolTeacherMode?"/teacher-dashboard.html":"/main.html?mode=teacher&portal=JNVST"}return "/index.html"}
-function goBack(){
-  try{
-    const ref=document.referrer;
-    if(ref && new URL(ref,location.href).origin===location.origin && history.length>1){history.back();return;}
-  }catch{}
-  location.replace(getHomeHref());
+/* ---- In-app Back: goes to the previous screen of THIS app (never to the login page) ---- */
+const NAV={stack:[],cur:null,pending:null,skip:false};
+const NAV_HOME=/^(?:window\.)?(?:teacherHome|studentHome|schoolStudentHome)\s*\(/;
+const NAV_IGNORE=/^(?:logout|goBack|navBack|notify|confirm|alert|window\.print|window\.open|location\.|history\.|document\.|this\.|event\.)/;
+const navFresh=()=>NAV.pending&&Date.now()-NAV.pending.t<2500;
+document.addEventListener("click",e=>{
+  const el=e.target&&e.target.closest?e.target.closest("[onclick]"):null;if(!el)return;
+  const code=String(el.getAttribute("onclick")||"").trim();
+  if(!code||NAV_IGNORE.test(code)||/^(?:\(?\s*\)?\s*=>)/.test(code))return;
+  NAV.pending={code,t:Date.now()};
+},true);
+function navNoteRender(){                        // called on every render()
+  if(NAV.skip){NAV.skip=false;NAV.pending=null;return;}
+  if(!navFresh()){return;}
+  const code=NAV.pending.code;NAV.pending=null;
+  if(NAV_HOME.test(code)){NAV.stack=[];NAV.cur=null;return;}       // back at the home screen
+  if(code===NAV.cur)return;                                        // same screen refreshed
+  NAV.stack.push(NAV.cur);NAV.cur=code;                            // null = home
+  if(NAV.stack.length>40)NAV.stack.shift();
 }
+// Back is shown on every screen except the home screen
+function navAtHome(){return !NAV.cur&&!navFresh()||(!NAV.cur&&navFresh()&&NAV_HOME.test(NAV.pending.code));}
+function navBack(){
+  if(!NAV.stack.length&&!NAV.cur)return false;
+  const prev=NAV.stack.pop();
+  NAV.cur=prev||null;NAV.pending=null;
+  if(!prev){NAV.stack=[];NAV.skip=false;try{if(typeof profile!=="undefined"&&profile){const h=getHomeFn();if(h){NAV.skip=false;h();return true;}}}catch(_){}location.replace(getHomeHref());return true;}
+  NAV.skip=true;
+  try{(0,Function)(prev)();}catch(err){NAV.skip=false;NAV.stack=[];NAV.cur=null;location.replace(getHomeHref());}
+  return true;
+}
+function getHomeFn(){
+  if(profile?.role==="teacher"&&!schoolTeacherMode&&typeof teacherHome==="function")return ()=>teacherHome();
+  if(profile?.role==="student"&&typeof studentHome==="function"&&String(profile.course||"").toUpperCase()!=="SCHOOL")return ()=>studentHome();
+  if(profile?.role==="student"&&typeof schoolStudentHome==="function")return ()=>schoolStudentHome();
+  return null;
+}
+// the phone / browser Back button does the same instead of leaving to the login page
+try{
+  history.replaceState({skhBase:true},"");history.pushState({skhTop:true},"");
+  window.addEventListener("popstate",e=>{
+    if(e.state&&e.state.skhTop)return;
+    history.pushState({skhTop:true},"");           // keep the app on screen
+    navBack();
+  });
+}catch(_){}
+function getHomeHref(){if(profile?.role==="student"){return String(profile.course||"").toUpperCase()==="SCHOOL"?"/main.html?mode=student&portal=SCHOOL":"/main.html?mode=student"}if(profile?.role==="teacher"){return schoolTeacherMode?"/teacher-dashboard.html":"/main.html?mode=teacher&portal=JNVST"}return "/index.html"}
+function goBack(){if(!navBack())location.replace(getHomeHref());}
 function studentDisplayName(){return String(profile?.display_name||profile?.name||profile?.full_name||profile?.student_name||profile?.roll_no||"Student").trim()||"Student";}
 function studentPhotoUrl(){return profile?.photo_url||"";}
-const header=(t,showBack=true)=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${showBack?`<button class="secondary" onclick="goBack()">← Back</button>`:""}<h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button>${profile?.role==="student"?`<button class="secondary" onclick="location.href='/main.html?mode=student&portal=SUBSCRIPTION'">💳 Subscription</button><button class="secondary" onclick="studentProfilePage()">👤 Profile</button>`:""}<button class="secondary" onclick="logout()">Logout</button></div></div>`;
+const header=(t,showBack=true)=>`<div class="top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${showBack&&!navAtHome()?`<button class="secondary" onclick="goBack()">← Back</button>`:""}<h1 style="margin:0">${t}</h1></div><div class="actions"><button class="secondary" onclick="location.replace(getHomeHref())">🏠 Home</button>${profile?.role==="student"?`<button class="secondary" onclick="location.href='/main.html?mode=student&portal=SUBSCRIPTION'">💳 Subscription</button><button class="secondary" onclick="studentProfilePage()">👤 Profile</button>`:""}<button class="secondary" onclick="logout()">Logout</button></div></div>`;
 const message=(t,ok=false)=>`<div class="${ok?'success':'notice'}">${esc(t)}</div>`;
 const STUDENT_PROFILE_CACHE_PREFIX="skh_student_profile_v1_";
 function getCachedStudentProfile(userId){

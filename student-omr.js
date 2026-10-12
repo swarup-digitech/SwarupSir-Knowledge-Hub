@@ -33,7 +33,7 @@ async function studentOmrDownload(base){
   if(!w)return notify('Your browser blocked the pop-up. Please allow pop-ups for this site and try again.');
   try{
     w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing your result report…</body>');
-    await loadOnce('omr-engine.js?v=1');
+    await loadOnce('omr-engine.js?v=4');
     const {data,error}=await sb.rpc('student_omr_report',{p_paper_base_serial:base});
     if(error)throw error;
     const html=OMR.reportHtml({
