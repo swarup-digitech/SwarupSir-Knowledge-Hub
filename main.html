@@ -267,7 +267,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=23";
+      s.src="teacher-app.js?v=24";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -279,10 +279,10 @@ function loadTeacherApp(){
           p.onload=p.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");
-            e.src="omr-engine.js?v=4";
+            e.src="omr-engine.js?v=6";
             e.onload=e.onerror=()=>{
               const o=document.createElement("script");
-              o.src="custom-omr.js?v=4";
+              o.src="custom-omr.js?v=5";
               o.onload=o.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
               document.head.appendChild(o);
             };
@@ -2388,10 +2388,10 @@ async function studentHome(){
     <div class="card omr-result-card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div>
-          <h2 style="margin:0;color:#1d4ed8">📄 OMR Test Result</h2>
-          <p class="muted" style="margin:6px 0 0">View and download your classroom OMR examination report.</p>
+          <h2 style="margin:0;color:#1d4ed8">📝 My scanned OMR exams</h2>
+          <p class="muted" style="margin:6px 0 0">See your OMR exam results and download your result report as PDF.</p>
         </div>
-        <button onclick="studentOmrResult()">View OMR Result</button>
+        <button onclick="studentOmrExams()">View my OMR results</button>
       </div>
     </div>
     <div class="card"><h2>Welcome, ${esc(studentDisplayName())}</h2>
@@ -2414,7 +2414,7 @@ async function studentHome(){
 function studentOmrBoot(){
   return new Promise((res,rej)=>{
     if(typeof window.studentOmrLoadApp==="function"&&!window.studentOmrLoadApp.__stub)return res();
-    const s=document.createElement("script");s.src="student-omr.js?v=1";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
+    const s=document.createElement("script");s.src="student-omr.js?v=3";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
   }).then(()=>window.studentOmrLoadApp()).catch(e=>console.warn("OMR app results:",e));
 }
 function revokeStudentOmrUrl(){
@@ -2425,6 +2425,13 @@ function revokeStudentOmrUrl(){
   window._studentOmrBlob=null;
 }
 
+async function studentOmrExams(){
+  if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+  render(`<div class="wrap">${header("My Scanned OMR Exams")}
+    <div id="omrAppResults"><div class="card"><p class="muted">Loading your OMR results…</p></div></div>
+    <button class="secondary" onclick="studentHome()">← Back to Dashboard</button></div>`);
+  studentOmrBoot();
+}
 async function studentOmrResult(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
   revokeStudentOmrUrl();

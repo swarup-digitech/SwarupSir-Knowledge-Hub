@@ -419,24 +419,62 @@ function rowCrop(canon,N,q,format){
 
 /* ================================== result report ================================== */
 // data: {title,subject,studentName,rollNo,date,total,correct,rows:[{no,selected,correct_option,is_correct,q:{...}}],fmt?:fn, label?:fn}
-function reportHtml(d){
+// Plain-text version of simple LaTeX, used only if the maths library cannot be loaded (e.g. no internet).
+function plainTeX(t){
+  return String(t||'').replace(/\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\$([^$]+)\$/g,(m,a,b,c,d)=>{
+    let x=a||b||c||d||'';
+    for(let k=0;k<4;k++)x=x.replace(/\\(?:text|mathrm|textbf|mathbf)\{([^{}]*)\}/g,'$1').replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g,'($1)/($2)').replace(/\\sqrt\{([^{}]*)\}/g,'√($1)');
+    const sup={0:'⁰',1:'¹',2:'²',3:'³',4:'⁴',5:'⁵',6:'⁶',7:'⁷',8:'⁸',9:'⁹'};
+    x=x.replace(/\^\{?(\d)\}?/g,(q,n)=>sup[n]).replace(/\^\{([^{}]*)\}/g,'^($1)').replace(/_\{([^{}]*)\}/g,'_$1')
+       .replace(/\\times/g,'×').replace(/\\div/g,'÷').replace(/\\cdot/g,'·').replace(/\\pi/g,'π').replace(/\\circ/g,'°').replace(/\\degree/g,'°')
+       .replace(/\\(?:le|leq)\b/g,'≤').replace(/\\(?:ge|geq)\b/g,'≥').replace(/\\neq/g,'≠').replace(/\\approx/g,'≈').replace(/\\pm/g,'±')
+       .replace(/\\(?:left|right)/g,'').replace(/\\[,;: !]/g,' ').replace(/\\%/g,'%').replace(/[{}]/g,'').replace(/\\([A-Za-z]+)/g,'$1');
+    return x;
+  });
+}
+const SUBJECT_LABEL={MAT:'Mental Ability (MAT)',ARITHMETIC:'Arithmetic',EVS:'Environmental Studies (EVS)',LANGUAGE:'Language'};
+// Report content for one student (no <html> wrapper).
+function reportParts(d){
   const fmt=typeof d.fmt==='function'?d.fmt:esc;
   const rows=d.rows||[];
   const total=d.total||rows.length,correct=d.correct!=null?d.correct:rows.filter(r=>r.is_correct).length;
   const pct=total?Math.round(correct*100/total):0;
   const wrong=rows.filter(r=>!r.is_correct);
   const blank=rows.filter(r=>!String(r.selected||'').trim()).length;
-  const groups=new Map();
-  rows.forEach(r=>{const g=(r.q&&(r.q._partHeading||r.q.topic))||'All questions';const x=groups.get(g)||{t:0,c:0};x.t++;if(r.is_correct)x.c++;groups.set(g,x);});
+  // Subject -> part (MAT, EVS ...) or lesson/chapter -> topics
+  const paperSubject=SUBJECT_LABEL[String(d.subject||'').toUpperCase()]||String(d.subject||'').trim()||'Questions';
+  const subjects=new Map();
+  rows.forEach(r=>{
+    const q=r.q||{};
+    const sName=String(q.subject_name||'').trim()||paperSubject;
+    const sub=String(q._partHeading||'').trim()||String(q.lesson_name||'').trim()||String(q.topic||'').trim()||'General';
+    const topic=String(q.topic||'').trim();
+    if(!subjects.has(sName))subjects.set(sName,{t:0,c:0,subs:new Map()});
+    const S=subjects.get(sName);S.t++;if(r.is_correct)S.c++;
+    if(!S.subs.has(sub))S.subs.set(sub,{t:0,c:0,topics:new Map()});
+    const U=S.subs.get(sub);U.t++;if(r.is_correct)U.c++;
+    if(topic&&topic!==sub){const T=U.topics.get(topic)||{t:0,c:0};T.t++;if(r.is_correct)T.c++;U.topics.set(topic,T);}
+  });
+  const pc=(c,t)=>t?Math.round(c*100/t)+'%':'–';
+  const bar=(c,t)=>{const v=t?Math.round(c*100/t):0;return `<span class="bar"><i style="width:${v}%;background:${v>=75?'#16a34a':v>=50?'#f59e0b':'#dc2626'}"></i></span>`;};
+  let perf='';
+  subjects.forEach((S,name)=>{
+    perf+=`<tr class="sj"><td>${esc(name)}</td><td>${S.c}</td><td>${S.t}</td><td>${pc(S.c,S.t)} ${bar(S.c,S.t)}</td></tr>`;
+    S.subs.forEach((U,sub)=>{
+      const tl=[...U.topics].map(([n,T])=>`${esc(n)} (${T.c}/${T.t})`);
+      perf+=`<tr><td class="ind">${esc(sub)}${tl.length?`<div class="small">${tl.slice(0,6).join(' · ')}${tl.length>6?' · +'+(tl.length-6)+' more':''}</div>`:''}</td><td>${U.c}</td><td>${U.t}</td><td>${pc(U.c,U.t)} ${bar(U.c,U.t)}</td></tr>`;
+    });
+  });
   const qBlock=r=>{
     const q=r.q||{};
+    const expl=String(q.explanation||'').trim();
     const text=String(q.question_text||'').trim();
     const realText=text&&!/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i.test(text)?text:'';
     const opts=['a','b','c','d'].map((k,i)=>{const v=String(q['option_'+k]||'').trim();return v&&!/^Option [A-D]$/i.test(v)?`<span class="o ${'ABCD'[i]===String(r.correct_option||'').toUpperCase()?'ok':''} ${'ABCD'[i]===String(r.selected||'').toUpperCase()&&!r.is_correct?'bad':''}">${'ABCD'[i]}. ${fmt(v)}</span>`:'';}).join('');
     return `<div class="q"><div class="qn">Q${r.no}</div><div class="qb">${q._passageTitle?`<div class="pt">${esc(q._passageTitle)}</div>`:''}${q.image_url?`<img src="${esc(q.image_url)}" alt="">`:''}${realText?`<div>${fmt(realText)}</div>`:''}${opts?`<div class="opts">${opts}</div>`:''}
-      <div class="ans">Your answer: <b class="${r.is_correct?'g':'r'}">${esc(String(r.selected||'').trim()||'— (blank)')}</b> &nbsp; Correct answer: <b class="g">${esc(r.correct_option||'')}</b></div></div></div>`;
+      <div class="ans">Your answer: <b class="${r.is_correct?'g':'r'}">${esc(String(r.selected||'').trim()||'— (blank)')}</b> &nbsp; Correct answer: <b class="g">${esc(r.correct_option||'')}</b></div>${expl?`<div class="expl"><b>Explanation:</b> ${fmt(expl)}</div>`:''}</div></div>`;
   };
-  const css=`*{box-sizing:border-box}body{font:13px/1.45 Arial,sans-serif;color:#111;margin:0}.pg{width:210mm;min-height:297mm;padding:12mm 14mm;margin:0 auto;background:#fff;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
+  const css=`.bar{display:inline-block;width:46px;height:6px;background:#e2e8f0;border-radius:3px;vertical-align:middle;margin-left:6px;overflow:hidden}.bar i{display:block;height:100%}tr.sj td{background:#eef2ff;font-weight:700}td.ind{padding-left:20px}.expl{margin-top:5px;padding:5px 8px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:12.5px}*{box-sizing:border-box}body{font:13px/1.45 Arial,sans-serif;color:#111;margin:0}.pg{width:210mm;min-height:297mm;padding:12mm 14mm;margin:0 auto;background:#fff;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
 h1{font-size:18px;margin:0}h2{font-size:14px;margin:16px 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px}.top{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #17365D;padding-bottom:6px;margin-bottom:10px}
 .score{display:flex;gap:10px;margin:8px 0}.box{flex:1;border:1px solid #cbd5e1;border-radius:8px;padding:8px;text-align:center}.box b{display:block;font-size:20px}
 table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;padding:4px 7px;text-align:left}th{background:#f1f5f9}
@@ -445,21 +483,48 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd5e1;padding
   const body=`<div class="pg"><div class="top"><div><h1>SWARUP SIR'S KNOWLEDGE HUB</h1><div class="small">OMR Result Report</div></div><div style="text-align:right"><b>${esc(d.studentName||'')}</b><br><span class="small">Roll No. ${esc(d.rollNo||'')}</span></div></div>
     <div><b>${esc(d.title||'')}</b> <span class="small">${esc(d.subject||'')} ${d.date?'· '+esc(d.date):''}</span></div>
     <div class="score"><div class="box"><b>${correct}/${total}</b>Score</div><div class="box"><b>${pct}%</b>Percentage</div><div class="box"><b class="r">${wrong.length}</b>Mistakes</div><div class="box"><b>${blank}</b>Not attempted</div></div>
-    <h2>Part-wise performance</h2><table><thead><tr><th>Part / topic</th><th>Correct</th><th>Total</th><th>%</th></tr></thead><tbody>${[...groups].map(([g,x])=>`<tr><td>${esc(g)}</td><td>${x.c}</td><td>${x.t}</td><td>${Math.round(x.c*100/x.t)}%</td></tr>`).join('')}</tbody></table>
+    <h2>Performance by subject and topic</h2><table><thead><tr><th>Subject / Part or topic</th><th>Correct</th><th>Total</th><th>%</th></tr></thead><tbody>${perf}</tbody></table>
     <h2>Answer overview</h2><div class="chips">${rows.map(r=>`<span class="${r.is_correct?'c':'w'}">${r.no}. ${esc(String(r.selected||'').trim()||'–')}${r.is_correct?' ✓':' ✗ ('+esc(r.correct_option||'')+')'}</span>`).join('')}</div>
     <p class="small" style="margin-top:12px">Questions you got wrong are saved in your Mistake Bank. They come back in your next personal practice until you answer them correctly twice in a row.</p></div>
     ${wrong.length?`<div class="pg"><h2 style="margin-top:0">Questions to revise (${wrong.length})</h2>${wrong.map(qBlock).join('')}</div>`:''}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc((d.studentName||'Student')+' — '+(d.title||'OMR Result'))}</title><script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script><style>@page{size:A4 portrait;margin:0}${css}.bn{font:13px Arial;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 14px;display:flex;gap:12px;align-items:center}.bn button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}@media print{.bn{display:none!important}}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body><div class="bn"><b>Result report</b><button onclick="window.print()">🖨 Print / Save as PDF</button></div>${body}</body></html>`;
+  return {css,body};
+}
+// Whole document. The maths (LaTeX) is typeset before the Print button is enabled; if the maths library cannot
+// be loaded the formulas are shown as plain readable text instead of raw LaTeX.
+function reportShell(title,css,body){
+  const PLAIN=plainTeX.toString();
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"],["$","$"]],displayMath:[["\\\\[","\\\\]"],["$$","$$"]],processEscapes:true},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]},startup:{typeset:false}};</script><script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script><style>@page{size:A4 portrait;margin:0}${css}.bn{font:13px Arial;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 14px;display:flex;gap:12px;align-items:center}.bn button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}.bn button:disabled{background:#94a3b8;cursor:wait}@media print{.bn{display:none!important}}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}mjx-container{font-size:105%}</style></head><body><div class="bn"><b>Result report</b><button id="pbtn" disabled onclick="window.print()">Preparing maths…</button></div>${body}<script>
+(function(){
+  var btn=document.getElementById('pbtn');
+  function ready(){btn.disabled=false;btn.textContent='🖨 Print / Save as PDF';}
+  var plainTeX=${PLAIN};
+  function fallback(){
+    var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null),n,list=[];
+    while(n=w.nextNode()){if(n.parentNode&&/^(SCRIPT|STYLE|BUTTON)$/.test(n.parentNode.nodeName))continue;if(/\\\\\\(|\\\\\\[|\\$/.test(n.nodeValue))list.push(n);}
+    list.forEach(function(t){t.nodeValue=plainTeX(t.nodeValue);});
+  }
+  var tries=0;
+  (function wait(){
+    if(window.MathJax&&MathJax.typesetPromise){
+      Promise.resolve(MathJax.startup&&MathJax.startup.promise).then(function(){return MathJax.typesetPromise([document.body]);}).then(ready,function(){fallback();ready();});
+    }else if(tries++<120){setTimeout(wait,100);}
+    else{fallback();ready();}
+  })();
+})();
+</script></body></html>`;
+}
+function reportHtml(d){
+  const p=reportParts(d);
+  return reportShell((d.studentName||'Student')+' — '+(d.title||'OMR Result'),p.css,p.body);
 }
 // Several students in one document (teacher print-all)
 function reportDocMany(list){
-  const docs=list.map(reportHtml);
-  const head=docs[0].match(/^[\s\S]*?<\/div>(?=<div class="pg">)/)[0];
-  return head+docs.map(d=>d.replace(/^[\s\S]*?<\/div>(?=<div class="pg">)/,'').replace(/<\/body><\/html>$/,'')).join('')+'</body></html>';
+  const parts=list.map(reportParts);
+  return reportShell('OMR result reports',parts[0].css,parts.map(p=>p.body).join(''));
 }
 
-const VERSION='17.4';
-const api={VERSION,quadCandidates,readCodeH,PAGE,FORMATS,HALF_SLOT,MARKS,MARK_SIZE,CODE,BUB,GRID,PXMM,CW,CH,FILLED,FAINT,layout,hash24,crc8,encodeCode,decodeCode,sheetHtml,sheetDoc,toGray,shrink,findMarks,solveHomography,locateSheet,straightenWithoutCode,readAnswers,rowCrop,reportHtml,reportDocMany};
+const VERSION='17.6';
+const api={VERSION,quadCandidates,readCodeH,PAGE,FORMATS,HALF_SLOT,MARKS,MARK_SIZE,CODE,BUB,GRID,PXMM,CW,CH,FILLED,FAINT,layout,hash24,crc8,encodeCode,decodeCode,sheetHtml,sheetDoc,toGray,shrink,findMarks,solveHomography,locateSheet,straightenWithoutCode,readAnswers,rowCrop,reportHtml,reportDocMany,reportParts,plainTeX};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.OMR=api;
 })(typeof window!=='undefined'?window:globalThis);

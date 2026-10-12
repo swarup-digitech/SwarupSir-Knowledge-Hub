@@ -16,7 +16,7 @@ async function studentOmrLoadApp(){
   try{
     const {data,error}=await sb.rpc('student_omr_exams');
     if(error)throw error;
-    if(!data||!data.length){box.innerHTML='';return;}
+    if(!data||!data.length){box.innerHTML='<div class="card"><h3 style="margin-top:0;color:#1d4ed8">📝 My scanned OMR exams</h3><p class="muted">No scanned OMR exams yet. When your teacher scans your OMR sheet, your result will appear here with a PDF report to download.</p></div>';return;}
     box.innerHTML=`<div class="card omr-result-card"><h3 style="margin-top:0;color:#1d4ed8">📝 My scanned OMR exams</h3>
       ${data.map(x=>{const pct=x.total?Math.round(x.correct*100/x.total):0;
         return `<div class="assignment" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
@@ -25,7 +25,7 @@ async function studentOmrLoadApp(){
           <button onclick="studentOmrDownload('${esc(x.paper_base_serial)}')">⬇ Download result PDF</button></div>`;}).join('')}
       <div class="small muted" style="margin-top:8px">Questions you got wrong are in your Mistake Bank and will come back in your next practice.</div></div>`;
   }catch(e){
-    box.innerHTML='';console.warn('OMR results unavailable:',e);
+    box.innerHTML='<div class="card"><div class="notice">Your OMR results could not be loaded right now. Please try again later.</div></div>';console.warn('OMR results unavailable:',e);
   }
 }
 async function studentOmrDownload(base){
@@ -33,7 +33,7 @@ async function studentOmrDownload(base){
   if(!w)return notify('Your browser blocked the pop-up. Please allow pop-ups for this site and try again.');
   try{
     w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing your result report…</body>');
-    await loadOnce('omr-engine.js?v=4');
+    await loadOnce('omr-engine.js?v=6');
     const {data,error}=await sb.rpc('student_omr_report',{p_paper_base_serial:base});
     if(error)throw error;
     const html=OMR.reportHtml({
