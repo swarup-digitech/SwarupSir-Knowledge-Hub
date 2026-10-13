@@ -1,3 +1,5 @@
+/* Supabase/PostgREST returns at most 1000 rows per request. Load every page so large question banks are not silently truncated (newest uploads were missing from the generator). */
+async function sbFetchAll(build,pageSize=1000){const all=[];let from=0;for(let guard=0;guard<200;guard++){const {data,error}=await build().order('id',{ascending:true}).range(from,from+pageSize-1);if(error)return {data:null,error};const n=(data||[]).length;if(!n)break;all.push(...data);from+=n;}return {data:all,error:null};}
 /* Swarup Sir's Knowledge Hub — Teacher tools (V13)
  * Loaded by main.html only after a TEACHER logs in, so students no longer
  * download ~542 KB of teacher-only code.
@@ -499,7 +501,7 @@ function qpLanguageCountChanged(){let n=Math.max(1,Number(document.getElementByI
 function qpSelectVisibleLanguageQuestions(){const search=qpNorm(document.getElementById('qpQuestionSearch')?.value).toLowerCase();qpState.bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase()==='LANGUAGE_PASSAGE').filter(q=>!search||[q.question_text,q.passage_title,q.passage_id].some(v=>qpNorm(v).toLowerCase().includes(search))).slice(0,600).forEach(q=>qpState.selected.add(q.id));qpState.lastRows=null;qpState.lastSignature='';qpRefreshLanguagePool();qpRefreshSubjectSummary();}
 async function questionPaperGeneratorPage(){
   qpState={bank:[],subject:'MAT',language:'COMMON',mode:'mat',selected:new Set(),selectedPassages:new Set(),selectedTopics:new Set(),topicLimits:{},commonCounts:Object.fromEntries(QP_COMMON_PARTS.map(x=>[x.part,4])),lastRows:null,lastSignature:'',lastSerial:'',setCode:'A',setCount:4,savedHistoryId:null,lastSetVariants:null,multiSetSerial:''};
-  const {data,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true});
+  const {data,error}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true}));
   if(error)return notify('Could not load Mock Test question bank: '+error.message);
   qpState.bank=data||[];
   render(`<div class="wrap">${header('🖨️ Question Paper Generator')}
@@ -1146,7 +1148,7 @@ async function generateMockTestPage(language){
  const {data:classes,error}=await sb.from('classes').select('id,name').eq('teacher_id',current.id).order('name');
  if(error)return notify(error.message);
  if(!classes?.length)return notify('Create a class first.');
- const {data:bank,error:be}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true);
+ const {data:bank,error:be}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true}));
  if(be)return notify(be.message);
  const byPart={};(bank||[]).forEach(q=>{const lang=String(q.language||'').toUpperCase();if(q.section_code==='MAT'){if(lang==='COMMON'||!lang)(byPart[q.part_code]||=[]).push(q)}else if(lang===generatorLanguage){(byPart[q.part_code]||=[]).push(q)}});
  const setInfo={};
@@ -1201,7 +1203,7 @@ async function createMockTest(){
  studentIds=[...new Set(studentIds)];
  if(!studentIds.length)return notify('No students were selected.');
  try{
-  const {data:bank,error:be}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true);
+  const {data:bank,error:be}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true}));
   if(be)throw be;
   const selectedLanguage=document.getElementById('mtLanguage')?.value||'ASSAMESE';
   const byPart={};(bank||[]).forEach(q=>{const lang=String(q.language||'').toUpperCase();if(q.section_code==='MAT'){if(lang==='COMMON'||!lang)(byPart[q.part_code]||=[]).push(q)}else if(lang===selectedLanguage){(byPart[q.part_code]||=[]).push(q)}});
@@ -4202,7 +4204,7 @@ async function openAssignmentQuestionBank(){
  const box=document.getElementById('assignmentBankPicker');if(!box)return;
  const subject=document.getElementById('asub')?.value||'';if(!subject){const s=document.getElementById('asub');s?.focus();return notify('Please select the assignment subject first. The Question Bank will then show the matching questions.');}
  box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading Mock Test Question Bank…</span></div>';
- const {data,error}=await sb.from('mock_question_bank').select('id,section_code,part_code,question_text,option_a,option_b,option_c,option_d,correct_option,passage_text,image_url,passage_id,passage_title,question_order,topic,language,active,created_at').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false});
+ const {data,error}=await sbFetchAll(()=>sb.from('mock_question_bank').select('id,section_code,part_code,question_text,option_a,option_b,option_c,option_d,correct_option,passage_text,image_url,passage_id,passage_title,question_order,topic,language,active,created_at').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false}));
  if(error){box.innerHTML=`<div class="notice">Could not load the Mock Test Question Bank: ${esc(error.message)}</div>`;return;}
  assignmentBankCache=data||[];assignmentBankFilters={part:'',topic:'',language:'',search:''};renderAssignmentBankPicker();assignmentBankSelectedSummary();
 }
@@ -4348,7 +4350,7 @@ function generateSchoolAssignmentQbSelection(){
  assignmentSchoolQbRenderSummary();
  if(window.MathJax?.typesetPromise){const out=document.getElementById('asqbSelectedList');if(out)window.MathJax.typesetPromise([out]).catch(()=>{});}
 }
-async function openJnvstAssignmentQbBuilder(){assignmentSchoolQbMode='JNVST';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading JNVST Question Bank…</span></div>';const {data:q,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false});if(error){box.innerHTML=`<div class="notice">Could not load JNVST Question Bank: ${assignmentSchoolQbEsc(error.message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=[];const initial=document.getElementById('asub')?.value||'';const so=(jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(initial).trim().toLowerCase());assignmentSchoolQbSubject=so?.id||'';assignmentSchoolQbSubjectName=so?.name||initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
+async function openJnvstAssignmentQbBuilder(){assignmentSchoolQbMode='JNVST';const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;box.style.display='block';box.innerHTML='<div class="card"><span class="muted">Loading JNVST Question Bank…</span></div>';const {data:q,error}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:false}));if(error){box.innerHTML=`<div class="notice">Could not load JNVST Question Bank: ${assignmentSchoolQbEsc(error.message)}</div>`;return;}assignmentSchoolQbQuestions=q||[];assignmentSchoolQbChapters=[];const initial=document.getElementById('asub')?.value||'';const so=(jnvstSubjects||[]).find(x=>String(x.name||'').trim().toLowerCase()===String(initial).trim().toLowerCase());assignmentSchoolQbSubject=so?.id||'';assignmentSchoolQbSubjectName=so?.name||initial;assignmentSchoolQbMedium='';assignmentSchoolQbLessons=new Set();assignmentSchoolQbFixedQuestions.clear();assignmentSchoolQbFixedGroups.clear();assignmentSchoolQbSelected=null;assignmentSchoolQbRenderBuilder();box.scrollIntoView({behavior:'smooth',block:'start'});}
 async function openSchoolAssignmentQbBuilder(){
  assignmentSchoolQbMode='SCHOOL';
  const box=document.getElementById('assignmentSchoolQbBuilder');if(!box)return;
