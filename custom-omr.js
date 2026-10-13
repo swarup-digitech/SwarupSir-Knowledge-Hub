@@ -92,7 +92,7 @@ async function customOmrBatch(base){
       </div>
       <div class="card"><h2 style="margin-top:0">3. Result reports</h2>
         <p class="muted">After importing, print every student's report (score, part-wise result, the questions they got wrong). Students can also download their own report from the <b>OMR Test Result</b> page in their login.</p>
-        <div class="actions"><button onclick="customOmrPrintReports()">🖨 Print result reports (all students)</button></div></div>
+        <div class="actions"><button onclick="customOmrPrintReports()">🖨 Print result reports (all students)</button>${typeof omrDiscussionPdf==='function'?`<button class="secondary" onclick="omrDiscussionPdf('${esc(base)}')">📽 Class discussion PDF (one question per page)</button>`:''}</div></div>
       <div class="actions"><button class="secondary" onclick="customOmrHome()">← All batches</button></div></div>`);
     paintPapers();
   }catch(e){
@@ -393,7 +393,17 @@ async function customOmrPrintReports(){
       const lm=new Map((ls||[]).map(x=>[x.id,x]));
       (ls||[]).forEach(x=>{const par=x.parent_lesson_id&&lm.get(x.parent_lesson_id);lessonName.set(x.id,(par?par.lesson_name+' › ':'')+x.lesson_name);});
     }catch(_){}
-    const withNames=q=>Object.assign({},q,{subject_name:subjName.get(q.subject_id)||'',lesson_name:lessonName.get(q.lesson_id)||''});
+    // V20: current explanations from the question bank (Assamese ones added after the paper was printed)
+    const bankEx=new Map();
+    try{
+      const ids=[...new Set(recs.flatMap(r=>((r.paper_snapshot&&r.paper_snapshot.rows)||[]).map(q=>q&&q.id).filter(Boolean)))];
+      for(let i=0;i<ids.length;i+=150){
+        const {data,error}=await sb.from('mock_question_bank').select('id,language,explanation,explanation_as').in('id',ids.slice(i,i+150));
+        if(error)break;(data||[]).forEach(x=>bankEx.set(x.id,x));
+      }
+    }catch(_){}
+    const withNames=q=>{const b=bankEx.get(q.id)||{};return Object.assign({},q,{subject_name:subjName.get(q.subject_id)||'',lesson_name:lessonName.get(q.lesson_id)||'',
+      explanation:String(b.explanation||'').trim()||q.explanation||'',explanation_as:String(b.explanation_as||'').trim()||q.explanation_as||'',language:b.language||q.language||''});};
     const by=new Map();resp.forEach(r=>{if(!by.has(r.student_id))by.set(r.student_id,new Map());by.get(r.student_id).set(r.question_no,r);});
     const list=recs.filter(r=>by.has(r.paper_snapshot&&r.paper_snapshot.student_id)).sort((a,b)=>String(a.paper_snapshot.roll_no||'').localeCompare(String(b.paper_snapshot.roll_no||''),undefined,{numeric:true})).map(r=>{
       const m=by.get(r.paper_snapshot.student_id),rows=r.paper_snapshot.rows||[];

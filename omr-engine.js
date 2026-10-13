@@ -467,12 +467,18 @@ function reportParts(d){
   });
   const qBlock=r=>{
     const q=r.q||{};
-    const expl=String(q.explanation||'').trim();
+    // V20: Assamese questions show the Assamese explanation (English if none yet);
+    // Common (MAT) questions show both, so every medium gets one.
+    const en=String(q.explanation||'').trim(),as=String(q.explanation_as||'').trim(),lang=String(q.language||'').toUpperCase();
+    const ex=[];
+    if(lang==='ASSAMESE'){if(as)ex.push(['ব্যাখ্যা',as]);else if(en)ex.push(['Explanation',en]);}
+    else if(lang==='COMMON'){if(en)ex.push(['Explanation',en]);if(as&&as!==en)ex.push(['ব্যাখ্যা',as]);}
+    else if(en)ex.push(['Explanation',en]);
     const text=String(q.question_text||'').trim();
     const realText=text&&!/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i.test(text)?text:'';
     const opts=['a','b','c','d'].map((k,i)=>{const v=String(q['option_'+k]||'').trim();return v&&!/^Option [A-D]$/i.test(v)?`<span class="o ${'ABCD'[i]===String(r.correct_option||'').toUpperCase()?'ok':''} ${'ABCD'[i]===String(r.selected||'').toUpperCase()&&!r.is_correct?'bad':''}">${'ABCD'[i]}. ${fmt(v)}</span>`:'';}).join('');
     return `<div class="q"><div class="qn">Q${r.no}</div><div class="qb">${q._passageTitle?`<div class="pt">${esc(q._passageTitle)}</div>`:''}${q.image_url?`<img src="${esc(q.image_url)}" alt="">`:''}${realText?`<div>${fmt(realText)}</div>`:''}${opts?`<div class="opts">${opts}</div>`:''}
-      <div class="ans">Your answer: <b class="${r.is_correct?'g':'r'}">${esc(String(r.selected||'').trim()||'— (blank)')}</b> &nbsp; Correct answer: <b class="g">${esc(r.correct_option||'')}</b></div>${expl?`<div class="expl"><b>Explanation:</b> ${fmt(expl)}</div>`:''}</div></div>`;
+      <div class="ans">Your answer: <b class="${r.is_correct?'g':'r'}">${esc(String(r.selected||'').trim()||'— (blank)')}</b> &nbsp; Correct answer: <b class="g">${esc(r.correct_option||'')}</b></div>${ex.map(([l,t])=>`<div class="expl"><b>${l}:</b> ${fmt(t)}</div>`).join('')}</div></div>`;
   };
   const css=`.bar{display:inline-block;width:46px;height:6px;background:#e2e8f0;border-radius:3px;vertical-align:middle;margin-left:6px;overflow:hidden}.bar i{display:block;height:100%}tr.sj td{background:#eef2ff;font-weight:700}td.ind{padding-left:20px}.expl{margin-top:5px;padding:5px 8px;background:#f0fdf4;border-left:3px solid #16a34a;border-radius:4px;font-size:12.5px}*{box-sizing:border-box}body{font:13px/1.45 Arial,sans-serif;color:#111;margin:0}.pg{width:210mm;min-height:297mm;padding:12mm 14mm;margin:0 auto;background:#fff;page-break-after:always;break-after:page}.pg:last-child{page-break-after:auto;break-after:auto}
 h1{font-size:18px;margin:0}h2{font-size:14px;margin:16px 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px}.top{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #17365D;padding-bottom:6px;margin-bottom:10px}
@@ -523,7 +529,7 @@ function reportDocMany(list){
   return reportShell('OMR result reports',parts[0].css,parts.map(p=>p.body).join(''));
 }
 
-const VERSION='17.9';
+const VERSION='20.0';
 const api={VERSION,quadCandidates,readCodeH,PAGE,FORMATS,HALF_SLOT,MARKS,MARK_SIZE,CODE,BUB,GRID,PXMM,CW,CH,FILLED,FAINT,layout,hash24,crc8,encodeCode,decodeCode,sheetHtml,sheetDoc,toGray,shrink,findMarks,solveHomography,locateSheet,straightenWithoutCode,readAnswers,rowCrop,reportHtml,reportDocMany,reportParts,plainTeX};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.OMR=api;

@@ -267,7 +267,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=27";
+      s.src="teacher-app.js?v=29";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -279,11 +279,23 @@ function loadTeacherApp(){
           p.onload=p.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");
-            e.src="omr-engine.js?v=9";
+            e.src="omr-engine.js?v=10";
             e.onload=e.onerror=()=>{
               const o=document.createElement("script");
-              o.src="custom-omr.js?v=5";
-              o.onload=o.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+              o.src="custom-omr.js?v=7";
+              o.onload=o.onerror=()=>{
+                // V20: Assamese explanations for the JNVST question bank (optional)
+                const x=document.createElement("script");
+                x.src="assamese-explanations.js?v=1";
+                x.onload=x.onerror=()=>{
+                  // V21: class discussion PDF after an OMR import (optional)
+                  const y=document.createElement("script");
+                  y.src="omr-discussion.js?v=1";
+                  y.onload=y.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+                  document.head.appendChild(y);
+                };
+                document.head.appendChild(x);
+              };
               document.head.appendChild(o);
             };
             document.head.appendChild(e);
@@ -2414,7 +2426,7 @@ async function studentHome(){
 function studentOmrBoot(){
   return new Promise((res,rej)=>{
     if(typeof window.studentOmrLoadApp==="function"&&!window.studentOmrLoadApp.__stub)return res();
-    const s=document.createElement("script");s.src="student-omr.js?v=3";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
+    const s=document.createElement("script");s.src="student-omr.js?v=4";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
   }).then(()=>window.studentOmrLoadApp()).catch(e=>console.warn("OMR app results:",e));
 }
 function revokeStudentOmrUrl(){
