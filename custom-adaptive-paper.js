@@ -51,7 +51,10 @@ function pickUnits(groups,perfMap,count,scheduled,o){
     .sort((a,b)=>info.get(b.id).size-info.get(a.id).size);
   for(const g of weakGroups){if(units.length>=target)break;take(g,'PREVIOUS_MISTAKE');}
   const tiers=[g=>!seen(g)&&!sched(g),g=>info.get(g.id).size===0&&!sched(g),g=>info.get(g.id).size===0,()=>true];
-  for(const t of tiers){
+  const ck=o.commonFirst?(o.commonKeys||new Set()):null;
+  const cg=g=>g.questions.some(q=>CAx.isCommonQ(q,ck));
+  const passes=o.commonFirst?[...tiers.slice(0,2).map(t=>g=>cg(g)&&t(g)),...tiers]:tiers;
+  for(const t of passes){
     if(units.length>=count)break;
     for(const g of shuffle(groups.filter(x=>!used.has(x.id)&&t(x)))){
       if(units.length>=count)break;
@@ -67,7 +70,7 @@ function buildPlan(defs,perfMap,scheduled,o){
   for(const d of defs){
     if(!(d.count>0))continue;
     if(d.kind==='q'){
-      const r=CAx.pickForStudent(d.pool,perfMap,scheduled||new Set(),{total:d.count,pct:o.pct,isSchool:false,useVariation:!!o.useVariation,avoid:!!o.avoid,focus:null});
+      const r=CAx.pickForStudent(d.pool,perfMap,scheduled||new Set(),{total:d.count,pct:o.pct,isSchool:false,useVariation:!!o.useVariation,avoid:!!o.avoid,focus:null,commonFirst:!!o.commonFirst,commonKeys:o.commonKeys});
       const items=shuffle(r.items);
       slots.push({key:d.key,heading:d.heading,kind:'q',count:d.count,items,short:r.short});
       weak+=r.weakCount;total+=items.length;short+=r.short;
@@ -107,7 +110,11 @@ function rowsFromPlan(plan,subject){
   rows.forEach((q,i)=>{q._number=i+1;});
   return rows;
 }
-// Questions the teacher could put into this slot (ranked: unseen first, mistakes last).
+// Common-first settings of the open screen (browser) – harmless defaults in node tests.
+let _cfgCommon=false,_cfgKeys=null;
+function setCommonCtx(on,keys){_cfgCommon=!!on;_cfgKeys=keys||null;}
+const cfgCommon=()=>_cfgCommon,cfgCommonKeys=()=>_cfgKeys;
+// Questions the teacher could put into this slot (ranked: Common first when on, then unseen first, mistakes last).
 function candidatesFor(def,slot,plan,perfMap,scheduled,skipIdx){
   const sch=scheduled||new Set();
   if(slot.kind==='p'){
@@ -115,8 +122,8 @@ function candidatesFor(def,slot,plan,perfMap,scheduled,skipIdx){
     const info=g=>g.questions.filter(q=>isMistake(perfMap.get(q.id))).length;
     return def.groups.filter(g=>!have.has(g.id)).map(g=>{
       const m=info(g),seen=g.questions.some(q=>perfMap.has(q.id)),sc=g.questions.some(q=>sch.has(q.id));
-      return {g,mistakes:m,rank:(m===0&&!seen&&!sc)?0:(m===0&&!sc)?1:(m===0)?2:3};
-    }).sort((a,b)=>a.rank-b.rank);
+      return {g,mistakes:m,common:cfgCommon()&&g.questions.some(q=>CAx.isCommonQ(q,cfgCommonKeys())),rank:(m===0&&!seen&&!sc)?0:(m===0&&!sc)?1:(m===0)?2:3};
+    }).sort((a,b)=>(b.common-a.common)||(a.rank-b.rank));
   }
   const used=new Set(),groups=new Set();
   plan.slots.forEach(s=>{
@@ -125,13 +132,13 @@ function candidatesFor(def,slot,plan,perfMap,scheduled,skipIdx){
   });
   return def.pool.filter(q=>!used.has(q.id)&&!(vk(q)&&groups.has(vk(q)))).map(q=>{
     const p=perfMap.get(q.id),m=isMistake(p);
-    return {q,mistake:m,rank:(!p&&!sch.has(q.id))?0:(!m&&!sch.has(q.id))?1:(!m)?2:3};
-  }).sort((a,b)=>a.rank-b.rank);
+    return {q,mistake:m,common:cfgCommon()&&CAx.isCommonQ(q,cfgCommonKeys()),rank:(!p&&!sch.has(q.id))?0:(!m&&!sch.has(q.id))?1:(!m)?2:3};
+  }).sort((a,b)=>(b.common-a.common)||(a.rank-b.rank));
 }
 const reasonOfCandidate=(c,perfMap)=>perfMap.get(c.q.id)?(c.mistake?'PREVIOUS_MISTAKE':'NEW_ATTEMPTED_BEFORE'):'NEW_UNSEEN';
 
 const getParts=()=>(typeof QP_COMMON_PARTS!=='undefined'&&Array.isArray(QP_COMMON_PARTS)&&QP_COMMON_PARTS.length)?QP_COMMON_PARTS:PARTS;   // the app's own list wins
-const api={shuffle,completeGroups,pickUnits,buildPlan,planStats,rowsFromPlan,candidatesFor,PARTS};
+const api={shuffle,completeGroups,pickUnits,buildPlan,planStats,rowsFromPlan,candidatesFor,setCommonCtx,PARTS};
 if(typeof module!=='undefined'&&module.exports){module.exports=api;}
 if(typeof window==='undefined')return;   // node: stop here (UI below needs the browser)
 root.CAP_API=api;
@@ -209,7 +216,7 @@ function readCfg(){
     title:String(q$('capTitle')?.value||'').trim()||'Personal Practice Paper',
     mat,arith:num('capArith',20),evsSets:Math.max(1,num('capEvsSets',1)),langSets:Math.max(1,num('capLangSets',4)),
     pct:Math.min(100,Math.max(0,Number(q$('capPct')?.value)||0)),
-    avoid:!!q$('capAvoid')?.checked,useVariation:!!q$('capVar')?.checked,
+    avoid:!!q$('capAvoid')?.checked,useVariation:!!q$('capVar')?.checked,commonFirst:!!q$('capCommon')?.checked,
     answers:q$('capAnswers')?.value==='yes'
   };
 }
@@ -286,6 +293,7 @@ function paint(){
     <div id="capStructure" style="margin-top:10px">${structureHtml()}</div>
     <div id="capAvail" class="small" style="margin-top:8px"></div>
     <div style="margin-top:8px"><label style="font-weight:400"><input type="checkbox" id="capAvoid" checked style="width:auto;margin-right:8px" onchange="capSettingsChanged()">Do not repeat new questions already printed in this student's earlier personal papers</label>
+    <label style="font-weight:400"><input type="checkbox" id="capCommon" checked style="width:auto;margin-right:8px" onchange="capSettingsChanged()">⭐ For the non-mistake questions, use <b>Common</b> questions first (frequently asked in exams; same Variation Group counts too). Other questions fill in only if Common ones run out.</label>
     <label style="font-weight:400"><input type="checkbox" id="capVar" checked style="width:auto;margin-right:8px" onchange="capSettingsChanged()">When a question has a Variation Group, ask a fresh variation instead of the exact mistake</label></div>
   </div>
 
@@ -345,7 +353,8 @@ function capGenerate(){
   const lack=active.filter(d=>defAvail(d)<d.count);
   if(lack.length)return notify('Not enough questions in your bank: '+lack.map(d=>`${defLabel(d)} needs ${d.count}, has ${defAvail(d)}`).join('; '));
   S.cfg=cfg;S.plans=new Map();
-  const o={pct:cfg.pct,avoid:cfg.avoid,useVariation:cfg.useVariation};
+  const ckeys=CAx.commonKeys(S.bank);setCommonCtx(cfg.commonFirst,ckeys);
+  const o={pct:cfg.pct,avoid:cfg.avoid,useVariation:cfg.useVariation,commonFirst:cfg.commonFirst,commonKeys:ckeys};
   S.students.filter(s=>S.selected.has(s.id)).forEach(s=>{
     S.plans.set(s.id,buildPlan(S.defs,S.perf.get(s.id)||new Map(),S.scheduled.get(s.id)||new Set(),o));
   });

@@ -25,6 +25,9 @@ function isActiveMistake(p,isSchool){
 }
 function shuffle(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
 function varKey(q){return String(q&&q.variation_group||'').trim().toLowerCase();}
+/* Common questions: a question is effectively Common when it is marked Common OR shares a Variation Group with a Common question. */
+function commonKeys(rows){const k=new Set();(rows||[]).forEach(q=>{if(q&&q.is_common&&varKey(q))k.add(varKey(q));});return k;}
+function isCommonQ(q,keys){if(!q)return false;if(q.is_common)return true;const g=varKey(q);return !!g&&!!keys&&keys.has(g);}
 
 /* Build one student's question set.
  * pool      normalised questions [{id,area,topic,variation_group,...}]
@@ -76,7 +79,11 @@ function pickForStudent(pool,perfMap,scheduled,o){
     q=>notMistake(q),
     ()=>true
   ];
-  for(const tier of tiers){
+  // Optional: after the mistake share, the remaining slots are taken from the Common pool first
+  // (fresh Common questions first, never the ones already given before when 'avoid' is on).
+  const ck=o.commonFirst?(o.commonKeys||commonKeys(pool)):null;
+  const passes=o.commonFirst?[...tiers.slice(0,4).map(t=>q=>isCommonQ(q,ck)&&t(q)),...tiers]:tiers;
+  for(const tier of passes){
     if(items.length>=total)break;
     for(const q of shuffle(rest.filter(x=>!used.has(x.id)&&tier(x)))){
       if(items.length>=total)break;
@@ -112,7 +119,7 @@ function areaStats(perfMap,catalogById,isSchool){
     .sort((a,b)=>(a.accuracy==null)-(b.accuracy==null)||a.accuracy-b.accuracy||b.active-a.active);
 }
 
-const api={isCorrectWord,isActiveMistake,pickForStudent,studentStats,areaStats};
+const api={isCorrectWord,isActiveMistake,pickForStudent,studentStats,areaStats,commonKeys,isCommonQ};
 if(typeof module!=='undefined'&&module.exports){module.exports=api;}
 if(typeof window==='undefined')return;   // node: stop here (UI below needs the browser)
 

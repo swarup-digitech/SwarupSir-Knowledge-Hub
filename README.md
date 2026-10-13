@@ -19,6 +19,8 @@ Student and teacher portal for the JNVST and School courses, built on Supabase.
 | `custom-omr.js` | V17 teacher screens: print sheets, scan, review, import, reports |
 | `student-omr.js` | V17 student list and PDF download of scanned OMR results |
 | `V17_STUDENT_OMR_REPORTS.sql` | Database change for V17 (student result functions) |
+| `V18_OMR_REPORT_GROUPS.sql` | Database change for V18 (student report knows subject / lesson names) |
+| `V19_COMMON_QUESTIONS.sql` | Database change for V19 (adds the Common label column to the question bank) |
 | `supabase/migrations/` | All database changes in order – see `supabase/README.md` |
 | `*_Template.xlsx` | Bulk-upload templates for teachers |
 | `docs/` | Notes from earlier versions |

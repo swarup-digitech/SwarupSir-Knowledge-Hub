@@ -383,10 +383,21 @@ async function customOmrPrintReports(){
       if(error)throw error;resp.push(...(data||[]));if(!data||data.length<1000)break;
     }
     let imp=null;try{const {data}=await sb.from('omr_imports').select('imported_at').eq('teacher_id',current.id).eq('paper_base_serial',B.base).order('imported_at',{ascending:false}).limit(1);imp=data&&data[0];}catch(_){}
+    // subject / lesson names for the grouping in the report
+    const subjName=new Map(),lessonName=new Map();
+    try{
+      const [{data:sj},{data:ls}]=await Promise.all([
+        sb.from('jnvst_subjects').select('id,name').eq('teacher_id',current.id),
+        sb.from('jnvst_subject_lessons').select('id,lesson_name,parent_lesson_id').eq('teacher_id',current.id)]);
+      (sj||[]).forEach(x=>subjName.set(x.id,x.name));
+      const lm=new Map((ls||[]).map(x=>[x.id,x]));
+      (ls||[]).forEach(x=>{const par=x.parent_lesson_id&&lm.get(x.parent_lesson_id);lessonName.set(x.id,(par?par.lesson_name+' › ':'')+x.lesson_name);});
+    }catch(_){}
+    const withNames=q=>Object.assign({},q,{subject_name:subjName.get(q.subject_id)||'',lesson_name:lessonName.get(q.lesson_id)||''});
     const by=new Map();resp.forEach(r=>{if(!by.has(r.student_id))by.set(r.student_id,new Map());by.get(r.student_id).set(r.question_no,r);});
     const list=recs.filter(r=>by.has(r.paper_snapshot&&r.paper_snapshot.student_id)).sort((a,b)=>String(a.paper_snapshot.roll_no||'').localeCompare(String(b.paper_snapshot.roll_no||''),undefined,{numeric:true})).map(r=>{
       const m=by.get(r.paper_snapshot.student_id),rows=r.paper_snapshot.rows||[];
-      const items=rows.map((q,i)=>{const x=m.get(i+1);return {no:i+1,selected:x?(x.selected_option||''):'',correct_option:x?x.correct_option:(q.correct_option||''),is_correct:!!(x&&x.is_correct),q};});
+      const items=rows.map((q,i)=>{const x=m.get(i+1);return {no:i+1,selected:x?(x.selected_option||''):'',correct_option:x?x.correct_option:(q.correct_option||''),is_correct:!!(x&&x.is_correct),q:withNames(q)};});
       return {title:r.title,subject:r.subject,studentName:r.paper_snapshot.student_name,rollNo:r.paper_snapshot.roll_no,date:fmtDate(imp&&imp.imported_at||r.generated_at),rows:items,
         fmt:typeof jnvstMathPreview==='function'?jnvstMathPreview:undefined};
     });

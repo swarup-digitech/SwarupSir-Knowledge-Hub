@@ -41,3 +41,12 @@ Student app → OMR result area → **My scanned OMR exams** → Download result
 
 ## "Two sheets per page not showing?"
 Open Custom OMR → a batch: under the title it must say **OMR tools version 17.4**. If it says "old" or shows no version, the browser is using an old `omr-engine.js` / `custom-omr.js`: upload **all** files (including `main.html`) and press Ctrl+Shift+R. The Print card must show the two radio buttons ("Two sheets on one A4 page" / "One sheet per A4 page").
+
+## Result report & student dashboard (update, V18 SQL)
+* **Student dashboard:** the old "OMR Test Result" card is gone. The dashboard now has only **My scanned OMR exams** (list of scanned exams with score and ⬇ Download result PDF; a friendly message when there are none).
+* **Result report:** "Part-wise performance" is replaced by **Performance by subject and topic**: each subject (e.g. Arithmetic, Mental Ability) with its score, then under it the part (MAT/EVS/Language) or lesson/chapter, with the topics covered and a small progress bar.
+* **Explanation:** each question under "Questions to revise" now shows its Explanation (typeset maths included) when one is saved for the question. Run the updated `V18_OMR_REPORT_GROUPS.sql` (re-run it if you already ran V18) so students see it too.
+* **Maths in "Questions to revise":** fractions, powers, units etc. are now typeset as proper maths. (The previous report had a mistake in the maths-library setting, so formulas were printed as raw `\( … \)` text.) The Print button stays disabled ("Preparing maths…") until typesetting is done; if the maths library cannot be loaded (no internet) the formulas are shown as readable plain text instead of raw code.
+* **Run `V18_OMR_REPORT_GROUPS.sql`** once (after V17) so students' downloads also know the subject and lesson names. Without it student reports still work and group by part/topic.
+* Upload: `omr-engine.js`, `custom-omr.js`, `student-omr.js`, `main.html`, `teacher-app.js`.
+* **Watermark:** every page of the result report carries a light diagonal stamp "SWARUP SIR'S / KNOWLEDGE HUB / Ph: 98643-90279" (double border), also when printed or saved as PDF.
