@@ -266,46 +266,30 @@ function loadTeacherApp(){
   if(window.__teacherAppLoaded)return Promise.resolve();
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
-      const s=document.createElement("script");
-      s.src="teacher-app.js?v=32";
-      s.onload=()=>{
-        // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
-        const c=document.createElement("script");
-        c.src="custom-adaptive.js?v=4";
-        c.onload=c.onerror=()=>{
-          // V16: Custom Adaptive Question Paper module (needs custom-adaptive.js; optional)
-          const p=document.createElement("script");
-          p.src="custom-adaptive-paper.js?v=3";
-          p.onload=p.onerror=()=>{
-            // V17: personal OMR sheets / scanning (optional)
-            const e=document.createElement("script");
-            e.src="omr-engine.js?v=10";
-            e.onload=e.onerror=()=>{
-              const o=document.createElement("script");
-              o.src="custom-omr.js?v=7";
-              o.onload=o.onerror=()=>{
-                // V20: Assamese explanations for the JNVST question bank (optional)
-                const x=document.createElement("script");
-                x.src="assamese-explanations.js?v=1";
-                x.onload=x.onerror=()=>{
-                  // V21: class discussion PDF after an OMR import (optional)
-                  const y=document.createElement("script");
-                  y.src="omr-discussion.js?v=1";
-                  y.onload=y.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
-                  document.head.appendChild(y);
-                };
-                document.head.appendChild(x);
-              };
-              document.head.appendChild(o);
-            };
-            document.head.appendChild(e);
-          };
-          document.head.appendChild(p);
-        };
-        document.head.appendChild(c);
+      /* V22: all teacher files download at the same time (they used to download one after another).
+         async=false keeps the run order: teacher-app.js first, then the optional add-ons. */
+      const files=[
+        {src:"teacher-app.js?v=33",required:true},
+        {src:"custom-adaptive.js?v=4"},          // V15 Custom Adaptive Assignment (optional)
+        {src:"custom-adaptive-paper.js?v=3"},    // V16 Custom Adaptive Question Paper (optional)
+        {src:"omr-engine.js?v=10"},              // V17 OMR engine (optional)
+        {src:"custom-omr.js?v=7"},               // V17 OMR screens (optional)
+        {src:"assamese-explanations.js?v=1"},    // V20 Assamese explanations (optional)
+        {src:"omr-discussion.js?v=1"}            // V21 class discussion PDF (optional)
+      ];
+      let pending=files.length,failed=false;const added=[];
+      const done=()=>{
+        if(--pending)return;
+        if(failed){added.forEach(x=>x.remove());__teacherAppPromise=null;return reject(new Error("Could not load the teacher tools. Please check your internet connection and reload the page."));}
+        window.__teacherAppLoaded=true;resolve();
       };
-      s.onerror=()=>{__teacherAppPromise=null;s.remove();reject(new Error("Could not load the teacher tools. Please check your internet connection and reload the page."))};
-      document.head.appendChild(s);
+      files.forEach(f=>{
+        const s=document.createElement("script");
+        s.src=f.src;s.async=false;
+        s.onload=done;
+        s.onerror=()=>{if(f.required)failed=true;else console.warn("Optional teacher module not loaded:",f.src);done();};
+        added.push(s);document.head.appendChild(s);
+      });
     });
   }
   return __teacherAppPromise;

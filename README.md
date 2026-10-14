@@ -24,6 +24,7 @@ Student and teacher portal for the JNVST and School courses, built on Supabase.
 | `V20_ASSAMESE_EXPLANATIONS.sql` | Database change for V20 (Assamese explanations, automatic translation queue, report update) |
 | `assamese-explanations.js` | V20 Question Bank add-on: automatic Assamese translation of explanations, status, filter |
 | `omr-discussion.js` | V21 Class discussion PDF after an OMR import (one question per wide page, who was wrong/skipped) |
+| `V22_SPEED_INDEXES.sql` | Database change for V22 (indexes for faster teacher screens; no data changes) |
 | `supabase/functions/translate-explanations/index.ts` | V20 Edge Function that translates explanations into Assamese (Claude API) |
 | `supabase/migrations/` | All database changes in order – see `supabase/README.md` |
 | `*_Template.xlsx` | Bulk-upload templates for teachers |
@@ -34,4 +35,4 @@ Not in this package (they live only on the website): `index.html`, `student-logi
 `student-course-selection.html`, and the `get-omr-result` Edge Function.
 Add them here so the whole site is versioned together.
 
-See `CHANGES_V13.md` and `CHANGES_V14.md` for what changed and how to install it.
+See the `CHANGES_V*.md` files for what changed in each version and how to install it. The latest is `CHANGES_V22.md` (faster Teacher Admin Panel).
