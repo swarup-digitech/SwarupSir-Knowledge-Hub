@@ -2710,7 +2710,7 @@ function jnvstQbQuestionPreview(q){
 function jnvstQbSubjectOptions(selected=''){return `<option value="">Select Subject</option>${(jnvstSubjects||[]).map(x=>`<option value="${esc(x.id)}" ${selected===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}`}
 function jnvstQbLessonOptions(subjectId,selected=''){const rows=(jnvstSubjectLessons||[]).filter(x=>x.subject_id===subjectId);const roots=rows.filter(x=>!x.parent_lesson_id);const out=[];const add=(l,d=0)=>{out.push(`<option value="${esc(l.id)}" ${selected===l.id?'selected':''}>${'— '.repeat(d)}${esc(l.lesson_code||'')} ${esc(l.lesson_name)}</option>`);rows.filter(x=>x.parent_lesson_id===l.id).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x,d+1))};roots.sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x));return `<option value="">Select Lesson / Sub-lesson</option>${out.join('')}`}
 async function jnvstQuestionBankHome(){
- const {data:q,error}=await sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
+ const {data:q,error}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false}));
  if(error)return notify('Could not load JNVST Question Bank: '+error.message);
  jnvstQbCache=q||[];
  jnvstQbSelected=new Set([...jnvstQbSelected].filter(id=>jnvstQbCache.some(q=>q.id===id)));
@@ -3015,7 +3015,7 @@ async function jnvstQbSaveEditRich(){
   if(!Number.isFinite(payload.marks)||payload.marks<0)throw new Error('Marks must be 0 or greater.');
   {const cm=!!document.getElementById('jqCommon')?.checked;const was=!!(jnvstQbCache.find(x=>x.id===id)||{}).is_common;if(cm!==was)payload.is_common=cm;}
   const {error}=await sb.from('mock_question_bank').update(payload).eq('id',id).eq('teacher_id',current.id);if(error)throw new Error(error.message+(/is_common/.test(error.message||'')?' — run the V19 SQL (adds the is_common column) in Supabase first.':''));
-  notify('JNVST question updated successfully.');jnvstQuestionBankHome();
+  {const c=jnvstQbCache.find(x=>x.id===id);if(c)Object.assign(c,payload);}jnvstQbAfterSave(id);
  }catch(e){notify('Could not save JNVST question: '+(e.message||e))}
 }
 async function jnvstQbSaveEdit(){return jnvstQbSaveEditRich()}
@@ -5845,9 +5845,9 @@ try{
         const payload={passage_title:title,passage_text:text,topic:String(document.getElementById(`pgTopic_${i}`)?.value||'').trim()||null,marks:Number(document.getElementById(`pgMarks_${i}`)?.value||1),cognitive_level:document.getElementById(`pgCog_${i}`)?.value||null,difficulty:document.getElementById(`pgDiff_${i}`)?.value||null,variation_group:String(document.getElementById(`pgVar_${i}`)?.value||'').trim()||null,is_fixed:!!document.getElementById(`pgFixed_${i}`)?.checked,question_text:String(document.getElementById(`pgQ_${i}`)?.value||'').trim()||null,option_a:String(document.getElementById(`pgA_${i}`)?.value||'').trim()||null,option_b:String(document.getElementById(`pgB_${i}`)?.value||'').trim()||null,option_c:String(document.getElementById(`pgC_${i}`)?.value||'').trim()||null,option_d:String(document.getElementById(`pgD_${i}`)?.value||'').trim()||null,correct_option:document.getElementById(`pgAns_${i}`)?.value||q.correct_option,explanation:String(document.getElementById(`pgEx_${i}`)?.value||'').trim()||null,image_url:imageUrl};
         if(document.getElementById(`pgExAs_${i}`))payload.explanation_as=String(document.getElementById(`pgExAs_${i}`).value||'').trim()||null;
         {const cm=!!document.getElementById(`pgCommon_${i}`)?.checked;if(cm!==!!q.is_common)payload.is_common=cm;}
-        const {error}=await sb.from('mock_question_bank').update(payload).eq('id',q.id).eq('teacher_id',current.id);if(error)throw new Error(error.message+(/is_common/.test(error.message||'')?' — run the V19 SQL first.':''));
+        const {error}=await sb.from('mock_question_bank').update(payload).eq('id',q.id).eq('teacher_id',current.id);if(error)throw new Error(error.message+(/is_common/.test(error.message||'')?' — run the V19 SQL first.':''));Object.assign(q,payload);
       }
-      notify('Complete passage entity updated: passage + all 5 questions.');await jnvstQuestionBankHome();
+      jnvstQbAfterSave(group.questions[0].id);
     }catch(e){notify('Could not save complete passage: '+(e.message||e));}
   };
   window.jnvstQbDeletePassage=async function(id){
@@ -6316,3 +6316,96 @@ async function saveAdaptiveJnvstAssignment(){
   }catch(e){notify('Could not create the adaptive assignment: '+(e.message||e),'error')}
   finally{if(btn&&btn.tagName==='BUTTON'&&document.body.contains(btn)){btn.disabled=false;btn.textContent=btn.dataset.txt||btn.textContent}}
 }
+
+
+/* V32 — JNVST Question Bank editing workflow
+   1. Filters, search and scroll position are kept when you return to the list after editing.
+   2. "Edit Selected": tick questions, edit them one after another with Save & Next / Previous / Skip / Stop. */
+(function(){
+  const FILTERS=['jnvstQbSubjectFilter','jnvstQbMediumFilter','jnvstQbLessonFilter','jnvstQbVariationFilter','jnvstQbDifficultyFilter','jnvstQbCommonFilter','jnvstQbSearch'];
+  const Q={ids:[],pos:-1};let snap=null;
+  const onList=()=>!!document.getElementById('jnvstQbTable');
+  const byId=id=>(jnvstQbCache||[]).find(x=>x.id===id);
+  const samePassage=(a,b)=>{const x=byId(a),y=byId(b);return !!(x&&y&&x.passage_id&&x.passage_id===y.passage_id)};
+  const active=()=>Q.ids.length>0&&Q.pos>=0&&Q.pos<Q.ids.length;
+  function takeSnap(){if(!onList())return;snap={y:window.scrollY||0};FILTERS.forEach(id=>{const el=document.getElementById(id);if(el)snap[id]=el.value});}
+  function setVal(id,v){const el=document.getElementById(id);if(el&&v!=null)el.value=v;}
+  function restoreSnap(){
+    if(!snap||!onList())return;const s=snap;
+    setVal('jnvstQbSubjectFilter',s.jnvstQbSubjectFilter);
+    try{jnvstQbRefreshLessonFilter(s.jnvstQbLessonFilter||'')}catch(_){}
+    setVal('jnvstQbMediumFilter',s.jnvstQbMediumFilter);setVal('jnvstQbLessonFilter',s.jnvstQbLessonFilter);
+    try{jnvstQbRefreshVariationFilter(s.jnvstQbVariationFilter||'')}catch(_){}
+    ['jnvstQbDifficultyFilter','jnvstQbCommonFilter','jnvstQbSearch'].forEach(id=>setVal(id,s[id]));
+    try{jnvstQbUpdateVariationAction()}catch(_){}
+    jnvstQbRenderTable();
+    setTimeout(()=>window.scrollTo(0,s.y||0),60);
+  }
+  function addListControls(){
+    if(!onList()||document.getElementById('jnvstQbEditSelBtn'))return;
+    const clear=[...document.querySelectorAll('button')].find(b=>/jnvstQbClearSelection/.test(b.getAttribute('onclick')||''));
+    const btn=document.createElement('button');btn.id='jnvstQbEditSelBtn';btn.type='button';
+    btn.style.cssText='background:#2563eb;color:#fff;border:0;font-weight:700';
+    btn.innerHTML='✏️ Edit Selected (<span id="jnvstQbEditSelCount">'+jnvstQbSelected.size+'</span>)';
+    btn.onclick=()=>window.jnvstQbEditSelected();
+    if(clear)clear.parentNode.insertBefore(btn,clear);
+    if(active()){
+      const box=document.getElementById('jnvstQbTable');
+      const bar=document.createElement('div');bar.id='jnvstQbResumeBar';bar.className='notice';
+      bar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0';
+      bar.innerHTML='<b>Editing selected questions paused</b> — next is question '+(Q.pos+1)+' of '+Q.ids.length+'.';
+      const go=document.createElement('button');go.textContent='▶ Continue editing';go.onclick=()=>jnvstQbEdit(Q.ids[Q.pos]);
+      const end=document.createElement('button');end.className='secondary';end.textContent='✖ End editing';end.onclick=()=>{Q.ids=[];Q.pos=-1;bar.remove();};
+      bar.append(go,end);if(box)box.parentNode.insertBefore(bar,box);
+    }
+  }
+  function decorateEditor(id){
+    if(document.getElementById('jnvstQbQueueBar'))return;
+    if(!active()||!(Q.ids[Q.pos]===id||samePassage(Q.ids[Q.pos],id)))return;
+    const n=Q.ids.length,i=Q.pos+1,last=i===n;
+    const saveBtns=[...document.querySelectorAll('button')].filter(b=>/jnvstQbSaveEdit|jnvstQbSavePassage/.test(b.getAttribute('onclick')||''));
+    saveBtns.forEach(b=>{
+      b.textContent=last?'💾 Save & Finish':'💾 Save & Next';
+      const prev=document.createElement('button');prev.type='button';prev.className='secondary';prev.textContent='⏮ Previous';prev.disabled=Q.pos===0;prev.onclick=()=>window.jnvstQbQueueGo(-1);
+      const skip=document.createElement('button');skip.type='button';skip.className='secondary';skip.textContent=last?'Skip & Finish ⏭':'Skip ⏭';skip.onclick=()=>window.jnvstQbQueueGo(1,'Skipped');
+      b.after(prev,skip);
+    });
+    const card=document.querySelector('.wrap .card');
+    if(card){
+      const bar=document.createElement('div');bar.id='jnvstQbQueueBar';bar.className='notice';
+      bar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;background:#eff6ff;border-color:#93c5fd';
+      bar.innerHTML='✏️ Editing selected question <b>'+i+'</b> of <b>'+n+'</b>';
+      const bar2=document.createElement('div');bar2.style.cssText='flex:1;height:8px;min-width:120px;background:#dbeafe;border-radius:99px;overflow:hidden';
+      bar2.innerHTML='<div style="height:100%;width:'+Math.round((i-1)/n*100)+'%;background:#2563eb"></div>';
+      const stop=document.createElement('button');stop.type='button';stop.className='secondary';stop.textContent='✖ Stop & back to list';stop.onclick=()=>window.jnvstQbQueueStop();
+      bar.append(bar2,stop);card.prepend(bar);
+    }
+    window.scrollTo(0,0);
+  }
+  window.jnvstQbQueueGo=function(step,msg){
+    Q.pos+=step;if(Q.pos<0)Q.pos=0;
+    if(Q.pos>=Q.ids.length){const n=Q.ids.length;Q.ids=[];Q.pos=-1;jnvstQbToast((msg?msg+' · ':'')+'Finished editing '+n+' selected question(s)');return jnvstQuestionBankHome();}
+    if(msg)jnvstQbToast(msg+' · now question '+(Q.pos+1)+' of '+Q.ids.length);
+    return jnvstQbEdit(Q.ids[Q.pos]);
+  };
+  window.jnvstQbQueueStop=function(){Q.ids=[];Q.pos=-1;return jnvstQuestionBankHome();};
+  window.jnvstQbAfterSave=function(id){
+    if(active()&&(Q.ids[Q.pos]===id||samePassage(Q.ids[Q.pos],id)))return window.jnvstQbQueueGo(1,'Saved');
+    jnvstQbToast('Question updated');return jnvstQuestionBankHome();
+  };
+  window.jnvstQbEditSelected=function(){
+    if(!jnvstQbSelected.size)return notify('Tick the questions you want to edit first.');
+    const visible=jnvstQbFilteredRows().map(q=>q.id);
+    let ids=visible.filter(id=>jnvstQbSelected.has(id)).concat([...jnvstQbSelected].filter(id=>!visible.includes(id)&&byId(id)));
+    const seen=new Set();ids=ids.filter(id=>{const p=byId(id)?.passage_id;if(!p)return true;if(seen.has(p))return false;seen.add(p);return true;});
+    takeSnap();Q.ids=ids;Q.pos=0;return jnvstQbEdit(ids[0]);
+  };
+  const origHome=window.jnvstQuestionBankHome;
+  window.jnvstQuestionBankHome=async function(){const r=await origHome.apply(this,arguments);restoreSnap();addListControls();return r;};
+  const origEdit=window.jnvstQbEdit;
+  window.jnvstQbEdit=async function(id){takeSnap();const r=await origEdit.apply(this,arguments);decorateEditor(id);return r;};
+  const origPassage=window.jnvstQbEditPassage;
+  if(origPassage)window.jnvstQbEditPassage=async function(id){takeSnap();const r=await origPassage.apply(this,arguments);decorateEditor(id);return r;};
+  const origCount=window.jnvstQbUpdateSelectionCount;
+  window.jnvstQbUpdateSelectionCount=function(){const r=origCount.apply(this,arguments);const el=document.getElementById('jnvstQbEditSelCount');if(el)el.textContent=jnvstQbSelected.size;return r;};
+})();
