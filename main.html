@@ -269,14 +269,14 @@ function loadTeacherApp(){
       /* V22: all teacher files download at the same time (they used to download one after another).
          async=false keeps the run order: teacher-app.js first, then the optional add-ons. */
       const files=[
-        {src:"teacher-app.js?v=34",required:true},
+        {src:"teacher-app.js?v=35",required:true},
         {src:"custom-adaptive.js?v=4"},          // V15 Custom Adaptive Assignment (optional)
         {src:"custom-adaptive-paper.js?v=3"},    // V16 Custom Adaptive Question Paper (optional)
         {src:"omr-engine.js?v=10"},              // V17 OMR engine (optional)
         {src:"custom-omr.js?v=7"},               // V17 OMR screens (optional)
         {src:"assamese-explanations.js?v=1"},    // V20 Assamese explanations (optional)
         {src:"omr-discussion.js?v=1"},           // V21 class discussion PDF (optional)
-        {src:"bilingual-papers.js?v=4"}          // V23/V24/V25 English + Assamese papers, missing-translation check, Claude pairing (optional)
+        {src:"bilingual-papers.js?v=7"}          // V23/V24/V25 English + Assamese papers, missing-translation check, Claude pairing (optional)
       ];
       let pending=files.length,failed=false;const added=[];
       const done=()=>{

@@ -99,7 +99,10 @@ function buildSuggestions(bank,idx){
   return out;
 }
 const westernDigits=t=>String(t??'').replace(/[০-৯]/g,d=>String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
-const numsOf=t=>(westernDigits(t).match(/\d+(?:\.\d+)?/g)||[]).map(x=>String(Number(x)));
+// The numbers a text contains, for comparing an English and an Assamese version:
+// powers of units are ignored (cm\(^{2}\) vs বৰ্গ ছে.মি., cm² vs ঘন), and each number counts once
+// ("3-digit … 3-digit" in English vs "3 অংকৰ" once in Assamese).
+const numsOf=t=>[...new Set((westernDigits(t).replace(/\^\s*\{?\s*\d\s*\}?|[²³]/g,' ').match(/\d+(?:\.\d+)?/g)||[]).map(x=>String(Number(x))))];
 // '' when there are too few numbers to tell questions apart
 function numberPrint(q){
   const qn=numsOf(q.question_text).sort(),on=['a','b','c','d'].map(k=>numsOf(q['option_'+k]).sort().join(','));
@@ -180,7 +183,9 @@ function computeLists(){
   checked.forEach(q=>{const p=R.idx.get(q.id);if(!p||seen.has(q.id))return;seen.add(q.id);seen.add(p.id);const pr=pairProblems(q,p);if(pr.length)mism.push({q:langOf(q)===EN?q:p,p:langOf(q)===EN?p:q,problems:pr});});
   const linked=checked.filter(q=>R.idx.has(q.id)).length/2;
   const claude=claudeItems(),auto=active.filter(q=>q.translation_status==='AUTO');
-  return {checked,missing,mism,linked,claude,auto,sure:R.sugs.filter(s=>s.tier==='sure'),likely:R.sugs.filter(s=>s.tier==='likely'),numbers:R.sugs.filter(s=>s.tier==='numbers'),common:active.filter(q=>langOf(q)==='COMMON').length,languageSubj:active.filter(q=>isLanguageSubject(q)).length};
+  // passages uploaded from Excel before V25.2 got answer "A" for every question (importer bug)
+  const allA=passageGroups(active).filter(g=>g.questions.length===5&&g.questions.every(q=>up(q.correct_option)==='A'));
+  return {checked,missing,mism,linked,claude,auto,allA,sure:R.sugs.filter(s=>s.tier==='sure'),likely:R.sugs.filter(s=>s.tier==='likely'),numbers:R.sugs.filter(s=>s.tier==='numbers'),common:active.filter(q=>langOf(q)==='COMMON').length,languageSubj:active.filter(q=>isLanguageSubject(q)).length};
 }
 const passFilter=q=>(!R.subject||String(q.subject_id||'')===R.subject)&&(!R.search||[q.question_text,q.topic,q.passage_title,q.variation_group,q.option_a,q.option_b].some(v=>norm(v).includes(R.search)));
 
@@ -197,6 +202,7 @@ function drawReport(){
    <div class="card"><div class="notice small">Every English question should have its Assamese version and the other way round, so a question paper can be printed in both languages.
     Checked here: <b>${L.checked.length}</b> English/Assamese questions (switched-off questions are left out).
     Not checked: <b>${L.common}</b> Common (MAT) questions, which serve both languages, and <b>${L.languageSubj}</b> Language-subject questions, which have their own paper for each language.</div>
+    ${L.allA.length?`<div class="notice" style="margin-top:10px;border:2px solid #dc2626"><b>⚠ ${L.allA.length} passage(s) have answer “A” for all 5 questions.</b> Passages uploaded from Excel were saved with answer A because of an old upload bug (fixed now), so their answer keys are probably wrong. Open each passage, correct the answers, and correct its other-language version too:<div class="small" style="margin-top:6px">${L.allA.slice(0,60).map(g=>`<a href="#" onclick="event.preventDefault();jnvstQbEdit('${H(g.questions[0].id)}')">✎ ${H(langName(g.lang))} — ${H(g.title)}</a>`).join(' · ')}${L.allA.length>60?' …':''}</div></div>`:''}
     <div class="grid" style="margin-top:12px">
      <div class="card" style="margin:0"><div class="muted">Linked pairs</div><div class="stat">${L.linked}</div></div>
      <div class="card" style="margin:0"><div class="muted">Suggested pairs</div><div class="stat">${L.sure.length+L.likely.length+L.numbers.length}</div></div>
@@ -382,7 +388,7 @@ root.jnvstBiMarkChecked=async function(ids){
 /* ============================ V25 (free): Excel round trip for missing versions */
 const XH={id:'Question ID (do not change)',subject:'Subject',lesson:'Lesson',part:'Part',topic:'Topic',from:'From',to:'Translate into',pkey:'Passage key (do not change)',order:'Q order',answer:'Correct answer',
   sPT:'Passage title',sPX:'Passage text',sQ:'Question',sA:'Option A',sB:'Option B',sC:'Option C',sD:'Option D',
-  tPT:'→ Passage title (translation)',tPX:'→ Passage text (translation)',tQ:'→ Question (translation)',tA:'→ Option A (translation)',tB:'→ Option B (translation)',tC:'→ Option C (translation)',tD:'→ Option D (translation)'};
+  link:'→ Same question as ID (link, no translation needed)',tPT:'→ Passage title (translation)',tPX:'→ Passage text (translation)',tQ:'→ Question (translation)',tA:'→ Option A (translation)',tB:'→ Option B (translation)',tC:'→ Option C (translation)',tD:'→ Option D (translation)'};
 root.jnvstBiExport=function(){
   if(typeof XLSX==='undefined')return notify('The Excel library is still loading. Try again in a few seconds.');
   const L=computeLists();
@@ -393,7 +399,7 @@ root.jnvstBiExport=function(){
     return {[XH.id]:q.id,[XH.subject]:subjName(q.subject_id),[XH.lesson]:lessonName(q.lesson_id),[XH.part]:q.part_code||'',[XH.topic]:q.topic||'',[XH.from]:langName(langOf(q)),[XH.to]:langName(otherLang(langOf(q))),
       [XH.pkey]:pass?groupKeyOf(q):'',[XH.order]:pass?(q.question_order??''):'',[XH.answer]:up(q.correct_option),
       [XH.sPT]:first?(q.passage_title||''):'',[XH.sPX]:first?(q.passage_text||''):'',[XH.sQ]:hasText(q)?q.question_text:'[question is in the picture: '+(q.image_url||'')+']',[XH.sA]:q.option_a||'',[XH.sB]:q.option_b||'',[XH.sC]:q.option_c||'',[XH.sD]:q.option_d||'',
-      [XH.tPT]:'',[XH.tPX]:'',[XH.tQ]:'',[XH.tA]:'',[XH.tB]:'',[XH.tC]:'',[XH.tD]:''};});
+      [XH.link]:'',[XH.tPT]:'',[XH.tPX]:'',[XH.tQ]:'',[XH.tA]:'',[XH.tB]:'',[XH.tC]:'',[XH.tD]:''};});
   const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(data);
   ws['!cols']=Object.values(XH).map(h=>({wch:/text/i.test(h)?60:/Question/.test(h)&&!/ID/.test(h)?50:/Option/.test(h)?22:/ID|key/.test(h)?14:14}));
   XLSX.utils.book_append_sheet(wb,ws,'Missing translations');
@@ -403,6 +409,7 @@ root.jnvstBiExport=function(){
     ['2. Keep every number, unit and maths ($...$, \\frac{..}{..}) exactly as it is. Keep options in the same order (A stays A).'],
     ['3. Passages: fill "→ Passage title" and "→ Passage text" on the first row of the passage only, and the 5 questions on their rows.'],
     ['4. Do not change "Question ID" or "Passage key". Rows you leave empty are skipped.'],
+    ['   If the other-language version already exists in this file (or in the bank), do not translate: put its Question ID in "→ Same question as ID" and the two are linked.'],
     ['5. "[question is in the picture]": if the picture has no words (or the same picture is fine for both languages), write SAME in "→ Question". Otherwise type the question in the other language.'],
     ['6. Import it with ⬆ Import translations (Excel) on the same page. The answer, picture, lesson and topic are copied from the existing question, and both are linked.'],
     ['Tip: you can upload this file to Claude chat and ask: "Translate the empty → columns into the language in column Translate into. Keep numbers, maths and option order. Use Assamese school terms (কালি, পৰিসীমা, ল.সা.গু.)."']
@@ -420,10 +427,22 @@ root.jnvstBiImport=function(ev){
       const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
       if(!raw.length||!(XH.id in raw[0]))throw new Error('This is not an exported "Missing translations" file (column "'+XH.id+'" not found).');
       const byId=new Map(R.bank.map(q=>[q.id,q]));
-      const items=[],problems=[];const groups=new Map();
+      const items=[],problems=[],links=[],linkSeen=new Set();const groups=new Map();
       raw.forEach((r,i)=>{
         const row=i+2,id=cell(r,XH.id),q=byId.get(id);
         const t={q:cell(r,XH.tQ),a:cell(r,XH.tA),b:cell(r,XH.tB),c:cell(r,XH.tC),d:cell(r,XH.tD),pt:cell(r,XH.tPT),px:cell(r,XH.tPX)};
+        const linkId=cell(r,XH.link);
+        if(linkId){
+          const o=byId.get(linkId);
+          if(!q){problems.push(`Row ${row}: question not found — skipped.`);return;}
+          if(!o){problems.push(`Row ${row}: "Same question as ID" ${linkId} not found — skipped.`);return;}
+          if(langOf(o)===langOf(q)||!needsPartner(o)){problems.push(`Row ${row}: the question to link is not in the other language — skipped.`);return;}
+          if(R.idx.has(q.id)||R.idx.has(o.id)||linkSeen.has(q.id)||linkSeen.has(o.id)){problems.push(`Row ${row}: one of the two is already linked — skipped.`);return;}
+          linkSeen.add(q.id);linkSeen.add(o.id);
+          const warn=[];if(up(q.correct_option)!==up(o.correct_option))warn.push(`different correct answers (${up(q.correct_option)} / ${up(o.correct_option)})`);
+          if(numberPrint(q)&&numberPrint(o)&&numberPrint(q)!==numberPrint(o))warn.push('the numbers are not the same');
+          links.push({row,q,o,warn});return;
+        }
         const filled=t.q||t.a||t.b||t.c||t.d||t.pt||t.px;if(!filled)return;
         if(!q){problems.push(`Row ${row}: question not found (was it deleted?) — skipped.`);return;}
         if(R.idx.has(q.id)){problems.push(`Row ${row}: already linked to a ${langName(otherLang(langOf(q)))} question — skipped.`);return;}
@@ -446,29 +465,31 @@ root.jnvstBiImport=function(ev){
         if(list.length!==all.length||!pt||!px){problems.push(`Passage "${all[0]?.passage_title||k}": needs the translated title, text and all ${all.length} questions — skipped.`);list.forEach(x=>x.skip=true);}
         else list.forEach(x=>{x.pt=pt;x.px=px;x.pkey=k;});
       });
-      R.importItems=items.filter(x=>!x.skip);R.importProblems=problems;drawImport();
+      R.importItems=items.filter(x=>!x.skip&&!linkSeen.has(x.q.id));R.importLinks=links;R.importProblems=problems;drawImport();
     }catch(err){notify('Could not read the Excel file: '+(err.message||err));}
   };
   rd.readAsArrayBuffer(f);
 };
 function drawImport(){
-  const items=R.importItems||[],pr=R.importProblems||[],warned=items.filter(x=>x.warn.length);
+  const items=R.importItems||[],links=R.importLinks||[],pr=R.importProblems||[],warned=[...items,...links].filter(x=>x.warn.length);
   render(`<div class="wrap">${header('⬆ Import translations')}<div class="card">
-    <div class="${items.length?'success':'notice'}"><b>${items.length}</b> translated question(s) ready to add and link.${warned.length?` <b>${warned.length}</b> have warnings — please look at them below.`:''}</div>
+    <div class="${items.length||links.length?'success':'notice'}"><b>${links.length}</b> pair(s) of existing questions to link · <b>${items.length}</b> translated question(s) to add and link.${warned.length?` <b>${warned.length}</b> have warnings — please look at them below.`:''}</div>
     ${pr.length?`<div class="notice small" style="margin-top:8px">${pr.slice(0,30).map(H).join('<br>')}${pr.length>30?'<br>…':''}</div>`:''}
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="biImpAuto" style="width:auto"> Mark them “Auto-translated — to check” (for machine translations; needs the V24 SQL)</label>
-    <div class="actions" style="margin-top:10px">${items.length?`<button type="button" id="biImpGo" onclick="jnvstBiImportSave()">💾 Add and link ${items.length} question(s)</button>`:''}<button type="button" class="secondary" onclick="jnvstBiBack()">Cancel</button></div></div>
-    <div class="card">${items.slice(0,200).map(x=>`<div class="student-card">${x.warn.length?`<div class="notice small">⚠ Row ${x.row}: ${H(x.warn.join('; '))}</div>`:`<div class="small muted">Row ${x.row}</div>`}<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">${qCard(x.q)}<div style="border:1px solid #e2e8f0;border-radius:10px;padding:9px;background:#f0fdf4"><span class="tag">${langName(x.want)} (new)</span>${x.pt&&Number(x.q.question_order)===1?`<div class="small"><b>${H(x.pt)}</b></div><div class="small" style="white-space:pre-wrap;max-height:90px;overflow:auto">${H(x.px.slice(0,500))}</div>`:''}<div style="margin-top:5px">${typeof jnvstMathPreview==='function'?jnvstMathPreview(x.t.q||'(same picture)'):H(x.t.q)}</div>${['a','b','c','d'].map(k=>x.t[k]?`<div class="small">(${k.toUpperCase()}) ${typeof jnvstMathPreview==='function'?jnvstMathPreview(x.t[k]):H(x.t[k])}</div>`:'').join('')}</div></div></div>`).join('')}${items.length>200?`<p class="muted">…and ${items.length-200} more.</p>`:''}</div></div>`);
+    <div class="actions" style="margin-top:10px">${items.length||links.length?`<button type="button" id="biImpGo" onclick="jnvstBiImportSave()">💾 Link ${links.length} pair(s) and add ${items.length} question(s)</button>`:''}<button type="button" class="secondary" onclick="jnvstBiBack()">Cancel</button></div></div>
+    ${links.length?`<div class="card"><h3>🔗 Existing questions to link (${links.length})</h3>${links.slice(0,200).map(x=>`<div class="student-card">${x.warn.length?`<div class="notice small">⚠ Row ${x.row}: ${H(x.warn.join('; '))}</div>`:`<div class="small muted">Row ${x.row}</div>`}<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">${qCard(x.q)}${qCard(x.o)}</div></div>`).join('')}</div>`:''}
+    <div class="card">${items.length?`<h3>✍ New translations (${items.length})</h3>`:''}${items.slice(0,200).map(x=>`<div class="student-card">${x.warn.length?`<div class="notice small">⚠ Row ${x.row}: ${H(x.warn.join('; '))}</div>`:`<div class="small muted">Row ${x.row}</div>`}<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">${qCard(x.q)}<div style="border:1px solid #e2e8f0;border-radius:10px;padding:9px;background:#f0fdf4"><span class="tag">${langName(x.want)} (new)</span>${x.pt&&Number(x.q.question_order)===1?`<div class="small"><b>${H(x.pt)}</b></div><div class="small" style="white-space:pre-wrap;max-height:90px;overflow:auto">${H(x.px.slice(0,500))}</div>`:''}<div style="margin-top:5px">${typeof jnvstMathPreview==='function'?jnvstMathPreview(x.t.q||'(same picture)'):H(x.t.q)}</div>${['a','b','c','d'].map(k=>x.t[k]?`<div class="small">(${k.toUpperCase()}) ${typeof jnvstMathPreview==='function'?jnvstMathPreview(x.t[k]):H(x.t[k])}</div>`:'').join('')}</div></div></div>`).join('')}${items.length>200?`<p class="muted">…and ${items.length-200} more.</p>`:''}</div></div>`);
   mathNow();
 }
 root.jnvstBiImportSave=async function(){
-  const items=R.importItems||[];if(!items.length)return;
-  const warned=items.filter(x=>x.warn.length).length;
+  const items=R.importItems||[],links=R.importLinks||[];if(!items.length&&!links.length)return;
+  const warned=[...items,...links].filter(x=>x.warn.length).length;
   if(warned&&!confirm(`${warned} question(s) have warnings. Add them anyway?`))return;
   const auto=!!document.getElementById('biImpAuto')?.checked;
   const btn=document.getElementById('biImpGo');if(btn){btn.disabled=true;btn.textContent='Saving…';}
-  const pids=new Map();let done=0;const errs=[];
+  const pids=new Map();let done=0,linked=0;const errs=[];
   try{
+    if(links.length){if(btn)btn.textContent='Linking…';linked=await linkPairs(links.map(x=>[x.q,x.o]));}
     for(let i=0;i<items.length;i+=20){
       const chunk=items.slice(i,i+20);
       const prepared=chunk.map(x=>{
@@ -485,8 +506,8 @@ root.jnvstBiImportSave=async function(){
       done+=chunk.length;if(btn)btn.textContent=`Saving… ${done}/${items.length}`;
     }
   }catch(e){errs.push(e.message||String(e));}
-  notify(errs.length?`Added ${done} of ${items.length}. Stopped: ${errs[0]}${/translation_status/.test(errs[0])?'\n\nUntick “Mark as to check” or run V24_CLAUDE_PAIRING.sql.':''}`:`${done} translated question(s) added and linked.`);
-  R.importItems=null;await loadBank();R.tab=auto?'auto':'missing';drawReport();
+  notify(errs.length?`Linked ${linked} pair(s), added ${done} of ${items.length}. Stopped: ${errs[0]}${/translation_status/.test(errs[0])?'\n\nUntick “Mark as to check” or run V24_CLAUDE_PAIRING.sql.':''}`:`${linked} pair(s) linked · ${done} translated question(s) added and linked.`);
+  R.importItems=null;R.importLinks=null;await loadBank();R.tab=auto?'auto':'missing';drawReport();
 };
 root.jnvstBiTab=function(t){R.tab=t;R.limit=50;drawReport();};
 root.jnvstBiMore=function(){R.limit+=50;const y=window.scrollY;drawReport();window.scrollTo(0,y);};
@@ -566,6 +587,8 @@ root.jnvstBiSaveMissingPassage=async function(gid,lang){
   const v=k=>document.getElementById(k)?.value.trim()||'';
   const title=v('biPT'),text=v('biPX');if(!title||!text)return notify('Type the passage title and text.');
   if(g.questions.some((q,i)=>!v('biQ'+i)))return notify('Type all 5 questions.');
+  const emptyOpts=g.questions.reduce((n,q,i)=>n+['a','b','c','d'].filter(k=>q['option_'+k]&&!v(`biO${i}_${k}`)).length,0);
+  if(emptyOpts&&!confirm(`${emptyOpts} option(s) are empty although the existing passage has them. A question paper with missing options will be stopped by the quality check. Save anyway?`))return;
   const btn=document.getElementById('biSave');if(btn)btn.disabled=true;
   try{
     const kind=partOf(g.questions[0])==='EVS_PASSAGE'?'EVS':'LANG';
