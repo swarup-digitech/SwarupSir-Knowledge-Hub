@@ -27,6 +27,8 @@ Student and teacher portal for the JNVST and School courses, built on Supabase.
 | `V22_SPEED_INDEXES.sql` | Database change for V22 (indexes for faster teacher screens; no data changes) |
 | `bilingual-papers.js` | V23 English + Assamese question papers (MAT, Arithmetic, EVS) and the 🌐 Check missing translations page |
 | `V23_BILINGUAL_PAIRS.sql` | Database change for V23 (function that links English/Assamese question pairs) |
+| `supabase/functions/pair-questions/index.ts` | V24 Edge Function: Claude finds English/Assamese pairs and translates missing questions |
+| `V24_CLAUDE_PAIRING.sql` | Database change for V24 (Claude's suggestions, auto-translated question status) |
 | `supabase/functions/translate-explanations/index.ts` | V20 Edge Function that translates explanations into Assamese (Claude API) |
 | `supabase/migrations/` | All database changes in order – see `supabase/README.md` |
 | `*_Template.xlsx` | Bulk-upload templates for teachers |
@@ -37,4 +39,4 @@ Not in this package (they live only on the website): `index.html`, `student-logi
 `student-course-selection.html`, and the `get-omr-result` Edge Function.
 Add them here so the whole site is versioned together.
 
-See the `CHANGES_V*.md` files for what changed in each version and how to install it. The latest is `CHANGES_V23.md` (English + Assamese papers, missing-translation check).
+See the `CHANGES_V*.md` files for what changed in each version and how to install it. The latest is `CHANGES_V24.md` (Claude finds pairs and translates missing questions).

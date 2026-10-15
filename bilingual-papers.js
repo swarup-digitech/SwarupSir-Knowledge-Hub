@@ -123,13 +123,22 @@ async function linkPairs(pairs){
 }
 
 /* =========================================================== REPORT PAGE */
-const R={bank:[],idx:null,sugs:[],tab:'missing',subject:'',search:'',limit:50};
+const R={bank:[],idx:null,sugs:[],checks:[],checksOk:true,tab:'missing',subject:'',search:'',limit:50,ai:{running:false,stop:false,msg:'',counts:{}}};
 async function loadBank(){
   const {data,error}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:true}));
   if(error)throw error;
   R.bank=data||[];try{jnvstQbCache=R.bank.slice().reverse();}catch(_){}
   R.idx=buildPartnerIndex(R.bank.filter(q=>q.active!==false));
   R.sugs=buildSuggestions(R.bank,R.idx);
+  // V24: what Claude found (table from V24_CLAUDE_PAIRING.sql)
+  const c=await sbFetchAll(()=>sb.from('jnvst_pair_checks').select('*').eq('teacher_id',current.id));
+  R.checksOk=!c.error;R.checks=c.data||[];
+  const pend=new Set();R.checks.filter(x=>x.status==='PENDING').forEach(x=>{pend.add(x.source_id);if(x.candidate_id)pend.add(x.candidate_id);});
+  R.claudeBusy=pend;
+  const rej=new Set();R.checks.filter(x=>x.status==='REJECTED'&&x.candidate_id).forEach(x=>{rej.add(x.source_id+'|'+x.candidate_id);rej.add(x.candidate_id+'|'+x.source_id);});
+  // hide rule-based suggestions that Claude is handling or that you said are not the same
+  R.sugs=R.sugs.filter(x=>!x.pairs.some(([a,b])=>pend.has(a.id)||pend.has(b.id)||rej.has(a.id+'|'+b.id)));
+  R.latestCheck=new Map();R.checks.slice().sort((a,b)=>String(a.updated_at||a.created_at).localeCompare(String(b.updated_at||b.created_at))).forEach(x=>R.latestCheck.set(x.source_id,x));
 }
 // jnvstSubjects / jnvstSubjectLessons are top-level "let" variables of main.html (not window properties)
 const subjList=()=>{try{return jnvstSubjects||[];}catch(_){return [];}};
@@ -141,11 +150,12 @@ function computeLists(){
   const active=R.bank.filter(q=>q.active!==false);
   const checked=active.filter(needsPartner);
   const sIds=suggestedIds(R.sugs);
-  const missing=checked.filter(q=>!R.idx.has(q.id)&&!sIds.has(q.id));
+  const missing=checked.filter(q=>!R.idx.has(q.id)&&!sIds.has(q.id)&&!(R.claudeBusy||new Set()).has(q.id));
   const seen=new Set(),mism=[];
   checked.forEach(q=>{const p=R.idx.get(q.id);if(!p||seen.has(q.id))return;seen.add(q.id);seen.add(p.id);const pr=pairProblems(q,p);if(pr.length)mism.push({q:langOf(q)===EN?q:p,p:langOf(q)===EN?p:q,problems:pr});});
   const linked=checked.filter(q=>R.idx.has(q.id)).length/2;
-  return {checked,missing,mism,linked,sure:R.sugs.filter(s=>s.tier==='sure'),likely:R.sugs.filter(s=>s.tier==='likely'),common:active.filter(q=>langOf(q)==='COMMON').length,languageSubj:active.filter(q=>isLanguageSubject(q)).length};
+  const claude=claudeItems(),auto=active.filter(q=>q.translation_status==='AUTO');
+  return {checked,missing,mism,linked,claude,auto,sure:R.sugs.filter(s=>s.tier==='sure'),likely:R.sugs.filter(s=>s.tier==='likely'),common:active.filter(q=>langOf(q)==='COMMON').length,languageSubj:active.filter(q=>isLanguageSubject(q)).length};
 }
 const passFilter=q=>(!R.subject||String(q.subject_id||'')===R.subject)&&(!R.search||[q.question_text,q.topic,q.passage_title,q.variation_group,q.option_a,q.option_b].some(v=>norm(v).includes(R.search)));
 
@@ -167,13 +177,16 @@ function drawReport(){
      <div class="card" style="margin:0"><div class="muted">Suggested pairs</div><div class="stat">${L.sure.length+L.likely.length}</div></div>
      <div class="card" style="margin:0"><div class="muted">Missing other version</div><div class="stat" style="color:${L.missing.length?'#b45309':'inherit'}">${L.missing.length}</div></div>
      <div class="card" style="margin:0"><div class="muted">Linked but different</div><div class="stat" style="color:${L.mism.length?'#b91c1c':'inherit'}">${L.mism.length}</div></div>
+     <div class="card" style="margin:0"><div class="muted">Auto-translated, to check</div><div class="stat" style="color:${L.auto.length?'#0f766e':'inherit'}">${L.auto.length}</div></div>
     </div>
-    <div class="actions" style="margin-top:12px">${tab('suggest','🔗 Suggested pairs',L.sure.length+L.likely.length,'#16a34a')}${tab('missing','➕ Missing',L.missing.length,'#b45309')}${tab('mismatch','⚠ Linked but different',L.mism.length,'#b91c1c')}<button class="secondary" type="button" onclick="jnvstQuestionBankHome()">← Question Bank</button></div>
+    <div class="actions" style="margin-top:12px">${tab('claude','🤖 Claude suggestions',L.claude.length,'#7c3aed')}${tab('suggest','🔗 Suggested pairs',L.sure.length+L.likely.length,'#16a34a')}${tab('missing','➕ Missing',L.missing.length,'#b45309')}${tab('mismatch','⚠ Linked but different',L.mism.length,'#b91c1c')}${tab('auto','🤖 Auto-translated — to check',L.auto.length,'#0f766e')}<button class="secondary" type="button" onclick="jnvstQuestionBankHome()">← Question Bank</button></div>
     <div class="grid" style="margin-top:10px"><div><label>Subject</label><select id="biSubject" onchange="jnvstBiFilter()"><option value="">All subjects</option>${subjects.map(s=>`<option value="${H(s.id)}" ${R.subject===s.id?'selected':''}>${H(s.name)}</option>`).join('')}</select></div><div><label>Search</label><input id="biSearch" value="${H(R.search)}" placeholder="Question text, topic, variation group…" oninput="jnvstBiSearch()"></div></div>
+    <div id="biAi" style="margin-top:12px">${aiPanel()}</div>
    </div>
-   <div class="card" id="biBody">${R.tab==='suggest'?drawSuggest(L):R.tab==='mismatch'?drawMismatch(L):drawMissing(L)}</div>
+   <div class="card" id="biBody">${R.tab==='claude'?drawClaude(L):R.tab==='auto'?drawAuto(L):R.tab==='suggest'?drawSuggest(L):R.tab==='mismatch'?drawMismatch(L):drawMissing(L)}</div>
   </div>`);
   mathNow(document.getElementById('biBody'));
+  if(R.subject&&R.checksOk&&!R.ai.counts[R.subject]&&!R.ai.running)refreshAiCounts();
 }
 function moreBtn(total){return total>R.limit?`<div class="actions" style="justify-content:center;margin-top:10px"><button type="button" class="secondary" onclick="jnvstBiMore()">Show 50 more · ${total-R.limit} not shown</button></div>`:'';}
 function qCard(q,extra){
@@ -207,7 +220,7 @@ function drawMissing(L){
   const shown=items.slice(0,R.limit);let lastHead='';
   const html=shown.map(it=>{
     const head=`${subjName(it.s)} → ${lessonName(it.l)}`;const h=head!==lastHead?`<h3 style="margin:14px 0 6px">${H(head)}</h3>`:'';lastHead=head;
-    if(it.type==='q'){const miss=langName(otherLang(langOf(it.q)));return h+`<div style="margin:6px 0">${qCard(it.q,`<div class="actions" style="margin-top:7px"><button type="button" onclick="jnvstBiAddMissing('${H(it.q.id)}')">➕ Add ${miss} version</button><button type="button" class="secondary" onclick="jnvstBiPickPartner('${H(it.q.id)}')">🔗 Link to an existing ${miss} question</button><button type="button" class="secondary" onclick="jnvstQbEdit('${H(it.q.id)}')">✎ Edit</button></div>`)}</div>`;}
+    if(it.type==='q'){const miss=langName(otherLang(langOf(it.q)));return h+`<div style="margin:6px 0">${qCard(it.q,`${checkNote(it.q)}<div class="actions" style="margin-top:7px"><button type="button" onclick="jnvstBiAddMissing('${H(it.q.id)}')">➕ Add ${miss} version</button><button type="button" class="secondary" onclick="jnvstBiPickPartner('${H(it.q.id)}')">🔗 Link to an existing ${miss} question</button><button type="button" class="secondary" onclick="jnvstQbEdit('${H(it.q.id)}')">✎ Edit</button></div>`)}</div>`;}
     const g=it.g,miss=langName(otherLang(g.lang)),complete=g.questions.length===5;
     return h+`<div class="student-card"><span class="tag">${langName(g.lang)} passage</span> <b>${H(g.title)}</b> <span class="small muted">· ${g.questions.length} question(s) without their ${miss} version</span><div class="small" style="max-height:90px;overflow:auto;white-space:pre-wrap;margin-top:5px">${H(g.text).slice(0,500)}</div><div class="actions" style="margin-top:7px">${complete?`<button type="button" onclick="jnvstBiAddMissingPassage('${H(g.id)}','${g.lang}')">➕ Add ${miss} passage (5 questions)</button>`:'<span class="small muted">Incomplete passage — fix it in the Question Bank first.</span>'}<button type="button" class="secondary" onclick="jnvstBiPickPassage('${H(g.id)}','${g.lang}')">🔗 Link to an existing ${miss} passage</button></div></div>`;
   }).join('');
@@ -218,9 +231,130 @@ function drawMismatch(L){
   if(!rows.length)return '<p class="success">All linked pairs agree. 🎉</p>';
   return rows.slice(0,R.limit).map(m=>`<div class="student-card"><div class="notice small"><b>Problem:</b> ${H(m.problems.join('; '))}</div><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-top:8px">${qCard(m.q,`<div class="actions" style="margin-top:6px"><button type="button" class="secondary" onclick="jnvstQbEdit('${H(m.q.id)}')">✎ Edit English</button></div>`)}${qCard(m.p,`<div class="actions" style="margin-top:6px"><button type="button" class="secondary" onclick="jnvstQbEdit('${H(m.p.id)}')">✎ Edit Assamese</button></div>`)}</div><div class="actions" style="margin-top:8px"><button type="button" class="danger" onclick="jnvstBiUnlink('${H(m.q.id)}','${H(m.p.id)}')">✂ Unlink (they are not the same question)</button></div></div>`).join('')+moreBtn(rows.length);
 }
+
+/* ========================================== V24: Claude finds pairs and translates */
+const PQ='pair-questions';
+async function invokePQ(body){
+  const {data,error}=await sb.functions.invoke(PQ,{body});
+  if(error){let m=error.message||String(error);try{const j=await error.context.json();if(j&&j.error)m=j.error;}catch(_){}
+    if(/Failed to send|not found|404|FunctionsFetchError|FunctionsRelayError/i.test(m))m='The pair-questions function is not deployed yet ('+m+'). See CHANGES_V24.md.';
+    throw new Error(m);}
+  if(data&&data.error)throw new Error(data.error);
+  return data||{};
+}
+const byIdRow=id=>R.bank.find(q=>q.id===id);
+function claudeItems(){
+  const m=new Map();
+  R.checks.filter(c=>c.status==='PENDING').forEach(c=>{const k=c.group_key||c.id;if(!m.has(k))m.set(k,[]);m.get(k).push(c);});
+  return [...m.entries()].map(([key,rows])=>{
+    const src=rows.map(c=>byIdRow(c.source_id)),cand=rows.map(c=>byIdRow(c.candidate_id));
+    if(src.some(x=>!x)||cand.some(x=>!x))return null;
+    const order=(a,b)=>(Number(a.question_order)||0)-(Number(b.question_order)||0);
+    return {key,rows,passage:!!rows[0].group_key,conf:rows[0].confidence||'weak',reason:rows[0].reason||'',src:src.sort(order),cand:cand.sort(order),subject:src[0].subject_id};
+  }).filter(Boolean);
+}
+function checkNote(q){
+  const c=(R.latestCheck||new Map()).get(q.id);if(!c)return '';
+  if(c.status==='MANUAL')return '<div class="small" style="margin-top:6px;color:#92400e">📷 The text is inside the picture, so Claude cannot read it. Type the other version yourself.</div>';
+  if(c.status==='FAILED')return `<div class="small" style="margin-top:6px;color:#991b1b">🤖 Claude could not translate this: ${H(c.error||'')}</div>`;
+  if(c.status==='NO_MATCH')return '<div class="small muted" style="margin-top:6px">🤖 Claude found no partner — use “2. Translate” to write it.</div>';
+  return '';
+}
+function aiPanel(){
+  if(!R.checksOk)return '<div class="notice small">🤖 <b>Claude can find pairs and write missing versions.</b> Run <b>V24_CLAUDE_PAIRING.sql</b> and deploy the <b>pair-questions</b> function first (see CHANGES_V24.md).</div>';
+  if(!R.subject)return '<div class="notice small">🤖 <b>Claude can find pairs by reading the questions, and translate the ones that have no partner.</b> Choose a <b>Subject</b> above to start.</div>';
+  const c=R.ai.counts[R.subject],n=v=>c?`<b>${v}</b>`:'…';
+  const busy=R.ai.running;
+  return `<div style="border:2px solid #7c3aed;background:#faf5ff;border-radius:12px;padding:12px">
+    <b>🤖 Claude — ${H(subjName(R.subject))}</b>
+    <div class="small" style="margin:6px 0">Not yet checked by Claude: ${n(c?.to_check)} · waiting for your approval: ${n(c?.waiting_approval)} · no partner, ready to translate: ${n(c?.to_translate)} · text in a picture (type yourself): ${n(c?.manual)}${c?.failed?` · failed: <b>${c.failed}</b>`:''}${c?.partial_passage_questions?` · questions of partly linked passages (link by hand): <b>${c.partial_passage_questions}</b>`:''}</div>
+    <div class="actions">
+      <button type="button" ${busy||!c?.to_check?'disabled':''} onclick="jnvstBiAiRun('match')" style="background:#7c3aed">1. 🔍 Find pairs with Claude</button>
+      <button type="button" ${busy||!c?.to_translate?'disabled':''} onclick="jnvstBiAiRun('translate')" style="background:#0f766e">2. ✍ Translate the ${c?c.to_translate:''} without a partner</button>
+      ${c?.failed?`<button type="button" class="secondary" ${busy?'disabled':''} onclick="jnvstBiAiRun('translate',true)">↻ Retry ${c.failed} failed</button>`:''}
+      ${busy?'<button type="button" class="danger" onclick="jnvstBiAiStop()">■ Stop</button>':''}
+    </div>
+    <div id="biAiMsg" class="small" style="margin-top:6px">${H(R.ai.msg||'Step 1 suggests pairs for you to approve (🤖 Claude suggestions). Approve or reject them before step 2, because step 2 skips questions that are waiting for approval. New questions are marked “Auto-translated — to check” and can be used in papers straight away.')}</div>
+  </div>`;
+}
+function paintAi(){const el=document.getElementById('biAi');if(el)el.innerHTML=aiPanel();}
+async function refreshAiCounts(){
+  const sid=R.subject;
+  try{const r=await invokePQ({subject_id:sid,count_only:true});R.ai.counts[sid]=r.counts;}
+  catch(e){R.ai.msg='Claude is not available: '+(e.message||e);R.ai.counts[sid]=R.ai.counts[sid]||null;}
+  if(R.subject===sid)paintAi();
+}
+root.jnvstBiAiStop=function(){R.ai.stop=true;R.ai.msg='Stopping after the current step…';paintAi();};
+root.jnvstBiAiRun=async function(action,retry){
+  if(R.ai.running)return;const sid=R.subject;if(!sid)return notify('Choose a subject first.');
+  R.ai.running=true;R.ai.stop=false;
+  const t={checked:0,proposed:0,no_match:0,manual:0,translated:0,failed:0};
+  const say=c=>{R.ai.msg=action==='match'
+      ?`Checked ${t.checked} · suggested pairs ${t.proposed} · no partner ${t.no_match} · picture text ${t.manual}${c?` · still to check ${c.to_check}`:''}`
+      :`Translated ${t.translated}${t.failed?` · failed ${t.failed}`:''}${c?` · still to translate ${retry?c.failed:c.to_translate}`:''}`;paintAi();};
+  say();
+  try{
+    for(let round=0;round<400&&!R.ai.stop;round++){
+      const r=await invokePQ({action,subject_id:sid,limit:action==='match'?8:6,retry_failed:!!retry});
+      Object.keys(t).forEach(k=>t[k]+=Number(r[k]||0));R.ai.counts[sid]=r.counts;say(r.counts);
+      if(action==='match'&&(!r.counts?.to_check||!r.checked))break;
+      if(action==='translate'&&(!(retry?r.counts?.failed:r.counts?.to_translate)||(!r.translated&&!r.failed)))break;
+    }
+    R.ai.msg=(R.ai.stop?'Stopped. ':'Done. ')+R.ai.msg;
+  }catch(e){R.ai.msg='Stopped: '+(e.message||e);}
+  R.ai.running=false;
+  try{await loadBank();}catch(_){}
+  if(action==='match'&&t.proposed)R.tab='claude';else if(action==='translate'&&t.translated)R.tab='auto';
+  R.limit=50;drawReport();
+};
+function drawClaude(L){
+  if(!R.checksOk)return '<p class="muted">Run V24_CLAUDE_PAIRING.sql first.</p>';
+  const list=L.claude.filter(it=>(!R.subject||String(it.subject||'')===R.subject)&&(it.src.some(passFilter)||it.cand.some(passFilter)));
+  if(!list.length)return '<p class="muted">No suggestions from Claude waiting. Choose a subject and press “1. 🔍 Find pairs with Claude”.</p>';
+  const strong=list.filter(x=>x.conf==='strong').length;
+  const head=`<div class="notice small">Claude read these questions and thinks each pair is the same question in English and Assamese. <b>Approve</b> links them; <b>Not the same</b> means Claude will not suggest that pair again.</div><div class="actions" style="margin:10px 0">${strong?`<button type="button" style="background:#7c3aed" onclick="jnvstBiApproveStrong()">✓ Approve all ${strong} strong matches</button>`:''}</div>`;
+  return head+list.slice(0,R.limit).map(it=>{
+    const badge=it.conf==='strong'?'<span class="tag" style="background:#ede9fe;color:#5b21b6">Strong match</span>':'<span class="tag" style="background:#fef9c3;color:#854d0e">Weaker match — please compare</span>';
+    const en=langOf(it.src[0])===EN?it.src:it.cand,as=langOf(it.src[0])===EN?it.cand:it.src;
+    const sides=it.passage
+      ?`<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">${[en,as].map(g=>`<div><span class="tag">${langName(langOf(g[0]))}</span> <b>${H(g[0].passage_title||'')}</b><div class="small" style="max-height:140px;overflow:auto;white-space:pre-wrap">${H(String(g[0].passage_text||'').slice(0,900))}</div>${g.map(q=>`<div class="small" style="margin-top:4px">Q${H(q.question_order)}: ${H(String(q.question_text||'').slice(0,160))} <b>(${H(up(q.correct_option))})</b></div>`).join('')}</div>`).join('')}</div>`
+      :`<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">${qCard(en[0])}${qCard(as[0])}</div>`;
+    const warn=it.src.some((q,i)=>up(q.correct_option)!==up(it.cand[i]?.correct_option))?'<div class="small" style="color:#991b1b;margin-top:4px">⚠ The correct answers are different — fix one before using it in papers.</div>':'';
+    return `<div class="student-card">${badge} <span class="small muted">${H(subjName(it.subject))} → ${H(lessonName(it.src[0].lesson_id))}${it.reason?' · Claude: '+H(it.reason):''}</span>${warn}<div style="margin-top:8px">${sides}</div><div class="actions" style="margin-top:8px"><button type="button" onclick="jnvstBiApprove('${H(it.key)}')">✓ Approve</button><button type="button" class="secondary" onclick="jnvstBiReject('${H(it.key)}')">✕ Not the same</button></div></div>`;
+  }).join('')+moreBtn(list.length);
+}
+async function approveItems(items){
+  const pairs=items.flatMap(it=>it.src.map((q,i)=>[q,it.cand[i]]));
+  await linkPairs(pairs);
+  const ids=items.flatMap(it=>it.rows.map(c=>c.id));
+  for(let i=0;i<ids.length;i+=100){const {error}=await sb.from('jnvst_pair_checks').update({status:'APPROVED',updated_at:new Date().toISOString()}).in('id',ids.slice(i,i+100)).eq('teacher_id',current.id);if(error)throw error;}
+}
+root.jnvstBiApprove=async function(key){const it=claudeItems().find(x=>x.key===key);if(!it)return;try{await approveItems([it]);await loadBank();refreshAfter();}catch(e){notify('Could not approve: '+(e.message||e));}};
+root.jnvstBiApproveStrong=async function(){
+  const list=claudeItems().filter(x=>x.conf==='strong'&&(!R.subject||String(x.subject||'')===R.subject));if(!list.length)return;
+  if(!confirm(`Approve and link ${list.length} strong match(es)?`))return;
+  try{await approveItems(list);notify(`${list.length} pair(s) linked.`);await loadBank();refreshAfter();}catch(e){notify('Could not approve: '+(e.message||e));}
+};
+root.jnvstBiReject=async function(key){const it=claudeItems().find(x=>x.key===key);if(!it)return;
+  try{const {error}=await sb.from('jnvst_pair_checks').update({status:'REJECTED',updated_at:new Date().toISOString()}).in('id',it.rows.map(c=>c.id)).eq('teacher_id',current.id);if(error)throw error;await loadBank();refreshAfter();}catch(e){notify('Could not save: '+(e.message||e));}};
+function refreshAfter(){if(R.subject)delete R.ai.counts[R.subject];const y=window.scrollY;drawReport();window.scrollTo(0,y);}
+function drawAuto(L){
+  const rows=L.auto.filter(passFilter);
+  if(!rows.length)return '<p class="success">No auto-translated questions waiting to be checked.</p>';
+  const shown=rows.slice(0,R.limit);
+  return `<div class="notice small">Claude wrote these questions. They are already used in question papers. Compare each with its partner, <b>✎ Edit</b> to correct it (editing marks it checked), or press <b>✓ Mark checked</b>.</div>
+    <div class="actions" style="margin:10px 0"><button type="button" style="background:#0f766e" onclick="jnvstBiMarkChecked(${H(JSON.stringify(shown.map(q=>q.id)))})">✓ Mark all ${shown.length} shown as checked</button></div>`+
+    shown.map(q=>{const p=R.idx.get(q.id);const pass=q.passage_id&&Number(q.question_order)===1?`<div class="small" style="white-space:pre-wrap;max-height:120px;overflow:auto;margin-top:4px"><b>${H(q.passage_title||'')}</b>\n${H(String(q.passage_text||'').slice(0,900))}</div>`:'';
+      return `<div class="student-card"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px">${p?qCard(p):'<div class="muted small">Partner not found</div>'}${qCard(q,pass+`<div class="actions" style="margin-top:6px"><button type="button" onclick="jnvstBiMarkChecked(['${H(q.id)}'])">✓ Mark checked</button><button type="button" class="secondary" onclick="jnvstQbEdit('${H(q.id)}')">✎ Edit</button></div>`)}</div></div>`;}).join('')+moreBtn(rows.length);
+}
+root.jnvstBiMarkChecked=async function(ids){
+  try{for(let i=0;i<ids.length;i+=100){const {error}=await sb.from('mock_question_bank').update({translation_status:'CHECKED'}).in('id',ids.slice(i,i+100)).eq('teacher_id',current.id);if(error)throw error;}
+    R.bank.forEach(q=>{if(ids.includes(q.id))q.translation_status='CHECKED';});refreshAfter();}
+  catch(e){notify('Could not save: '+(e.message||e));}
+};
 root.jnvstBiTab=function(t){R.tab=t;R.limit=50;drawReport();};
 root.jnvstBiMore=function(){R.limit+=50;const y=window.scrollY;drawReport();window.scrollTo(0,y);};
-root.jnvstBiFilter=function(){R.subject=document.getElementById('biSubject')?.value||'';R.limit=50;drawReport();};
+root.jnvstBiFilter=function(){if(R.ai.running)return notify('Wait until Claude has finished, or press Stop.');R.subject=document.getElementById('biSubject')?.value||'';R.limit=50;R.ai.msg='';drawReport();};
 let __biT=null;root.jnvstBiSearch=function(){clearTimeout(__biT);__biT=setTimeout(()=>{const el=document.getElementById('biSearch');R.search=norm(el?.value);R.limit=50;const pos=el?.selectionStart;drawReport();const e2=document.getElementById('biSearch');if(e2){e2.focus();try{e2.setSelectionRange(pos,pos);}catch(_){}}},350);};
 root.jnvstBiLinkOne=async function(i){const s=R.sugs[i];if(!s)return;try{await linkPairs(s.pairs);notify('Linked.');await loadBank();drawReport();}catch(e){notify('Could not link: '+(e.message||e));}};
 root.jnvstBiLinkAll=async function(tier){
