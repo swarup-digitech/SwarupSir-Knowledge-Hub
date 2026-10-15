@@ -1,5 +1,9 @@
 # V24: Claude finds English/Assamese pairs and translates the missing ones
 
+> **Fix (V24.1):** the first `pair-questions/index.ts` never started on Supabase, so the page said *"Failed to send a
+> request to the Edge Function"*. Deploy the new `index.ts` again (paste it over the old one → Deploy), upload
+> `bilingual-papers.js` and `main.html`, and press Ctrl+Shift+R.
+
 On **🌐 Check missing translations**, choose a **Subject**. A purple **🤖 Claude** box then offers two steps:
 
 1. **🔍 Find pairs with Claude.** Claude reads the unlinked questions of that subject and suggests which English

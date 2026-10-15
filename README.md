@@ -39,4 +39,4 @@ Not in this package (they live only on the website): `index.html`, `student-logi
 `student-course-selection.html`, and the `get-omr-result` Edge Function.
 Add them here so the whole site is versioned together.
 
-See the `CHANGES_V*.md` files for what changed in each version and how to install it. The latest is `CHANGES_V24.md` (Claude finds pairs and translates missing questions).
+See the `CHANGES_V*.md` files for what changed in each version and how to install it. The latest is `CHANGES_V25.md` (free pairing by numbers, Excel export/import of missing translations).
