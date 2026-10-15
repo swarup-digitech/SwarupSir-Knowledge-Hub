@@ -5770,9 +5770,11 @@ try{
         const versions=[];if(r.en)versions.push({language:part==='MAT'?'COMMON':'ENGLISH',question:r.en,a:r.aen,b:r.ben,c:r.cen,d:r.den,pt:r.passageTitleEn,px:r.passageEn});if(r.as)versions.push({language:part==='MAT'?'COMMON':'ASSAMESE',question:r.as,a:r.aas,b:r.bas,c:r.cas,d:r.das,pt:r.passageTitleAs,px:r.passageAs});
         if(!versions.length)continue;
         const groupKey=passage?`${typeNorm}::${r.localPassageNo}`:null;
+        // V23: the English and Assamese versions from the same Excel row share one language_pair_id, so they are linked.
+        const rowPairId=versions.length>1?crypto.randomUUID():null;
         for(const v of versions){
-          let passageId=null,languagePairId=null,questionOrder=null,passageTitle=null,passageText=null;
-          if(passage){const pairKey=`${groupKey}::${v.language}`;if(!groupIds.has(pairKey))groupIds.set(pairKey,{passageId:`JNVST-${passagePart(r.type)==='EVS_PASSAGE'?'EVS':'LANG'}-${v.language[0]}-${shortId()}`,pairId:crypto.randomUUID()});const g=groupIds.get(pairKey);passageId=g.passageId;languagePairId=g.pairId;questionOrder=r.questionOrder;passageTitle=v.pt||null;passageText=v.px||null;}
+          let passageId=null,languagePairId=rowPairId,questionOrder=null,passageTitle=null,passageText=null;
+          if(passage){const pairKey=`${groupKey}::${v.language}`;if(!groupIds.has(pairKey))groupIds.set(pairKey,{passageId:`JNVST-${passagePart(r.type)==='EVS_PASSAGE'?'EVS':'LANG'}-${v.language[0]}-${shortId()}`,pairId:crypto.randomUUID()});const g=groupIds.get(pairKey);passageId=g.passageId;questionOrder=r.questionOrder;passageTitle=v.pt||null;passageText=v.px||null;}
           prepared.push({teacher_id:current.id,section_code:sectionFor(part),part_code:part,topic:r.topic||null,variation_group:r.group||null,is_fixed:bool(r.fixed),...(bool(r.common)?{is_common:true}:{}),question_type:passage?(part==='EVS_PASSAGE'?'EVS-PASSAGE':'LANGUAGE-PASSAGE'):r.type,marks:r.marks||1,cognitive_level:r.cognitive||null,difficulty:r.difficulty||null,language:v.language,subject_id:subj.id,lesson_id:lesson.id,lesson_code:r.lessonCode,question_text:v.question||null,option_a:v.a||null,option_b:v.b||null,option_c:v.c||null,option_d:v.d||null,correct_option:r.type==='MCQ'?r.answer:'A',explanation:r.explanation||(v.language==='ENGLISH'?null:r.explanationAs)||null,...(window.jnvstExplAsOn&&r.explanationAs&&v.language!=='ENGLISH'?{explanation_as:r.explanationAs}:{}),source_type:'JNVST_BULK',active:true,passage_id:passageId,passage_title:passageTitle,passage_text:passageText,question_order:questionOrder,language_pair_id:languagePairId,set_id:passageId});
         }
       }
