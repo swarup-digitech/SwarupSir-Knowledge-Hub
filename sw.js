@@ -1,25 +1,25 @@
-const CACHE_NAME = 'swarup-sir-knowledge-hub-v8';
-const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/main.html',
-  '/student-login.html',
-  '/teacher-login.html',
-  '/manifest.webmanifest',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/icon-maskable-512.png'
-];
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
+/* Keeps the front page and icons on the phone so the app opens instantly.
+   The family data itself always comes fresh from Google (it is not stored here). */
+const CACHE = 'vamshavali-v2';
+const FILES = ['./', 'index.html', 'manifest.webmanifest', 'privacy.html',
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
-self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
 });
-self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
-  event.respondWith(fetch(req).then(res => {
-    const copy=res.clone(); caches.open(CACHE_NAME).then(c=>c.put(req,copy)).catch(()=>{}); return res;
-  }).catch(()=>caches.match(req).then(r=>r || caches.match('/main.html') || caches.match('/index.html'))));
+
+// Own files: network first (so updates on GitHub show up), cached copy when offline.
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  e.respondWith(fetch(e.request).then(res => {
+    const copy = res.clone();
+    caches.open(CACHE).then(c => c.put(e.request, copy));
+    return res;
+  }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html'))));
 });

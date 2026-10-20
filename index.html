@@ -1,26 +1,152 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ne">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#087ed7"><link rel="manifest" href="/student-app.webmanifest"><link rel="icon" href="/skh-icon-192.png" type="image/png">
-<title>Swarup Sir's Knowledge Hub — Course Selection</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>न्यौपाने वंशावली · Neopane Family Tree</title>
+<meta name="description" content="न्यौपाने परिवारको वंशावली — Neopane Family Tree">
+<meta name="theme-color" content="#1F2A44">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="वंशावली">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>
+  /* ─────────────────────────────────────────────────────────────
+     PASTE YOUR APPS SCRIPT WEB APP LINK HERE (the one ending in /exec,
+     without ?page=admin). Everything else on this page works by itself.
+     ───────────────────────────────────────────────────────────── */
+  const APP_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+</script>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(135deg,#eef8ff,#f8fbff);min-height:100vh;color:#12304d}
-.page{width:min(1050px,94vw);margin:auto;padding:28px 0 50px}.hero{text-align:center;margin-bottom:28px}.hero img{width:min(230px,55vw);height:120px;object-fit:contain}.hero h1{margin:8px 0;color:#07508d;font-size:32px}.hero p{color:#55718b;font-size:17px}
-.section{background:#fff;border-radius:22px;padding:24px;margin:20px 0;box-shadow:0 10px 30px rgba(20,70,110,.10);border:1px solid #dcecf8}.section h2{margin:0 0 18px;color:#07508d}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.course{display:flex;flex-direction:column;justify-content:space-between;min-height:150px;padding:20px;border:2px solid #d8e8f5;border-radius:18px;background:#fbfdff}.course h3{margin:0 0 8px;color:#174d78}.course p{margin:0 0 18px;color:#647b91;line-height:1.45}.course button{border:0;border-radius:12px;padding:13px 16px;background:#087ed7;color:#fff;font-size:16px;font-weight:700;cursor:pointer}.teacher .course{background:#f9fbff}.teacher .course button{background:#334155}.note{text-align:center;color:#647b91;font-size:14px;margin-top:24px}
-</style></head><body><main class="page">
-<div class="hero"><img src="/swarup-sir-logo.png" alt="Swarup Sir's Knowledge Hub"><h1>Swarup Sir's Knowledge Hub</h1><p>Select the correct login portal. Student and Teacher portals are completely separate.</p></div>
-<section class="section"><h2>🎓 Student Login</h2><div class="cards">
-<div class="course"><div><h3>JNVST Class VI</h3><p>Navodaya Selection Test preparation for Class VI.</p></div><button onclick="student('JNVST-6')">Student Login →</button></div>
-<div class="course"><div><h3>JNVST Class IX</h3><p>Navodaya Selection Test preparation for Class IX.</p></div><button onclick="student('JNVST-9')">Student Login →</button></div>
-<div class="course"><div><h3>School Course</h3><p>School assignments, assessments and learning materials.</p></div><button onclick="student('SCHOOL')">Student Login →</button></div>
-</div></section>
-<section class="section teacher"><h2>👨‍🏫 Teacher Login</h2><div class="cards">
-<div class="course"><div><h3>JNVST</h3><p>Teacher dashboard for JNVST Class VI & IX.</p></div><button onclick="teacher('JNVST')">JNVST Teacher Login →</button></div>
-<div class="course"><div><h3>School Course</h3><p>Teacher dashboard for School Course classes and assessments.</p></div><button onclick="teacher('SCHOOL')">School Teacher Login →</button></div>
-</div></section>
-<div class="note">🔒 Student accounts can only enter the Student Portal. Teacher accounts can only enter the Teacher Portal.</div>
-</main><script>
-function student(course){localStorage.setItem('skh_selected_course',course);location.replace('/student-login.html?course='+encodeURIComponent(course))}
-function teacher(portal){location.replace('/teacher-login.html?portal='+encodeURIComponent(portal))}
-</script></body></html>
+  :root{--indigo:#1F2A44;--sindoor:#B3202A;--marigold:#E8A317;--paper:#F1F2EE}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--indigo);overflow:hidden}
+  body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:#F4F1EA}
+  #app{position:fixed;inset:0;width:100%;height:100%;border:0;background:var(--paper)}
+
+  /* splash while the family tree loads */
+  #splash{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--indigo);transition:opacity .35s}
+  #splash.gone{opacity:0;pointer-events:none}
+  #splash img{width:112px;height:112px;border-radius:26px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  #splash .t{font-size:24px;font-weight:700;color:#fff}
+  #splash .e{font-size:14px;color:#F3C969;margin-top:-10px}
+  #splash .dots{display:flex;gap:6px;margin-top:6px}
+  #splash .dots i{width:8px;height:8px;border-radius:50%;background:var(--marigold);animation:b 1s infinite}
+  #splash .dots i:nth-child(2){animation-delay:.15s}#splash .dots i:nth-child(3){animation-delay:.3s}
+  @keyframes b{0%,100%{opacity:.25}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){#splash .dots i{animation:none;opacity:.8}}
+  #splash .msg{max-width:340px;text-align:center;color:#DDE1EA;font-size:14px;padding:0 16px}
+  #splash .msg a{color:#F3C969}
+
+  /* install banner (real Install button where the browser allows it) */
+  .bar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:6;max-width:600px;margin:0 auto;
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--indigo);border-radius:16px;padding:12px 14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);border-top:4px solid var(--marigold)}
+  .bar img{width:44px;height:44px;border-radius:11px;flex:none}
+  .bar .tx{flex:1 1 200px;font-size:14px}
+  .bar .tx b{display:block;font-size:16px;color:#fff}
+  .bar .tx small{color:#C9CEDA}
+  .bar kbd{display:inline-block;padding:0 6px;border-radius:5px;background:rgba(255,255,255,.15);font:inherit}
+  .bar .ac{display:flex;gap:6px;margin-left:auto}
+  .bar button{font:inherit;min-height:40px;padding:6px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;cursor:pointer}
+  .bar button.go{background:var(--sindoor);border-color:var(--sindoor);font-weight:700}
+  .bar button:focus-visible{outline:2px solid var(--marigold);outline-offset:2px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="splash" role="status" aria-live="polite">
+  <img src="icons/icon-512.png" alt="">
+  <div class="t">न्यौपाने वंशावली</div>
+  <div class="e">Neopane Family Tree</div>
+  <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="msg" id="msg"></div>
+</div>
+
+<iframe id="app" title="न्यौपाने वंशावली · Neopane Family Tree"
+  allow="geolocation; clipboard-write; fullscreen"
+  referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+<div class="bar" id="bar" hidden>
+  <img src="icons/icon-192.png" alt="">
+  <div class="tx" id="barText"></div>
+  <div class="ac">
+    <button type="button" class="go" id="install" hidden>इन्स्टल · Install</button>
+    <button type="button" id="later">पछि · Later</button>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const frame = $('app'), splash = $('splash'), msg = $('msg');
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+  /* ---------- load the family tree ---------- */
+  if (!/^https:\/\/script\.google\.com\/.+\/exec/.test(APP_URL)) {
+    msg.innerHTML = 'Setup: open <b>index.html</b> on GitHub and paste your Apps Script web app link into <b>APP_URL</b>.';
+    document.querySelector('.dots').hidden = true;
+  } else if (!navigator.onLine) {
+    msg.innerHTML = 'इन्टरनेट छैन। जडान भएपछि फेरि खोल्नुहोस्।<br>You are offline. Please connect to the internet and open again.';
+    document.querySelector('.dots').hidden = true;
+  } else {
+    // shell=1 tells the family tree page that this front page handles the install banner.
+    frame.src = APP_URL + (APP_URL.includes('?') ? '&' : '?') + 'shell=1';
+    frame.addEventListener('load', () => setTimeout(() => splash.classList.add('gone'), 300));
+    setTimeout(() => {
+      if (!splash.classList.contains('gone')) msg.innerHTML = 'ढिलो भइरहेको छ… <a href="' + APP_URL + '">सिधै खोल्नुहोस् · Open directly</a>';
+    }, 15000);
+  }
+  window.addEventListener('online', () => { if (!frame.src && /\/exec/.test(APP_URL)) location.reload(); });
+
+  /* ---------- install ---------- */
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ua = navigator.userAgent || '';
+  const ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  let deferred = null;
+  const snoozed = () => { const t = +store.get('ft_install_later') || 0; return store.get('ft_install_done') || Date.now() - t < 7 * 864e5; };
+  function showBar(html, withButton) {
+    if (standalone || snoozed()) return;
+    $('barText').innerHTML = html;
+    $('install').hidden = !withButton;
+    $('bar').hidden = false;
+  }
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); deferred = e;
+    setTimeout(() => showBar('<b>फोनमा एप राख्नुहोस्</b><small>Install the family tree app — one tap</small>', true), 2500);
+  });
+  $('install').onclick = async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    const r = await deferred.userChoice;
+    deferred = null;
+    if (r && r.outcome === 'accepted') { $('bar').hidden = true; store.set('ft_install_done', '1'); }
+  };
+  $('later').onclick = () => { $('bar').hidden = true; store.set('ft_install_later', String(Date.now())); };
+  window.addEventListener('appinstalled', () => { $('bar').hidden = true; store.set('ft_install_done', '1'); });
+  if (ios) setTimeout(() => showBar('<b>फोनमा एप राख्नुहोस्</b><small>तल <kbd>⬆︎ Share</kbd> → <kbd>Add to Home Screen</kbd></small>', false), 3000);
+  if (standalone) store.set('ft_install_done', '1');
+
+  /* ---------- full screen (the tree's ⛶ button asks for it) ---------- */
+  window.addEventListener('message', e => {
+    const d = e.data || {};
+    if (d.ft !== 'fullscreen' || !/(^https:\/\/[\w.-]+\.googleusercontent\.com$)|(^https:\/\/script\.google\.com$)/.test(e.origin)) return;
+    try {
+      if (d.on && document.fullscreenEnabled && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+          .then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (x) {} }).catch(() => {});
+      } else if (!d.on && document.fullscreenElement) {
+        try { screen.orientation.unlock(); } catch (x) {}
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch (x) {}
+  });
+
+  /* ---------- offline support ---------- */
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
