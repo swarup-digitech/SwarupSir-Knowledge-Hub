@@ -33,13 +33,17 @@ function isCommonQ(q,keys){if(!q)return false;if(q.is_common)return true;const g
  * pool      normalised questions [{id,area,topic,variation_group,...}]
  * perfMap   Map(questionId -> perf)
  * scheduled Set(questionId) already given to this student before
- * o         {total, pct, focus:Set(area), avoid:boolean, useVariation:boolean, isSchool}
+ * o         {total, pct, focus:Set(area), avoid:boolean, useVariation:boolean, isSchool,
+ *            strictGroups:boolean  (V22) never put two questions of one Variation Group in the set –
+ *                                  also not among the mistakes, and no "last resort" repeat,
+ *            usedGroups:Set        (V22) groups already used elsewhere in the same paper (updated)}
  */
 function pickForStudent(pool,perfMap,scheduled,o){
   const total=Math.max(1,Math.floor(o.total)), pct=Math.min(100,Math.max(0,Number(o.pct)||0));
   const target=Math.min(total,Math.round(total*pct/100));
   const inFocus=q=>!o.focus||!o.focus.size||o.focus.has(q.area);
-  const items=[], used=new Set(), groups=new Set();
+  const strict=!!o.strictGroups;
+  const items=[], used=new Set(), groups=o.usedGroups instanceof Set?o.usedGroups:new Set();
   const take=(q,reason,extra)=>{
     items.push(Object.assign({q,reason},extra||{}));
     used.add(q.id); const g=varKey(q); if(g)groups.add(g);
@@ -55,6 +59,9 @@ function pickForStudent(pool,perfMap,scheduled,o){
     if(weak>=target)break;
     if(used.has(w.id))continue;
     const g=varKey(w); let chosen=null,reason='PREVIOUS_MISTAKE';
+    // V22: one mistake per Variation Group. The worst mistake of the group is asked now; the other
+    // mistakes of that group stay active and come back in a later paper.
+    if(strict&&g&&groups.has(g))continue;
     if(o.useVariation&&g){
       // prefer a different, never-attempted variation of the same concept
       const alt=shuffle(pool.filter(x=>x.id!==w.id&&varKey(x)===g&&!used.has(x.id)&&!perfOf(x.id)&&!(o.avoid&&scheduled.has(x.id))));
@@ -92,7 +99,8 @@ function pickForStudent(pool,perfMap,scheduled,o){
     }
   }
   // last resort: allow a second question of a variation group
-  if(items.length<total){
+  // (V22: not for papers – a paper is left short instead, and the screen says why)
+  if(items.length<total&&!strict){
     for(const q of shuffle(rest.filter(x=>!used.has(x.id)))){
       if(items.length>=total)break;
       take(q,perfOf(q.id)?'NEW_ATTEMPTED_BEFORE':'NEW_UNSEEN');
@@ -119,7 +127,11 @@ function areaStats(perfMap,catalogById,isSchool){
     .sort((a,b)=>(a.accuracy==null)-(b.accuracy==null)||a.accuracy-b.accuracy||b.active-a.active);
 }
 
-const api={isCorrectWord,isActiveMistake,pickForStudent,studentStats,areaStats,commonKeys,isCommonQ};
+// V22: how many questions can be chosen without repeating a Variation Group
+// (every group counts once, every question without a group counts once).
+function groupCapacity(pool){const k=new Set();(pool||[]).forEach(q=>k.add(varKey(q)?'g:'+varKey(q):'q:'+q.id));return k.size;}
+
+const api={isCorrectWord,isActiveMistake,pickForStudent,studentStats,areaStats,commonKeys,isCommonQ,varKey,groupCapacity};
 if(typeof module!=='undefined'&&module.exports){module.exports=api;}
 if(typeof window==='undefined')return;   // node: stop here (UI below needs the browser)
 

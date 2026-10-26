@@ -37,6 +37,10 @@ function completeGroups(groups){
 
 // Passage groups are chosen as whole units. pct% of the units are the ones that contain
 // the student's active mistakes (most mistakes first); the rest are new passages.
+// Variation Groups used by the questions of one passage unit (V22)
+const unitKeys=g=>new Set((g.questions||[]).map(vk).filter(Boolean));
+const overlaps=(g,taken)=>!!taken&&[...unitKeys(g)].some(k=>taken.has(k));
+
 function pickUnits(groups,perfMap,count,scheduled,o){
   count=Math.max(0,Math.floor(count));
   const pct=Math.min(100,Math.max(0,Number(o.pct)||0));
@@ -45,19 +49,24 @@ function pickUnits(groups,perfMap,count,scheduled,o){
   const info=new Map(groups.map(g=>[g.id,mset(g)]));
   const sched=g=>!!(o.avoid&&scheduled&&g.questions.some(q=>scheduled.has(q.id)));
   const seen=g=>g.questions.some(q=>perfMap.has(q.id));
+  const taken=o.usedGroups instanceof Set?o.usedGroups:new Set();   // V22: shared with the rest of the paper
   const units=[],used=new Set();
-  const take=(g,reason)=>{units.push({g,reason,mistakeIds:info.get(g.id)||new Set()});used.add(g.id);};
+  const take=(g,reason)=>{units.push({g,reason,mistakeIds:info.get(g.id)||new Set()});used.add(g.id);unitKeys(g).forEach(k=>taken.add(k));};
   const weakGroups=groups.filter(g=>info.get(g.id).size>0)
     .sort((a,b)=>info.get(b.id).size-info.get(a.id).size);
-  for(const g of weakGroups){if(units.length>=target)break;take(g,'PREVIOUS_MISTAKE');}
+  for(const g of weakGroups){if(units.length>=target)break;if(overlaps(g,taken))continue;take(g,'PREVIOUS_MISTAKE');}
   const tiers=[g=>!seen(g)&&!sched(g),g=>info.get(g.id).size===0&&!sched(g),g=>info.get(g.id).size===0,()=>true];
   const ck=o.commonFirst?(o.commonKeys||new Set()):null;
   const cg=g=>g.questions.some(q=>CAx.isCommonQ(q,ck));
-  const passes=o.commonFirst?[...tiers.slice(0,2).map(t=>g=>cg(g)&&t(g)),...tiers]:tiers;
+  const passes0=o.commonFirst?[...tiers.slice(0,2).map(t=>g=>cg(g)&&t(g)),...tiers]:tiers;
+  // V22: first only passages whose Variation Groups are not in the paper yet; a similar passage
+  // is used only when nothing else is left (a missing passage would be worse).
+  const passes=[...passes0.map(t=>g=>!overlaps(g,taken)&&t(g)),()=>true];
   for(const t of passes){
     if(units.length>=count)break;
     for(const g of shuffle(groups.filter(x=>!used.has(x.id)&&t(x)))){
       if(units.length>=count)break;
+      if(t!==passes[passes.length-1]&&overlaps(g,taken))continue;   // a unit taken in this pass may block the next one
       take(g,seen(g)?'NEW_ATTEMPTED_BEFORE':'NEW_UNSEEN');
     }
   }
@@ -67,20 +76,50 @@ function pickUnits(groups,perfMap,count,scheduled,o){
 // defs: [{key,heading,kind:'q'|'p',count,pool|groups}]
 function buildPlan(defs,perfMap,scheduled,o){
   const slots=[];let weak=0,total=0,short=0;
+  const usedGroups=new Set();   // V22: one Variation Group per PAPER (shared by all parts)
   for(const d of defs){
     if(!(d.count>0))continue;
     if(d.kind==='q'){
-      const r=CAx.pickForStudent(d.pool,perfMap,scheduled||new Set(),{total:d.count,pct:o.pct,isSchool:false,useVariation:!!o.useVariation,avoid:!!o.avoid,focus:null,commonFirst:!!o.commonFirst,commonKeys:o.commonKeys});
+      const r=CAx.pickForStudent(d.pool,perfMap,scheduled||new Set(),{total:d.count,pct:o.pct,isSchool:false,useVariation:!!o.useVariation,avoid:!!o.avoid,focus:null,commonFirst:!!o.commonFirst,commonKeys:o.commonKeys,strictGroups:true,usedGroups});
       const items=shuffle(r.items);
       slots.push({key:d.key,heading:d.heading,kind:'q',count:d.count,items,short:r.short});
       weak+=r.weakCount;total+=items.length;short+=r.short;
     }else{
-      const r=pickUnits(d.groups,perfMap,d.count,scheduled,o);
+      const r=pickUnits(d.groups,perfMap,d.count,scheduled,Object.assign({},o,{usedGroups}));
       slots.push({key:d.key,heading:d.heading,kind:'p',count:d.count,units:r.units,short:r.short*5});
       r.units.forEach(u=>{weak+=u.mistakeIds.size;total+=5;});short+=r.short*5;
     }
   }
-  return {slots,weak,total,short,verified:false};
+  const plan={slots,weak,total,short,verified:false};
+  repairPlan(plan,defs,perfMap,scheduled);   // safety net – normally finds nothing to fix
+  return plan;
+}
+
+// V22: list the questions of a plan that repeat a Variation Group used earlier in the same paper.
+function repeatedInPlan(plan){
+  const seen=new Map(),rep=[];
+  plan.slots.forEach((s,si)=>{
+    if(s.kind==='q')s.items.forEach((it,i)=>{const g=vk(it.q);if(!g)return;if(seen.has(g))rep.push({si,i,group:String(it.q.variation_group).trim()});else seen.set(g,{si,i});});
+    else s.units.forEach(u=>unitKeys(u.g).forEach(g=>{if(!seen.has(g))seen.set(g,{si,unit:true});}));
+  });
+  return rep;
+}
+// V22: replace every repeated question with the best question of a group not yet in the paper.
+// Mistakes are kept where possible: the repeated copy is the later one, the first one stays.
+function repairPlan(plan,defs,perfMap,scheduled){
+  let fixed=0;const left=[];
+  for(const r of repeatedInPlan(plan)){
+    const slot=plan.slots[r.si],def=(defs||[]).find(d=>d.key===slot.key);
+    if(!def){left.push(r);continue;}
+    const c=candidatesFor(def,slot,plan,perfMap||new Map(),scheduled,r.i);
+    if(!c.length){left.push(r);continue;}
+    const best=c[0].rank,top=c.filter(z=>z.rank===best&&z.common===c[0].common);
+    const pick=top[Math.floor(Math.random()*top.length)];
+    const p=(perfMap||new Map()).get(pick.q.id);
+    slot.items[r.i]={q:pick.q,reason:reasonOfCandidate(pick,perfMap||new Map()),wrongCount:p?p.wrong||0:0};
+    fixed++;
+  }
+  return {fixed,left};
 }
 function planStats(plan){
   let weak=0,total=0,short=0;
@@ -118,17 +157,22 @@ const cfgCommon=()=>_cfgCommon,cfgCommonKeys=()=>_cfgKeys;
 function candidatesFor(def,slot,plan,perfMap,scheduled,skipIdx){
   const sch=scheduled||new Set();
   if(slot.kind==='p'){
-    const have=new Set();slot.units.forEach((u,i)=>{if(i!==skipIdx)have.add(u.g.id);});
+    const have=new Set(),taken=new Set();
+    plan.slots.forEach(s=>{
+      if(s.kind==='q')s.items.forEach(it=>{const g=vk(it.q);if(g)taken.add(g);});
+      else s.units.forEach((u,i)=>{if(s===slot&&i===skipIdx)return;if(s===slot)have.add(u.g.id);unitKeys(u.g).forEach(k=>taken.add(k));});
+    });
     const info=g=>g.questions.filter(q=>isMistake(perfMap.get(q.id))).length;
     return def.groups.filter(g=>!have.has(g.id)).map(g=>{
       const m=info(g),seen=g.questions.some(q=>perfMap.has(q.id)),sc=g.questions.some(q=>sch.has(q.id));
-      return {g,mistakes:m,common:cfgCommon()&&g.questions.some(q=>CAx.isCommonQ(q,cfgCommonKeys())),rank:(m===0&&!seen&&!sc)?0:(m===0&&!sc)?1:(m===0)?2:3};
-    }).sort((a,b)=>(b.common-a.common)||(a.rank-b.rank));
+      // V22: passages that repeat a Variation Group already in the paper come last
+      return {g,mistakes:m,common:cfgCommon()&&g.questions.some(q=>CAx.isCommonQ(q,cfgCommonKeys())),rank:((m===0&&!seen&&!sc)?0:(m===0&&!sc)?1:(m===0)?2:3)+(overlaps(g,taken)?10:0)};
+    }).sort((a,b)=>(a.rank>=10)-(b.rank>=10)||(b.common-a.common)||(a.rank-b.rank));
   }
   const used=new Set(),groups=new Set();
   plan.slots.forEach(s=>{
     if(s.kind==='q')s.items.forEach((it,i)=>{if(s===slot&&i===skipIdx)return;used.add(it.q.id);const g=vk(it.q);if(g)groups.add(g);});
-    else s.units.forEach(u=>u.g.questions.forEach(q=>used.add(q.id)));
+    else s.units.forEach(u=>u.g.questions.forEach(q=>{used.add(q.id);const g=vk(q);if(g)groups.add(g);}));   // V22: passage groups count too
   });
   return def.pool.filter(q=>!used.has(q.id)&&!(vk(q)&&groups.has(vk(q)))).map(q=>{
     const p=perfMap.get(q.id),m=isMistake(p);
@@ -138,7 +182,7 @@ function candidatesFor(def,slot,plan,perfMap,scheduled,skipIdx){
 const reasonOfCandidate=(c,perfMap)=>perfMap.get(c.q.id)?(c.mistake?'PREVIOUS_MISTAKE':'NEW_ATTEMPTED_BEFORE'):'NEW_UNSEEN';
 
 const getParts=()=>(typeof QP_COMMON_PARTS!=='undefined'&&Array.isArray(QP_COMMON_PARTS)&&QP_COMMON_PARTS.length)?QP_COMMON_PARTS:PARTS;   // the app's own list wins
-const api={shuffle,completeGroups,pickUnits,buildPlan,planStats,rowsFromPlan,candidatesFor,setCommonCtx,PARTS};
+const api={shuffle,completeGroups,pickUnits,buildPlan,planStats,rowsFromPlan,candidatesFor,setCommonCtx,repeatedInPlan,repairPlan,PARTS};
 if(typeof module!=='undefined'&&module.exports){module.exports=api;}
 if(typeof window==='undefined')return;   // node: stop here (UI below needs the browser)
 root.CAP_API=api;
@@ -233,7 +277,9 @@ function defsFor(cfg){
   });
 }
 const defLabel=d=>d.heading?d.heading.replace(/^PART [IVX]+ — /,''):d.key==='EVS_MCQ'?'EVS questions':d.key==='EVS_PASSAGE'?'EVS passages':d.key==='LANGUAGE_PASSAGE'?'Language passages':'Arithmetic';
-const defAvail=d=>d.kind==='q'?d.pool.length:d.groups.length;
+// V22: for questions, what limits a paper is the number of DIFFERENT Variation Groups, not questions
+const defAvail=d=>d.kind==='q'?CAx.groupCapacity(d.pool):d.groups.length;
+const availText=d=>d.kind==='q'?`${d.pool.length} questions in ${defAvail(d)} groups`:`${defAvail(d)}`;
 
 function structureHtml(){
   const sub=(q$('capSubject')?.value||'MAT').toUpperCase();
@@ -258,7 +304,8 @@ function paintAvail(){
   const box=q$('capAvail');if(!box)return;
   try{
     const cfg=readCfg();S.defs=defsFor(cfg);
-    box.innerHTML='Available in your bank: '+S.defs.map(d=>`<span class="tag" style="background:${d.count>defAvail(d)?'#fee2e2':'#f1f5f9'};color:${d.count>defAvail(d)?'#991b1b':'#334155'}">${esc(defLabel(d))}: ${defAvail(d)}${d.count>defAvail(d)?' (need '+d.count+')':''}</span>`).join(' ');
+    box.innerHTML='Available in your bank: '+S.defs.map(d=>`<span class="tag" style="background:${d.count>defAvail(d)?'#fee2e2':'#f1f5f9'};color:${d.count>defAvail(d)?'#991b1b':'#334155'}">${esc(defLabel(d))}: ${esc(availText(d))}${d.count>defAvail(d)?' (need '+d.count+')':''}</span>`).join(' ')
+      +'<div class="muted" style="margin-top:4px">A paper never has two questions of the same Variation Group, so the number of different groups is the limit.</div>';
     const ids=new Set();S.defs.forEach(d=>(d.kind==='q'?d.pool:d.groups.flatMap(g=>g.questions)).forEach(q=>ids.add(q.id)));S.poolIds=ids;
   }catch(e){box.textContent='';S.poolIds=new Set();}
 }
@@ -351,7 +398,7 @@ function capGenerate(){
   const active=S.defs.filter(d=>d.count>0);
   if(!active.length)return notify('Enter how many questions each part needs.');
   const lack=active.filter(d=>defAvail(d)<d.count);
-  if(lack.length)return notify('Not enough questions in your bank: '+lack.map(d=>`${defLabel(d)} needs ${d.count}, has ${defAvail(d)}`).join('; '));
+  if(lack.length)return notify('Not enough different questions in your bank (one per Variation Group): '+lack.map(d=>`${defLabel(d)} needs ${d.count}, has ${d.kind==='q'?defAvail(d)+' different Variation Groups':defAvail(d)}`).join('; ')+'. Add questions in new Variation Groups or lower the number.');
   S.cfg=cfg;S.plans=new Map();
   const ckeys=CAx.commonKeys(S.bank);setCommonCtx(cfg.commonFirst,ckeys);
   const o={pct:cfg.pct,avoid:cfg.avoid,useVariation:cfg.useVariation,commonFirst:cfg.commonFirst,commonKeys:ckeys};
@@ -526,7 +573,9 @@ async function capPrint(){
   const bad=papers.filter(p=>p.report.errors.length);
   const out=q$('capOut');
   if(bad.length){
-    out.innerHTML=`<div class="notice"><b>${bad.length} paper${bad.length===1?'':'s'} need${bad.length===1?'s':''} attention before printing:</b><ul style="margin:6px 0 0 18px">${bad.map(p=>`<li><b>${esc(p.report.setLabel)}</b> — ${p.report.errors.map(esc).join('; ')}</li>`).join('')}</ul></div>`;
+    const vg=bad.filter(p=>p.report.errors.some(e=>/Variation Group/i.test(e))).length;
+    out.innerHTML=`<div class="notice"><b>${bad.length} paper${bad.length===1?'':'s'} need${bad.length===1?'s':''} attention before printing:</b><ul style="margin:6px 0 0 18px">${bad.map(p=>`<li><b>${esc(p.report.setLabel)}</b> — ${p.report.errors.map(esc).join('; ')}</li>`).join('')}</ul>
+      ${vg?`<div class="actions" style="margin-top:8px"><button onclick="capFixRepeats()">🔧 Fix repeated Variation Groups automatically (${vg} paper${vg===1?'':'s'})</button></div><div class="small muted">Each repeated question is replaced by the best question from a group that is not in that paper yet. Changed papers are marked “not verified” so you can check them.</div>`:''}</div>`;
     return;
   }
   const unver=papers.filter(p=>!p.plan.verified).length;
@@ -556,6 +605,21 @@ async function capPrint(){
     try{w.close();}catch(_){}
     out.innerHTML=`<div class="notice">Could not save the papers: ${esc(e.message||e)}<br><span class="small">Nothing was printed. Run the JNVST generated question paper history SQL if the table does not exist.</span></div>`;
   }
+}
+// V22: replace repeated Variation Group questions in all generated papers
+function capFixRepeats(){
+  if(!S||!S.plans.size)return;
+  let fixed=0,papers=0;const left=[];
+  S.plans.forEach((plan,sid)=>{
+    const r=repairPlan(plan,S.defs,S.perf.get(sid)||new Map(),S.scheduled.get(sid)||new Set());
+    if(r.fixed){fixed+=r.fixed;papers++;plan.verified=false;}
+    if(r.left.length){const s=S.students.find(x=>x.id===sid);left.push(`${s?.roll_no||''} ${s?.full_name||''}`.trim()+' ('+r.left.map(x=>x.group).join(', ')+')');}
+  });
+  paintPreview();
+  const out=q$('capOut');
+  if(out)out.innerHTML=fixed||!left.length
+    ?`<div class="success">Replaced ${fixed} repeated question${fixed===1?'':'s'} in ${papers} paper${papers===1?'':'s'}. These papers are marked not verified — please check them, then press <b>Save to history &amp; print</b> again.</div>${left.length?`<div class="notice small">Could not fix (no other group left in the bank): ${left.map(esc).join('; ')}</div>`:''}`
+    :`<div class="notice">Nothing could be replaced: the bank has no other Variation Group left for ${left.map(esc).join('; ')}. Add questions in new groups or use ✎ Choose… / ✕ in those papers.</div>`;
 }
 function capPreviewOne(sid){
   const cfg=S.cfg;const papers=gatherPapers();const p=papers.find(x=>x.s.id===sid);if(!p)return;
@@ -596,5 +660,5 @@ function capViewGroup(records){
   }finally{qpState.mode=oldMode;}
 }
 
-Object.assign(root,{customAdaptivePaperHome,capSubjectChanged,capSettingsChanged,capFilter,capSelectVisible,capToggleStudent,capGenerate,capOpened,capSwap,capChoose,capAdd,capRemove,capVerify,capVerifyAll,capPrint,capPreviewOne,capAnswerExcel,capPickerClose,capPickerRender,capPickerUse,capDecorate:decorate,capViewGroup,capState:()=>S});
+Object.assign(root,{customAdaptivePaperHome,capSubjectChanged,capSettingsChanged,capFilter,capSelectVisible,capToggleStudent,capGenerate,capOpened,capSwap,capChoose,capAdd,capRemove,capVerify,capVerifyAll,capPrint,capFixRepeats,capPreviewOne,capAnswerExcel,capPickerClose,capPickerRender,capPickerUse,capDecorate:decorate,capViewGroup,capState:()=>S});
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,8 +1,5 @@
 /* Supabase/PostgREST returns at most 1000 rows per request. Load every page so large question banks are not silently truncated (newest uploads were missing from the generator). */
-async function sbFetchAll(build,pageSize=1000,orderCols=['id']){const all=[];let from=0;for(let guard=0;guard<200;guard++){let q=build();for(const c of orderCols)q=q.order(c,{ascending:true});const {data,error}=await q.range(from,from+pageSize-1);if(error)return {data:null,error};const n=(data||[]).length;all.push(...(data||[]));if(n<pageSize)break;from+=n;}return {data:all,error:null};}
-/* V22: run a query for a long list of ids in parallel chunks (a single .in() with hundreds of ids makes the request address too long and fails).
-   build(chunk) must return a fresh query. Each chunk is paged, so results above 1000 rows are not cut off. */
-async function sbInChunks(build,ids,orderCols=['id'],chunk=120){const list=[...new Set((ids||[]).filter(Boolean))];if(!list.length)return {data:[],error:null};const parts=[];for(let i=0;i<list.length;i+=chunk)parts.push(list.slice(i,i+chunk));const res=await Promise.all(parts.map(p=>sbFetchAll(()=>build(p),1000,orderCols)));const bad=res.find(r=>r.error);if(bad)return {data:null,error:bad.error};return {data:res.flatMap(r=>r.data||[]),error:null};}
+async function sbFetchAll(build,pageSize=1000){const all=[];let from=0;for(let guard=0;guard<200;guard++){const {data,error}=await build().order('id',{ascending:true}).range(from,from+pageSize-1);if(error)return {data:null,error};const n=(data||[]).length;if(!n)break;all.push(...data);from+=n;}return {data:all,error:null};}
 /* Swarup Sir's Knowledge Hub — Teacher tools (V13)
  * Loaded by main.html only after a TEACHER logs in, so students no longer
  * download ~542 KB of teacher-only code.
@@ -607,9 +604,9 @@ function qpValidatePaperQuality(rows, subjectOverride, setLabel){
   if(subject==='ARITHMETIC'){
     const bad=list.filter(q=>!qpQuestionSubjectMatches(q)||String(q.part_code||'').toUpperCase()!=='ARITHMETIC');
     add(!bad.length,'Arithmetic subject isolation',bad.length?`Non-Arithmetic question(s): ${bad.map(q=>q._number).join(', ')}.`:'All questions are Arithmetic.');
-    const groups=new Map();list.forEach(q=>{const g=qpQualityText(q.variation_group).toLowerCase();if(g){if(!groups.has(g))groups.set(g,[]);groups.get(g).push(q._number);}});
-    const dup=[...groups.values()].filter(a=>a.length>1);
-    add(!dup.length,'Variation Group uniqueness',dup.length?`Repeated group(s): ${dup.map(a=>a.join(', ')).join(' | ')}.`:'No Variation Group is repeated.');
+    const groups=new Map(),gname=new Map();list.forEach(q=>{const g=qpQualityText(q.variation_group).toLowerCase();if(g){if(!groups.has(g)){groups.set(g,[]);gname.set(g,qpQualityText(q.variation_group));}groups.get(g).push(q._number);}});
+    const dup=[...groups.entries()].filter(([,a])=>a.length>1);
+    add(!dup.length,'Variation Group uniqueness',dup.length?`Repeated group(s): ${dup.map(([g,a])=>`Q${a.join(' & Q')} (${gname.get(g)})`).join(' | ')}.`:'No Variation Group is repeated.');
   }
   if(subject==='EVS'){
     const passageFlags=list.map(q=>qpIsPassage(q));
@@ -1725,8 +1722,7 @@ async function ensureJnvstBaseClasses(allClasses){
    const {data,error}=await sb.from("classes").insert({name:base.name,description:base.description,teacher_id:current.id,course:base.course,jnvst_group_type:"MAIN",jnvst_parent_id:null}).select("*").single();
    if(error)throw error;
    found=data; created.push(data); existing.push(data);
-  }else if(found.name!==base.name||found.description!==base.description||found.course!==base.course||String(found.jnvst_group_type||"").toUpperCase()!=="MAIN"||found.jnvst_parent_id){
-   // V22: only write when the fixed class really needs correcting (it used to be re-saved on every dashboard open).
+  }else{
    const {data,error}=await sb.from("classes").update({name:base.name,description:base.description,course:base.course,jnvst_group_type:"MAIN",jnvst_parent_id:null}).eq("id",found.id).eq("teacher_id",current.id).select("*").single();
    if(error)throw error;
    found=data;
@@ -1979,25 +1975,18 @@ async function importFeeExcel(confirmImport=false){
 }
 async function teacherHome(){
  if(schoolTeacherMode){ location.replace("teacher-dashboard.html"); return; }
- // V22: everything the dashboard needs is requested at the same time, in one round.
- //  - students: only JNVST students are requested (School students used to be downloaded and thrown away)
- //  - assignments / students / memberships are paged, so nothing is cut off after 1000 rows
- //  - class memberships are requested together with the classes instead of afterwards
- const loadMembers=()=>sbFetchAll(()=>sb.from("class_students").select("student_id,class_id,classes!inner(teacher_id)").eq("classes.teacher_id",current.id),1000,["student_id","class_id"]);
- let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje},{data:lessonRows,error:lje},{data:allMembers,error:me0}]=await Promise.all([
+ let [{data:allClasses,error:ce},{data:allAssignments,error:ae},{data:allStudents,error:se},{data:subjectRows,error:sje},{data:lessonRows,error:lje}]=await Promise.all([
    sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false}),
-   sbFetchAll(()=>sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false})),
-   sbFetchAll(()=>sb.from("profiles").select("*").eq("role","student").or("course.ilike.*jnvst-6*,course.ilike.*jnvst-9*").order("full_name")),
+   sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
+   sb.from("profiles").select("*").eq("role","student").order("full_name"),
    sb.from("jnvst_subjects").select("*").eq("teacher_id",current.id).order("name"),
-   sb.from("jnvst_subject_lessons").select("*").eq("teacher_id",current.id).order("lesson_code").order("lesson_name"),
-   loadMembers()
+   sb.from("jnvst_subject_lessons").select("*").eq("teacher_id",current.id).order("lesson_code").order("lesson_name")
  ]);
  if(sje||lje) return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard",false)}<div class="card">${message("Please run JNVST_GROUP_SUBJECT_MANAGEMENT.sql and JNVST_SUBJECT_LESSON_CATEGORY_MIGRATION.sql in Supabase first. "+(sje||lje).message)}</div></div>`);
  jnvstSubjects=subjectRows||[];
  jnvstSubjectLessons=lessonRows||[];
  if(ce||ae||se)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message((ce||ae||se).message)}</div></div>`);
  try{
-  const classIdsBefore=(allClasses||[]).map(c=>c.id).sort().join(",");
   allClasses=await ensureJnvstBaseClasses(allClasses||[]);
   const migration=await migrateLegacyNavodayaGroups(allClasses);
   allClasses=migration.classes;
@@ -2010,10 +1999,6 @@ async function teacherHome(){
   }
   allAssignments=await normalizeJnvstAssignmentGroups(allClasses,allAssignments||[]);
   window._jnvstMigration=migration;
-  // Groups were merged or students moved by the one-time repair above: read the memberships again.
-  if(migration.groupsMigrated?.length||(allClasses||[]).map(c=>c.id).sort().join(",")!==classIdsBefore){
-   const r=await loadMembers();allMembers=r.data;me0=r.error;
-  }
  }catch(e){return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message("Could not prepare the fixed JNVST classes or migrate the previous Navodaya groups: "+(e.message||e))}</div></div>`)}
  const classes=(allClasses||[]).filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL");
  const classIds=new Set(classes.map(c=>c.id));
@@ -2022,11 +2007,7 @@ async function teacherHome(){
  // profiles from appearing on the JNVST dashboard.
  let students=[];
  if(classIds.size){
-   let members=(allMembers||[]).filter(x=>classIds.has(x.class_id)),me=me0;
-   if(me){ // fallback: the older way (one more request), in case the combined request is not allowed
-     const r=await sbFetchAll(()=>sb.from("class_students").select("student_id,class_id").in("class_id",[...classIds]),1000,["student_id","class_id"]);
-     members=r.data||[];me=r.error;
-   }
+   const {data:members,error:me}=await sb.from("class_students").select("student_id,class_id").in("class_id",[...classIds]);
    if(me)return render(`<div class="wrap">${header("JNVST Course Teacher Dashboard")}<div class="card">${message(me.message)}</div></div>`);
    const cm=new Map((members||[]).map(x=>[x.student_id,x.class_id]));
    students=(allStudents||[]).filter(st=>["JNVST-6","JNVST-9"].includes(String(st.course||"").trim().toUpperCase()) && cm.has(st.id)).map(st=>({...st,class_id:cm.get(st.id)||""}));
@@ -2048,7 +2029,7 @@ async function schoolAssignmentManagement(){
   schoolTeacherMode=true;
   try{await ensureSchoolSubjects();
     const [{data:assignments,error:ae},{data:classes,error:ce},{data:groups,error:ge}]=await Promise.all([
-      sbFetchAll(()=>sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false})),
+      sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
       sb.from("classes").select("id,name,description,course").eq("teacher_id",current.id).eq("course","SCHOOL").order("name"),
       sb.from("school_course_groups").select("id,name,class_id,description").eq("teacher_id",current.id).order("name")
     ]);
@@ -2058,7 +2039,7 @@ async function schoolAssignmentManagement(){
     window._schoolAssignmentClasses=schoolClasses;window._schoolAssignmentGroups=groups||[];window._schoolAssignments=list;
     const qCounts=new Map();
     if(list.length){
-      const {data:q,error:qe}=await sbInChunks(ch=>sb.from("questions").select("id,assignment_id").in("assignment_id",ch),list.map(a=>a.id),["id"],40);
+      const {data:q,error:qe}=await sb.from("questions").select("assignment_id").in("assignment_id",list.map(a=>a.id));
       if(qe)throw qe;(q||[]).forEach(x=>qCounts.set(x.assignment_id,(qCounts.get(x.assignment_id)||0)+1));
     }
     const cards=list.map(a=>{
@@ -2728,11 +2709,6 @@ function jnvstQbQuestionPreview(q){
 }
 function jnvstQbSubjectOptions(selected=''){return `<option value="">Select Subject</option>${(jnvstSubjects||[]).map(x=>`<option value="${esc(x.id)}" ${selected===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}`}
 function jnvstQbLessonOptions(subjectId,selected=''){const rows=(jnvstSubjectLessons||[]).filter(x=>x.subject_id===subjectId);const roots=rows.filter(x=>!x.parent_lesson_id);const out=[];const add=(l,d=0)=>{out.push(`<option value="${esc(l.id)}" ${selected===l.id?'selected':''}>${'— '.repeat(d)}${esc(l.lesson_code||'')} ${esc(l.lesson_name)}</option>`);rows.filter(x=>x.parent_lesson_id===l.id).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x,d+1))};roots.sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true})).forEach(x=>add(x));return `<option value="">Select Lesson / Sub-lesson</option>${out.join('')}`}
-/* V22: JNVST Question Bank paging + search that waits until you stop typing */
-const JNVST_QB_PAGE=50;
-function jnvstQbFilterSig(){return ['jnvstQbSubjectFilter','jnvstQbMediumFilter','jnvstQbLessonFilter','jnvstQbVariationFilter','jnvstQbDifficultyFilter','jnvstQbCommonFilter','jnvstQbExplAsFilter','jnvstQbSearch'].map(id=>document.getElementById(id)?.value||'').join('\u0001');}
-let __jnvstQbSearchTimer=null;
-function jnvstQbSearchDebounced(){clearTimeout(__jnvstQbSearchTimer);__jnvstQbSearchTimer=setTimeout(()=>jnvstQbRenderTable(),300);}
 async function jnvstQuestionBankHome(){
  const {data:q,error}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false}));
  if(error)return notify('Could not load JNVST Question Bank: '+error.message);
@@ -2743,10 +2719,10 @@ async function jnvstQuestionBankHome(){
   <div class="card"><div class="notice"><b>JNVST Course Question Bank is separate from School Course.</b> Questions are stored in <b>mock_question_bank</b> and use <b>Subject → Lesson → Sub-lesson → Topic → Variation/Fixed metadata</b>.</div>
    <div class="actions"><button onclick="jnvstQuestionBulkUpload()">📥 Bulk Upload JNVST Questions</button><button class="secondary" onclick="downloadJnvstQuestionTemplate()">⬇ Excel Template</button><button class="secondary" onclick="manageJnvstClasses()">← Manage JNVST Subjects</button></div>
   </div>
-  <div class="card"><div class="grid"><div><label>Subject</label><select id="jnvstQbSubjectFilter" onchange="jnvstQbSubjectChanged(this.value)">${jnvstQbSubjectOptions(subj)}</select></div><div><label>Medium</label><select id="jnvstQbMediumFilter" onchange="jnvstQbContextChanged()"><option value="">All Mediums</option><option value="COMMON">Common (MAT)</option><option value="ENGLISH">English</option><option value="ASSAMESE">Assamese</option></select></div><div><label>Lesson / Sub-lesson</label><select id="jnvstQbLessonFilter" onchange="jnvstQbContextChanged()"><option value="">All Lessons</option></select></div><div><label>Variation Group</label><select id="jnvstQbVariationFilter" onchange="jnvstQbVariationChanged(this.value)"><option value="">All Variations</option></select></div><div><label>Difficulty Level</label><select id="jnvstQbDifficultyFilter" onchange="jnvstQbRenderTable()"><option value="">All Levels</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option><option value="NONE">Not set</option></select></div><div><label>Common</label><select id="jnvstQbCommonFilter" onchange="jnvstQbRenderTable()"><option value="">All questions</option><option value="YES">⭐ Common only</option><option value="NO">Not common</option></select></div><div><label>Search / Topic / Group</label><input id="jnvstQbSearch" placeholder="Search..." oninput="jnvstQbSearchDebounced()"></div></div>
+  <div class="card"><div class="grid"><div><label>Subject</label><select id="jnvstQbSubjectFilter" onchange="jnvstQbSubjectChanged(this.value)">${jnvstQbSubjectOptions(subj)}</select></div><div><label>Medium</label><select id="jnvstQbMediumFilter" onchange="jnvstQbContextChanged()"><option value="">All Mediums</option><option value="COMMON">Common (MAT)</option><option value="ENGLISH">English</option><option value="ASSAMESE">Assamese</option></select></div><div><label>Lesson / Sub-lesson</label><select id="jnvstQbLessonFilter" onchange="jnvstQbContextChanged()"><option value="">All Lessons</option></select></div><div><label>Variation Group</label><select id="jnvstQbVariationFilter" onchange="jnvstQbVariationChanged(this.value)"><option value="">All Variations</option></select></div><div><label>Difficulty Level</label><select id="jnvstQbDifficultyFilter" onchange="jnvstQbRenderTable()"><option value="">All Levels</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option><option value="NONE">Not set</option></select></div><div><label>Common</label><select id="jnvstQbCommonFilter" onchange="jnvstQbRenderTable()"><option value="">All questions</option><option value="YES">⭐ Common only</option><option value="NO">Not common</option></select></div><div><label>Search / Topic / Group</label><input id="jnvstQbSearch" placeholder="Search..." oninput="jnvstQbRenderTable()"></div></div>
     <div class="actions" style="margin-top:12px;align-items:center;flex-wrap:wrap">
       <button onclick="jnvstQbDeleteSelected()" class="danger">🗑 Delete Selected (<span id="jnvstQbSelectedCount">0</span>)</button>
-      <button onclick="jnvstQbDeleteFiltered()" class="danger">🗑 Delete All Matching Filters</button>
+      <button onclick="jnvstQbDeleteFiltered()" class="danger">🗑 Delete All Visible</button>
       <button onclick="jnvstQbDeleteLesson()" class="danger">🗑 Delete Selected Lesson</button>
       <button onclick="jnvstQbDeleteSubject()" class="danger">🗑 Delete Selected Subject</button>
       <button class="secondary" onclick="jnvstQbClearSelection()">Clear Selection</button>
@@ -3203,31 +3179,13 @@ function jnvstBulkUploadUnlock(){
 async function newJnvstMainGroup(){
  render(`<div class="wrap">${header("Create JNVST Main Group")}<div class="card"><label>Main Group Name</label><input id="jnvstMainName" placeholder="e.g. JNVST-V (Foundation)"><label>Description</label><textarea id="jnvstMainDesc" placeholder="Optional description"></textarea><div class="actions"><button onclick="saveJnvstMainGroup()">Create Main Group</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`);
 }
-/* V22: after adding/editing a group, subject or lesson, reload only what changed and go straight back to the
-   Manage Groups & Subjects page (it used to reload the whole dashboard first and then jump after 200 ms). */
-async function jnvstRefreshAndManage(what){
- try{
-  if(what==='groups'){
-   const {data,error}=await sb.from("classes").select("*").eq("teacher_id",current.id).order("created_at",{ascending:false});if(error)throw error;
-   window._jnvstClasses=(data||[]).filter(c=>String(c.course||"").trim().toUpperCase()!=="SCHOOL");
-  }else{
-   const [a,b]=await Promise.all([
-    sb.from("jnvst_subjects").select("*").eq("teacher_id",current.id).order("name"),
-    sb.from("jnvst_subject_lessons").select("*").eq("teacher_id",current.id).order("lesson_code").order("lesson_name")
-   ]);
-   if(a.error)throw a.error;if(b.error)throw b.error;
-   jnvstSubjects=a.data||[];jnvstSubjectLessons=b.data||[];
-  }
-  manageJnvstClasses();
- }catch(e){console.warn('Quick refresh failed, reloading the dashboard',e);await teacherHome();setTimeout(manageJnvstClasses,200);}
-}
 async function saveJnvstMainGroup(){
  const name=document.getElementById("jnvstMainName")?.value.trim(),desc=document.getElementById("jnvstMainDesc")?.value.trim()||"";
  if(!name)return notify("Enter a main group name.");
  if((window._jnvstClasses||[]).some(c=>!isJnvstSubGroup(c)&&String(c.name||"").trim().toLowerCase()===name.toLowerCase()))return notify("A main group with this name already exists.");
  const {data,error}=await sb.from("classes").insert({name,description:`JNVST_MAIN_GROUP| ${desc}`.trim(),teacher_id:current.id,course:"JNVST-CUSTOM",jnvst_group_type:"MAIN",jnvst_parent_id:null}).select("*").single();
  if(error)return notify(error.message);
- await jnvstRefreshAndManage('groups');
+ await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function newJnvstSubgroup(parentId){
  const parent=(window._jnvstClasses||[]).find(c=>c.id===parentId) || (window._jnvstClasses||[]).find(c=>jnvstBaseKey(c)===parentId);
@@ -3244,7 +3202,7 @@ async function saveJnvstSubgroup(parentId){
  const fullDesc=key?`JNVST_SUBGROUP_PARENT:${key}| ${desc}`.trim():`JNVST_SUBGROUP_PARENT_ID:${parent.id}| ${desc}`.trim();
  const {error}=await sb.from("classes").insert({name,description:fullDesc,teacher_id:current.id,course,jnvst_group_type:"SUB",jnvst_parent_id:parent.id});
  if(error)return notify(error.message);
- await jnvstRefreshAndManage('groups');
+ await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function newJnvstSubject(){
  render(`<div class="wrap">${header("Create JNVST Subject")}<div class="card"><label>Subject Name</label><input id="jnvstSubjectName" placeholder="e.g. Mathematics"><label>Description</label><textarea id="jnvstSubjectDesc" placeholder="Optional description"></textarea><div class="actions"><button onclick="saveJnvstSubject()">Create Subject</button><button class="secondary" onclick="manageJnvstClasses()">Cancel</button></div></div></div>`);
@@ -3255,7 +3213,7 @@ async function saveJnvstSubject(){
  if((jnvstSubjects||[]).some(x=>String(x.name).trim().toLowerCase()===name.toLowerCase()))return notify("This subject already exists.");
  const {data,error}=await sb.from("jnvst_subjects").insert({teacher_id:current.id,name,description}).select("*").single();
  if(error)return notify(error.message);
- jnvstSubjects.push(data);await jnvstRefreshAndManage('subjects');
+ jnvstSubjects.push(data);await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function newJnvstLesson(subjectId,parentId=''){
  const subject=(jnvstSubjects||[]).find(x=>x.id===subjectId);if(!subject)return notify('Subject not found.');
@@ -3268,7 +3226,7 @@ async function saveJnvstLesson(subjectId,parentId=''){
  if(!/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(code))return notify('Use a simple lesson code such as 1, 1.1 or 1.2.');
  const exists=(jnvstSubjectLessons||[]).find(x=>x.subject_id===subjectId&&String(x.lesson_code||'').trim().toLowerCase()===code.toLowerCase());if(exists)return notify('This lesson code already exists under the selected subject.');
  const {data,error}=await sb.from('jnvst_subject_lessons').insert({teacher_id:current.id,subject_id:subjectId,parent_lesson_id:parentId||null,lesson_code:code,lesson_name:name,description}).select('*').single();
- if(error)return notify(error.message);jnvstSubjectLessons.push(data);await jnvstRefreshAndManage('subjects');
+ if(error)return notify(error.message);jnvstSubjectLessons.push(data);await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function editJnvstLesson(id){
  const l=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!l)return notify('Lesson not found.');
@@ -3279,13 +3237,13 @@ async function updateJnvstLesson(id){
  const code=document.getElementById('jnvstLessonCode')?.value.trim(),name=document.getElementById('jnvstLessonName')?.value.trim(),description=document.getElementById('jnvstLessonDesc')?.value.trim()||null;
  if(!code||!name)return notify('Enter both lesson code and lesson name.');
  const dup=(jnvstSubjectLessons||[]).find(x=>x.id!==id&&x.subject_id===l.subject_id&&String(x.lesson_code||'').trim().toLowerCase()===code.toLowerCase());if(dup)return notify('This lesson code already exists under the subject.');
- const {data,error}=await sb.from('jnvst_subject_lessons').update({lesson_code:code,lesson_name:name,description}).eq('id',id).eq('teacher_id',current.id).select('*').single();if(error)return notify(error.message);jnvstSubjectLessons=jnvstSubjectLessons.map(x=>x.id===id?data:x);await jnvstRefreshAndManage('subjects');
+ const {data,error}=await sb.from('jnvst_subject_lessons').update({lesson_code:code,lesson_name:name,description}).eq('id',id).eq('teacher_id',current.id).select('*').single();if(error)return notify(error.message);jnvstSubjectLessons=jnvstSubjectLessons.map(x=>x.id===id?data:x);await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function deleteJnvstLesson(id){
  const l=(jnvstSubjectLessons||[]).find(x=>x.id===id);if(!l)return;
  const children=(jnvstSubjectLessons||[]).filter(x=>x.parent_lesson_id===id);if(children.length)return notify(`Cannot delete this lesson because it has ${children.length} sub-lesson(s). Delete or move the sub-lessons first.`);
  const {data:used,error}=await sb.from('mock_question_bank').select('id').eq('teacher_id',current.id).eq('lesson_id',id).limit(1);if(error)return notify(error.message);if((used||[]).length)return notify('This lesson is assigned to one or more Question Bank questions. Re-categorize those questions first.');
- if(!confirm(`Delete lesson "${l.lesson_name}"?`))return;const {error:de}=await sb.from('jnvst_subject_lessons').delete().eq('id',id).eq('teacher_id',current.id);if(de)return notify(de.message);jnvstSubjectLessons=jnvstSubjectLessons.filter(x=>x.id!==id);await jnvstRefreshAndManage('subjects');
+ if(!confirm(`Delete lesson "${l.lesson_name}"?`))return;const {error:de}=await sb.from('jnvst_subject_lessons').delete().eq('id',id).eq('teacher_id',current.id);if(de)return notify(de.message);jnvstSubjectLessons=jnvstSubjectLessons.filter(x=>x.id!==id);await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function deleteJnvstSubject(id){
  const subject=(jnvstSubjects||[]).find(x=>x.id===id);if(!subject)return;
@@ -3298,7 +3256,7 @@ async function deleteJnvstSubject(id){
  if(!confirm(`Delete subject "${subject.name}"?\n\nThis subject will be removed from the subject list. This cannot be undone.`))return;
  const {error:de}=await sb.from("jnvst_subjects").delete().eq("id",id).eq("teacher_id",current.id);
  if(de)return notify("Could not delete subject: "+de.message);
- await jnvstRefreshAndManage('subjects');
+ await teacherHome();setTimeout(manageJnvstClasses,200);
 }
 async function deleteJnvstMainGroup(id){
  const c=(window._jnvstClasses||[]).find(x=>x.id===id);if(!c)return;
@@ -3387,10 +3345,11 @@ async function teacherLoadAdaptiveProgress(){
   const ids=[...(window._taBatches||new Map()).values()].flatMap(b=>b.items.map(a=>a.id));
   const prog=new Map();
   try{
-    // V22: all chunks are requested at the same time (they used to go one after another)
-    const {data,error}=await sbInChunks(ch=>sb.from('attempts').select('id,assignment_id,score,total_questions,submitted_at').in('assignment_id',ch),ids,['id'],80);
-    if(error)throw error;
-    (data||[]).sort((x,y)=>String(y.submitted_at||'').localeCompare(String(x.submitted_at||''))).forEach(r=>{if(!prog.has(r.assignment_id))prog.set(r.assignment_id,r);});   // latest attempt
+    for(let i=0;i<ids.length;i+=80){
+      const {data,error}=await sb.from('attempts').select('assignment_id,score,total_questions,submitted_at').in('assignment_id',ids.slice(i,i+80)).order('submitted_at',{ascending:false});
+      if(error)throw error;
+      (data||[]).forEach(r=>{if(!prog.has(r.assignment_id))prog.set(r.assignment_id,r);});   // latest attempt
+    }
   }catch(e){console.warn('Could not load progress',e);for(const b of (window._taBatches||new Map()).values()){const el=document.getElementById('taProg_'+b.key);if(el)el.textContent='progress unavailable';}return;}
   st.progress=prog;taPaintProgress();
 }
@@ -3503,10 +3462,9 @@ async function saveSchoolAssignmentGroupEdit(assignmentId){
 async function teacherResultsDashboard(preset){
   try{
     const [{data:allAssignments,error:ae},{data:allClasses,error:ce},{data:allStudents,error:se}]=await Promise.all([
-      sbFetchAll(()=>sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false})),
+      sb.from("assignments").select("*").eq("created_by",current.id).order("created_at",{ascending:false}),
       sb.from("classes").select("id,name,course,description,jnvst_group_type,jnvst_parent_id").eq("teacher_id",current.id).order("name"),
-      // V22: request only this portal's students, all pages
-      sbFetchAll(()=>sb.from("profiles").select("id,full_name,roll_no,course").eq("role","student").or(schoolTeacherMode?"course.ilike.*school*":"course.ilike.*jnvst-6*,course.ilike.*jnvst-9*").order("full_name"))
+      sb.from("profiles").select("id,full_name,roll_no,course").eq("role","student").order("full_name")
     ]);
     if(ae)throw ae;if(ce)throw ce;if(se)throw se;
 
@@ -3524,15 +3482,14 @@ async function teacherResultsDashboard(preset){
     const aids=assignments.map(a=>a.id);
     let attempts=[],links=[],memberships=[];
     if(aids.length){
-      // V22: long id lists are sent in parallel chunks (one huge list made the request fail, and rows after 1000 were cut off)
       const [{data:at,error:te},{data:ls,error:le}]=await Promise.all([
-        sbInChunks(ch=>sb.from("attempts").select("id,assignment_id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").in("assignment_id",ch),aids),
-        sbInChunks(ch=>sb.from("assignment_students").select("assignment_id,student_id").in("assignment_id",ch),aids,["assignment_id","student_id"])
+        sb.from("attempts").select("id,assignment_id,student_id,score,total_questions,video_completed,submitted_at,attempt_number").in("assignment_id",aids).order("submitted_at",{ascending:false}),
+        sb.from("assignment_students").select("assignment_id,student_id").in("assignment_id",aids)
       ]);
-      if(te)throw te;if(le)throw le;attempts=(at||[]).sort((x,y)=>String(y.submitted_at||"").localeCompare(String(x.submitted_at||"")));links=ls||[];
+      if(te)throw te;if(le)throw le;attempts=at||[];links=ls||[];
       const recipientIds=[...new Set(links.map(x=>x.student_id))];
       if(recipientIds.length){
-        const {data:ms,error:me}=await sbInChunks(ch=>sb.from("class_students").select("student_id,class_id").in("student_id",ch),recipientIds,["student_id","class_id"]);
+        const {data:ms,error:me}=await sb.from("class_students").select("student_id,class_id").in("student_id",recipientIds);
         if(me)throw me;memberships=ms||[];
       }
     }
@@ -3773,11 +3730,11 @@ async function downloadFilteredTeacherResultsExcel(){
     const assignmentIds=[...new Set(submittedRows.map(r=>r.a?.id).filter(Boolean))];
     let questions=[],answers=[];
     if(assignmentIds.length){
-      const {data:q,error:qe}=await sbInChunks(ch=>sb.from("questions").select("id,assignment_id,question_order,correct_option").in("assignment_id",ch),assignmentIds,["id"],40);
-      if(qe)throw qe;questions=(q||[]).sort((x,y)=>Number(x.question_order||0)-Number(y.question_order||0));
+      const {data:q,error:qe}=await sb.from("questions").select("id,assignment_id,question_order,correct_option").in("assignment_id",assignmentIds).order("question_order");
+      if(qe)throw qe;questions=q||[];
     }
     if(attemptIds.length){
-      const {data:a,error:ae}=await sbInChunks(ch=>sb.from("answers").select("attempt_id,question_id,selected_option").in("attempt_id",ch),attemptIds,["attempt_id","question_id"],20);
+      const {data:a,error:ae}=await sb.from("answers").select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
       if(ae)throw ae;answers=a||[];
     }
     const am=new Map(answers.map(x=>[`${x.attempt_id}:${x.question_id}`,x]));
@@ -5139,7 +5096,7 @@ async function results(id){
   const ids=[...new Set((ats||[]).map(x=>x.student_id))],attemptIds=(ats||[]).map(x=>x.id);
   let profiles=[],answerRows=[];
   if(ids.length){const {data:p,error}=await sb.from("profiles").select("id,full_name,roll_no").in("id",ids);if(error)throw error;profiles=p||[]}
-  if(attemptIds.length){const {data:ar,error}=await sbInChunks(ch=>sb.from("answers").select("attempt_id,question_id,selected_option,is_correct").in("attempt_id",ch),attemptIds,["attempt_id","question_id"],20);if(error)throw error;answerRows=ar||[]}
+  if(attemptIds.length){const {data:ar,error}=await sb.from("answers").select("attempt_id,question_id,selected_option,is_correct").in("attempt_id",attemptIds);if(error)throw error;answerRows=ar||[]}
   window._resultData={assignment:a,questions:qs||[],attempts:ats||[],profiles:new Map(profiles.map(p=>[p.id,p])),answers:new Map(answerRows.map(x=>[`${x.attempt_id}:${x.question_id}`,x])),sortBy:"submitted",sortDir:"desc"};
   renderResultsPage();
  }catch(e){notify("Could not load results: "+(e.message||e))}
@@ -5235,7 +5192,8 @@ async function downloadAssignmentResultsExcel(assignmentId){
     const attemptIds=(ats||[]).map(x=>x.id);
     let answerRows=[];
     if(attemptIds.length){
-      const {data:ar,error:are}=await sbInChunks(ch=>sb.from("answers").select("attempt_id,question_id,selected_option").in("attempt_id",ch),attemptIds,["attempt_id","question_id"],20);
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
       if(are) throw new Error(are.message);
       answerRows=ar||[];
     }
@@ -5277,7 +5235,7 @@ async function downloadAssignmentResultsExcel(assignmentId){
 async function downloadAllResultsExcel(){
   try{
     const [{data:allAs,error:ae},{data:allCls,error:ce}]=await Promise.all([
-      sbFetchAll(()=>sb.from("assignments").select("id,title,created_by,class_id").eq("created_by",profile.id).order("created_at",{ascending:false})),
+      sb.from("assignments").select("id,title,created_by,class_id").eq("created_by",profile.id).order("created_at",{ascending:false}),
       sb.from("classes").select("id,course").eq("teacher_id",profile.id)
     ]);
     if(ae) throw new Error(ae.message);
@@ -5289,20 +5247,21 @@ async function downloadAllResultsExcel(){
     if(!as.length){ notify(schoolTeacherMode?"No School Course assignments found.":"No JNVST assignments found."); return; }
 
     const assignmentIds=as.map(a=>a.id);
-    // V22: chunked + parallel (one request with every assignment id failed once there were many assignments)
-    const [{data:qs0,error:qe},{data:ats0,error:te}]=await Promise.all([
-      sbInChunks(ch=>sb.from("questions").select("id,assignment_id,question_order,correct_option").in("assignment_id",ch),assignmentIds,["id"],40),
-      sbInChunks(ch=>sb.from("attempts").select("id,assignment_id,student_id,score,total_questions,submitted_at,attempt_number").in("assignment_id",ch),assignmentIds)
-    ]);
+    const {data:qs,error:qe}=await sb.from("questions")
+      .select("id,assignment_id,question_order,correct_option")
+      .in("assignment_id",assignmentIds).order("question_order");
     if(qe) throw new Error(qe.message);
+
+    const {data:ats,error:te}=await sb.from("attempts")
+      .select("id,assignment_id,student_id,score,total_questions,submitted_at,attempt_number")
+      .in("assignment_id",assignmentIds).order("submitted_at",{ascending:true});
     if(te) throw new Error(te.message);
-    const qs=(qs0||[]).sort((x,y)=>Number(x.question_order||0)-Number(y.question_order||0));
-    const ats=(ats0||[]).sort((x,y)=>String(x.submitted_at||"").localeCompare(String(y.submitted_at||"")));
 
     const studentIds=[...new Set((ats||[]).map(x=>x.student_id))];
     let profiles=[];
     if(studentIds.length){
-      const {data:p,error:pe}=await sbInChunks(ch=>sb.from("profiles").select("id,full_name,roll_no").in("id",ch),studentIds);
+      const {data:p,error:pe}=await sb.from("profiles")
+        .select("id,full_name,roll_no").in("id",studentIds);
       if(pe) throw new Error(pe.message);
       profiles=p||[];
     }
@@ -5310,7 +5269,8 @@ async function downloadAllResultsExcel(){
     const attemptIds=(ats||[]).map(x=>x.id);
     let answerRows=[];
     if(attemptIds.length){
-      const {data:ar,error:are}=await sbInChunks(ch=>sb.from("answers").select("attempt_id,question_id,selected_option").in("attempt_id",ch),attemptIds,["attempt_id","question_id"],20);
+      const {data:ar,error:are}=await sb.from("answers")
+        .select("attempt_id,question_id,selected_option").in("attempt_id",attemptIds);
       if(are) throw new Error(are.message);
       answerRows=ar||[];
     }
@@ -5770,12 +5730,10 @@ try{
         const versions=[];if(r.en)versions.push({language:part==='MAT'?'COMMON':'ENGLISH',question:r.en,a:r.aen,b:r.ben,c:r.cen,d:r.den,pt:r.passageTitleEn,px:r.passageEn});if(r.as)versions.push({language:part==='MAT'?'COMMON':'ASSAMESE',question:r.as,a:r.aas,b:r.bas,c:r.cas,d:r.das,pt:r.passageTitleAs,px:r.passageAs});
         if(!versions.length)continue;
         const groupKey=passage?`${typeNorm}::${r.localPassageNo}`:null;
-        // V23: the English and Assamese versions from the same Excel row share one language_pair_id, so they are linked.
-        const rowPairId=versions.length>1?crypto.randomUUID():null;
         for(const v of versions){
-          let passageId=null,languagePairId=rowPairId,questionOrder=null,passageTitle=null,passageText=null;
-          if(passage){const pairKey=`${groupKey}::${v.language}`;if(!groupIds.has(pairKey))groupIds.set(pairKey,{passageId:`JNVST-${passagePart(r.type)==='EVS_PASSAGE'?'EVS':'LANG'}-${v.language[0]}-${shortId()}`,pairId:crypto.randomUUID()});const g=groupIds.get(pairKey);passageId=g.passageId;questionOrder=r.questionOrder;passageTitle=v.pt||null;passageText=v.px||null;}
-          prepared.push({teacher_id:current.id,section_code:sectionFor(part),part_code:part,topic:r.topic||null,variation_group:r.group||null,is_fixed:bool(r.fixed),...(bool(r.common)?{is_common:true}:{}),question_type:passage?(part==='EVS_PASSAGE'?'EVS-PASSAGE':'LANGUAGE-PASSAGE'):r.type,marks:r.marks||1,cognitive_level:r.cognitive||null,difficulty:r.difficulty||null,language:v.language,subject_id:subj.id,lesson_id:lesson.id,lesson_code:r.lessonCode,question_text:v.question||null,option_a:v.a||null,option_b:v.b||null,option_c:v.c||null,option_d:v.d||null,correct_option:['A','B','C','D'].includes(r.answer)?r.answer:(r.type==='MCQ'?r.answer:'A'),explanation:r.explanation||(v.language==='ENGLISH'?null:r.explanationAs)||null,...(window.jnvstExplAsOn&&r.explanationAs&&v.language!=='ENGLISH'?{explanation_as:r.explanationAs}:{}),source_type:'JNVST_BULK',active:true,passage_id:passageId,passage_title:passageTitle,passage_text:passageText,question_order:questionOrder,language_pair_id:languagePairId,set_id:passageId});
+          let passageId=null,languagePairId=null,questionOrder=null,passageTitle=null,passageText=null;
+          if(passage){const pairKey=`${groupKey}::${v.language}`;if(!groupIds.has(pairKey))groupIds.set(pairKey,{passageId:`JNVST-${passagePart(r.type)==='EVS_PASSAGE'?'EVS':'LANG'}-${v.language[0]}-${shortId()}`,pairId:crypto.randomUUID()});const g=groupIds.get(pairKey);passageId=g.passageId;languagePairId=g.pairId;questionOrder=r.questionOrder;passageTitle=v.pt||null;passageText=v.px||null;}
+          prepared.push({teacher_id:current.id,section_code:sectionFor(part),part_code:part,topic:r.topic||null,variation_group:r.group||null,is_fixed:bool(r.fixed),...(bool(r.common)?{is_common:true}:{}),question_type:passage?(part==='EVS_PASSAGE'?'EVS-PASSAGE':'LANGUAGE-PASSAGE'):r.type,marks:r.marks||1,cognitive_level:r.cognitive||null,difficulty:r.difficulty||null,language:v.language,subject_id:subj.id,lesson_id:lesson.id,lesson_code:r.lessonCode,question_text:v.question||null,option_a:v.a||null,option_b:v.b||null,option_c:v.c||null,option_d:v.d||null,correct_option:r.type==='MCQ'?r.answer:'A',explanation:r.explanation||(v.language==='ENGLISH'?null:r.explanationAs)||null,...(window.jnvstExplAsOn&&r.explanationAs&&v.language!=='ENGLISH'?{explanation_as:r.explanationAs}:{}),source_type:'JNVST_BULK',active:true,passage_id:passageId,passage_title:passageTitle,passage_text:passageText,question_order:questionOrder,language_pair_id:languagePairId,set_id:passageId});
         }
       }
       const {data:old,error:oe}=await sb.from('mock_question_bank').select('id,question_text,option_a,option_b,option_c,option_d,subject_id,lesson_id,language,passage_id,question_order').eq('teacher_id',current.id).eq('active',true);if(oe)throw oe;
@@ -5845,7 +5803,6 @@ try{
   }
 
   /* ---------- JNVST Question Bank: group display ---------- */
-  window.jnvstQbShowMore=function(all){const sig=jnvstQbFilterSig(),l=(window._jnvstQbLimits=window._jnvstQbLimits||{});l[sig]=all?1e9:(l[sig]||JNVST_QB_PAGE)+JNVST_QB_PAGE;jnvstQbRenderTable();};
   window.jnvstQbRenderTable=function(){
     const box=document.getElementById('jnvstQbTable');if(!box)return;jnvstQbEnsureStyle();
     const currentLesson=document.getElementById('jnvstQbLessonFilter')?.value||'';
@@ -5857,21 +5814,14 @@ try{
     const groupedKeys=new Set(groups.flatMap(g=>g.questions.map(q=>q.id)));
     const normal=rows.filter(q=>!groupedKeys.has(q.id));
     const allVisibleSelected=rows.length>0&&rows.every(q=>jnvstQbSelected.has(q.id));
-    // V22: show 50 items at a time (a passage group counts as one). The page remembers how many were opened for each filter
-    // combination, so coming back after editing still shows the question you were on.
-    const sig=jnvstQbFilterSig(),limits=(window._jnvstQbLimits=window._jnvstQbLimits||{}),limit=limits[sig]||JNVST_QB_PAGE;
-    const totalItems=groups.length+normal.length,groupsShown=groups.slice(0,limit),normalShown=normal.slice(0,Math.max(0,limit-groupsShown.length));
-    const hidden=totalItems-groupsShown.length-normalShown.length;
-    const subjMap=new Map((jnvstSubjects||[]).map(x=>[x.id,x])),lessonMap=new Map((jnvstSubjectLessons||[]).map(x=>[x.id,x]));
-    const groupHtml=groupsShown.map(g=>{
+    const groupHtml=groups.map(g=>{
       const allSel=g.questions.every(q=>jnvstQbSelected.has(q.id));
       const first=g.questions[0]||{};
       const actions=`<div class="actions"><label style="display:flex;align-items:center;gap:5px;margin:0"><input type="checkbox" style="width:auto" ${allSel?'checked':''} onchange="jnvstQbTogglePassageGroup('${esc(g.id)}',this.checked)"> Select Group</label><button onclick="jnvstQbEditPassage('${esc(first.id)}')">✎ Edit Complete Block</button><button class="danger" onclick="jnvstQbDeletePassage('${esc(first.id)}')">🗑 Delete Group</button></div>`;
       return passageCard(g,actions);
     }).join('');
-    const ckeys0=jnvstCommonKeys(jnvstQbCache);const normalHtml=normalShown.length?`<div style="overflow:auto"><table><thead><tr><th><input type="checkbox" title="Select all ${rows.length} matching questions (including those not shown yet)" ${allVisibleSelected?'checked':''} onchange="jnvstQbToggleVisible(this.checked)"></th><th>#</th><th>Question</th><th>Subject</th><th>Medium</th><th>Lesson / Sub-lesson</th><th>Topic</th><th>Level / Common</th><th>Variation / Fixed</th><th>Actions</th></tr></thead><tbody>${normalShown.map((q,i)=>{const sj=subjMap.get(q.subject_id),l=lessonMap.get(q.lesson_id);return `<tr><td onclick="if(event.target===this){const c=this.querySelector('input');c.checked=!c.checked;c.dispatchEvent(new Event('change'))}"><input type="checkbox" ${jnvstQbSelected.has(q.id)?'checked':''} onchange="jnvstQbToggleSelection('${esc(q.id)}',this.checked)"></td><td>${i+1}</td><td style="min-width:240px">${jnvstQbQuestionPreview(q)}</td><td>${esc(sj?.name||'—')}</td><td>${esc(q.language||'—')}</td><td>${esc(l?`${l.lesson_code||''} ${l.lesson_name}`:'—')}</td><td>${esc(q.topic||'—')}</td><td>${jnvstQbLevelBadges(q,ckeys0)}</td><td style="min-width:180px"><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><select title="Change Variation Group directly" style="min-width:155px" onchange="jnvstQbInlineVariationChange('${esc(q.id)}',this.value)">${jnvstQbVariationOptions(String(q.variation_group||''))}</select>${q.variation_group?`<button type="button" class="secondary" style="padding:5px 9px;font-size:12px" onclick="jnvstQbShowVariation('${esc(q.variation_group)}')" title="Show all questions in ${esc(q.variation_group)}">🔎 Show Group</button>`:''}${q.is_fixed?' <span class="tag">Fixed</span>':''}</div></td><td><div class="actions"><button onclick="jnvstQbEdit('${esc(q.id)}')">✎ Edit</button><button class="danger" onclick="jnvstQbDeleteOne('${esc(q.id)}')">🗑 Delete</button></div></td></tr>`}).join('')}</tbody></table></div>`:'';
-    const moreHtml=hidden>0?`<div class="actions" style="justify-content:center;margin-top:10px"><button type="button" class="secondary" onclick="jnvstQbShowMore()">Show ${Math.min(JNVST_QB_PAGE,hidden)} more · ${hidden} not shown</button><button type="button" class="secondary" onclick="jnvstQbShowMore(true)">Show all</button></div>`:'';
-    box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${rows.length} question row(s) · <b>${groups.length}</b> complete passage group(s) · <b>${jnvstQbSelected.size}</b> selected${hidden>0?` · showing first ${totalItems-hidden} of ${totalItems}`:''}</div>${groupHtml}${normalHtml||(!groupHtml?'<div class="muted">No questions found.</div>':'')}${moreHtml}`;
+    const ckeys0=jnvstCommonKeys(jnvstQbCache);const normalHtml=normal.length?`<div style="overflow:auto"><table><thead><tr><th><input type="checkbox" ${allVisibleSelected?'checked':''} onchange="jnvstQbToggleVisible(this.checked)"></th><th>#</th><th>Question</th><th>Subject</th><th>Medium</th><th>Lesson / Sub-lesson</th><th>Topic</th><th>Level / Common</th><th>Variation / Fixed</th><th>Actions</th></tr></thead><tbody>${normal.map((q,i)=>{const sj=(jnvstSubjects||[]).find(x=>x.id===q.subject_id),l=(jnvstSubjectLessons||[]).find(x=>x.id===q.lesson_id);return `<tr><td onclick="if(event.target===this){const c=this.querySelector('input');c.checked=!c.checked;c.dispatchEvent(new Event('change'))}"><input type="checkbox" ${jnvstQbSelected.has(q.id)?'checked':''} onchange="jnvstQbToggleSelection('${esc(q.id)}',this.checked)"></td><td>${i+1}</td><td style="min-width:240px">${jnvstQbQuestionPreview(q)}</td><td>${esc(sj?.name||'—')}</td><td>${esc(q.language||'—')}</td><td>${esc(l?`${l.lesson_code||''} ${l.lesson_name}`:'—')}</td><td>${esc(q.topic||'—')}</td><td>${jnvstQbLevelBadges(q,ckeys0)}</td><td style="min-width:180px"><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><select title="Change Variation Group directly" style="min-width:155px" onchange="jnvstQbInlineVariationChange('${esc(q.id)}',this.value)">${jnvstQbVariationOptions(String(q.variation_group||''))}</select>${q.variation_group?`<button type="button" class="secondary" style="padding:5px 9px;font-size:12px" onclick="jnvstQbShowVariation('${esc(q.variation_group)}')" title="Show all questions in ${esc(q.variation_group)}">🔎 Show Group</button>`:''}${q.is_fixed?' <span class="tag">Fixed</span>':''}</div></td><td><div class="actions"><button onclick="jnvstQbEdit('${esc(q.id)}')">✎ Edit</button><button class="danger" onclick="jnvstQbDeleteOne('${esc(q.id)}')">🗑 Delete</button></div></td></tr>`}).join('')}</tbody></table></div>`:'';
+    box.innerHTML=`<div class="small muted" style="margin-bottom:8px">${rows.length} question row(s) · <b>${groups.length}</b> complete passage group(s) · <b>${jnvstQbSelected.size}</b> selected</div>${groupHtml}${normalHtml||(!groupHtml?'<div class="muted">No questions found.</div>':'')}`;
     jnvstQbUpdateSelectionCount();if(window.MathJax?.typesetPromise)window.MathJax.typesetPromise([box]).catch(()=>{});
   };
   window.jnvstQbTogglePassageGroup=function(groupId,checked){
