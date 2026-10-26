@@ -298,7 +298,7 @@ function loadTeacherApp(){
            t.onload=t.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");
-            e.src="omr-engine.js?v=11";
+            e.src="omr-engine.js?v=12";
             e.onload=e.onerror=()=>{
               const o=document.createElement("script");
               o.src="custom-omr.js?v=8";
@@ -309,7 +309,7 @@ function loadTeacherApp(){
                 x.onload=x.onerror=()=>{
                   // V21: class discussion PDF after an OMR import (optional)
                   const y=document.createElement("script");
-                  y.src="omr-discussion.js?v=2";
+                  y.src="omr-discussion.js?v=3";
                   y.onload=y.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
                   document.head.appendChild(y);
                 };
@@ -1549,8 +1549,15 @@ let jnvstLessonBulkRows=[];
 
 let jnvstQbCache=[];
 let jnvstQbEditingId='';
+// V23.7: rupee sign. Outside a formula \rupee / \text{\rupee} become a plain ₹. Inside a formula they (and a bare ₹)
+// become \text{₹} — MathJax 3.2.2 crashes on a bare ₹ in maths and shows "Math input error".
+function jnvstFixRupee(value){
+ const R=/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}|\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g;
+ const inMath=x=>x.replace(R,'\u0000').replace(/\\text\s*\{\s*₹\s*\}/g,'\u0000').replace(/₹/g,'\u0000').replace(/\u0000/g,'\\text{₹}');
+ return String(value??'').split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\\)\$[^$]*?(?<!\\)\$)/).map((part,i)=>i%2?inMath(part):part.replace(R,'₹')).join('');
+}
 function jnvstNormalizeMathText(value){
- const s=String(value??'').replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹').trim();   // V23.6: \rupee → ₹
+ const s=jnvstFixRupee(value).trim();
  if(!s)return '';
  if(/\\\(|\\\[|\$\$|\$[^$]+\$/.test(s))return s;
  const commands=['frac','dfrac','tfrac','sqrt','times','div','cdot','pi','leq','geq','neq','pm','mp','sum','prod','int','left','right','text','overline','underline','vec','angle','triangle','circ','degree','infty','approx','sim','subset','supset','in','notin'];
@@ -1618,7 +1625,7 @@ let jnvstQbSelected=new Set();
 
 
 function jnvstMathPreview(value){
- let s=String(value??'').replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹').trim();   // V23.6: \rupee → ₹
+ let s=jnvstFixRupee(value).trim();
  if(!s)return '<span class="muted">Math/text preview will appear here.</span>';
  // Normalize the common formats teachers may have entered in Excel/editor:
  // $...$, $$...$$, \( ... \), \[ ... \], or bare LaTeX commands such as \frac{2}{3}.
@@ -2447,7 +2454,7 @@ async function studentHome(){
 function studentOmrBoot(){
   return new Promise((res,rej)=>{
     if(typeof window.studentOmrLoadApp==="function"&&!window.studentOmrLoadApp.__stub)return res();
-    const s=document.createElement("script");s.src="student-omr.js?v=4";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
+    const s=document.createElement("script");s.src="student-omr.js?v=5";s.onload=res;s.onerror=()=>rej(new Error("student-omr.js"));document.head.appendChild(s);
   }).then(()=>window.studentOmrLoadApp()).catch(e=>console.warn("OMR app results:",e));
 }
 function revokeStudentOmrUrl(){

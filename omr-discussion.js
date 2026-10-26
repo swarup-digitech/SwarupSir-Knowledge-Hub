@@ -13,7 +13,7 @@
 const q$=id=>document.getElementById(id);
 const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fixRupee=t=>String(t==null?'':t).replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹');   // V23.6: \rupee → ₹
-const fmt=t=>typeof jnvstMathPreview==='function'?jnvstMathPreview(fixRupee(t)):e(fixRupee(t));
+const fmt=t=>typeof jnvstMathPreview==='function'?jnvstMathPreview(t):e(fixRupee(t));   // V23.7: jnvstMathPreview handles ₹ itself (\text{₹} inside formulas)
 const isImageText=t=>/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i.test(String(t||'').trim());
 const realOpt=v=>{v=String(v||'').trim();return v&&!/^Option [A-D]$/i.test(v)?v:'';};
 const blank=v=>!String(v||'').trim();

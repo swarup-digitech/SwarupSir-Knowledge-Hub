@@ -116,6 +116,16 @@ Changed files: `teacher-app.js`, `main.html`.
   renderer also knows `\rupee` now.
 Changed files: `omr-discussion.js`, `omr-engine.js`, `teacher-app.js`, `main.html`.
 
+## V23.7 — Fix: "Math input error" for ₹ in reports
+After V23.6, `\rupee` inside a formula (e.g. `$\rupee420$`) was changed to a bare ₹. The maths renderer
+(MathJax 3.2.2) crashes on a bare ₹ inside a formula and shows **Math input error** — seen in the student OMR result
+report and the class discussion PDF. Now ₹ inside a formula is written `\text{₹}` (also when a bare ₹ was typed in a
+formula); outside a formula it stays a plain ₹. Tested with the real MathJax 3.2.2: report and discussion PDF of the
+pizza question show ₹300, ₹420 … ₹525 with no errors.
+The student page loaded the OMR tools with a fixed old version number, so students could keep an old copy;
+it now loads the current one.
+Changed files: `main.html`, `omr-discussion.js`, `student-omr.js`.
+
 ## Not included
 * Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
 * School Course papers.
