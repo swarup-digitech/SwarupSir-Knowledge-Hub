@@ -77,6 +77,12 @@ Changed files: `teacher-app.js`, `custom-adaptive-paper.js`, `custom-test.js`, `
 Tested: 10 chapter-matching checks; browser run with the real `teacher-app.js` (generator: 1.0 → 21, 3.0 → 21 with an
 unlinked 3.1, 5.2 → 11, 1.0 + 5.0 → 39 questions; adaptive: chapters 1.0 + 6.0 → paper only from 1.0–1.3 and 6.0); all earlier checks still pass.
 
+## V23.3 — Slightly larger question text on printed papers
+All printed papers (Question Paper Generator, Custom Adaptive Papers, Custom Test, Generated History):
+question text, options, passages and other questions are all **11 pt** (before: 9.5 / 9.2 / 10.5 / 10.5 pt).
+The layout (two columns, page breaks, OMR numbering) is unchanged; a 20-question Arithmetic paper still fits one page.
+To change the sizes again, edit the small `<style id="qp-font-size">` block in `main.html`. Changed file: `main.html`.
+
 ## Not included
 * Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
 * School Course papers.

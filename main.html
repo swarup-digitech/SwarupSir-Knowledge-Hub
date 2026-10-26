@@ -257,6 +257,21 @@ html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!importan
 .qp-banner.warn{background:#fef3c7;border-color:#fcd34d;color:#78350f}
 @media print{.qp-noprint{display:none!important}}
 </style>
+<style id="qp-font-size">
+/* ===== V23.3: question text on printed papers =====
+   (Question Paper Generator, Custom Adaptive Papers, Custom Test — they share this layout)
+   question text, options, passages and other questions: all 11 pt */
+.jnvst-paper .jnvst-question{font-size:11pt}
+.jnvst-paper .qp-arithmetic-flow .arithmetic-question .jnvst-qtext,
+.jnvst-paper .qp-arithmetic-columns .arithmetic-question .jnvst-qtext,
+.jnvst-paper .qp-evs-mcq-flow .evs-mcq-question .jnvst-qtext,
+.jnvst-paper .qp-evs-passage-question-column .jnvst-qtext{font-size:11pt;line-height:1.22}
+.jnvst-paper .qp-arithmetic-flow .arithmetic-question .jnvst-options,
+.jnvst-paper .qp-arithmetic-columns .arithmetic-question .jnvst-options,
+.jnvst-paper .qp-evs-mcq-flow .evs-mcq-question .jnvst-options,
+.jnvst-paper .qp-evs-passage-question-column .jnvst-options{font-size:11pt}
+.jnvst-paper .jnvst-passage,.jnvst-paper .qp-evs-passage-text{font-size:11pt}
+</style>
 </head>
 <body><div id="app"></div>
 <script>
