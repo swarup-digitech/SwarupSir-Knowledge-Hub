@@ -12,7 +12,8 @@
 'use strict';
 const q$=id=>document.getElementById(id);
 const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=t=>typeof jnvstMathPreview==='function'?jnvstMathPreview(t):e(t);
+const fixRupee=t=>String(t==null?'':t).replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹');   // V23.6: \rupee → ₹
+const fmt=t=>typeof jnvstMathPreview==='function'?jnvstMathPreview(fixRupee(t)):e(fixRupee(t));
 const isImageText=t=>/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i.test(String(t||'').trim());
 const realOpt=v=>{v=String(v||'').trim();return v&&!/^Option [A-D]$/i.test(v)?v:'';};
 const blank=v=>!String(v||'').trim();
@@ -32,13 +33,14 @@ function omrDiscussionPdf(base){
   d.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
   d.innerHTML=`<div class="card" style="max-width:520px;width:100%;margin:0;max-height:92vh;overflow:auto">
     <h2 style="margin-top:0">📽 Class discussion PDF</h2>
-    <p class="small muted" style="margin-top:0">One wide page per question in big letters, with its number in every set and the students who answered wrongly or skipped it. <code>${e(base)}</code></p>
+    <p class="small muted" style="margin-top:0">One wide page per question in big letters, with its number in every set and the students who answered wrongly, skipped it or answered correctly. <code>${e(base)}</code></p>
     <label>Page shape</label><select id="odShape"><option value="a4">A4 landscape (print or projector)</option><option value="wide">16:9 widescreen (projector / smart board)</option></select>
     <label>Questions</label><select id="odWhich"><option value="mist">Only questions someone got wrong or skipped</option><option value="all">All questions</option></select>
     <label>Order</label><select id="odOrder"><option value="paper">Paper order (Set A numbering)</option><option value="most">Most mistakes first</option></select>
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="odAns" type="checkbox" style="width:auto" checked> Mark the correct answer</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="odCount" type="checkbox" style="width:auto" checked> Show how many students chose each option</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="odNames" type="checkbox" style="width:auto" checked> Show names of students who were wrong / skipped</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="odRight" type="checkbox" style="width:auto" checked> Show names of students who answered correctly</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="odExpl" type="checkbox" style="width:auto"> Show the explanation</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="odSpace" type="checkbox" style="width:auto" checked> Leave writing space for the pen tablet</label>
     <div class="actions" style="margin-top:14px"><button id="odGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('omrDiscDlg').remove()">Cancel</button></div>
@@ -46,7 +48,7 @@ function omrDiscussionPdf(base){
   document.body.appendChild(d);
   d.addEventListener('click',ev=>{if(ev.target===d)d.remove();});
   q$('odGo').onclick=()=>build(base,{shape:q$('odShape').value,which:q$('odWhich').value,order:q$('odOrder').value,
-    ans:q$('odAns').checked,count:q$('odCount').checked,names:q$('odNames').checked,expl:q$('odExpl').checked,space:q$('odSpace').checked});
+    ans:q$('odAns').checked,count:q$('odCount').checked,names:q$('odNames').checked,right:!!(q$('odRight')&&q$('odRight').checked),expl:q$('odExpl').checked,space:q$('odSpace').checked});
 }
 
 /* ------------------------------- collect the data ------------------------------- */
@@ -116,10 +118,10 @@ function whereLine(it,D){
   if(D.custom)return `In ${it.papers} student paper${it.papers===1?'':'s'}`;
   return D.sets.filter(s=>it.where.has(s)).map(s=>`<span class="sn">Set ${e(s)} · Q${it.where.get(s)}</span>`).join('');
 }
-function whoChip(w,D,short){
+function whoChip(w,D,short,kind){
   const no=D.custom?`Q${w.no}`:(D.sets.length>1?`${e(w.set)}${w.no}`:'');
   let nm=String(w.name||'').trim()||'Student';if(short)nm=nm.split(/\s+/)[0];
-  return `<span class="who"><b>${e(w.roll||'')}</b> ${e(nm)}${w.sel?` <i>${e(w.sel)}</i>`:''}${no?` <small>${no}</small>`:''}</span>`;
+  return `<span class="who${kind==='ok'?' ok':''}"><b>${e(w.roll||'')}</b> ${e(nm)}${w.sel&&kind!=='ok'?` <i>${e(w.sel)}</i>`:''}${no?` <small>${no}</small>`:''}</span>`;
 }
 
 function questionPage(it,idx,total,D,o){
@@ -129,16 +131,20 @@ function questionPage(it,idx,total,D,o){
     return {L,v,ok,n:it.pick[L]||0};});
   const anyOpt=opts.some(x=>x.v);
   const attempted=it.right.length+it.wrong.length+it.skip.length;
-  const short=it.wrong.length+it.skip.length>10;
-  const optHtml=anyOpt?`<div class="opts">${opts.map(x=>`<div class="opt${x.ok?' ok':''}"><span class="L">${x.L}</span><span class="ot">${fmt(x.v)}</span>${o.count?`<span class="cnt">${x.n}</span>`:''}${x.ok?'<span class="tick">✓</span>':''}</div>`).join('')}</div>`
+  const short=it.wrong.length+it.skip.length+(o.right?it.right.length:0)>10;
+  // V23.6: long options (e.g. "0.04 < 0.004 < 0.44 …") get one option per row so nothing is cut off
+  const plainLen=v=>String(v||'').replace(/\\(?:frac|dfrac)\{([^{}]*)\}\{([^{}]*)\}/g,'$1/$2').replace(/\\[A-Za-z]+/g,'x').replace(/[{}$\\]/g,'').length;
+  const longOpts=opts.some(x=>plainLen(x.v)>22);
+  const optHtml=anyOpt?`<div class="opts${longOpts?' one':''}">${opts.map(x=>`<div class="opt${x.ok?' ok':''}"><span class="L">${x.L}</span><span class="ot">${fmt(x.v)}</span>${o.count?`<span class="cnt">${x.n}</span>`:''}${x.ok?'<span class="tick">✓</span>':''}</div>`).join('')}</div>`
     :(o.count||o.ans)?`<div class="opts small4">${opts.map(x=>`<div class="opt${x.ok?' ok':''}"><span class="L">${x.L}</span>${o.count?`<span class="cnt">${x.n} chose</span>`:''}${x.ok?'<span class="tick">✓</span>':''}</div>`).join('')}</div>`:'';
   const ex=o.expl?explFor(it,D).map(([l,t])=>`<div class="ex"><b>${e(l)}:</b> ${fmt(t)}</div>`).join(''):'';
   const side=`<div class="side">
       <div class="stat"><span class="sw">✗ ${it.wrong.length}</span><span class="ss">— ${it.skip.length}</span><span class="sr">✓ ${it.right.length}</span></div>
       <div class="small2">${attempted} student${attempted===1?'':'s'} · wrong · skipped · correct</div>
-      ${o.names?`<div class="lists">
+      ${(o.names||o.right)?`<div class="lists">${o.names?`
         <h4>✗ Wrong (${it.wrong.length})</h4><div class="chips">${it.wrong.sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})).map(w=>whoChip(w,D,short)).join('')||'<span class="none">—</span>'}</div>
-        <h4>— Skipped (${it.skip.length})</h4><div class="chips">${it.skip.sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})).map(w=>whoChip(w,D,short)).join('')||'<span class="none">—</span>'}</div>
+        <h4>— Skipped (${it.skip.length})</h4><div class="chips">${it.skip.sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})).map(w=>whoChip(w,D,short)).join('')||'<span class="none">—</span>'}</div>`:''}
+        ${o.right?`<h4 class="okh">✓ Correct (${it.right.length})</h4><div class="chips">${it.right.sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true})).map(w=>whoChip(w,D,short,'ok')).join('')||'<span class="none">—</span>'}</div>`:''}
       </div>`:''}
     </div>`;
   return `<section class="pg"><div class="hd"><div class="qn">${idx}<small>/${total}</small></div><div class="wh">${whereLine(it,D)}</div><div class="tt">${e(D.title)}</div></div>
@@ -190,8 +196,9 @@ body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala 
 .qt{font-weight:600;margin-bottom:3mm}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:2.5mm 5mm;font-size:.85em}
 .opts.small4{grid-template-columns:repeat(4,1fr);font-size:.7em}
-.opt{display:flex;align-items:center;gap:3mm;border:.5mm solid #cbd5e1;border-radius:3mm;padding:1.8mm 3mm;position:relative}
-.opt .L{font-weight:800;color:#1e3a8a;min-width:1.2em}.opt .ot{flex:1}
+.opts.one{grid-template-columns:1fr}
+.opt{display:flex;align-items:center;gap:3mm;min-width:0;border:.5mm solid #cbd5e1;border-radius:3mm;padding:1.8mm 3mm;position:relative}
+.opt .L{font-weight:800;color:#1e3a8a;min-width:1.2em}.opt .ot{flex:1;min-width:0;overflow-wrap:anywhere}
 .opt .cnt{font:700 .55em/1 Arial;background:#e2e8f0;color:#334155;border-radius:9mm;padding:1mm 2.5mm;white-space:nowrap}
 .opt.ok{border-color:#16a34a;background:#f0fdf4}.opt .tick{color:#16a34a;font-weight:800}
 .ex{margin-top:3mm;font-size:.6em;background:#f0fdf4;border-left:1.2mm solid #16a34a;padding:2mm 3mm;border-radius:1.5mm}
@@ -201,6 +208,7 @@ body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala 
 .small2{font-size:.7em;color:#64748b;margin:1mm 0 2mm}
 .lists{flex:1;min-height:0;overflow:hidden}.lists h4{margin:2mm 0 1mm;font-size:.95em}
 .chips{display:flex;flex-wrap:wrap;gap:1mm}.who{border:.3mm solid #fecaca;background:#fef2f2;border-radius:1.5mm;padding:.5mm 1.8mm;font-size:.9em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.who.ok{border-color:#bbf7d0;background:#f0fdf4}.okh{color:#166534}
 .who i{font-style:normal;font-weight:700;color:#b91c1c}.who small{color:#64748b}.none{color:#94a3b8}
 .cover .ct{font-size:1.1em;font-weight:800;color:#17365D}.cover .cs{font-size:.5em;color:#475569;margin:2mm 0 4mm}
 table.ix{border-collapse:collapse;font-size:.42em;width:100%}table.ix td,table.ix th{border:.3mm solid #cbd5e1;padding:1mm 2mm;text-align:left}table.ix th{background:#f1f5f9}
@@ -209,7 +217,7 @@ mjx-container{font-size:100%!important}
 .bn button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer}.bn button:disabled{background:#94a3b8;cursor:wait}`;
   const PLAIN=(root.OMR&&root.OMR.plainTeX)?root.OMR.plainTeX.toString():'function(t){return t}';
   return `<!doctype html><html><head><meta charset="utf-8"><title>${e('Class discussion — '+D.title)}</title>
-<script>window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"],["$","$"]],displayMath:[["\\\\[","\\\\]"],["$$","$$"]],processEscapes:true},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]},startup:{typeset:false}};<\/script>
+<script>window.MathJax={tex:{macros:{rupee:"\\\\text{₹}",Rupee:"\\\\text{₹}",inr:"\\\\text{₹}"},inlineMath:[["\\\\(","\\\\)"],["$","$"]],displayMath:[["\\\\[","\\\\]"],["$$","$$"]],processEscapes:true},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]},startup:{typeset:false}};<\/script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"><\/script><style>${css}</style></head><body>
 <div class="bn"><b>Class discussion PDF</b><button id="pbtn" disabled onclick="window.print()">Preparing maths…</button><span>In the print window choose <b>Save as PDF</b>. Layout and paper size are already set (${wide?'16:9 widescreen':'A4 landscape'}); keep margins <b>None</b> / <b>Default</b> and scale <b>100%</b>.</span></div>
 ${pages.join('')}
@@ -219,9 +227,11 @@ ${pages.join('')}
   var plainTeX=${PLAIN};
   function fit(){
     var els=document.querySelectorAll('.fit');
+    var wide=function(m){var x=m.querySelectorAll('.ot,.qt');for(var q=0;q<x.length;q++)if(x[q].scrollWidth>x[q].clientWidth+1)return true;return false;};
     for(var i=0;i<els.length;i++){var m=els[i],size=parseFloat(getComputedStyle(m).fontSize),img=m.querySelector('.qi'),sp=m.querySelector('.space'),n=0;
+      var op=m.querySelector('.opts');if(op&&!op.classList.contains('one')&&!op.classList.contains('small4')&&wide(m))op.classList.add('one');   // too wide side by side: one option per row
       if(sp&&m.scrollHeight>m.clientHeight+1)sp.style.display='none';
-      while(m.scrollHeight>m.clientHeight+1&&size>11&&n++<60){size*=0.93;m.style.fontSize=size+'px';if(img){var h=img.getBoundingClientRect().height;img.style.maxHeight=Math.max(80,h*0.93)+'px';}}
+      while((m.scrollHeight>m.clientHeight+1||wide(m))&&size>11&&n++<60){size*=0.93;m.style.fontSize=size+'px';if(img){var h=img.getBoundingClientRect().height;img.style.maxHeight=Math.max(80,h*0.93)+'px';}}
       if(sp&&m.scrollHeight<=m.clientHeight-60)sp.style.display='';}
     var ls=document.querySelectorAll('.lists');
     for(var j=0;j<ls.length;j++){var s=ls[j],hi=parseFloat(getComputedStyle(s).fontSize),lo=8;

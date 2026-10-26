@@ -105,6 +105,17 @@ Changed files: `teacher-app.js`, `custom-test.js`, `main.html`.
   works the same way.
 Changed files: `teacher-app.js`, `main.html`.
 
+## V23.6 — Class discussion PDF: who answered correctly; two display fixes
+* **✓ Correct list:** every question page now also lists the students who answered correctly (green), under
+  ✗ Wrong and — Skipped. New option in the dialog: *Show names of students who answered correctly* (on).
+  Long lists get smaller so they fit; with many names only first names are shown.
+* **Long options were cut off** (e.g. "0.04 < 0.004 < 0.44 < 4.0004 < 4.40"): long options are now shown one per row,
+  and if an option is still too wide the page text is made smaller until everything fits.
+* **₹ shown as code** (`\text{\rupee}300`, `\rupee420`): `\rupee` / `\text{\rupee}` (also `\Rupee`, `\inr`) are now shown as **₹**
+  everywhere: question bank preview, printed papers, OMR result reports and the class discussion PDF. The maths
+  renderer also knows `\rupee` now.
+Changed files: `omr-discussion.js`, `omr-engine.js`, `teacher-app.js`, `main.html`.
+
 ## Not included
 * Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
 * School Course papers.

@@ -10,7 +10,7 @@
 <script src="common-ui.js?v=13"></script><script src="pwa-install.js?v=14" defer></script><script>window.notify=window.notify||function(m){window.alert(m instanceof Error?m.message:m)};</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.110.0/mathlive.min.js"></script>
-<script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script>
+<script>window.MathJax={tex:{macros:{rupee:"\\text{₹}",Rupee:"\\text{₹}",inr:"\\text{₹}"},inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"],["$$","$$"]]},options:{skipHtmlTags:["script","noscript","style","textarea","pre","code"]}};</script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
@@ -282,7 +282,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=38";
+      s.src="teacher-app.js?v=39";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -298,7 +298,7 @@ function loadTeacherApp(){
            t.onload=t.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");
-            e.src="omr-engine.js?v=10";
+            e.src="omr-engine.js?v=11";
             e.onload=e.onerror=()=>{
               const o=document.createElement("script");
               o.src="custom-omr.js?v=8";
@@ -309,7 +309,7 @@ function loadTeacherApp(){
                 x.onload=x.onerror=()=>{
                   // V21: class discussion PDF after an OMR import (optional)
                   const y=document.createElement("script");
-                  y.src="omr-discussion.js?v=1";
+                  y.src="omr-discussion.js?v=2";
                   y.onload=y.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
                   document.head.appendChild(y);
                 };
@@ -1550,7 +1550,7 @@ let jnvstLessonBulkRows=[];
 let jnvstQbCache=[];
 let jnvstQbEditingId='';
 function jnvstNormalizeMathText(value){
- const s=String(value??'').trim();
+ const s=String(value??'').replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹').trim();   // V23.6: \rupee → ₹
  if(!s)return '';
  if(/\\\(|\\\[|\$\$|\$[^$]+\$/.test(s))return s;
  const commands=['frac','dfrac','tfrac','sqrt','times','div','cdot','pi','leq','geq','neq','pm','mp','sum','prod','int','left','right','text','overline','underline','vec','angle','triangle','circ','degree','infty','approx','sim','subset','supset','in','notin'];
@@ -1618,7 +1618,7 @@ let jnvstQbSelected=new Set();
 
 
 function jnvstMathPreview(value){
- let s=String(value??'').trim();
+ let s=String(value??'').replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹').trim();   // V23.6: \rupee → ₹
  if(!s)return '<span class="muted">Math/text preview will appear here.</span>';
  // Normalize the common formats teachers may have entered in Excel/editor:
  // $...$, $$...$$, \( ... \), \[ ... \], or bare LaTeX commands such as \frac{2}{3}.

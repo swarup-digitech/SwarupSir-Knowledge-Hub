@@ -1283,7 +1283,7 @@ async function createMockTest(){
  }catch(e){notify('Could not generate Mock Test: '+(e.message||e))}
 }
 function qpPlainMath(v,dollars=true){
-  let s=String(v??'');
+  let s=String(v??'').replace(/\\text\s*\{\s*\\(?:rupee|Rupee|inr|INR)\s*\}/g,'₹').replace(/\\(?:rupee|Rupee|inr|INR)(?![A-Za-z])\s?/g,'₹');   // V23.6: \rupee → ₹
   s=s.replace(/<br\s*\/?\s*>/gi,'\n');
   s=s.replace(/\\\\(?=[()\[\]a-zA-Z])/g,'\\');
   if(dollars){s=s.replace(/\$\$([\s\S]*?)\$\$/g,'$1').replace(/(?<!\\)\$([^$\n]+?)(?<!\\)\$/g,'$1');}
@@ -1342,7 +1342,7 @@ function qpPopupRuntime(){
     let mathOk=false;
     try{
       say('Loading maths engine…');
-      window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],processEscapes:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']},startup:{typeset:false}};
+      window.MathJax={tex:{macros:{rupee:'\\text{₹}',Rupee:'\\text{₹}',inr:'\\text{₹}'},inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']],processEscapes:true},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']},startup:{typeset:false}};
       const urls=window.__QP_MATHJAX_URLS||['https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js','https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-chtml.js','https://unpkg.com/mathjax@3.2.2/es5/tex-chtml.js'];
       let loaded=false;for(const u of urls){if(await loadScript(u,15000)&&await waitFor(()=>window.MathJax&&window.MathJax.typesetPromise,6000)){loaded=true;break;}}
       if(loaded){
