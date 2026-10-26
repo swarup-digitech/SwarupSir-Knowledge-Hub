@@ -267,7 +267,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=34";
+      s.src="teacher-app.js?v=36";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -275,11 +275,11 @@ function loadTeacherApp(){
         c.onload=c.onerror=()=>{
           // V16: Custom Adaptive Question Paper module (needs custom-adaptive.js; optional)
           const p=document.createElement("script");
-          p.src="custom-adaptive-paper.js?v=4";
+          p.src="custom-adaptive-paper.js?v=5";
           p.onload=p.onerror=()=>{
            // V23: Custom Test (teacher-chosen questions, a variation per student; optional)
            const t=document.createElement("script");
-           t.src="custom-test.js?v=1";
+           t.src="custom-test.js?v=3";
            t.onload=t.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");

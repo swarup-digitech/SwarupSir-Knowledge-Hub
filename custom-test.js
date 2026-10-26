@@ -128,7 +128,50 @@ function spreadSummary(items,variants,assign){
   });
 }
 
-const api={shuffle,groupConflicts,variantsFor,spreadVariants,planFor,rowsFromPlan,spreadSummary};
+/* ---- V23.1: lesson filter with sub-lessons ----
+ * Choosing a lesson (e.g. 2.0) shows the questions of that lesson AND of all its sub-lessons (2.1, 2.2 …).
+ * A question belongs to a lesson when its lesson_id is that lesson or a descendant (parent_lesson_id links),
+ * or – for questions without a stored link – when its lesson code lies under the lesson code. */
+const codeParts=c=>{const a=String(c==null?'':c).trim().split('.').map(x=>x.trim()).filter(x=>x!=='');return a.length>1&&/^0+$/.test(a[a.length-1])?a.slice(0,-1):a;};
+// is lesson code c inside lesson code p?   2.0 contains 2.0, 2.1, 2.1.3 ;  2.1 contains 2.1, 2.1.2 ;  2.1 does not contain 2.10
+function codeUnder(c,p){const a=codeParts(c),b=codeParts(p);if(!a.length||!b.length||a.length<b.length)return false;return b.every((x,i)=>x===a[i]);}
+function lessonIndex(lessons){
+  const byId=new Map((lessons||[]).map(l=>[String(l.id),l])),kids=new Map();
+  (lessons||[]).forEach(l=>{const p=String(l.parent_lesson_id||'');if(p){if(!kids.has(p))kids.set(p,[]);kids.get(p).push(String(l.id));}});
+  const desc=id=>{const out=new Set([String(id)]),st=[String(id)];while(st.length){(kids.get(st.pop())||[]).forEach(k=>{if(!out.has(k)){out.add(k);st.push(k);}});}return out;};
+  return {byId,desc};
+}
+// node: {id?, code}.  q: question with lesson_id / lesson_code
+function inLesson(q,node,idx){
+  if(!node)return true;
+  const lid=String(q&&q.lesson_id||'');
+  if(node.id&&lid&&idx.desc(node.id).has(lid))return true;
+  if(node.subject&&q&&q.subject_id&&String(q.subject_id)!==String(node.subject))return false;   // same code, other subject
+  const code=(q&&q.lesson_code)||(lid&&idx.byId.get(lid)&&idx.byId.get(lid).lesson_code)||'';
+  return codeUnder(code,node.code);
+}
+/* Lesson list for the drop-down, in tree order, with the number of questions (sub-lessons included).
+ * lessons  rows of jnvst_subject_lessons (any subject; only those with questions here are listed)
+ * items    the questions of the pool (a passage counts by its first question) */
+function lessonOptions(lessons,items){
+  // only the lessons of the subject(s) of these questions
+  const subs=new Set((items||[]).map(q=>String(q.subject_id||'')).filter(Boolean));
+  lessons=(lessons||[]).filter(l=>!subs.size||!l.subject_id||subs.has(String(l.subject_id)));
+  const idx=lessonIndex(lessons);
+  let nodes=lessons.map(l=>({id:String(l.id),code:String(l.lesson_code||'').trim(),name:String(l.lesson_name||'').trim(),parent:String(l.parent_lesson_id||''),subject:String(l.subject_id||'')}));
+  // questions whose lesson is not in the table: make nodes from their codes (2.1 also adds 2.0)
+  const known=new Set(nodes.map(n=>n.code));
+  (items||[]).forEach(q=>{const lid=String(q.lesson_id||'');if(lid&&idx.byId.has(lid))return;const c=String(q.lesson_code||'').trim();if(!c)return;
+    const parts=codeParts(c);
+    for(let k=1;k<=parts.length;k++){const code=k===1?parts[0]+'.0':parts.slice(0,k).join('.');   // 2.1.3 -> 2.0, 2.1, 2.1.3
+      if(!known.has(code)){known.add(code);nodes.push({id:'',code,name:'',parent:''});}}});
+  nodes=nodes.map(n=>Object.assign(n,{count:(items||[]).filter(q=>inLesson(q,n,idx)).length})).filter(n=>n.count>0);
+  const depth=n=>{if(n.id){let d=0,cur=idx.byId.get(n.id);while(cur&&cur.parent_lesson_id&&idx.byId.has(String(cur.parent_lesson_id))&&d<8){d++;cur=idx.byId.get(String(cur.parent_lesson_id));}return d||Math.max(0,codeParts(n.code).length-1);}return Math.max(0,codeParts(n.code).length-1);};
+  return nodes.map(n=>Object.assign(n,{depth:depth(n),key:n.id?'id:'+n.id:'code:'+n.code}))
+    .sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true})||a.depth-b.depth||a.name.localeCompare(b.name));
+}
+
+const api={shuffle,groupConflicts,variantsFor,spreadVariants,planFor,rowsFromPlan,spreadSummary,codeUnder,inLesson,lessonIndex,lessonOptions};
 if(typeof module!=='undefined'&&module.exports){module.exports=api;}
 if(typeof window==='undefined')return;   // node: stop here (UI below needs the browser)
 root.CT_API=api;
@@ -156,7 +199,9 @@ const REASON={
   CT_VARIATION:['Variation','#ffedd5','#9a3412']
 };
 const tag=r=>{const x=REASON[r]||[r,'#e5e7eb','#374151'];return `<span class="tag" style="background:${x[1]};color:${x[2]}">${esc(x[0])}</span>`;};
-const topicOf=q=>[String(q.lesson_code||'').trim(),String(q.topic||'').trim()].filter(Boolean).join(' ')||'—';
+const topicOf=q=>{const l=S&&S.lessonIdx&&S.lessonIdx.byId.get(String(q.lesson_id||''));
+  const code=String(q.lesson_code||(l&&l.lesson_code)||'').trim(),name=String((l&&l.lesson_name)||q.topic||'').trim();
+  return [code,name].filter(Boolean).join(' ')||'—';};
 
 /* ---- run the app's own paper helpers for this test's subject / language ---- */
 function setCtx(cfg,matCounts){
@@ -193,7 +238,10 @@ async function loadData(){
     const recs=await fetchAll((a,b)=>sb.from('jnvst_generated_question_papers').select('id,sid:paper_snapshot->>student_id,key:answer_key_snapshot->rows').eq('teacher_id',current.id).not('paper_snapshot->>student_id','is',null).order('id').range(a,b));
     recs.forEach(r=>{if(!r.sid)return;if(!scheduled.has(r.sid))scheduled.set(r.sid,new Set());(Array.isArray(r.key)?r.key:[]).forEach(x=>{if(x&&x['Question ID'])scheduled.get(r.sid).add(x['Question ID']);});});
   }catch(e){console.warn('Earlier personal papers could not be read:',e);}
-  return {classes,students,perf,bank,scheduled};
+  let lessons=[];
+  try{lessons=await fetchAll((a,b)=>sb.from('jnvst_subject_lessons').select('id,subject_id,parent_lesson_id,lesson_code,lesson_name').eq('teacher_id',current.id).order('lesson_code').range(a,b));}
+  catch(e){try{if(typeof jnvstSubjectLessons!=='undefined'&&Array.isArray(jnvstSubjectLessons))lessons=jnvstSubjectLessons;}catch(_){}}
+  return {classes,students,perf,bank,scheduled,lessons};
 }
 
 /* -------------------------------- settings -------------------------------- */
@@ -256,7 +304,7 @@ function paint(){
   <div class="card"><h2 style="margin-top:0">2. Choose questions</h2>
     <div class="grid">
       <div><label>Search</label><input id="ctSearch" oninput="ctRenderBank()" placeholder="Words in the question, group name…"></div>
-      <div><label>Lesson / Topic</label><select id="ctTopic" onchange="ctRenderBank()"></select></div>
+      <div><label>Lesson</label><select id="ctTopic" onchange="ctRenderBank()"></select><div class="small muted">A lesson includes all its sub-lessons (2.0 shows 2.1, 2.2 …).</div></div>
       <div><label>Show</label><select id="ctShow" onchange="ctRenderBank()"><option value="">All</option><option value="var">Only questions with variations</option><option value="chosen">Only chosen</option></select></div>
     </div>
     <div id="ctChosenInfo" class="notice small" style="margin-top:10px"></div>
@@ -292,8 +340,10 @@ function ctSubjectChanged(){
   // group sizes in this pool (how many variations a chosen question has)
   S.groupSize=new Map();S.pool.qs.forEach(q=>{const g=vk(q);if(g)S.groupSize.set(g,(S.groupSize.get(g)||0)+1);});
   S.unitVar=new Map();S.pool.ps.forEach(g=>{const k=unitKeys(g);S.unitVar.set(g.id,k.size?S.pool.ps.filter(x=>[...unitKeys(x)].some(z=>k.has(z))).length:1);});
-  const topics=[...new Set([...S.pool.qs,...S.pool.ps.flatMap(g=>g.questions)].map(topicOf))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-  const sel=q$('ctTopic');if(sel){const old=sel.value;sel.innerHTML='<option value="">All</option>'+topics.map(t=>`<option ${t===old?'selected':''}>${esc(t)}</option>`).join('');}
+  S.lessonIdx=lessonIndex(S.lessons||[]);
+  S.lessonOpts=lessonOptions(S.lessons||[],[...S.pool.qs,...S.pool.ps.map(g=>g.questions[0]).filter(Boolean)]);
+  const sel=q$('ctTopic');if(sel){const old=sel.value;
+    sel.innerHTML=`<option value="">All lessons</option>`+S.lessonOpts.map(n=>`<option value="${esc(n.key)}" ${n.key===old?'selected':''}>${'— '.repeat(n.depth)}${esc([n.code,n.name].filter(Boolean).join(' '))} (${n.count})</option>`).join('');}
   clearPlans();ctRenderBank();
 }
 function ctOptionsChanged(){clearPlans();ctRenderBank();}
@@ -309,10 +359,11 @@ function ctRenderBank(){
   const box=q$('ctBank');if(!box||!S)return;
   const txt=String(q$('ctSearch')?.value||'').trim().toLowerCase(),top=q$('ctTopic')?.value||'',show=q$('ctShow')?.value||'';
   const taken=takenKeys(null);
-  const match=(text,topic,keyed,chosen)=>(!txt||text.toLowerCase().includes(txt))&&(!top||topic===top)&&(show!=='var'||keyed)&&(show!=='chosen'||chosen);
+  const node=top?(S.lessonOpts||[]).find(n=>n.key===top):null;
+  const match=(text,q,keyed,chosen)=>(!txt||text.toLowerCase().includes(txt))&&(!node||inLesson(q,node,S.lessonIdx))&&(show!=='var'||keyed)&&(show!=='chosen'||chosen);
   const groupLine=(g,n)=>g?`<span class="small muted">Group <b>${esc(g)}</b> · ${n} variation${n===1?'':'s'}</span>`:'<span class="small muted">No group — same question for every student</span>';
-  const qRows=S.pool.qs.filter(q=>match([q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.variation_group,q.topic].join(' '),topicOf(q),!!vk(q)&&(S.groupSize.get(vk(q))||0)>1,S.chosen.has('q:'+q.id)));
-  const pRows=S.pool.ps.filter(g=>match([g.title,g.text,...g.questions.map(q=>q.question_text+' '+(q.variation_group||''))].join(' '),topicOf(g.questions[0]||{}),(S.unitVar.get(g.id)||1)>1,S.chosen.has('p:'+g.id)));
+  const qRows=S.pool.qs.filter(q=>match([q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.variation_group,q.topic].join(' '),q,!!vk(q)&&(S.groupSize.get(vk(q))||0)>1,S.chosen.has('q:'+q.id)));
+  const pRows=S.pool.ps.filter(g=>match([g.title,g.text,...g.questions.map(q=>q.question_text+' '+(q.variation_group||''))].join(' '),g.questions[0]||{},(S.unitVar.get(g.id)||1)>1,S.chosen.has('p:'+g.id)));
   const LIMIT=200;
   const qHtml=qRows.slice(0,LIMIT).map(q=>{
     const id='q:'+q.id,on=S.chosen.has(id),g=vk(q),other=g&&taken.get(g),dis=!on&&other;

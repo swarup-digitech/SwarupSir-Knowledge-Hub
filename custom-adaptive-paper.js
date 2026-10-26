@@ -247,7 +247,9 @@ async function loadData(){
     const recs=await fetchAll((a,b)=>sb.from('jnvst_generated_question_papers').select('id,sid:paper_snapshot->>student_id,key:answer_key_snapshot->rows').eq('teacher_id',current.id).not('paper_snapshot->>student_id','is',null).order('id').range(a,b));
     recs.forEach(r=>{if(!r.sid)return;if(!scheduled.has(r.sid))scheduled.set(r.sid,new Set());(Array.isArray(r.key)?r.key:[]).forEach(x=>{if(x&&x['Question ID'])scheduled.get(r.sid).add(x['Question ID']);});});
   }catch(e){console.warn('Earlier personal papers could not be read:',e);}
-  return {classes,students,perf,bank,scheduled};
+  let lessons=[];   // V23.2: chapters / sub-chapters for the chapter filter
+  try{lessons=await fetchAll((a,b)=>sb.from('jnvst_subject_lessons').select('id,subject_id,parent_lesson_id,lesson_code,lesson_name').eq('teacher_id',current.id).order('lesson_code').range(a,b));}catch(e){console.warn('Lessons could not be read:',e);}
+  return {classes,students,perf,bank,scheduled,lessons};
 }
 
 /* -------------------------------- settings -------------------------------- */
@@ -261,13 +263,24 @@ function readCfg(){
     mat,arith:num('capArith',20),evsSets:Math.max(1,num('capEvsSets',1)),langSets:Math.max(1,num('capLangSets',4)),
     pct:Math.min(100,Math.max(0,Number(q$('capPct')?.value)||0)),
     avoid:!!q$('capAvoid')?.checked,useVariation:!!q$('capVar')?.checked,commonFirst:!!q$('capCommon')?.checked,
-    answers:q$('capAnswers')?.value==='yes'
+    answers:q$('capAnswers')?.value==='yes',
+    lessons:S&&S.lessonSel&&S.lessonSel.size?new Set(S.lessonSel):null
   };
+}
+/* V23.2: chapter filter — a chosen chapter includes all its sub-chapters (2.0 → 2.1, 2.2 …). Uses the
+   lesson helpers of custom-test.js (CT_API). Without them the filter is hidden and nothing is filtered. */
+const LX=()=>root.CT_API&&root.CT_API.lessonOptions?root.CT_API:null;
+function lessonFilter(cfg){
+  const X=LX();if(!X||!cfg.lessons||!cfg.lessons.size)return null;
+  const nodes=(S.lessonOpts||[]).filter(n=>cfg.lessons.has(n.key));if(!nodes.length)return null;
+  const idx=X.lessonIndex(S.lessons||[]);
+  return q=>nodes.some(n=>X.inLesson(q,n,idx));
 }
 function defsFor(cfg){
   setCtx(cfg);
   const bank=S.bank;
-  return withSubject(cfg.subject,()=>{
+  const lf=lessonFilter(cfg);
+  const defs=withSubject(cfg.subject,()=>{
     if(cfg.subject==='MAT')return getParts().map(p=>({key:p.part,heading:p.heading,kind:'q',count:cfg.mat[p.part]||0,pool:bank.filter(q=>String(q.part_code||'').toUpperCase()===p.part)}));
     if(cfg.subject==='ARITHMETIC')return [{key:'ARITHMETIC',heading:'',kind:'q',count:cfg.arith,pool:bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionSubjectMatches(q))}];
     if(cfg.subject==='EVS')return [
@@ -275,7 +288,23 @@ function defsFor(cfg){
       {key:'EVS_PASSAGE',heading:'',kind:'p',count:cfg.evsSets,groups:completeGroups(qpPassageGroups(bank.filter(q=>qpIsEVSPassageQuestion(q))))}];
     return [{key:'LANGUAGE_PASSAGE',heading:'',kind:'p',count:cfg.langSets,groups:completeGroups(qpPassageGroups(bank.filter(q=>qpIsPassage(q)&&qpLangMatches(q)&&String(q.part_code||'').toUpperCase().replace(/-/g,'_')==='LANGUAGE_PASSAGE')))}];
   });
+  if(lf)defs.forEach(d=>{if(d.kind==='q')d.pool=d.pool.filter(lf);else d.groups=d.groups.filter(g=>g.questions.some(lf));});   // a passage counts when one of its questions is in the chapter
+  return defs;
 }
+// V23.2: chapter list (tree, counts include sub-chapters) for the current subject / language
+function paintLessons(){
+  const box=q$('capLessons');if(!box)return;
+  const X=LX();if(!X){box.parentElement.style.display='none';return;}
+  let all;try{all=defsFor(Object.assign(readCfg(),{lessons:null}));}catch(e){box.innerHTML='';return;}
+  const items=all.flatMap(d=>d.kind==='q'?d.pool:d.groups.map(g=>g.questions[0]).filter(Boolean));
+  S.lessonOpts=X.lessonOptions(S.lessons||[],items);
+  const keys=new Set(S.lessonOpts.map(n=>n.key));[...S.lessonSel].forEach(k=>{if(!keys.has(k))S.lessonSel.delete(k);});
+  box.innerHTML=S.lessonOpts.length?S.lessonOpts.map(n=>`<label style="display:block;font-weight:400;padding-left:${n.depth*22}px"><input type="checkbox" style="width:auto;margin-right:6px" ${S.lessonSel.has(n.key)?'checked':''} onchange="capLessonToggle('${esc(n.key)}',this.checked)">${n.depth?'↳ ':'📚 '}<b>${esc([n.code,n.name].filter(Boolean).join(' '))}</b> <span class="tag">${n.count}</span></label>`).join('')
+    :'<div class="muted small">No chapters found for these questions.</div>';
+  const info=q$('capLessonInfo');if(info)info.textContent=S.lessonSel.size?`${S.lessonSel.size} chapter${S.lessonSel.size===1?'':'s'} chosen — only their questions (and their sub-chapters) are used, mistakes included.`:'All chapters are used. Tick chapters to use only those.';
+}
+function capLessonToggle(key,on){on?S.lessonSel.add(key):S.lessonSel.delete(key);capSettingsChanged();}
+function capLessonClear(){S.lessonSel=new Set();capSettingsChanged();}
 const defLabel=d=>d.heading?d.heading.replace(/^PART [IVX]+ — /,''):d.key==='EVS_MCQ'?'EVS questions':d.key==='EVS_PASSAGE'?'EVS passages':d.key==='LANGUAGE_PASSAGE'?'Language passages':'Arithmetic';
 // V22: for questions, what limits a paper is the number of DIFFERENT Variation Groups, not questions
 const defAvail=d=>d.kind==='q'?CAx.groupCapacity(d.pool):d.groups.length;
@@ -290,6 +319,7 @@ function structureHtml(){
   return `<div class="grid">${box('capLangSets','Language passages',4,'Each passage = 5 questions')}</div>`;
 }
 function capSubjectChanged(){
+  if(S)S.lessonSel=new Set();
   const box=q$('capStructure');if(box)box.innerHTML=structureHtml();
   const lg=q$('capLangWrap');if(lg)lg.style.display=(q$('capSubject').value==='MAT')?'none':'';
   capSettingsChanged();
@@ -298,7 +328,7 @@ function capSettingsChanged(){
   if(!S)return;
   S.defs=null;
   if(S.plans.size){S.plans=new Map();const p=q$('capPreview');if(p)p.innerHTML='<div class="notice">Settings changed — generate the papers again.</div>';}
-  paintAvail();capFilter();
+  paintLessons();paintAvail();capFilter();
 }
 function paintAvail(){
   const box=q$('capAvail');if(!box)return;
@@ -315,7 +345,7 @@ async function customAdaptivePaperHome(){
   render(`<div class="wrap">${header('Custom Adaptive Question Paper')}<div class="card"><p class="muted">Loading students, results and question bank…</p></div></div>`);
   try{
     const d=await loadData();
-    S=Object.assign(d,{selected:new Set(),plans:new Map(),defs:null,poolIds:new Set(),cfg:null});
+    S=Object.assign(d,{selected:new Set(),plans:new Map(),defs:null,poolIds:new Set(),cfg:null,lessonSel:new Set(),lessonOpts:[]});
     paint();
   }catch(e){
     render(`<div class="wrap">${header('Custom Adaptive Question Paper')}<div class="card">${message('Could not load data: '+(e.message||e))}<div class="actions"><button class="secondary" onclick="questionPaperGeneratorPage()">← Back</button></div></div></div>`);
@@ -338,6 +368,10 @@ function paint(){
       <div><label>Teacher copy</label><select id="capAnswers"><option value="no">Question paper only</option><option value="yes">Include answer key after each paper</option></select></div>
     </div>
     <div id="capStructure" style="margin-top:10px">${structureHtml()}</div>
+    <details style="margin-top:10px"><summary><b>Chapters / sub-chapters</b> <span class="small muted" id="capLessonInfo"></span></summary>
+      <div class="small muted" style="margin:6px 0">Tick one or more chapters to build the papers only from them. A chapter includes all its sub-chapters (2.0 → 2.1, 2.2 …). The numbers are questions in your bank.</div>
+      <div id="capLessons" style="max-height:260px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px"></div>
+      <div class="actions" style="margin-top:6px"><button class="secondary" onclick="capLessonClear()">☐ Use all chapters</button></div></details>
     <div id="capAvail" class="small" style="margin-top:8px"></div>
     <div style="margin-top:8px"><label style="font-weight:400"><input type="checkbox" id="capAvoid" checked style="width:auto;margin-right:8px" onchange="capSettingsChanged()">Do not repeat new questions already printed in this student's earlier personal papers</label>
     <label style="font-weight:400"><input type="checkbox" id="capCommon" checked style="width:auto;margin-right:8px" onchange="capSettingsChanged()">⭐ For the non-mistake questions, use <b>Common</b> questions first (frequently asked in exams; same Variation Group counts too). Other questions fill in only if Common ones run out.</label>
@@ -359,7 +393,7 @@ function paint(){
     <div id="capPreview" style="margin-top:12px"></div>
   </div>
   </div>`);
-  paintAvail();capFilter();
+  paintLessons();paintAvail();capFilter();
 }
 function mistakesInPool(sid){
   const pm=S.perf.get(sid);let n=0;if(!pm)return 0;
@@ -660,5 +694,5 @@ function capViewGroup(records){
   }finally{qpState.mode=oldMode;}
 }
 
-Object.assign(root,{customAdaptivePaperHome,capSubjectChanged,capSettingsChanged,capFilter,capSelectVisible,capToggleStudent,capGenerate,capOpened,capSwap,capChoose,capAdd,capRemove,capVerify,capVerifyAll,capPrint,capFixRepeats,capPreviewOne,capAnswerExcel,capPickerClose,capPickerRender,capPickerUse,capDecorate:decorate,capViewGroup,capState:()=>S});
+Object.assign(root,{capLessonToggle,capLessonClear,customAdaptivePaperHome,capSubjectChanged,capSettingsChanged,capFilter,capSelectVisible,capToggleStudent,capGenerate,capOpened,capSwap,capChoose,capAdd,capRemove,capVerify,capVerifyAll,capPrint,capFixRepeats,capPreviewOne,capAnswerExcel,capPickerClose,capPickerRender,capPickerUse,capDecorate:decorate,capViewGroup,capState:()=>S});
 })(typeof window!=='undefined'?window:globalThis);

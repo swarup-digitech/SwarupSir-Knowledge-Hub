@@ -55,6 +55,28 @@ Question Paper Generator → **📝 Custom Test** (next to 🎯 Custom Adaptive 
   a second import of the same student refused.
 **Not tested on your live Supabase project.**
 
+## V23.1 — Lesson filter includes sub-lessons
+In *2. Choose questions* the **Lesson** list is now a tree with the number of questions, e.g.
+`2.0 Four fundamental operations (15)`, `— 2.1 … (6)`. Choosing a lesson shows the questions of that lesson
+**and all its sub-lessons** (2.0 shows 2.0, 2.1, 2.2, 2.2.1 …); choosing 2.2 shows only 2.2 and its own sub-lessons.
+It follows the lesson tree of *Manage Groups & Subjects*; a question that is not linked to a lesson record is
+placed by its lesson code (2.1 belongs to 2.0; 2.10 is not under 2.1). Changed files: `custom-test.js`, `main.html`.
+
+## V23.2 — Chapters with sub-chapters in all paper tools
+* **Question Paper Generator (Arithmetic → Chapters / Sub-chapters):** a ticked chapter already included its
+  sub-chapters through the lesson tree. Now it also includes sub-chapters that have no parent link, and questions
+  that carry only a lesson code (for example from an older bulk upload): 2.0 takes 2.1, 2.2 …, but 2.1 never takes 2.10.
+  Every chapter shows its number of questions; a chapter without sub-chapters is shown as a chapter, not a sub-chapter.
+* **Custom Adaptive Papers:** new folding box **Chapters / sub-chapters** under the paper structure. Tick one or more
+  chapters to build the papers only from them (mistakes included); a chapter includes all its sub-chapters.
+  *Available in your bank* then counts only those chapters. Changing the subject clears the ticks.
+  A passage counts when one of its questions is in a ticked chapter.
+* **Custom Test:** the same chapter matching; the list only shows chapters of the chosen subject (Arithmetic 2.0 and
+  EVS 2.0 are no longer mixed).
+Changed files: `teacher-app.js`, `custom-adaptive-paper.js`, `custom-test.js`, `main.html`.
+Tested: 10 chapter-matching checks; browser run with the real `teacher-app.js` (generator: 1.0 → 21, 3.0 → 21 with an
+unlinked 3.1, 5.2 → 11, 1.0 + 5.0 → 39 questions; adaptive: chapters 1.0 + 6.0 → paper only from 1.0–1.3 and 6.0); all earlier checks still pass.
+
 ## Not included
 * Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
 * School Course papers.
