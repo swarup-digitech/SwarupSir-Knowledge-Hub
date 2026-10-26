@@ -90,6 +90,21 @@ The tree is now worked out once and reused. Measured with 3,000 questions: chapt
 chapter 1 s → 3 ms; Custom Adaptive Papers and Custom Test respond in under 0.2 s (50 students). Same results as before.
 Changed files: `teacher-app.js`, `custom-test.js`, `main.html`.
 
+## V23.5 — JNVST Question Bank: fast, subject-specific lessons, lesson includes sub-lessons
+* **Fast:** the bank showed every question at once, and every row had a Variation drop-down with all groups (built
+  again for each row). With ~3,900 questions that is millions of entries — the page became very slow or crashed.
+  Now 50 questions/passages are shown at a time (**Show 50 more** / **Show all**), and a row's Variation drop-down is
+  filled only when you click it. Measured with 3,900 questions: opening 0.16 s (before: the tab crashed), changing a filter < 0.1 s.
+* **Subject → only its lessons:** after choosing a Subject, *Lesson / Sub-lesson* lists only that subject's lessons.
+  With no subject chosen, every lesson shows its subject name (*Arithmetic · 1.0 …*).
+* **Lesson includes its sub-lessons:** choosing **1.0** shows the questions of 1.0, 1.1, 1.2 …; choosing **1.1** shows
+  only 1.1 (and its own sub-lessons, if any). Questions linked only by lesson code are placed by the code; 1.1 never takes 1.10.
+  (*Delete Selected Lesson* already worked this way.)
+* *Delete All Visible* is now called **Delete All Matching (all pages)** — it deletes every question matching the filters,
+  also those on pages not shown yet; the confirmation still shows the number. The select-all box in the table header
+  works the same way.
+Changed files: `teacher-app.js`, `main.html`.
+
 ## Not included
 * Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
 * School Course papers.
