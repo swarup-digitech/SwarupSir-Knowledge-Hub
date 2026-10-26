@@ -1,93 +1,60 @@
-# V23: English + Assamese question papers, missing-translation check
+# V23: Custom Test — your questions, a variation for every student, personal OMR
 
-1. **JNVST Question Bank → 🌐 Check missing translations** lists every English question without its Assamese
-   version (and the other way round), suggests pairs that belong together, links them, and lets you type in a
-   missing version.
-2. **Question Paper Generator (MAT, Arithmetic, EVS)** always makes **two PDFs**: English medium and Assamese
-   medium, with the same questions, numbering, order and answer key. **Language papers are unchanged**, with one
-   paper per language as before.
+You choose the questions. Every selected student gets a personal paper:
 
-Changed files: `main.html`, `teacher-app.js`, README.
-New files: `bilingual-papers.js`, `V23_BILINGUAL_PAIRS.sql` (same as
-`supabase/migrations/20261015000001_v23_bilingual_pairs.sql`), this note.
+* a chosen question **with a Variation Group** → each student gets one question of that group (a *variation*),
+* a chosen question **without a Variation Group** → the same question is in every paper,
+* the **question order is different** for every student.
 
-## Install (once)
-1. **SQL:** run `V23_BILINGUAL_PAIRS.sql` in the Supabase SQL Editor. It adds one function that links many
-   pairs in a single request, and changes no data. Without it, linking still works, only slower.
-2. Upload `main.html`, `teacher-app.js` and `bilingual-papers.js` and press Ctrl+Shift+R.
-3. Open **JNVST Question Bank → 🌐 Check missing translations** and link your existing questions (see below).
-   Until a pair is linked, the generator treats that question as having no other-language version.
+The papers are printed with each student's name and roll no., each student gets their own OMR sheet, and the
+imported OMR results go into the **Mistake Bank** exactly like Custom Adaptive Papers.
 
-## Why the first check shows many unlinked questions
-English and Assamese versions are linked by a shared pair ID.
-* Questions added by hand (➕ Add JNVST Question) and variation questions were already linked.
-* **Excel bulk uploads never linked them.** From now on, the English and Assamese versions in the same Excel
-  row are linked automatically.
+New file: `custom-test.js`. Changed files: `main.html` (loads the new file, version numbers), `teacher-app.js`
+(📝 Custom Test button; Generated History reads the paper kind), `custom-omr.js` (Custom Test / Adaptive label), README.
+No SQL to run (needs V16, which you already have). Upload the files and press Ctrl+Shift+R.
 
-For questions already in the bank, the check suggests pairs:
-* **Sure:** uploaded in the same upload, with the same subject, lesson, part, topic, variation group, answer,
-  picture, marks and level. Press **🔗 Link all sure pairs**.
-* **Likely:** the same details, but uploaded at different times. Look through them, then link them all or
-  one by one.
-* Passages are matched as whole passages (5 questions, same answers in order) and linked question by question.
+## Where to find it
+Question Paper Generator → **📝 Custom Test** (next to 🎯 Custom Adaptive Papers).
 
-## The 🌐 Check missing translations page
-* **Not checked:** Common (MAT) questions, which serve both languages, and Language-subject questions, which
-  have their own paper per language. Switched-off questions are also left out.
-* **🔗 Suggested pairs:** the Sure and Likely pairs, side by side.
-* **➕ Missing:** the questions with no partner, by Subject → Lesson. For each one you can:
-  * **➕ Add Assamese/English version:** type the question and options. The answer, subject, lesson, topic,
-    variation group, level and (optionally) the picture are copied, and the two are linked.
-  * Use **➕ Add … passage** for a whole passage with its 5 questions.
-  * **🔗 Link to an existing … question:** choose from unlinked questions of the same subject, closest
-    first.
-* **⚠ Linked but different:** linked pairs that disagree. Checked: different correct answer, Part, Subject or
-  Lesson; a picture in only one version; one version switched off. Use **✎ Edit** to fix the question, or
-  **✂ Unlink** if the two are not the same question.
+## How to use
+1. **Test** – title, subject (Arithmetic / MAT / EVS / Language), language, options:
+   * give each student a **variation** (on by default)
+   * the chosen question may also be one of the variations (on)
+   * prefer variations the student has **not attempted** and was **not given** in an earlier personal paper (on)
+   * **different question order** for every student (on). Passage questions stay 1–5 inside their passage;
+     EVS MCQs stay before the passages; MAT questions stay inside their part.
+2. **Choose questions** – search, filter by lesson/topic, "only questions with variations", "only chosen".
+   Each question shows its group and how many variations it has, or *"No group — same question for every student"*.
+   Only **one question per Variation Group** can be ticked (the others of that group are greyed out), because
+   every student already gets a variation of it. EVS and Language passages are chosen as whole passages.
+3. **Choose students** – class filter, search, select shown.
+4. **⚙ Generate personal papers**
+   * *How the variations are spread* shows how many students got each variation.
+   * Variations are shared out evenly, and students next to each other in roll order get different variations.
+   * Open a student to check the paper; **⇄ Other variation** gives that student the next variation.
+   * Tags: *Variation*, *Your question*, *Same for all*.
+5. **🖨️ Save to history & print** – runs the normal Paper Quality Control for every paper, saves the batch to
+   Generated History, and prints all papers with names and roll numbers (answer key after each paper if chosen).
+   **📊 Answer key Excel** gives one column per student.
+6. **🧾 Print OMR sheets, scan & import results** (button after saving, or *Personal OMR Sheets*): print each
+   student's own OMR sheet, scan the filled sheets, import. Every student is matched to their own paper by roll no.;
+   every wrong or blank answer goes into the Mistake Bank on the exact question that student had, so Custom
+   Adaptive Papers and Assignments use it next time. Result reports and the Class discussion PDF work as before.
+   *Import OMR Results* with the paper's serial works too.
 
-## Question Paper Generator
-* The **Language** dropdown is now **Show questions in**. It only changes the language shown while you tick
-  mandatory questions. Ticked questions switch to their partner when you change it.
-  For **Language** papers it is still the paper's language.
-* A note under the subject summary says how many questions have no other-language version. In the lists they
-  are marked **⚠ No English/Assamese version — used only if you tick it**.
-* **Random questions** come only from questions that have both versions. For EVS passages, all 5 questions
-  must be linked.
-* **Before the papers are made**, you get a warning in two cases:
-  * a ticked question has no partner (it is then printed in the shown language in both PDFs);
-  * a partner has a different answer (the shown language's answer is used in both).
-* After **Generate**, the shown-language PDF opens as before. A green box then offers both papers:
-  **🖨 English-medium PDF** and **🖨 Assamese-medium PDF**. Each window's title is the PDF file name, for
-  example *JNVST Practice Question Paper — English medium — SET A, SET B*.
-* Each paper says **ENGLISH MEDIUM** or **ASSAMESE MEDIUM** under the title.
-* With several sets (A–D), each PDF contains all sets. SET A English and SET A Assamese have the same
-  questions in the same order.
-* **MAT:** Common questions appear in both papers. If you also have English/Assamese MAT questions, only
-  linked ones are used, once each.
+## Tested
+* 23 unit checks: variations spread evenly (30 students over 8 variations: 3–4 each), neighbours differ,
+  unattempted / not-yet-given variations first, no repeated question or group in a paper, questions without a
+  group in every paper, different order per student, MAT parts, EVS passages (similar passages alternate,
+  MCQs before passages, passage questions 1–5), one-per-group rule.
+* Browser run with the real `teacher-app.js` and a test bank: choose, refuse a 2nd question of a group,
+  generate 8 papers, ⇄ Other variation, Quality Control, save, print window (names on every paper), open the
+  batch in Personal OMR Sheets; EVS test with passages. No page errors.
+* The real OMR import function in PostgreSQL 16 (mistake bank + history + V14 + V14 fix + V16 files):
+  3 students, each matched to their own paper, mistakes recorded on each student's own variation,
+  a second import of the same student refused.
+**Not tested on your live Supabase project.**
 
-## Generated History
-* One entry per set holds both languages. The buttons are **Paper (English)**, **Paper (Assamese)**,
-  **📄 All Questions (English)** and **📄 All Questions (Assamese)**.
-* The answer key is the same for both languages, so one OMR import covers English- and Assamese-medium
-  students.
-* The answer key Excel gains a *Question ID English/Assamese* column.
-
-## Not changed / good to know
-* **Mistake Bank after OMR import:** answers are recorded against the question IDs of the language that was
-  shown when the paper was made. For Assamese-medium students on a paper made with English shown, mistakes are
-  saved on the English question. The app has no field that says which medium a student is in, so this can't
-  be split yet.
-* **⬇ Word download** of the generated paper is still made in the shown language only.
-* The fixed paper texts (*Instructions*, *Name*, *Roll No.*, *Passage 1*) stay in English in both papers.
-
-## Tested in a test browser
-Tested with simulated data, not your live database:
-* Linking: 15 suggested pairs, linked with one request (and again without the SQL function, one by one).
-* Adding a missing question and a missing passage: saved and linked.
-* Arithmetic, 2 sets: Assamese and English PDFs with identical order and answer keys. Random questions only
-  from linked pairs; a ticked unlinked question triggered the warning.
-* EVS: 15 MCQs + 1 passage, identical order in both papers.
-* MAT: Common questions, medium label shown.
-* Language papers: still one paper in the chosen language.
-* Excel import: both versions of each row linked, for MCQs and passages.
-* The earlier V22 checks still pass.
+## Not included
+* Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
+* School Course papers.

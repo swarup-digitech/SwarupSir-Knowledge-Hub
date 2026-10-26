@@ -48,13 +48,13 @@ async function customOmrHome(){
       const set=scannedBy.get(base),free=rs.filter(r=>!isScanned(r,set));H.set(base,{rs,free});
       const n=rs.filter(r=>set&&set.has(sidOf(r))).length||(set?0:imp.reduce((t,i)=>t+(i.student_count||0),0));
       return `<div class="assignment"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-        <div><b>${esc(first.title||'Personal paper')}</b><div class="small muted">${esc(first.subject||'')} · ${esc(fmtDate(first.generated_at))} · ${rs.length} student${rs.length===1?'':'s'} · ${Number(first.question_count||0)} questions · <code>${esc(base)}</code></div>
+        <div><b>${esc(first.title||'Personal paper')}</b> ${first.custom_kind==='CUSTOM_TEST'?'<span class="tag" style="background:#fef3c7;color:#92400e">📝 Custom Test</span>':'<span class="tag" style="background:#f3e8ff;color:#6b21a8">🎯 Adaptive</span>'}<div class="small muted">${esc(first.subject||'')} · ${esc(fmtDate(first.generated_at))} · ${rs.length} student${rs.length===1?'':'s'} · ${Number(first.question_count||0)} questions · <code>${esc(base)}</code></div>
         ${n?`<span class="tag" style="background:#dcfce7;color:#166534">✓ ${n} of ${rs.length} scanned &amp; imported</span>`:'<span class="tag">Not scanned yet</span>'}</div>
         <div class="actions" style="margin:0"><button onclick="customOmrBatch('${esc(base)}')">Open</button>${free.length?`<button class="danger" onclick="customOmrDeleteUnscanned('${esc(base)}')">🗑 ${free.length===rs.length?'Delete batch':'Delete not-scanned ('+free.length+')'}</button>`:''}</div></div></div>`;}).join('');
     render(`<div class="wrap">${header('Personal OMR Sheets')}
       <div class="card" style="border:2px solid #0f766e;background:#f0fdfa"><h2 style="margin:0">🧾 Personal OMR sheets, scanning and result reports</h2>
-        <p class="muted" style="margin:6px 0 0">For papers made with <b>Custom Adaptive Papers</b>: print each student's own OMR sheet, scan the filled sheets with a phone or scanner, and the answers go straight into the Mistake Bank. Students download their result PDF from their own login.</p></div>
-      <div class="card"><h2 style="margin-top:0">Personal paper batches</h2>${cards||'<p class="muted">No personal papers yet. Create them first with <b>Custom Adaptive Papers</b>.</p>'}</div>
+        <p class="muted" style="margin:6px 0 0">For papers made with <b>Custom Adaptive Papers</b> or <b>Custom Test</b>: print each student's own OMR sheet, scan the filled sheets with a phone or scanner, and the answers go straight into the Mistake Bank. Students download their result PDF from their own login.</p></div>
+      <div class="card"><h2 style="margin-top:0">Personal paper batches</h2>${cards||'<p class="muted">No personal papers yet. Create them first with <b>Custom Adaptive Papers</b> or <b>Custom Test</b>.</p>'}</div>
       <div class="actions"><button class="secondary" onclick="questionPaperGeneratorPage()">← Question Paper Generator</button></div></div>`);
   }catch(e){
     render(`<div class="wrap">${header('Personal OMR Sheets')}<div class="card">${message('Could not load: '+(e.message||e))}</div></div>`);

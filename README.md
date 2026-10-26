@@ -11,6 +11,7 @@ Student and teacher portal for the JNVST and School courses, built on Supabase.
 | `student-sw.js`, `student-app.webmanifest`, `manifest.webmanifest`, `skh-icon*.png` | Installable student app (PWA) |
 | `custom-adaptive.js` | V15 Custom Adaptive Assignment (teacher-controlled personal sets) |
 | `custom-adaptive-paper.js` | V16 Custom Adaptive Question Paper (one personal JNVST paper per student; V22: one question per Variation Group, fix button) |
+| `custom-test.js` | V23 Custom Test (teacher-chosen questions, a variation per student, own question order, personal OMR) |
 | `index.ts` | Supabase Edge Function `create-students` (student accounts, login by Roll No, fees) |
 | `V13_SECURE_SCORING_MIGRATION.sql` | Database change for V13 (security, server-side marking) |
 | `V14_OMR_MISTAKES_MIGRATION.sql` | Database change for V14 (OMR import, mistake streaks) |
@@ -35,4 +36,4 @@ Not in this package (they live only on the website): `index.html`, `student-logi
 Add them here so the whole site is versioned together.
 
 See `CHANGES_V13.md` and `CHANGES_V14.md` for what changed and how to install it.
-Latest: `CHANGES_V22.md` (Custom Adaptive Papers without repeated Variation Groups).
+Latest: `CHANGES_V23.md` (Custom Test) and `CHANGES_V22.md` (Custom Adaptive Papers without repeated Variation Groups).

@@ -267,7 +267,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=33";
+      s.src="teacher-app.js?v=34";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -277,12 +277,16 @@ function loadTeacherApp(){
           const p=document.createElement("script");
           p.src="custom-adaptive-paper.js?v=4";
           p.onload=p.onerror=()=>{
+           // V23: Custom Test (teacher-chosen questions, a variation per student; optional)
+           const t=document.createElement("script");
+           t.src="custom-test.js?v=1";
+           t.onload=t.onerror=()=>{
             // V17: personal OMR sheets / scanning (optional)
             const e=document.createElement("script");
             e.src="omr-engine.js?v=10";
             e.onload=e.onerror=()=>{
               const o=document.createElement("script");
-              o.src="custom-omr.js?v=7";
+              o.src="custom-omr.js?v=8";
               o.onload=o.onerror=()=>{
                 // V20: Assamese explanations for the JNVST question bank (optional)
                 const x=document.createElement("script");
@@ -299,6 +303,8 @@ function loadTeacherApp(){
               document.head.appendChild(o);
             };
             document.head.appendChild(e);
+           };
+           document.head.appendChild(t);
           };
           document.head.appendChild(p);
         };
