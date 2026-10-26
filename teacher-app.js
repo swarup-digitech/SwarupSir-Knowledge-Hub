@@ -411,19 +411,30 @@ function qpCommonPrepareRows(){
 function qpTopicLabel(q){return qpNorm(q.topic)||mockPartLabel(q.part_code)||q.part_code}
 function qpLangMatches(q){const want=qpCurrentLanguage();const lang=qpLanguageValue(q);return want==='COMMON'?lang==='COMMON'||!lang:lang===want;}
 function qpSelectedLessonIds(){return qpState.selectedLessons||new Set()}
-function qpAvailableLessons(){const sid=qpSubjectId();return (jnvstSubjectLessons||[]).filter(l=>!sid||String(l.subject_id)===String(sid)).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true,sensitivity:'base'}));}
+// V23.4: the lesson tree is worked out once and reused (it was recomputed for every question — very slow with big banks)
+let __qpLessonCache={key:'',list:[],ids:new Set(),desc:new Map(),pool:null,poolKey:''};
+function qpLessonCacheFor(){const sid=qpSubjectId(),all=jnvstSubjectLessons||[];const key=sid+'|'+all.length+'|'+(all[0]&&all[0].id||'')+'|'+(all[all.length-1]&&all[all.length-1].id||'');
+  if(__qpLessonCache.key!==key){const list=all.filter(l=>!sid||String(l.subject_id)===String(sid)).sort((a,b)=>String(a.lesson_code||'').localeCompare(String(b.lesson_code||''),undefined,{numeric:true,sensitivity:'base'}));
+    __qpLessonCache={key,list,ids:new Set(list.map(l=>String(l.id))),desc:new Map(),pool:null,poolKey:''};}
+  return __qpLessonCache;}
+function qpAvailableLessons(){return qpLessonCacheFor().list;}
 // V23.2: lesson codes — "2.0" contains 2.0, 2.1, 2.1.3 …; "2.1" does not contain "2.10"
 function qpLessonCodeParts(c){const a=String(c==null?'':c).trim().split('.').map(x=>x.trim()).filter(x=>x!=='');return a.length>1&&/^0+$/.test(a[a.length-1])?a.slice(0,-1):a;}
 function qpLessonCodeUnder(c,p){const a=qpLessonCodeParts(c),b=qpLessonCodeParts(p);if(!a.length||!b.length||a.length<b.length)return false;return b.every((x,i)=>x===a[i]);}
 // A chapter includes its sub-chapters: by parent link, and (V23.2) by lesson code for sub-chapters without a parent link.
-function qpLessonDescendants(selected){const all=qpAvailableLessons();const out=new Set([...selected].map(String));const codes=all.filter(l=>out.has(String(l.id))).map(l=>l.lesson_code).filter(Boolean);all.forEach(l=>{if(codes.some(c=>qpLessonCodeUnder(l.lesson_code,c)))out.add(String(l.id));});let changed=true;while(changed){changed=false;for(const l of all){if(l.parent_lesson_id&&out.has(String(l.parent_lesson_id))&&!out.has(String(l.id))){out.add(String(l.id));changed=true;}}}return out;}
-function qpLessonMatchesSet(q,selected){if(!selected||!selected.size)return true;const ids=qpLessonDescendants(selected);if(ids.has(String(q.lesson_id||'')))return true;
+// A chapter includes its sub-chapters: by parent link, and (V23.2) by lesson code for sub-chapters without a parent link.
+function qpLessonDescendants(selected){const C=qpLessonCacheFor();const k=[...selected].map(String).sort().join(',');if(C.desc.has(k))return C.desc.get(k);
+  const all=C.list;const out=new Set([...selected].map(String));const codes=all.filter(l=>out.has(String(l.id))).map(l=>l.lesson_code).filter(Boolean);all.forEach(l=>{if(codes.some(c=>qpLessonCodeUnder(l.lesson_code,c)))out.add(String(l.id));});let changed=true;while(changed){changed=false;for(const l of all){if(l.parent_lesson_id&&out.has(String(l.parent_lesson_id))&&!out.has(String(l.id))){out.add(String(l.id));changed=true;}}}
+  const res={ids:out,codes};C.desc.set(k,res);return res;}
+function qpLessonMatchesSet(q,selected){if(!selected||!selected.size)return true;const C=qpLessonCacheFor(),D=qpLessonDescendants(selected);const lid=String(q.lesson_id||'');if(D.ids.has(lid))return true;
   // V23.2: a question that is not linked to a lesson record of this subject is placed by its lesson code
-  const known=q.lesson_id&&qpAvailableLessons().some(l=>String(l.id)===String(q.lesson_id));if(known||!String(q.lesson_code||'').trim())return false;
-  return qpAvailableLessons().filter(l=>selected.has(String(l.id))).some(l=>qpLessonCodeUnder(q.lesson_code,l.lesson_code));}
+  if((lid&&C.ids.has(lid))||!String(q.lesson_code||'').trim())return false;
+  return D.codes.some(c=>qpLessonCodeUnder(q.lesson_code,c));}
 function qpQuestionMatchesLesson(q){return qpLessonMatchesSet(q,qpSelectedLessonIds());}
 // V23.2: number of questions of a chapter (its sub-chapters included) in the current subject / language
-function qpLessonQuestionCount(l){const one=new Set([String(l.id)]);return (qpState.bank||[]).filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionSubjectMatches(q)&&qpLessonMatchesSet(q,one)).length;}
+function qpLessonQuestionCount(l){const C=qpLessonCacheFor(),bank=qpState.bank||[],pk=bank.length+'|'+(bank[0]&&bank[0].id||'')+'|'+qpCurrentLanguage();
+  if(C.poolKey!==pk){C.pool=bank.filter(q=>!qpIsPassage(q)&&qpLangMatches(q)&&qpQuestionSubjectMatches(q));C.poolKey=pk;}
+  const one=new Set([String(l.id)]);let n=0;for(const q of C.pool)if(qpLessonMatchesSet(q,one))n++;return n;}
 function qpLessonName(l){return `${l.lesson_code?l.lesson_code+' ':''}${l.lesson_name||''}`.trim()}
 function qpLessonIndent(l){let n=0,cur=l,parentMap=new Map(qpAvailableLessons().map(x=>[String(x.id),x]));while(cur?.parent_lesson_id&&parentMap.has(String(cur.parent_lesson_id))&&n<8){n++;cur=parentMap.get(String(cur.parent_lesson_id));}return n||Math.max(0,qpLessonCodeParts(l?.lesson_code).length-1);}
 function qpAvailableTopics(){const m=new Map();for(const q of qpState.bank){if(qpIsPassage(q)||!qpLangMatches(q)||!qpQuestionSubjectMatches(q)||!qpQuestionMatchesLesson(q))continue;const key=qpTopicLabel(q);if(!m.has(key))m.set(key,0);m.set(key,m.get(key)+1)}return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]));}

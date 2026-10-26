@@ -83,6 +83,13 @@ question text, options, passages and other questions are all **11 pt** (before: 
 The layout (two columns, page breaks, OMR numbering) is unchanged; a 20-question Arithmetic paper still fits one page.
 To change the sizes again, edit the small `<style id="qp-font-size">` block in `main.html`. Changed file: `main.html`.
 
+## V23.4 — Fix: page froze ("This page is slowing down Firefox")
+The chapter counting added in V23.2 recomputed the chapter tree for every question. With a large bank, opening the
+Question Paper Generator's chapter list could take close to a minute and Firefox showed "This page is slowing down".
+The tree is now worked out once and reused. Measured with 3,000 questions: chapter list 50 s → 0.17 s, filtering a
+chapter 1 s → 3 ms; Custom Adaptive Papers and Custom Test respond in under 0.2 s (50 students). Same results as before.
+Changed files: `teacher-app.js`, `custom-test.js`, `main.html`.
+
 ## Not included
 * Option order (A–D) is not shuffled — only the question order, so the printed answer key stays simple.
 * School Course papers.

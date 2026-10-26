@@ -138,7 +138,8 @@ function codeUnder(c,p){const a=codeParts(c),b=codeParts(p);if(!a.length||!b.len
 function lessonIndex(lessons){
   const byId=new Map((lessons||[]).map(l=>[String(l.id),l])),kids=new Map();
   (lessons||[]).forEach(l=>{const p=String(l.parent_lesson_id||'');if(p){if(!kids.has(p))kids.set(p,[]);kids.get(p).push(String(l.id));}});
-  const desc=id=>{const out=new Set([String(id)]),st=[String(id)];while(st.length){(kids.get(st.pop())||[]).forEach(k=>{if(!out.has(k)){out.add(k);st.push(k);}});}return out;};
+  const memo=new Map();   // V23.4: each lesson's sub-lessons are worked out once
+  const desc=id=>{id=String(id);if(memo.has(id))return memo.get(id);const out=new Set([id]),st=[id];while(st.length){(kids.get(st.pop())||[]).forEach(k=>{if(!out.has(k)){out.add(k);st.push(k);}});}memo.set(id,out);return out;};
   return {byId,desc};
 }
 // node: {id?, code}.  q: question with lesson_id / lesson_code
