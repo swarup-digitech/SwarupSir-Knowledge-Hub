@@ -310,7 +310,13 @@ function loadTeacherApp(){
                   // V21: class discussion PDF after an OMR import (optional)
                   const y=document.createElement("script");
                   y.src="omr-discussion.js?v=3";
-                  y.onload=y.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+                  y.onload=y.onerror=()=>{
+                    // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
+                    const v=document.createElement("script");
+                    v.src="teacher-portal.js?v=1";
+                    v.onload=v.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+                    document.head.appendChild(v);
+                  };
                   document.head.appendChild(y);
                 };
                 document.head.appendChild(x);
@@ -975,9 +981,14 @@ async function init(){
     return login();
   }
   profile=p;
+  if(p.role==="teacher"&&p.is_active===false){
+    await sb.auth.signOut();
+    return render(`<div class="wrap"><div class="card login"><h2>Account disabled</h2><p class="muted">This teacher account has been turned off by the Admin.</p><button onclick="teacherLoginPage()">Back to login</button></div></div>`);
+  }
   if(p.role==="teacher"){
     try{await loadTeacherApp()}catch(e){return render(`<div class="wrap"><div class="card"><h2>Unable to load teacher tools</h2><p>${esc(e.message||e)}</p><button onclick="location.reload()">Reload</button></div></div>`)}
-    const selectedPortal=portal==="SCHOOL"?"SCHOOL":"JNVST";
+    // V24: teacher accounts made by the Admin work in the JNVST course only.
+    const selectedPortal=(portal==="SCHOOL"&&p.is_admin!==false)?"SCHOOL":"JNVST";
     schoolTeacherMode=selectedPortal==="SCHOOL";
     const action=new URLSearchParams(location.search).get("action");
 
@@ -1047,6 +1058,8 @@ async function doTeacherLogin(){
   if(e||!p){await sb.auth.signOut();msg.innerHTML=message("Login worked, but no profile exists for this user.");return}
   profile=p;
   if(p.role!=="teacher"){await sb.auth.signOut();msg.innerHTML=message("This account is not a teacher account.");return}
+  if(p.is_active===false){await sb.auth.signOut();msg.innerHTML=message("This teacher account has been turned off by the Admin.");return}
+  if(p.is_admin===false)schoolTeacherMode=false;
   window.loginMode="teacher";teacherHome();
 }
 

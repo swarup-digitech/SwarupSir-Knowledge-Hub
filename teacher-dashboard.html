@@ -52,6 +52,9 @@ async function init(){
     const {data:p,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
     if(error)throw error;
     if(p?.role!=='teacher'){await sb.auth.signOut();return location.replace('teacher-login.html')}
+    // V24: teacher accounts made by the Admin use the JNVST teacher dashboard only.
+    if(p.is_active===false){await sb.auth.signOut();return location.replace('teacher-login.html')}
+    if(p.is_admin===false){return location.replace('/main.html?mode=teacher&portal=JNVST')}
     teacher=p;
     await load();
     home();
