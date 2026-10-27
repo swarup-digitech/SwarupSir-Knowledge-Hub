@@ -258,23 +258,45 @@ html.qp-print-root,html.qp-print-root body{margin:0!important;padding:0!importan
 @media print{.qp-noprint{display:none!important}}
 </style>
 <style id="qp-font-size">
-/* ===== V23.3: question text on printed papers =====
+/* ===== V23.4: question text on printed papers =====
    (Question Paper Generator, Custom Adaptive Papers, Custom Test — they share this layout)
-   question text, options, passages and other questions: all 11 pt */
-.jnvst-paper .jnvst-question{font-size:11pt}
+   question text, options, passages, passage titles and other questions: all 12 pt
+   The Word download (📝 Download Word File) is set to 12 pt by jnvstWord12Install() further below. */
+.jnvst-paper .jnvst-question{font-size:12pt}
 .jnvst-paper .qp-arithmetic-flow .arithmetic-question .jnvst-qtext,
 .jnvst-paper .qp-arithmetic-columns .arithmetic-question .jnvst-qtext,
 .jnvst-paper .qp-evs-mcq-flow .evs-mcq-question .jnvst-qtext,
-.jnvst-paper .qp-evs-passage-question-column .jnvst-qtext{font-size:11pt;line-height:1.22}
+.jnvst-paper .qp-evs-passage-question-column .jnvst-qtext{font-size:12pt;line-height:1.22}
 .jnvst-paper .qp-arithmetic-flow .arithmetic-question .jnvst-options,
 .jnvst-paper .qp-arithmetic-columns .arithmetic-question .jnvst-options,
 .jnvst-paper .qp-evs-mcq-flow .evs-mcq-question .jnvst-options,
-.jnvst-paper .qp-evs-passage-question-column .jnvst-options{font-size:11pt}
-.jnvst-paper .jnvst-passage,.jnvst-paper .qp-evs-passage-text{font-size:11pt}
+.jnvst-paper .qp-evs-passage-question-column .jnvst-options{font-size:12pt}
+.jnvst-paper .jnvst-passage,.jnvst-paper .qp-evs-passage-text{font-size:12pt}
+.jnvst-paper .qp-passage-number,.jnvst-paper .qp-passage-title,.jnvst-paper .jnvst-passage-title{font-size:12pt}
 </style>
 </head>
 <body><div id="app"></div>
 <script>
+/* ---- V23.5: Word download (📝 Download Word File) — question text 12 pt ----
+   teacher-app.js writes question numbers, question text, options and passage text without a size,
+   so Word used its own default. This gives every text run WITHOUT its own size 12 pt (docx size 24 =
+   12 pt). Headings that already have a size keep it. Installed after teacher-app.js has loaded. */
+window.jnvstWord12Install=function(){
+  const cur=window.qpLoadDocxLibrary;
+  if(typeof cur!=="function"||cur.__w12)return;
+  const patch=d=>{
+    if(!d||!d.TextRun||d.__w12)return d;
+    const Base=d.TextRun;
+    class TextRun12 extends Base{constructor(o){
+      if(typeof o==="string")o={text:o};
+      if(o&&typeof o==="object"&&o.size==null&&!o.children)o=Object.assign({},o,{size:24});
+      super(o);}}
+    return Object.assign({},d,{TextRun:TextRun12,__w12:true});
+  };
+  const wrapped=async function(){return patch(await cur.apply(this,arguments));};
+  wrapped.__w12=true;
+  window.qpLoadDocxLibrary=wrapped;
+};
 /* ---- V13: teacher tools are loaded on demand (teacher-app.js) ---- */
 let __teacherAppPromise=null;
 function loadTeacherApp(){
@@ -282,7 +304,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=40";
+      s.src="teacher-app.js?v=41";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -314,7 +336,7 @@ function loadTeacherApp(){
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
                     v.src="teacher-portal.js?v=2";
-                    v.onload=v.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
+                    v.onload=v.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
                     document.head.appendChild(v);
                   };
                   document.head.appendChild(y);

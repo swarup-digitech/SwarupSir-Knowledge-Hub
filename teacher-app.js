@@ -956,6 +956,7 @@ async function qpDocxQuestionBlocks(q,d){
 async function downloadSelectedQuestionPaperWord(){
   try{
     const rows=qpPrepareRows();
+    const subject=qpSubject();   // V23.6: EVS / Language Word download needs the subject (was undefined)
     if(!rows.length)return notify('Please select questions or passage sets first.');
     if(!qpQualityGate(rows,'Word Export'))return;
     const d=await qpLoadDocxLibrary();
@@ -3146,17 +3147,6 @@ function jnvstManualPreviewImage(input){
   box.innerHTML=`<img class="jnvst-editor-image" src="${URL.createObjectURL(file)}" alt="Question image preview"><div class="small muted">Image selected.</div>`;
 }
 function jnvstManualField(id){return document.getElementById(id)?.value.trim()||''}
-/* V24.2: helpers for "Add JNVST Question". They were only defined inside the
-   bulk-upload module, so saving a single question failed with
-   "sectionFor is not defined". */
-function jnvstSectionForPart(part){
-  const p=String(part||'').toUpperCase();
-  if(p.startsWith('MAT'))return 'MAT';
-  if(p.startsWith('ARITHMETIC'))return 'ARITHMETIC';
-  if(p.startsWith('LANGUAGE'))return 'LANGUAGE';
-  return 'EVS';
-}
-function jnvstShortId(){return crypto.randomUUID().replace(/-/g,'').slice(0,10).toUpperCase();}
 async function saveJnvstManualQuestion(saveAnother=false){
   const subject=document.getElementById('jmSubject')?.value||'',lesson=document.getElementById('jmLesson')?.value||'',medium=document.getElementById('jmMedium')?.value||'',part=document.getElementById('jmPart')?.value||'',topic=jnvstManualField('jmTopic');
   const type=document.getElementById('jmType')?.value||'MCQ',marks=Number(document.getElementById('jmMarks')?.value||1);
@@ -3184,10 +3174,8 @@ async function saveJnvstManualQuestion(saveAnother=false){
     const subj=(jnvstSubjects||[]).find(s=>s.id===subject),lessonObj=(jnvstSubjectLessons||[]).find(l=>l.id===lesson);if(!subj||!lessonObj)throw new Error('Selected Subject or Lesson could not be found.');
     let imageUrl=null;const file=document.getElementById('jmImage')?.files?.[0];if(file)imageUrl=await uploadMockFile(file,`${current.id}/jnvst-manual/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);
     const pairId=versions.length>1?crypto.randomUUID():null;
-    let passageId=passage?`JNVST-${part==='EVS_PASSAGE'?'EVS':'LANG'}-${medium}-${jnvstShortId()}`:null;
-    // V24.2: questions of one passage added one by one share the passage (same lesson, part and passage title).
-    if(passage){const t=String(versions[0]?.passage_title||'').trim();if(t){const {data:pp}=await sb.from('mock_question_bank').select('passage_id').in('teacher_id',[current.id]).eq('lesson_id',lessonObj.id).eq('part_code',part).eq('passage_title',t).not('passage_id','is',null).eq('active',true).limit(1);if(pp&&pp[0]?.passage_id)passageId=pp[0].passage_id;}}
-    const rows=versions.map(v=>({teacher_id:current.id,section_code:jnvstSectionForPart(part),part_code:part,topic,variation_group:jnvstManualField('jmVariation')||null,is_fixed:!!document.getElementById('jmFixed')?.checked,...(document.getElementById('jmCommon')?.checked?{is_common:true}:{}),question_type:type,marks,cognitive_level:document.getElementById('jmCognitive')?.value||null,difficulty:document.getElementById('jmDifficulty')?.value||null,language:v.language,subject_id:subj.id,lesson_id:lessonObj.id,lesson_code:lessonObj.lesson_code||null,question_text:v.question_text,option_a:v.option_a||null,option_b:v.option_b||null,option_c:v.option_c||null,option_d:v.option_d||null,correct_option:v.correct_option,explanation:v.explanation||null,...(v.explanation_as!==undefined?{explanation_as:v.explanation_as}:{}),source_type:'JNVST_MANUAL',active:true,image_url:imageUrl,passage_id:passageId,passage_title:passage?v.passage_title:null,passage_text:passage?v.passage_text:null,question_order:passage?order:null,language_pair_id:pairId,set_id:passageId}));
+    const passageId=passage?`JNVST-${part==='EVS_PASSAGE'?'EVS':'LANG'}-${medium}-${shortId()}`:null;
+    const rows=versions.map(v=>({teacher_id:current.id,section_code:sectionFor(part),part_code:part,topic,variation_group:jnvstManualField('jmVariation')||null,is_fixed:!!document.getElementById('jmFixed')?.checked,...(document.getElementById('jmCommon')?.checked?{is_common:true}:{}),question_type:type,marks,cognitive_level:document.getElementById('jmCognitive')?.value||null,difficulty:document.getElementById('jmDifficulty')?.value||null,language:v.language,subject_id:subj.id,lesson_id:lessonObj.id,lesson_code:lessonObj.lesson_code||null,question_text:v.question_text,option_a:v.option_a||null,option_b:v.option_b||null,option_c:v.option_c||null,option_d:v.option_d||null,correct_option:v.correct_option,explanation:v.explanation||null,...(v.explanation_as!==undefined?{explanation_as:v.explanation_as}:{}),source_type:'JNVST_MANUAL',active:true,image_url:imageUrl,passage_id:passageId,passage_title:passage?v.passage_title:null,passage_text:passage?v.passage_text:null,question_order:passage?order:null,language_pair_id:pairId,set_id:passageId}));
     const {data:old,error:oe}=await sb.from('mock_question_bank').select('id,question_text,option_a,option_b,option_c,option_d,subject_id,lesson_id,language,passage_id,question_order').eq('teacher_id',current.id).eq('active',true);if(oe)throw oe;
     const seen=new Set((old||[]).map(q=>[q.subject_id,q.lesson_id,q.language,q.passage_id,q.question_order,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d].map(v=>String(v??'').trim().toLowerCase()).join('¦')));
     const fresh=[];for(const r of rows){const key=[r.subject_id,r.lesson_id,r.language,r.passage_id,r.question_order,r.question_text,r.option_a,r.option_b,r.option_c,r.option_d].map(v=>String(v??'').trim().toLowerCase()).join('¦');if(seen.has(key))throw new Error(`A duplicate ${r.language} question already exists in this Subject/Lesson.`);seen.add(key);fresh.push(r);}
