@@ -313,7 +313,7 @@ function loadTeacherApp(){
                   y.onload=y.onerror=()=>{
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
-                    v.src="teacher-portal.js?v=1";
+                    v.src="teacher-portal.js?v=2";
                     v.onload=v.onerror=()=>{window.__teacherAppLoaded=true;resolve()};
                     document.head.appendChild(v);
                   };

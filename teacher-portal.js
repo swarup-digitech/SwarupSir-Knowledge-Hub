@@ -851,6 +851,54 @@ async function v24AdminRelease1(id) {
   v24AdminHome('release');
 }
 
+/* ------------------------------------- Admin: who wrote each question */
+async function v24AdminAuthorUi() {
+  if (!V24.authorNames) {
+    V24.authorNames = new Map();
+    try { ((await v24Rpc('admin_list_teachers')) || []).forEach(t => V24.authorNames.set(t.id, t.full_name || t.email || 'Teacher')); } catch (_) {}
+  }
+  const cache = (typeof jnvstQbCache !== 'undefined' && jnvstQbCache) || [];
+  const authors = [...new Set(cache.map(q => q.author_id || q.teacher_id).filter(a => a && a !== current.id))];
+  if (!document.getElementById('v24QbAuthorFilter')) {
+    const anchor = document.getElementById('jnvstQbCommonFilter');
+    const cell = anchor && anchor.closest('div');
+    if (cell && cell.parentNode) {
+      const d = document.createElement('div');
+      d.innerHTML = `<label for="v24QbAuthorFilter">Added by</label><select id="v24QbAuthorFilter" onchange="jnvstQbRenderTable()">
+        <option value="">Everyone</option><option value="ME">Me (Admin)</option>${authors.length ? '<option value="TEACHERS">Any teacher</option>' : ''}
+        ${authors.map(a => `<option value="${a}">${v24e(V24.authorNames.get(a) || 'Teacher (removed)')}</option>`).join('')}</select>`;
+      cell.parentNode.insertBefore(d, cell.nextSibling);
+    }
+  }
+  if (typeof jnvstQbRenderTable === 'function') jnvstQbRenderTable(); // draws the table again with the names
+}
+function v24AuthorBadge(q) {
+  const a = q && (q.author_id || q.teacher_id);
+  if (!a || a === current.id) return '';
+  const name = V24.authorNames?.get(a) || 'Teacher';
+  const when = q.reviewed_at ? ` · approved ${v24Date(q.reviewed_at)}` : '';
+  return `<span class="tag v24-author" style="background:#ede9fe;color:#5b21b6;margin:0 0 6px;display:inline-block" title="Written by this teacher; approved into the central bank">👩‍🏫 Added by ${v24e(name)}${when}</span>`;
+}
+function v24DecorateAuthors() {
+  const box = document.getElementById('jnvstQbTable');
+  if (!box || typeof jnvstQbCache === 'undefined' || !V24.authorNames) return;
+  const byId = new Map(jnvstQbCache.map(q => [q.id, q]));
+  box.querySelectorAll('input[onchange^="jnvstQbToggleSelection("]').forEach(cb => {
+    const id = (cb.getAttribute('onchange').match(/jnvstQbToggleSelection\('([^']+)'/) || [])[1];
+    const q = byId.get(id), html = v24AuthorBadge(q);
+    const cell = cb.closest('tr')?.children?.[2];
+    if (html && cell && !cell.querySelector('.v24-author')) cell.insertAdjacentHTML('afterbegin', html + '<br>');
+  });
+  box.querySelectorAll('input[onchange^="jnvstQbTogglePassageGroup("]').forEach(cb => {
+    const gid = (cb.getAttribute('onchange').match(/jnvstQbTogglePassageGroup\('([^']+)'/) || [])[1];
+    const q = jnvstQbCache.find(x => String(x.passage_id || '') === gid || String(x.set_id || '') === gid);
+    const html = v24AuthorBadge(q);
+    const card = cb.closest('div[style*="border:2px"]');
+    const line = card?.querySelector('.small.muted');
+    if (html && line && !card.querySelector('.v24-author')) line.insertAdjacentHTML('afterend', html);
+  });
+}
+
 /* ============================================== hooks into the old tools == */
 (function v24Hooks() {
   const wrap = (name, fn) => {
@@ -872,9 +920,30 @@ async function v24AdminRelease1(id) {
   });
 
   // Question Bank: teachers use the "My questions" view.
-  wrap('jnvstQuestionBankHome', function (orig, args) {
+  // Admin: also show who wrote each question, with an "Added by" filter.
+  wrap('jnvstQuestionBankHome', async function (orig, args) {
     if (V24.limited) return v24PortalHome('bank', 'mine');
-    return orig.apply(this, args);
+    const r = await orig.apply(this, args);
+    try { await v24LoadScope(); if (!V24.scope.missing && !V24.limited) await v24AdminAuthorUi(); } catch (_) {}
+    return r;
+  });
+
+  // Admin Question Bank: filter by who wrote each question.
+  wrap('jnvstQbFilteredRows', function (orig, args) {
+    const rows = orig.apply(this, args);
+    const f = document.getElementById('v24QbAuthorFilter')?.value || '';
+    if (!f || V24.limited) return rows;
+    return rows.filter(q => {
+      const a = q.author_id || q.teacher_id;
+      if (f === 'ME') return a === current.id;
+      if (f === 'TEACHERS') return a !== current.id;
+      return a === f;
+    });
+  });
+  wrap('jnvstQbRenderTable', function (orig, args) {
+    const r = orig.apply(this, args);
+    if (!V24.limited) { try { v24DecorateAuthors(); } catch (_) {} }
+    return r;
   });
 
   // Result release: teachers send a request instead.
