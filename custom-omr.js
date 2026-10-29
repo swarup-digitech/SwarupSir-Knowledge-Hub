@@ -92,7 +92,15 @@ async function customOmrBatch(base){
       </div>
       <div class="card"><h2 style="margin-top:0">3. Result reports</h2>
         <p class="muted">After importing, print every student's report (score, part-wise result, the questions they got wrong). Students can also download their own report from the <b>OMR Test Result</b> page in their login.</p>
-        <div class="actions"><button onclick="customOmrPrintReports()">🖨 Print result reports (all students)</button>${typeof omrDiscussionPdf==='function'?`<button class="secondary" onclick="omrDiscussionPdf('${esc(base)}')">📽 Class discussion PDF (one question per page)</button>`:''}</div></div>
+        <div class="actions"><button onclick="customOmrPrintReports()">🖨 Print result reports (all students)</button>${typeof omrDiscussionPdf==='function'?`<button class="secondary" onclick="omrDiscussionPdf('${esc(base)}')">📽 Class discussion PDF (one question per page)</button>`:''}</div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb">
+          <b>📊 Result sheet (Excel)</b>
+          <p class="small muted" style="margin:4px 0 8px">Merit list of all students: total questions, correct, wrong, not attempted, marks scored, percentage and rank (equal marks share a rank). Students not scanned yet are listed at the end.</p>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+            <label class="small" style="font-weight:400">Marks per correct answer<br><input id="omrMarkRight" type="number" min="0" step="0.25" value="${esc(markPref().right)}" style="width:110px"></label>
+            <label class="small" style="font-weight:400">Marks deducted per wrong answer<br><input id="omrMarkWrong" type="number" min="0" step="0.25" value="${esc(markPref().wrong)}" style="width:110px"></label>
+            <button onclick="customOmrResultSheet()">📊 Download result sheet (Excel)</button>
+          </div></div></div>
       <div class="actions"><button class="secondary" onclick="customOmrHome()">← All batches</button></div></div>`);
     paintPapers();
   }catch(e){
@@ -364,7 +372,7 @@ async function customOmrImport(){
     const {data,error}=await sb.rpc('teacher_import_omr_results',{...args,p_dry_run:false});
     if(error)throw error;
     SC.imported=true;try{B.scanned=(await loadScanned(B.base)).get(B.base)||B.scanned;}catch(_){}paintScan();paintPapers();
-    res.innerHTML=`${omrReportHtml(data)}<div class="actions" style="margin-top:8px"><button onclick="customOmrPrintReports()">🖨 Print result reports</button></div>`;
+    res.innerHTML=`${omrReportHtml(data)}<div class="actions" style="margin-top:8px"><button onclick="customOmrPrintReports()">🖨 Print result reports</button><button class="secondary" onclick="customOmrResultSheet()">📊 Result sheet (Excel)</button></div>`;
     notify(`Imported ${data.imported} student${data.imported===1?'':'s'} into the Mistake Bank.`,'success');
   }catch(e){
     notify('Import failed: '+(e.message||e),'error');if(btn)btn.disabled=false;
@@ -372,27 +380,112 @@ async function customOmrImport(){
 }
 
 /* -------------------------------------- reports -------------------------------------- */
+// Shared by the PDF reports and the Excel result sheet.
+async function fetchResponses(base){
+  const resp=[];
+  for(let from=0;;from+=1000){
+    const {data,error}=await sb.from('omr_responses').select('student_id,question_no,selected_option,correct_option,is_correct').eq('paper_base_serial',base).order('id').range(from,from+999);
+    if(error)throw error;resp.push(...(data||[]));if(!data||data.length<1000)break;
+  }
+  return resp;
+}
+async function lastImport(base){
+  try{const {data}=await sb.from('omr_imports').select('imported_at').eq('teacher_id',current.id).eq('paper_base_serial',base).order('imported_at',{ascending:false}).limit(1);return data&&data[0]||null;}catch(_){return null;}
+}
+async function fetchNames(){
+  const subjName=new Map(),lessonName=new Map();
+  try{
+    const [{data:sj},{data:ls}]=await Promise.all([
+      sb.from('jnvst_subjects').select('id,name').eq('teacher_id',current.id),
+      sb.from('jnvst_subject_lessons').select('id,lesson_name,parent_lesson_id').eq('teacher_id',current.id)]);
+    (sj||[]).forEach(x=>subjName.set(x.id,x.name));
+    const lm=new Map((ls||[]).map(x=>[x.id,x]));
+    (ls||[]).forEach(x=>{const par=x.parent_lesson_id&&lm.get(x.parent_lesson_id);lessonName.set(x.id,(par?par.lesson_name+' › ':'')+x.lesson_name);});
+  }catch(_){}
+  return {subjName,lessonName};
+}
+
+/* ------------------------------ V25: Excel result sheet ------------------------------ */
+const SUBJ_LABEL={MAT:'Mental Ability (MAT)',ARITHMETIC:'Arithmetic',EVS:'Environmental Studies (EVS)',LANGUAGE:'Language'};
+const PREF_KEY='skh_omr_marking';
+function markPref(){
+  try{const p=JSON.parse(localStorage.getItem(PREF_KEY)||'null');if(p&&isFinite(p.right)&&isFinite(p.wrong))return {right:Number(p.right),wrong:Number(p.wrong)};}catch(_){}
+  return {right:1,wrong:0};
+}
+const r2=x=>Math.round(x*100)/100;
+// Pure: builds the result table from the batch papers and imported responses (also used by the tests).
+function buildResultSheetData(recs,resp,opt){
+  const right=Number(opt.right),wrong=Number(opt.wrong),subjName=opt.subjName||new Map();
+  const paperSubject=SUBJ_LABEL[String(opt.subject||'').toUpperCase()]||String(opt.subject||'').trim()||'Questions';
+  const by=new Map();resp.forEach(r=>{if(!by.has(r.student_id))by.set(r.student_id,new Map());by.get(r.student_id).set(Number(r.question_no),r);});
+  const sections=[];const secOf=q=>{const n=String(subjName.get(q&&q.subject_id)||'').trim()||paperSubject;if(!sections.includes(n))sections.push(n);return n;};
+  const done=[],missing=[];
+  recs.forEach(r=>{
+    const ps=r.paper_snapshot||{},sid=ps.student_id||r.student_id,rows=ps.rows||[];
+    const who={roll:String(ps.roll_no||r.roll_no||''),name:String(ps.student_name||r.student_name||'')};
+    rows.forEach(secOf);
+    if(!sid||!by.has(sid)){missing.push(Object.assign(who,{total:rows.length}));return;}
+    const m=by.get(sid),sec={};let c=0,w=0,na=0;
+    rows.forEach((q,i)=>{
+      const x=m.get(i+1),sel=x?String(x.selected_option||'').trim():'',s=secOf(q);
+      sec[s]=sec[s]||{c:0,w:0,t:0};sec[s].t++;
+      if(!sel){na++;}else if(x.is_correct){c++;sec[s].c++;}else{w++;sec[s].w++;}
+    });
+    const total=rows.length,max=total*right,marks=r2(c*right-w*wrong);
+    const secMarks={};Object.keys(sec).forEach(k=>{secMarks[k]=r2(sec[k].c*right-sec[k].w*wrong);});
+    done.push(Object.assign(who,{total,correct:c,wrong:w,na,marks,max,pct:max?marks/max:0,secMarks,secMax:Object.fromEntries(Object.entries(sec).map(([k,v])=>[k,v.t*right]))}));
+  });
+  const roll=(a,b)=>a.roll.localeCompare(b.roll,undefined,{numeric:true});
+  done.sort((a,b)=>b.marks-a.marks||roll(a,b));
+  done.forEach((d,i)=>{d.rank=i&&d.marks===done[i-1].marks?done[i-1].rank:i+1;});
+  missing.sort(roll);
+  return {done,missing,sections};
+}
+async function customOmrResultSheet(){
+  if(!B)return;
+  if(typeof XLSX==='undefined')return notify('The Excel library is not loaded yet. Please wait a moment and try again.');
+  const pr=markPref(),ri=q$('omrMarkRight'),wi=q$('omrMarkWrong');
+  const right=ri&&ri.value!==''?Number(ri.value):pr.right,wrong=wi&&wi.value!==''?Number(wi.value):pr.wrong;
+  if(!(right>0)||!(wrong>=0))return notify('Marks per correct answer must be more than 0, and marks deducted per wrong answer 0 or more.');
+  try{localStorage.setItem(PREF_KEY,JSON.stringify({right,wrong}));}catch(_){}
+  try{
+    const [recs,resp,imp,names]=await Promise.all([qpGetHistoryGroupRecords(B.base),fetchResponses(B.base),lastImport(B.base),fetchNames()]);
+    const R=buildResultSheetData(recs,resp,{right,wrong,subject:B.subject,subjName:names.subjName});
+    if(!R.done.length)return notify('No imported results yet for this batch. Scan and import the OMR sheets first.');
+    const multi=R.sections.length>1;
+    const date=fmtDate(imp&&imp.imported_at||new Date());
+    const markTxt=`Marking: +${right} per correct answer`+(wrong?`, −${wrong} per wrong answer`:', no negative marking')+'; blank = not attempted';
+    const head=['S.No','Roll No','Student Name',...(multi?R.sections.map(s=>`${s} (marks)`):[]),'Total Questions','Total Correct','Total Wrong','Not Attempted','Marks Scored','Out of','Percentage','Rank'];
+    const aoa=[["SWARUP SIR'S KNOWLEDGE HUB — OMR Result Sheet"],[`${B.title}${B.subject?' · '+B.subject:''} · ${date} · Batch ${B.base}`],[markTxt],[],head];
+    R.done.forEach((d,i)=>aoa.push([i+1,d.roll,d.name,...(multi?R.sections.map(s=>s in d.secMarks?d.secMarks[s]:''):[]),d.total,d.correct,d.wrong,d.na,d.marks,d.max,d.pct,d.rank]));
+    R.missing.forEach((d,i)=>aoa.push([R.done.length+i+1,d.roll,d.name,...(multi?R.sections.map(()=>''):[]),d.total,'','','','','','','Not scanned']));
+    const ws=XLSX.utils.aoa_to_sheet(aoa),nc=head.length,pc=nc-2;
+    for(let r=5;r<5+R.done.length;r++){const c=ws[XLSX.utils.encode_cell({r,c:pc})];if(c)c.z='0.00%';}
+    ws['!merges']=[0,1,2].map(r=>({s:{r,c:0},e:{r,c:nc-1}}));
+    ws['!cols']=head.map((h,i)=>({wch:i===0?6:i===1?10:i===2?28:Math.max(10,Math.min(26,h.length+2))}));
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:4,c:0},e:{r:aoa.length-1,c:nc-1}})};
+    const ms=R.done.map(d=>d.marks),ps=R.done.map(d=>d.pct),avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+    const top=R.done.filter(d=>d.rank===1).map(d=>`${d.name} (${d.roll})`).join(', ');
+    const sum=XLSX.utils.aoa_to_sheet([['Result summary'],['Paper',B.title],['Subject',B.subject||''],['Batch',B.base],['Date',date],['Marking',markTxt],[],
+      ['Students in batch',recs.length],['Scanned & imported',R.done.length],['Not scanned',R.missing.length],
+      ['Highest marks',Math.max(...ms)],['Average marks',r2(avg(ms))],['Lowest marks',Math.min(...ms)],['Highest percentage',Math.max(...ps)],['Average percentage',avg(ps)],['Rank 1',top]]);
+    ['B14','B15'].forEach(a=>{if(sum[a])sum[a].z='0.00%';});
+    sum['!cols']=[{wch:22},{wch:60}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Result');XLSX.utils.book_append_sheet(wb,sum,'Summary');
+    XLSX.writeFile(wb,`OMR_Result_${String(B.base).replace(/[^\w-]+/g,'_')}.xlsx`);
+    notify(`Result sheet downloaded: ${R.done.length} student${R.done.length===1?'':'s'}${R.missing.length?`, ${R.missing.length} not scanned`:''}.`,'success');
+  }catch(e){notify('Could not prepare the result sheet: '+(e.message||e));}
+}
+
 async function customOmrPrintReports(){
   if(!B)return;
   const w=openDoc();if(!w)return;
   try{
     const recs=await qpGetHistoryGroupRecords(B.base);
-    const resp=[];
-    for(let from=0;;from+=1000){
-      const {data,error}=await sb.from('omr_responses').select('student_id,question_no,selected_option,correct_option,is_correct').eq('paper_base_serial',B.base).order('id').range(from,from+999);
-      if(error)throw error;resp.push(...(data||[]));if(!data||data.length<1000)break;
-    }
-    let imp=null;try{const {data}=await sb.from('omr_imports').select('imported_at').eq('teacher_id',current.id).eq('paper_base_serial',B.base).order('imported_at',{ascending:false}).limit(1);imp=data&&data[0];}catch(_){}
+    const resp=await fetchResponses(B.base);
+    const imp=await lastImport(B.base);
     // subject / lesson names for the grouping in the report
-    const subjName=new Map(),lessonName=new Map();
-    try{
-      const [{data:sj},{data:ls}]=await Promise.all([
-        sb.from('jnvst_subjects').select('id,name').eq('teacher_id',current.id),
-        sb.from('jnvst_subject_lessons').select('id,lesson_name,parent_lesson_id').eq('teacher_id',current.id)]);
-      (sj||[]).forEach(x=>subjName.set(x.id,x.name));
-      const lm=new Map((ls||[]).map(x=>[x.id,x]));
-      (ls||[]).forEach(x=>{const par=x.parent_lesson_id&&lm.get(x.parent_lesson_id);lessonName.set(x.id,(par?par.lesson_name+' › ':'')+x.lesson_name);});
-    }catch(_){}
+    const {subjName,lessonName}=await fetchNames();
     // V20: current explanations from the question bank (Assamese ones added after the paper was printed)
     const bankEx=new Map();
     try{
@@ -416,5 +509,5 @@ async function customOmrPrintReports(){
   }catch(e){try{w.close();}catch(_){}notify('Could not prepare the reports: '+(e.message||e));}
 }
 
-Object.assign(root,{customOmrHome,customOmrBatch,customOmrPrintSheets,customOmrScanFiles,customOmrOpened,customOmrSet,customOmrDone,customOmrInclude,customOmrDrop,customOmrManual,customOmrImport,customOmrPrintReports,customOmrDeleteUnscanned,customOmrDeleteOne,customOmrState:()=>({B,SC})});
+Object.assign(root,{customOmrHome,customOmrBatch,customOmrPrintSheets,customOmrScanFiles,customOmrOpened,customOmrSet,customOmrDone,customOmrInclude,customOmrDrop,customOmrManual,customOmrImport,customOmrPrintReports,customOmrDeleteUnscanned,customOmrDeleteOne,customOmrResultSheet,customOmrBuildResultSheetData:buildResultSheetData,customOmrState:()=>({B,SC})});
 })(typeof window!=='undefined'?window:globalThis);
