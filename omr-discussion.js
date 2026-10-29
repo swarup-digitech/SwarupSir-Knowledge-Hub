@@ -118,10 +118,13 @@ function whereLine(it,D){
   if(D.custom)return `In ${it.papers} student paper${it.papers===1?'':'s'}`;
   return D.sets.filter(s=>it.where.has(s)).map(s=>`<span class="sn">Set ${e(s)} · Q${it.where.get(s)}</span>`).join('');
 }
+// First name only (e.g. "Rahul" for "Rahul Kumar Das"), so the chosen option and
+// the student's own Q No always fit. If a first name is still too long, only the
+// name is shortened ("…"); roll no., option and Q No are never cut off.
+function firstName(n){return String(n||'').trim().split(/\s+/)[0]||'Student';}
 function whoChip(w,D,short,kind){
   const no=D.custom?`Q${w.no}`:(D.sets.length>1?`${e(w.set)}${w.no}`:'');
-  let nm=String(w.name||'').trim()||'Student';if(short)nm=nm.split(/\s+/)[0];
-  return `<span class="who${kind==='ok'?' ok':''}"><b>${e(w.roll||'')}</b> ${e(nm)}${w.sel&&kind!=='ok'?` <i>${e(w.sel)}</i>`:''}${no?` <small>${no}</small>`:''}</span>`;
+  return `<span class="who${kind==='ok'?' ok':''}"><b>${e(w.roll||'')}</b><span class="nm">${e(firstName(w.name))}</span>${w.sel&&kind!=='ok'?`<i>${e(w.sel)}</i>`:''}${no?`<small>${no}</small>`:''}</span>`;
 }
 
 function questionPage(it,idx,total,D,o){
@@ -207,7 +210,8 @@ body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala 
 .stat{display:flex;gap:3mm;font-weight:800;font-size:1.6em;line-height:1}.sw{color:#dc2626}.ss{color:#b45309}.sr{color:#16a34a}
 .small2{font-size:.7em;color:#64748b;margin:1mm 0 2mm}
 .lists{flex:1;min-height:0;overflow:hidden}.lists h4{margin:2mm 0 1mm;font-size:.95em}
-.chips{display:flex;flex-wrap:wrap;gap:1mm}.who{border:.3mm solid #fecaca;background:#fef2f2;border-radius:1.5mm;padding:.5mm 1.8mm;font-size:.9em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.chips{display:flex;flex-wrap:wrap;gap:1mm}.who{display:inline-flex;align-items:baseline;gap:1.2mm;border:.3mm solid #fecaca;background:#fef2f2;border-radius:1.5mm;padding:.5mm 1.8mm;font-size:.9em;white-space:nowrap;max-width:100%;min-width:0}
+.who>b,.who>i,.who>small{flex:0 0 auto}.who .nm{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .who.ok{border-color:#bbf7d0;background:#f0fdf4}.okh{color:#166534}
 .who i{font-style:normal;font-weight:700;color:#b91c1c}.who small{color:#64748b}.none{color:#94a3b8}
 .cover .ct{font-size:1.1em;font-weight:800;color:#17365D}.cover .cs{font-size:.5em;color:#475569;margin:2mm 0 4mm}
