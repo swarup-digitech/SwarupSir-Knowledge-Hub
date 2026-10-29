@@ -312,6 +312,13 @@ async function v24TabHome(el) {
     if (t.release_requested_at) todo.push({ t: t.title, d: `Release requested ${v24Date(t.release_requested_at)}. Waiting for Admin.`, b: v24Chip('pending', 'Waiting') });
     else if (n) todo.push({ t: t.title, d: `${n} student${n === 1 ? '' : 's'} submitted. Results reach students after Admin releases them.`, b: `<button class="v24-sm" onclick="v24RequestRelease('${t.id}')">Request release</button>` });
   });
+  try {
+    const fr = (await v24Rpc('teacher_fee_change_requests')) || [];
+    const back = fr.filter(r => r.status === 'rejected' && r.reviewed_at && (Date.now() - new Date(r.reviewed_at)) < 14 * 864e5);
+    if (back.length) todo.push({ t: `${back.length} fee change${back.length === 1 ? '' : 's'} not approved`, d: back[0].review_note ? `“${back[0].review_note}”` : 'See the Fees tab.', b: `<button class="secondary v24-sm" onclick="v24PortalGo('fees')">Open</button>` });
+    const wait = fr.filter(r => r.status === 'pending').length;
+    if (wait) todo.push({ t: `${wait} fee change${wait === 1 ? '' : 's'} waiting for Admin`, d: 'The fee changes when the Admin approves it.', b: v24Chip('pending', 'Waiting') });
+  } catch (_) {}
   if (!V24.classes.length || !V24.mySubjects.length) todo.unshift({ t: 'Waiting for Admin', d: 'The Admin has not given you ' + (!V24.classes.length ? 'any groups' : 'any subjects') + ' yet.', b: '' });
 
   el.innerHTML = `
@@ -700,8 +707,11 @@ async function v24TabFees(el) {
   const list = [...rows].sort((a, b) => String(a.roll_no || '').localeCompare(String(b.roll_no || ''), undefined, { numeric: true }));
   const sum = k => list.reduce((t, s) => t + Number(fees.get(s.id)?.[k] || 0), 0);
   let mine = null; try { mine = ((await v24Rpc('teacher_my_collections')) || [])[0] || null; } catch (_) {}
+  let reqs = []; try { reqs = (await v24Rpc('teacher_fee_change_requests')) || []; } catch (_) {}
+  V24.feeReqs = reqs;
+  const waiting = new Map(reqs.filter(r => r.status === 'pending').map(r => [r.student_id, r]));
   el.innerHTML = `
-    <div class="v24-head"><div><h2>Fees</h2><p>Students in your groups. Record payments and set each student's course fee and discount.</p></div></div>
+    <div class="v24-head"><div><h2>Fees</h2><p>Students in your groups. Record payments; a change of a course fee or discount is sent to the Admin for approval.</p></div></div>
     <div class="v24-stats">
       <div class="v24-stat"><div class="l">Collected</div><div class="n">₹${v24Money(sum('paid'))}</div></div>
       <div class="v24-stat"><div class="l">Still due</div><div class="n">₹${v24Money(sum('due'))}</div></div>
@@ -709,14 +719,25 @@ async function v24TabFees(el) {
       ${mine ? `<div class="v24-stat"><div class="l">Received by you</div><div class="n">₹${v24Money(mine.total)}</div><div class="s">${mine.payments} payment${mine.payments === 1 ? '' : 's'} · ₹${v24Money(mine.this_month)} this month</div></div>` : ''}
     </div>
     <div class="v24-lock"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>A saved payment cannot be changed or deleted. If a payment was entered wrongly, ask the Admin to correct it.</div>
+    ${v26FeeReqPanel(reqs)}
     ${list.length ? `<div class="v24-tw"><table class="v24-t"><thead><tr><th>Roll no.</th><th>Name</th><th>Group</th><th>Fee (₹)</th><th>Paid (₹)</th><th>Due (₹)</th><th>Last payment</th><th>Status</th><th></th></tr></thead><tbody>
       ${list.map(s => { const f = fees.get(s.id); const [k, l] = v24FeeStatus(f); return `<tr><td>${v24e(s.roll_no || '—')}</td><td><b>${v24e(s.full_name || '')}</b></td><td class="nw">${v24e(s.class_name || '')}</td>
-        <td>${f ? v24Money(Number(f.total) - Number(f.discount || 0)) : '—'}</td><td>${f ? v24Money(f.paid) : '—'}</td><td>${f ? v24Money(f.due) : '—'}</td><td class="nw">${f?.last_payment ? v24Date(f.last_payment) : '—'}</td><td>${v24Chip(k, l)}</td>
-        <td class="r"><button class="v24-sm" onclick="v26PaymentForm('${s.id}')">Record payment</button><button class="secondary v24-sm" onclick="v26FeeForm('${s.id}')">Edit fee</button><button class="secondary v24-sm" onclick="v26FeeHistory('${s.id}')">History</button></td></tr>`; }).join('')}
+        <td>${f ? v24Money(Number(f.total) - Number(f.discount || 0)) : '—'}</td><td>${f ? v24Money(f.paid) : '—'}</td><td>${f ? v24Money(f.due) : '—'}</td><td class="nw">${f?.last_payment ? v24Date(f.last_payment) : '—'}</td><td>${v24Chip(k, l)}${waiting.has(s.id) ? '<br>' + v24Chip('pending', 'Fee change waiting') : ''}</td>
+        <td class="r"><button class="v24-sm" onclick="v26PaymentForm('${s.id}')">Record payment</button><button class="secondary v24-sm" onclick="v26FeeForm('${s.id}')">Change fee</button><button class="secondary v24-sm" onclick="v26FeeHistory('${s.id}')">History</button></td></tr>`; }).join('')}
     </tbody></table></div>` : '<div class="v24-empty">No students in your groups yet.</div>'}`;
 }
 
 /* V26: fees of one student (teacher). Payments are added only; the Admin corrects mistakes. */
+function v26FeeReqPanel(reqs) {
+  if (!reqs || !reqs.length) return '';
+  const st = { pending: ['pending', 'Waiting for Admin'], approved: ['approved', 'Approved'], rejected: ['returned', 'Not approved'] };
+  const fee = (t, d) => t == null ? '—' : `₹${v24Money(t)}${Number(d) ? ` − ₹${v24Money(d)}` : ''}`;
+  return `<section class="v24-panel" style="margin-bottom:14px"><h3>My fee change requests</h3>
+    <div class="v24-tw" style="border:0;border-radius:0"><table class="v24-t"><thead><tr><th>Student</th><th>Was</th><th>Requested</th><th>Status</th><th>Admin note</th><th>Sent</th></tr></thead><tbody>
+    ${reqs.map(r => `<tr><td><b>${v24e(r.student_name || '')}</b><div class="small muted">${v24e(r.roll_no || '')}</div></td><td class="nw">${fee(r.old_total, r.old_discount)}</td><td class="nw"><b>${fee(r.new_total, r.new_discount)}</b>${r.reason ? `<div class="small muted">${v24e(r.reason)}</div>` : ''}</td>
+      <td>${v24Chip(...(st[r.status] || ['none', r.status]))}</td><td class="small" style="max-width:220px">${v24e(r.review_note || '')}</td><td class="nw">${v24Date(r.created_at)}</td></tr>`).join('')}
+    </tbody></table></div></section>`;
+}
 function v26Student(id) { return (V24.students || []).find(s => s.id === id) || {}; }
 function v26Today() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 async function v26AfterFeeChange() {
@@ -727,7 +748,7 @@ function v26FeeMenu(id) {
   const s = v26Student(id), f = V24.fees?.get?.(id);
   v24Modal(`<h3>Fees — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3>
     <p>${f ? `Fee ₹${v24Money(Number(f.total) - Number(f.discount || 0))} · Paid ₹${v24Money(f.paid)} · <b>Due ₹${v24Money(f.due)}</b>` : 'No fee set yet.'}</p>
-    <div class="actions"><button onclick="v26PaymentForm('${id}')">Record payment</button><button class="secondary" onclick="v26FeeForm('${id}')">Edit fee</button><button class="secondary" onclick="v26FeeHistory('${id}')">History</button><button class="secondary" onclick="v24CloseModal()">Close</button></div>`);
+    <div class="actions"><button onclick="v26PaymentForm('${id}')">Record payment</button><button class="secondary" onclick="v26FeeForm('${id}')">Change fee</button><button class="secondary" onclick="v26FeeHistory('${id}')">History</button><button class="secondary" onclick="v24CloseModal()">Close</button></div>`);
 }
 function v26PaymentForm(id) {
   const s = v26Student(id);
@@ -766,15 +787,18 @@ async function v26SavePayment(id, allowDuplicate) {
   }
 }
 function v26FeeForm(id) {
-  const s = v26Student(id), f = V24.fees?.get?.(id);
-  v24Modal(`<h3>Course fee — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3>
+  const s = v26Student(id), f = V24.fees?.get?.(id), w = (V24.feeReqs || []).find(r => r.student_id === id && r.status === 'pending');
+  v24Modal(`<h3>Change course fee — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3>
+    <p class="small" style="margin-top:0">Now: ${f ? `fee ₹${v24Money(f.total)}${Number(f.discount) ? `, discount ₹${v24Money(f.discount)}` : ''}` : 'no fee set'}. Your change is sent to the <b>Admin for approval</b>; until then the current fee stays.</p>
+    ${w ? `<div class="notice small">Already waiting: fee ₹${v24Money(w.new_total)}, discount ₹${v24Money(w.new_discount)} (sent ${v24Date(w.created_at)}). Sending a new change replaces it.</div>` : ''}
     <div class="grid">
       <div><label for="v26FTotal">Total course fee (₹)</label><input id="v26FTotal" type="number" min="0" step="1" value="${f ? Number(f.total) : ''}" oninput="v26FeeNet()"></div>
       <div><label for="v26FDisc">Discount (₹)</label><input id="v26FDisc" type="number" min="0" step="1" value="${f ? Number(f.discount || 0) : 0}" oninput="v26FeeNet()"></div>
     </div>
     <p id="v26FNet" class="small"></p>
+    <label for="v26FWhy">Reason for the Admin (optional)</label><input id="v26FWhy" maxlength="500" autocomplete="off" placeholder="e.g. sibling discount agreed with parents">
     <div id="v26FMsg"></div>
-    <div class="actions" style="margin-top:14px"><button id="v26FBtn" onclick="v26SaveFee('${id}')">Save fee</button><button class="secondary" onclick="v24CloseModal()">Cancel</button></div>`);
+    <div class="actions" style="margin-top:14px"><button id="v26FBtn" onclick="v26SaveFee('${id}')">Send for approval</button><button class="secondary" onclick="v24CloseModal()">Cancel</button></div>`);
   v26FeeNet();
 }
 function v26FeeNet() {
@@ -787,8 +811,8 @@ async function v26SaveFee(id) {
   if (total < 0 || discount < 0 || discount > total) { msg.innerHTML = message('Enter a fee of 0 or more and a discount not larger than the fee.'); return; }
   const btn = document.getElementById('v26FBtn'); btn.disabled = true;
   try {
-    await callTeacherFn({ action: 'feeSaveAccount', student_id: id, total_course_fee: total, discount_amount: discount });
-    v24CloseModal(); notify('Fee saved.'); v26AfterFeeChange();
+    const j = await callTeacherFn({ action: 'feeSaveAccount', student_id: id, total_course_fee: total, discount_amount: discount, reason: document.getElementById('v26FWhy')?.value.trim() || '' });
+    v24CloseModal(); notify(j.pending ? 'Sent to the Admin for approval. The fee changes when the Admin approves it.' : 'Fee saved.'); v26AfterFeeChange();
   } catch (e) { btn.disabled = false; msg.innerHTML = message(v24Err(e)); }
 }
 async function v26FeeHistory(id) {
@@ -817,7 +841,7 @@ async function v24InjectAdminCard() {
   const card = document.createElement('div');
   card.className = 'card'; card.id = 'v24AdminCard';
   card.innerHTML = `<div class="v24-admin-card"><div><h2 style="margin:0">👩‍🏫 Teachers</h2><p class="muted small" style="margin:4px 0 0">Teacher accounts, question approvals and result release requests.</p></div>
-    <div class="actions"><button onclick="v24AdminHome('teachers')">Manage Teachers</button><button class="secondary" onclick="v24AdminHome('approvals')">Question Approvals<span id="v24PendBadge"></span></button><button class="secondary" onclick="v24AdminHome('release')">Result Release Requests<span id="v24RelBadge"></span></button></div></div>`;
+    <div class="actions"><button onclick="v24AdminHome('teachers')">Manage Teachers</button><button class="secondary" onclick="v24AdminHome('approvals')">Question Approvals<span id="v24PendBadge"></span></button><button class="secondary" onclick="v24AdminHome('release')">Result Release Requests<span id="v24RelBadge"></span></button><button class="secondary" onclick="v24AdminHome('fees')">Fee Change Approvals<span id="v26FeeBadge"></span></button></div></div>`;
   const first = wrap.querySelector('.card');
   if (first && first.nextSibling) wrap.insertBefore(card, first.nextSibling); else wrap.appendChild(card);
   try {
@@ -826,6 +850,7 @@ async function v24InjectAdminCard() {
     if (groups) document.getElementById('v24PendBadge').innerHTML = `<span class="v24-badge">${groups}</span>`;
     if ((r || []).length) document.getElementById('v24RelBadge').innerHTML = `<span class="v24-badge">${r.length}</span>`;
   } catch (_) {}
+  try { const f = (await v24Rpc('admin_fee_change_requests')) || []; if (f.length) document.getElementById('v26FeeBadge').innerHTML = `<span class="v24-badge">${f.length}</span>`; } catch (_) {}
 }
 
 async function v24AdminHome(tab) {
@@ -833,13 +858,14 @@ async function v24AdminHome(tab) {
   v24Css();
   render(`<div class="wrap v24-admin">${header('Teachers')}
     <div class="card"><div class="v24-seg" role="tablist" aria-label="Teachers section" style="margin:0">
-      ${[['teachers', 'Teachers'], ['approvals', 'Question approvals'], ['release', 'Result release requests']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${V24.adminTab === k}" onclick="v24AdminHome('${k}')">${l}</button>`).join('')}
+      ${[['teachers', 'Teachers'], ['approvals', 'Question approvals'], ['release', 'Result release requests'], ['fees', 'Fee change approvals']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${V24.adminTab === k}" onclick="v24AdminHome('${k}')">${l}</button>`).join('')}
     </div></div>
     <div id="v24AdminMain"><div class="card"><p class="muted">Loading…</p></div></div></div>`);
   const el = document.getElementById('v24AdminMain');
   try {
     if (V24.adminTab === 'approvals') await v24AdminApprovals(el);
     else if (V24.adminTab === 'release') await v24AdminRelease(el);
+    else if (V24.adminTab === 'fees') await v26AdminFeeRequests(el);
     else await v24AdminTeachers(el);
   } catch (e) {
     el.innerHTML = `<div class="card">${message(v24Err(e))}<p class="small muted">If this says a function does not exist, run V24_TEACHER_ACCOUNTS.sql in the Supabase SQL Editor.</p></div>`;
@@ -1009,6 +1035,43 @@ async function v24ApproveAll() {
   try { const n = await v24Rpc('admin_review_questions', { p_ids: ids, p_approve: true, p_note: null }); notify(`${n} question row(s) approved.`); }
   catch (e) { notify('Could not approve: ' + v24Err(e)); }
   v24AdminHome('approvals');
+}
+
+/* V26: fee changes sent by teachers; the fee changes only when approved here. */
+async function v26AdminFeeRequests(el) {
+  let rows;
+  try { rows = (await v24Rpc('admin_fee_change_requests')) || []; }
+  catch (e) { el.innerHTML = `<div class="card">${message(/does not exist|Could not find/i.test(v24Err(e)) ? 'Run V26_TEACHER_STUDENTS_FEES.sql in the Supabase SQL Editor first.' : v24Err(e))}</div>`; return; }
+  V24.feeReqRows = rows;
+  const fee = (t, d) => t == null ? '<span class="muted">not set</span>' : `₹${v24Money(Number(t) - Number(d || 0))}<div class="small muted">₹${v24Money(t)}${Number(d) ? ` − ₹${v24Money(d)} discount` : ''}</div>`;
+  el.innerHTML = rows.length ? `<div class="card">
+    <div class="actions" style="justify-content:space-between;align-items:center"><div><b>${rows.length}</b> fee change${rows.length === 1 ? '' : 's'} waiting. The fee changes only after you approve.</div>
+      <button class="secondary" onclick="v26ReviewFee(null,true)">Approve all</button></div>
+    <div class="v24-tw" style="margin-top:10px"><table class="v24-t"><thead><tr><th>Student</th><th>Teacher</th><th>Current fee</th><th>Requested fee</th><th>Paid so far</th><th>Reason</th><th>Sent</th><th></th></tr></thead><tbody>
+    ${rows.map((r, i) => {
+      const changed = r.old_total != null && (Number(r.old_total) !== Number(r.cur_total) || Number(r.old_discount || 0) !== Number(r.cur_discount || 0));
+      const net = Number(r.new_total) - Number(r.new_discount || 0);
+      return `<tr><td><b>${v24e(r.student_name || '')}</b><div class="small muted">${v24e(r.roll_no || '')} · ${v24e(r.group_name || '')}</div></td><td class="nw">${v24e(r.teacher_name || '')}</td>
+        <td class="nw">${fee(r.cur_total, r.cur_discount)}${changed ? '<div class="small" style="color:#b45309">Changed since the request</div>' : ''}</td>
+        <td class="nw"><b>${fee(r.new_total, r.new_discount)}</b></td>
+        <td class="nw">₹${v24Money(r.paid)}${Number(r.paid) > net ? '<div class="small" style="color:#b91c1c">More than the new fee</div>' : ''}</td>
+        <td class="small" style="max-width:220px">${v24e(r.reason || '')}</td><td class="nw">${v24Date(r.created_at)}</td>
+        <td class="r"><button class="v24-sm" onclick="v26ReviewFee(${i},true)">✓ Approve</button><button class="secondary v24-sm" onclick="v26ReviewFee(${i},false)">✕ Reject</button></td></tr>`;
+    }).join('')}
+    </tbody></table></div></div>` : '<div class="card"><p class="muted" style="margin:0">No fee changes are waiting for approval.</p></div>';
+}
+async function v26ReviewFee(i, approve) {
+  const rows = V24.feeReqRows || [];
+  const list = i == null ? rows : [rows[i]].filter(Boolean);
+  if (!list.length) return;
+  let note = null;
+  if (!approve) { note = prompt(`Why is the fee change for ${list[0].student_name || 'this student'} not approved? (the teacher sees this note)`); if (note == null) return; if (!note.trim()) return notify('Please write a short note.'); }
+  else if (i == null && !confirm(`Approve all ${list.length} fee change(s)? The new fees are saved.`)) return;
+  try {
+    const n = await v24Rpc('admin_review_fee_change', { p_ids: list.map(r => r.id), p_approve: approve, p_note: note });
+    notify(approve ? `${n} fee change${n === 1 ? '' : 's'} approved and saved.` : 'Not approved. The teacher sees your note.');
+  } catch (e) { notify('Could not save: ' + v24Err(e)); }
+  v24AdminHome('fees');
 }
 
 async function v24AdminRelease(el) {
