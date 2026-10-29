@@ -209,7 +209,7 @@ async function v24PortalHome(tab, sub) {
   try { await v24LoadBasics(); }
   catch (e) { return render(`<div class="wrap"><div class="card">${message('Could not load your groups and subjects: ' + v24Err(e))}<div class="actions"><button onclick="v24PortalHome()">Try again</button><button class="secondary" onclick="logout()">Log out</button></div></div></div>`); }
 
-  const tabs = [['home', 'Home'], ['students', 'Students'], ['bank', 'Question Bank'], ['work', 'Assign & Test'], ['results', 'Results'], ['fees', 'Fees']];
+  const tabs = [['home', 'Home'], ['students', 'Students'], ['bank', 'Question Bank'], ['work', 'Assign & Test'], ['results', 'Results'], ['progress', 'Progress'], ['fees', 'Fees']];
   const groupNames = v24TopGroups().map(c => c.name).join(', ') || 'No groups yet';
   const subjNames = V24.mySubjects.map(s => s.name).join(', ') || 'No subjects yet';
   render(`<div class="wrap"><div class="v24">
@@ -262,7 +262,8 @@ function v24ShowTab(tab) {
   const el = document.getElementById('v24Main');
   if (!el) return v24PortalHome(tab);
   el.innerHTML = '<div class="v24-empty">Loading…</div>';
-  const run = { home: v24TabHome, students: v24TabStudents, bank: v24TabBank, work: v24TabWork, results: v24TabResults, fees: v24TabFees }[tab] || v24TabHome;
+  const run = { home: v24TabHome, students: v24TabStudents, bank: v24TabBank, work: v24TabWork, results: v24TabResults, fees: v24TabFees,
+    progress: el => (typeof v27TabProgress === 'function' ? v27TabProgress(el) : (el.innerHTML = '<div class="v24-empty">Progress needs progress.js (V27).</div>')) }[tab] || v24TabHome;
   Promise.resolve(run(el)).catch(e => { el.innerHTML = message(v24Err(e)); });
 }
 

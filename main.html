@@ -333,11 +333,17 @@ function loadTeacherApp(){
                   const y=document.createElement("script");
                   y.src="omr-discussion.js?v=4";
                   y.onload=y.onerror=()=>{
+                   // V27: student progress from the Mistake Bank (optional)
+                   const g=document.createElement("script");
+                   g.src="progress.js?v=1";
+                   g.onload=g.onerror=()=>{
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
-                    v.src="teacher-portal.js?v=6";
+                    v.src="teacher-portal.js?v=7";
                     v.onload=v.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
                     document.head.appendChild(v);
+                   };
+                   document.head.appendChild(g);
                   };
                   document.head.appendChild(y);
                 };
