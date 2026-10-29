@@ -304,7 +304,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=41";
+      s.src="teacher-app.js?v=43";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -335,7 +335,7 @@ function loadTeacherApp(){
                   y.onload=y.onerror=()=>{
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
-                    v.src="teacher-portal.js?v=2";
+                    v.src="teacher-portal.js?v=5";
                     v.onload=v.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
                     document.head.appendChild(v);
                   };

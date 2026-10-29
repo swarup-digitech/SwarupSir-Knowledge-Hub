@@ -1,5 +1,6 @@
 /* ============================================================================
-   V24 — Admin + Teacher accounts
+   V24 — Admin + Teacher accounts  (V26: teachers add students, take fees;
+         Roll No prefix per teacher; question bank limited to own subjects)
    ----------------------------------------------------------------------------
    Loaded by main.html after teacher-app.js.
 
@@ -346,8 +347,10 @@ function v24PortalGo(tab, sub, filter) {
 async function v24TabStudents(el) {
   const [rows, fees] = await Promise.all([v24Students(true), v24Fees().catch(() => new Map())]);
   const groups = [...new Map(rows.map(r => [r.class_id, r.class_name])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  const prefix = V24.scope?.roll_prefix || '';
   el.innerHTML = `
-    <div class="v24-head"><div><h2>My students</h2><p>Students in your groups. The Admin adds students and moves them between groups.</p></div></div>
+    <div class="v24-head"><div><h2>My students</h2><p>Students in your groups. ${prefix ? `Students you add get Roll Nos starting with <b>${v24e(prefix)}-</b>.` : 'To add students, the Admin must first give you a Roll No prefix.'} Moving students between groups is done by the Admin.</p></div>
+      <div class="actions"><button onclick="v26AddStudentForm()"${prefix && V24.classes.length ? '' : ' disabled'}>+ Add student</button></div></div>
     <div class="v24-filters">
       <label>Group<select id="v24StuGroup" onchange="v24FilterStudents()"><option value="">All groups</option>${groups.map(([id, n]) => `<option value="${id}">${v24e(n)}</option>`).join('')}</select></label>
       <label>Search<input id="v24StuSearch" type="search" placeholder="Name or roll no." oninput="v24FilterStudents()"></label>
@@ -365,10 +368,60 @@ function v24FilterStudents() {
   if (!body) return;
   body.innerHTML = list.length ? list.map(s => {
     const [k, l] = v24FeeStatus(V24._feeMap?.get(s.id));
-    return `<tr><td class="nw">${v24e(s.roll_no || '—')}</td><td><b>${v24e(s.full_name || 'Student')}</b></td><td class="nw">${v24e(s.class_name || '—')}</td><td>${v24Chip(k, l)}</td>
-      <td class="r"><button class="secondary v24-sm" onclick="v24ResetStudentPassword('${s.id}')">Reset password</button></td></tr>`;
+    return `<tr><td class="nw">${v24e(s.roll_no || '—')}</td><td><b>${v24e(s.full_name || 'Student')}</b>${s.added_by_me ? ' ' + v24Chip('info', 'Added by you') : ''}</td><td class="nw">${v24e(s.class_name || '—')}</td><td>${v24Chip(k, l)}</td>
+      <td class="r"><button class="secondary v24-sm" onclick="v26FeeMenu('${s.id}')">Fees</button><button class="secondary v24-sm" onclick="v24ResetStudentPassword('${s.id}')">Reset password</button></td></tr>`;
   }).join('') : `<tr><td colspan="5" class="v24-empty">${(V24.students || []).length ? 'No student matches.' : 'No students in your groups yet.'}</td></tr>`;
 }
+/* V26: a teacher adds a student to one of their groups (Roll No = PREFIX-number). */
+function v26GroupOptions() {
+  // Sub-groups under their main group; a main group without sub-groups can be chosen itself.
+  const ids = new Set(V24.classes.map(c => c.id));
+  const mains = V24.classes.filter(c => !c.jnvst_parent_id || !ids.has(c.jnvst_parent_id));
+  return mains.map(m => {
+    const subs = V24.classes.filter(c => c.jnvst_parent_id === m.id);
+    return subs.length
+      ? `<optgroup label="${v24e(m.name)}">${subs.map(s => `<option value="${s.id}">${v24e(s.name)}</option>`).join('')}</optgroup>`
+      : `<option value="${m.id}">${v24e(m.name)}</option>`;
+  }).join('');
+}
+function v26AddStudentForm() {
+  const prefix = V24.scope?.roll_prefix || '';
+  if (!prefix) return notify('The Admin has not given you a Roll No prefix yet. Please ask the Admin.');
+  v24Modal(`<h3>Add a student</h3>
+    <label for="v26SName">Student name</label><input id="v26SName" autocomplete="off" placeholder="Full name">
+    <label for="v26SGroup">Group</label><select id="v26SGroup">${v26GroupOptions()}</select>
+    <label for="v26SRoll">Roll No</label>
+    <div style="display:flex;align-items:center;gap:6px"><b style="font-size:16px">${v24e(prefix)}-</b><input id="v26SRoll" autocomplete="off" placeholder="001" maxlength="10" style="margin:0"></div>
+    <p class="small muted" style="margin:4px 0 0">The student logs in with this Roll No, e.g. <b>${v24e(prefix)}-001</b>.</p>
+    <label for="v26SPw">Password (at least 6 characters)</label><input id="v26SPw" autocomplete="new-password" value="${v24e(v24MakePassword().slice(0, 8))}">
+    <div id="v26SMsg"></div>
+    <div class="actions" style="margin-top:14px"><button id="v26SBtn" onclick="v26AddStudent()">Add student</button><button class="secondary" onclick="v24CloseModal()">Cancel</button></div>`);
+  document.getElementById('v26SName')?.focus();
+}
+async function v26AddStudent() {
+  const name = document.getElementById('v26SName').value.trim();
+  const class_id = document.getElementById('v26SGroup').value;
+  const roll = document.getElementById('v26SRoll').value.trim();
+  const password = document.getElementById('v26SPw').value;
+  const msg = document.getElementById('v26SMsg');
+  if (!name || !class_id || !roll) { msg.innerHTML = message('Enter the name, group and Roll No.'); return; }
+  if (!/^[A-Za-z0-9]{1,10}$/.test(roll.replace(new RegExp('^' + (V24.scope.roll_prefix || '') + '-', 'i'), ''))) { msg.innerHTML = message('Roll No: only letters and digits after the prefix, for example 001.'); return; }
+  if (password.length < 6) { msg.innerHTML = message('Password must have at least 6 characters.'); return; }
+  const btn = document.getElementById('v26SBtn'); btn.disabled = true;
+  try {
+    const j = await callTeacherFn({ action: 'createStudents', students: [{ name, roll_no: roll, password, class_id }] });
+    const r = (j.results || [])[0] || {};
+    if (!r.success) { msg.innerHTML = message(r.error || 'Could not add the student.'); btn.disabled = false; return; }
+    v24Modal(`<h3>Student added</h3>
+      <p>Give these login details to <b>${v24e(name)}</b>:</p>
+      <div class="v24-group-box" style="font-size:16px">Roll No: <b>${v24e(r.roll_no)}</b><br>Password: <b>${v24e(password)}</b></div>
+      <p class="small muted">The student logs in with “Student Login”. You can reset the password later from this list.</p>
+      <div class="actions"><button onclick="v24CloseModal();v26AddStudentForm()">Add another</button><button class="secondary" onclick="v24CloseModal()">Done</button></div>`);
+    V24.students = null; V24.fees = null;
+    if (V24.tab === 'students') v24ShowTab('students');
+  } catch (e) { msg.innerHTML = message(v24Err(e)); btn.disabled = false; }
+}
+
 async function v24ResetStudentPassword(id) {
   const s = (V24.students || []).find(x => x.id === id);
   const pw = prompt(`New password for ${s?.full_name || 'this student'} (at least 6 characters):`);
@@ -381,7 +434,7 @@ async function v24ResetStudentPassword(id) {
 /* -------------------------------------------------------- Question Bank */
 async function v24TabBank(el) {
   el.innerHTML = `
-    <div class="v24-head"><div><h2>Question bank</h2><p>Use any central question. Your own questions join the central bank after the Admin approves them.</p></div>
+    <div class="v24-head"><div><h2>Question bank</h2><p>Central questions of your subjects (${v24e(V24.mySubjects.map(s => s.name).join(', ') || 'none yet')}). You can add questions only to these subjects; they join the central bank after the Admin approves them.</p></div>
       <div class="actions"><button class="secondary" onclick="jnvstQuestionBulkUpload()"${V24.mySubjects.length ? '' : ' disabled'}>Bulk upload</button><button onclick="jnvstManualAddQuestion()"${V24.mySubjects.length ? '' : ' disabled'}>+ Add question</button></div></div>
     <div class="v24-seg" role="tablist" aria-label="Question bank view">
       <button type="button" role="tab" aria-selected="${V24.bank === 'central'}" onclick="V24.bank='central';v24ShowTab('bank')">Central bank</button>
@@ -394,7 +447,7 @@ async function v24TabBank(el) {
 }
 
 function v24BankCentral(body) {
-  const vis = V24.allSubjects;
+  const vis = V24.mySubjects;   // V26: only the teacher's own subjects
   body.innerHTML = `
     <div class="v24-filters">
       <label>Subject<select id="v24CSubj" onchange="v24CentralLessons();v24LoadCentral(0)"><option value="">All my subjects</option>${vis.map(s => `<option value="${s.id}">${v24e(s.name)}</option>`).join('')}</select></label>
@@ -420,12 +473,12 @@ async function v24LoadCentral(page) {
   const lesson = document.getElementById('v24CLesson')?.value || '';
   const part = document.getElementById('v24CPart')?.value || '';
   const search = (document.getElementById('v24CSearch')?.value || '').trim();
-  if (!V24.adminIds.length || !V24.allSubjects.length) { box.innerHTML = '<div class="v24-empty">The Admin has not shared any subjects with you yet.</div>'; return; }
+  if (!V24.adminIds.length || !V24.mySubjects.length) { box.innerHTML = '<div class="v24-empty">The Admin has not given you any subjects yet.</div>'; return; }
   if (page === 0) box.innerHTML = '<div class="v24-empty">Loading…</div>';
   let q = sb.from('mock_question_bank')
     .select('id,question_text,image_url,part_code,language,subject_id,lesson_id,passage_id,passage_title,passage_text,question_order,author_id,option_a,option_b,option_c,option_d,correct_option', { count: 'exact' })
     .eq('approval_status', 'approved').in('teacher_id', V24.adminIds).eq('active', true);
-  q = subj ? q.eq('subject_id', subj) : q.in('subject_id', V24.allSubjects.map(s => s.id));
+  q = subj ? q.eq('subject_id', subj) : q.in('subject_id', V24.mySubjects.map(s => s.id));
   if (lesson) q = q.eq('lesson_id', lesson);
   if (part) q = q.eq('part_code', part);
   if (search) q = q.ilike('question_text', `%${search.replace(/[%_]/g, '')}%`);
@@ -645,13 +698,115 @@ async function v24TabResults(el) {
 async function v24TabFees(el) {
   const [rows, fees] = await Promise.all([v24Students(), v24Fees(true)]);
   const list = [...rows].sort((a, b) => String(a.roll_no || '').localeCompare(String(b.roll_no || ''), undefined, { numeric: true }));
+  const sum = k => list.reduce((t, s) => t + Number(fees.get(s.id)?.[k] || 0), 0);
+  let mine = null; try { mine = ((await v24Rpc('teacher_my_collections')) || [])[0] || null; } catch (_) {}
   el.innerHTML = `
-    <div class="v24-head"><div><h2>Fees</h2><p>Students in your groups.</p></div></div>
-    <div class="v24-lock"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>View only. Fees are added and changed by the Admin.</div>
-    ${list.length ? `<div class="v24-tw"><table class="v24-t"><thead><tr><th>Roll no.</th><th>Name</th><th>Group</th><th>Fee (₹)</th><th>Paid (₹)</th><th>Due (₹)</th><th>Last payment</th><th>Status</th></tr></thead><tbody>
+    <div class="v24-head"><div><h2>Fees</h2><p>Students in your groups. Record payments and set each student's course fee and discount.</p></div></div>
+    <div class="v24-stats">
+      <div class="v24-stat"><div class="l">Collected</div><div class="n">₹${v24Money(sum('paid'))}</div></div>
+      <div class="v24-stat"><div class="l">Still due</div><div class="n">₹${v24Money(sum('due'))}</div></div>
+      <div class="v24-stat"><div class="l">Students fully paid</div><div class="n">${list.filter(s => v24FeeStatus(fees.get(s.id))[0] === 'paid').length} / ${list.length}</div></div>
+      ${mine ? `<div class="v24-stat"><div class="l">Received by you</div><div class="n">₹${v24Money(mine.total)}</div><div class="s">${mine.payments} payment${mine.payments === 1 ? '' : 's'} · ₹${v24Money(mine.this_month)} this month</div></div>` : ''}
+    </div>
+    <div class="v24-lock"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>A saved payment cannot be changed or deleted. If a payment was entered wrongly, ask the Admin to correct it.</div>
+    ${list.length ? `<div class="v24-tw"><table class="v24-t"><thead><tr><th>Roll no.</th><th>Name</th><th>Group</th><th>Fee (₹)</th><th>Paid (₹)</th><th>Due (₹)</th><th>Last payment</th><th>Status</th><th></th></tr></thead><tbody>
       ${list.map(s => { const f = fees.get(s.id); const [k, l] = v24FeeStatus(f); return `<tr><td>${v24e(s.roll_no || '—')}</td><td><b>${v24e(s.full_name || '')}</b></td><td class="nw">${v24e(s.class_name || '')}</td>
-        <td>${f ? v24Money(Number(f.total) - Number(f.discount || 0)) : '—'}</td><td>${f ? v24Money(f.paid) : '—'}</td><td>${f ? v24Money(f.due) : '—'}</td><td class="nw">${f?.last_payment ? v24Date(f.last_payment) : '—'}</td><td>${v24Chip(k, l)}</td></tr>`; }).join('')}
+        <td>${f ? v24Money(Number(f.total) - Number(f.discount || 0)) : '—'}</td><td>${f ? v24Money(f.paid) : '—'}</td><td>${f ? v24Money(f.due) : '—'}</td><td class="nw">${f?.last_payment ? v24Date(f.last_payment) : '—'}</td><td>${v24Chip(k, l)}</td>
+        <td class="r"><button class="v24-sm" onclick="v26PaymentForm('${s.id}')">Record payment</button><button class="secondary v24-sm" onclick="v26FeeForm('${s.id}')">Edit fee</button><button class="secondary v24-sm" onclick="v26FeeHistory('${s.id}')">History</button></td></tr>`; }).join('')}
     </tbody></table></div>` : '<div class="v24-empty">No students in your groups yet.</div>'}`;
+}
+
+/* V26: fees of one student (teacher). Payments are added only; the Admin corrects mistakes. */
+function v26Student(id) { return (V24.students || []).find(s => s.id === id) || {}; }
+function v26Today() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+async function v26AfterFeeChange() {
+  V24.fees = null;
+  if (document.getElementById('v24Main')) v24ShowTab(V24.tab);
+}
+function v26FeeMenu(id) {
+  const s = v26Student(id), f = V24.fees?.get?.(id);
+  v24Modal(`<h3>Fees — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3>
+    <p>${f ? `Fee ₹${v24Money(Number(f.total) - Number(f.discount || 0))} · Paid ₹${v24Money(f.paid)} · <b>Due ₹${v24Money(f.due)}</b>` : 'No fee set yet.'}</p>
+    <div class="actions"><button onclick="v26PaymentForm('${id}')">Record payment</button><button class="secondary" onclick="v26FeeForm('${id}')">Edit fee</button><button class="secondary" onclick="v26FeeHistory('${id}')">History</button><button class="secondary" onclick="v24CloseModal()">Close</button></div>`);
+}
+function v26PaymentForm(id) {
+  const s = v26Student(id);
+  v24Modal(`<h3>Record payment — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3>
+    <div class="grid">
+      <div><label for="v26PAmt">Amount (₹)</label><input id="v26PAmt" type="number" min="1" step="1" inputmode="decimal"></div>
+      <div><label for="v26PDate">Payment date</label><input id="v26PDate" type="date" value="${v26Today()}" max="${v26Today()}"></div>
+      <div><label for="v26PMode">Mode</label><select id="v26PMode"><option>Cash</option><option>UPI</option><option>Bank transfer</option><option>Cheque</option><option>Other</option></select></div>
+      <div><label for="v26PRef">Reference no. (optional)</label><input id="v26PRef" autocomplete="off"></div>
+    </div>
+    <label for="v26PRem">Remarks (optional)</label><input id="v26PRem" autocomplete="off">
+    <p class="small muted" style="margin:2px 0 0">Recorded as received by you (<b>${v24e(profile?.full_name || '')}</b>) — record only money you collected yourself.</p>
+    <div id="v26PMsg"></div>
+    <div class="actions" style="margin-top:14px"><button id="v26PBtn" onclick="v26SavePayment('${id}')">Save payment</button><button class="secondary" onclick="v24CloseModal()">Cancel</button></div>`);
+  document.getElementById('v26PAmt')?.focus();
+}
+async function v26SavePayment(id, allowDuplicate) {
+  const amount = Number(document.getElementById('v26PAmt').value);
+  const payment_date = document.getElementById('v26PDate').value;
+  const msg = document.getElementById('v26PMsg');
+  if (!(amount > 0)) { msg.innerHTML = message('Enter an amount greater than 0.'); return; }
+  if (!payment_date) { msg.innerHTML = message('Choose the payment date.'); return; }
+  const s = v26Student(id);
+  if (!allowDuplicate && !confirm(`Save a payment of ₹${v24Money(amount)} for ${s.full_name || 'this student'} on ${v24Date(payment_date)}?\n\nA saved payment cannot be changed or deleted by you.`)) return;
+  const btn = document.getElementById('v26PBtn'); btn.disabled = true;
+  try {
+    await callTeacherFn({ action: 'feeAddPayment', student_id: id, amount, payment_date,
+      payment_mode: document.getElementById('v26PMode').value, reference_no: document.getElementById('v26PRef').value.trim(),
+      remarks: document.getElementById('v26PRem').value.trim(), allow_duplicate: !!allowDuplicate });
+    v24CloseModal(); notify(`Payment of ₹${v24Money(amount)} saved for ${s.full_name || 'the student'}.`);
+    v26AfterFeeChange();
+  } catch (e) {
+    btn.disabled = false;
+    if (/same date and amount/i.test(v24Err(e)) && confirm('A payment with the same date and amount is already saved for this student.\n\nSave this one as an extra payment anyway?')) return v26SavePayment(id, true);
+    msg.innerHTML = message(v24Err(e));
+  }
+}
+function v26FeeForm(id) {
+  const s = v26Student(id), f = V24.fees?.get?.(id);
+  v24Modal(`<h3>Course fee — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3>
+    <div class="grid">
+      <div><label for="v26FTotal">Total course fee (₹)</label><input id="v26FTotal" type="number" min="0" step="1" value="${f ? Number(f.total) : ''}" oninput="v26FeeNet()"></div>
+      <div><label for="v26FDisc">Discount (₹)</label><input id="v26FDisc" type="number" min="0" step="1" value="${f ? Number(f.discount || 0) : 0}" oninput="v26FeeNet()"></div>
+    </div>
+    <p id="v26FNet" class="small"></p>
+    <div id="v26FMsg"></div>
+    <div class="actions" style="margin-top:14px"><button id="v26FBtn" onclick="v26SaveFee('${id}')">Save fee</button><button class="secondary" onclick="v24CloseModal()">Cancel</button></div>`);
+  v26FeeNet();
+}
+function v26FeeNet() {
+  const t = Number(document.getElementById('v26FTotal')?.value || 0), d = Number(document.getElementById('v26FDisc')?.value || 0);
+  const el = document.getElementById('v26FNet'); if (el) el.innerHTML = d > t ? '<span style="color:#b91c1c">The discount is more than the fee.</span>' : `Fee to pay: <b>₹${v24Money(t - d)}</b>`;
+}
+async function v26SaveFee(id) {
+  const total = Number(document.getElementById('v26FTotal').value || 0), discount = Number(document.getElementById('v26FDisc').value || 0);
+  const msg = document.getElementById('v26FMsg');
+  if (total < 0 || discount < 0 || discount > total) { msg.innerHTML = message('Enter a fee of 0 or more and a discount not larger than the fee.'); return; }
+  const btn = document.getElementById('v26FBtn'); btn.disabled = true;
+  try {
+    await callTeacherFn({ action: 'feeSaveAccount', student_id: id, total_course_fee: total, discount_amount: discount });
+    v24CloseModal(); notify('Fee saved.'); v26AfterFeeChange();
+  } catch (e) { btn.disabled = false; msg.innerHTML = message(v24Err(e)); }
+}
+async function v26FeeHistory(id) {
+  const s = v26Student(id);
+  v24Modal(`<h3>Payments — ${v24e(s.full_name || '')} <span class="small muted">${v24e(s.roll_no || '')}</span></h3><div id="v26H" class="v24-empty">Loading…</div>`);
+  try {
+    const d = await v24Rpc('teacher_student_fee_detail', { p_student: id });
+    const p = d?.payments || [], a = d?.account;
+    const paid = p.reduce((t, x) => t + Number(x.amount || 0), 0);
+    document.getElementById('v26H').outerHTML = `
+      <p>${a ? `Course fee ₹${v24Money(a.total_course_fee)}${Number(a.discount_amount) ? ` − discount ₹${v24Money(a.discount_amount)}` : ''} · Paid ₹${v24Money(paid)} · <b>Due ₹${v24Money(Math.max(0, Number(a.total_course_fee) - Number(a.discount_amount || 0) - paid))}</b>` : 'No fee set yet.'}</p>
+      ${p.length ? `<div class="v24-tw"><table class="v24-t"><thead><tr><th>Date</th><th>Amount (₹)</th><th>Received by</th><th>Mode</th><th>Reference</th><th>Remarks</th></tr></thead><tbody>
+        ${p.map(x => `<tr><td class="nw">${v24Date(x.payment_date)}</td><td>${v24Money(x.amount)}</td><td class="nw"><b>${v24e(x.received_by || '')}</b>${x.received_by_me ? ' ' + v24Chip('info', 'You') : ''}</td><td>${v24e(x.payment_mode || '')}</td><td>${v24e(x.reference_no || '')}</td><td>${v24e(x.remarks || '')}</td></tr>`).join('')}
+      </tbody></table></div>` : '<div class="v24-empty">No payments yet.</div>'}
+      <div class="actions" style="margin-top:14px"><button onclick="v26PaymentForm('${id}')">Record payment</button><button class="secondary" onclick="v24CloseModal()">Close</button></div>`;
+  } catch (e) {
+    const h = document.getElementById('v26H'); if (h) h.outerHTML = message(/does not exist|Could not find/i.test(v24Err(e)) ? 'Payment history needs V26_TEACHER_STUDENTS_FEES.sql. Please ask the Admin to run it.' : v24Err(e));
+  }
 }
 
 /* ============================================================ ADMIN SIDE == */
@@ -718,18 +873,27 @@ async function v24AdminTeachers(el) {
       <p class="small muted">After creating the account, choose the teacher's groups and subjects. Give the teacher the email and password; they log in with “Teacher Login”.</p>
     </div>
     <div class="card"><h2 style="margin-top:0">Teachers (${t.length})</h2>
-      ${t.length ? `<div class="v24-tw"><table class="v24-t"><thead><tr><th>Teacher</th><th>Groups</th><th>Subjects</th><th>Whole-paper access</th><th>Status</th><th></th></tr></thead><tbody>
+      ${t.length ? `<div class="v24-tw"><table class="v24-t"><thead><tr><th>Teacher</th><th>Groups</th><th>Subjects</th><th>Roll No prefix</th><th>Status</th><th></th></tr></thead><tbody>
       ${t.map(x => `<tr><td><b>${v24e(x.full_name || '')}</b><div class="small muted">${v24e(x.email || '')}</div></td>
         <td>${(x.class_ids || []).map(id => v24Chip('info', cName(id))).join(' ') || '<span class="muted small">None</span>'}</td>
         <td>${(x.subject_ids || []).map(id => v24Chip('info', sName(id))).join(' ') || '<span class="muted small">None</span>'}</td>
-        <td>${x.full_bank_access ? v24Chip('ok', 'All subjects') : v24Chip('none', 'Own subjects')}</td>
+        <td class="nw">${x.roll_prefix ? v24Chip('info', x.roll_prefix + '-') : (x.roll_prefix === undefined ? '<span class="small muted">Run V26 SQL</span>' : v24Chip('due', 'Not set'))}${x.students_added ? `<div class="small muted">${x.students_added} student${x.students_added === 1 ? '' : 's'} added</div>` : ''}</td>
         <td>${x.is_active ? v24Chip('ok', 'Active') : v24Chip('off', 'Disabled')}</td>
-        <td class="r"><button class="v24-sm" onclick="v24EditAccess('${x.id}')">Groups &amp; subjects</button>
+        <td class="r"><button class="v24-sm" onclick="v24EditAccess('${x.id}')">Groups, subjects &amp; prefix</button>
           <button class="secondary v24-sm" onclick="v24TeacherPassword('${x.id}')">Password</button>
           <button class="secondary v24-sm" onclick="v24RenameTeacher('${x.id}')">Rename</button>
           <button class="${x.is_active ? 'danger' : 'secondary'} v24-sm" onclick="v24SetTeacherActive('${x.id}',${!x.is_active})">${x.is_active ? 'Disable' : 'Enable'}</button></td></tr>`).join('')}
       </tbody></table></div>` : '<p class="muted">No teacher accounts yet.</p>'}
     </div>`;
+}
+// V26: suggested prefix from the teacher's initials (e.g. Rina Kalita -> RK).
+function v26SuggestPrefix(name) {
+  const w = String(name || '').toUpperCase().replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(Boolean);
+  const p = (w.length > 1 ? w.map(x => x[0]).join('') : (w[0] || 'T').slice(0, 2)).slice(0, 4);
+  const used = new Set((V24.admin.teachers || []).map(t => String(t.roll_prefix || '').toUpperCase()));
+  if (!used.has(p)) return p;
+  for (let i = 2; i < 100; i++) if (!used.has(p + i)) return (p + i).slice(0, 6);
+  return p;
 }
 function v24MakePassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -743,7 +907,7 @@ async function v24CreateTeacher() {
   if (!full_name || !email || password.length < 8) return notify('Enter a name, an email and a password of at least 8 characters.');
   try {
     const r = await v24CallFn(V24_TEACHER_FN, { action: 'createTeacher', full_name, email, password });
-    notify(`Teacher account created for ${full_name}.\nEmail: ${email}\nPassword: ${password}\n\nNow choose the teacher's groups and subjects.`);
+    notify(`Teacher account created for ${full_name}.\nEmail: ${email}\nPassword: ${password}\n\nNow choose the teacher's groups, subjects and Roll No prefix.`);
     await v24AdminHome('teachers');
     if (r.id) v24EditAccess(r.id);
   } catch (e) { notify('Could not create the account: ' + v24Err(e)); }
@@ -754,21 +918,31 @@ function v24EditAccess(id) {
   const mains = V24.admin.classes.filter(c => !c.jnvst_parent_id);
   const subs = p => V24.admin.classes.filter(c => c.jnvst_parent_id === p);
   const box = (id2, name, on, extra = '') => `<label class="v24-check"><input type="checkbox" value="${id2}" data-v24grp ${on ? 'checked' : ''} ${extra}>${v24e(name)}</label>`;
-  v24Modal(`<h3>Groups &amp; subjects — ${v24e(t.full_name || '')}</h3>
+  v24Modal(`<h3>Groups, subjects &amp; Roll No prefix — ${v24e(t.full_name || '')}</h3>
     <p class="small muted" style="margin-top:0">A main group includes all its sub-groups. Tick only a sub-group to limit the teacher to it.</p>
     <b>Groups</b>
     ${mains.map(m => `<div class="v24-group-box">${box(m.id, m.name, has.has(m.id))}${subs(m.id).map(s => `<div style="margin-left:22px">${box(s.id, s.name, has.has(s.id))}</div>`).join('')}</div>`).join('') || '<p class="muted">No groups found.</p>'}
     <b>Subjects</b> <span class="small muted">(the teacher can add questions to these)</span>
     <div class="v24-group-box">${V24.admin.subjects.map(s => `<label class="v24-check"><input type="checkbox" value="${s.id}" data-v24subj ${subj.has(s.id) ? 'checked' : ''}>${v24e(s.name)}</label>`).join('') || '<p class="muted">No subjects found.</p>'}</div>
-    <label class="v24-check" style="margin-top:10px"><input type="checkbox" id="v24FullBank" ${t.full_bank_access ? 'checked' : ''}>Whole-paper access: may use central questions of <b>all</b> subjects in mock tests and question papers</label>
+    <p class="small muted" style="margin:6px 0 0">The teacher sees and uses only the central questions of these subjects. A full 80-question paper needs all four subjects.</p>
+    <b style="display:block;margin-top:12px">Roll No prefix</b> <span class="small muted">(students this teacher adds get Roll Nos like <b>${v24e(t.roll_prefix || v26SuggestPrefix(t.full_name))}-001</b>)</span>
+    <input id="v26Prefix" maxlength="6" style="max-width:160px;text-transform:uppercase" value="${v24e(t.roll_prefix || (t.roll_prefix === null ? v26SuggestPrefix(t.full_name) : ''))}" placeholder="${v24e(v26SuggestPrefix(t.full_name))}">
+    <p class="small muted" style="margin:4px 0 0">1–6 letters or digits, starting with a letter, different for every teacher. Leave empty and the teacher cannot add students.</p>
     <div class="actions" style="margin-top:14px"><button onclick="v24SaveAccess('${id}')">Save</button><button class="secondary" onclick="v24CloseModal()">Cancel</button></div>`);
 }
 async function v24SaveAccess(id) {
   const classes = [...document.querySelectorAll('[data-v24grp]:checked')].map(x => x.value);
   const subjects = [...document.querySelectorAll('[data-v24subj]:checked')].map(x => x.value);
-  const full = !!document.getElementById('v24FullBank')?.checked;
+  const t = V24.admin.teachers.find(x => x.id === id) || {};
+  const prefix = (document.getElementById('v26Prefix')?.value || '').trim().toUpperCase();
+  if (prefix && !/^[A-Z][A-Z0-9]{0,5}$/.test(prefix)) return notify('Roll No prefix: 1 to 6 letters or digits, starting with a letter (for example RK or T2).');
   try {
-    await v24Rpc('admin_set_teacher_access', { p_teacher: id, p_class_ids: classes, p_subject_ids: subjects, p_full_bank: full });
+    await v24Rpc('admin_set_teacher_access', { p_teacher: id, p_class_ids: classes, p_subject_ids: subjects, p_full_bank: false });
+    if (prefix !== String(t.roll_prefix || '')) {
+      if (t.roll_prefix && t.students_added && !confirm(`Change the prefix from ${t.roll_prefix} to ${prefix || '(none)'}?\n\nStudents already added keep their Roll Nos (${t.roll_prefix}-…). Only new students get the new prefix.`)) return;
+      try { await v24Rpc('admin_set_teacher_prefix', { p_teacher: id, p_prefix: prefix }); }
+      catch (e) { return notify('Groups and subjects saved, but the prefix was not: ' + (/does not exist|Could not find/i.test(v24Err(e)) ? 'please run V26_TEACHER_STUDENTS_FEES.sql first.' : v24Err(e))); }
+    }
     v24CloseModal(); notify('Saved.'); v24AdminHome('teachers');
   } catch (e) { notify('Could not save: ' + v24Err(e)); }
 }
@@ -851,54 +1025,6 @@ async function v24AdminRelease1(id) {
   v24AdminHome('release');
 }
 
-/* ------------------------------------- Admin: who wrote each question */
-async function v24AdminAuthorUi() {
-  if (!V24.authorNames) {
-    V24.authorNames = new Map();
-    try { ((await v24Rpc('admin_list_teachers')) || []).forEach(t => V24.authorNames.set(t.id, t.full_name || t.email || 'Teacher')); } catch (_) {}
-  }
-  const cache = (typeof jnvstQbCache !== 'undefined' && jnvstQbCache) || [];
-  const authors = [...new Set(cache.map(q => q.author_id || q.teacher_id).filter(a => a && a !== current.id))];
-  if (!document.getElementById('v24QbAuthorFilter')) {
-    const anchor = document.getElementById('jnvstQbCommonFilter');
-    const cell = anchor && anchor.closest('div');
-    if (cell && cell.parentNode) {
-      const d = document.createElement('div');
-      d.innerHTML = `<label for="v24QbAuthorFilter">Added by</label><select id="v24QbAuthorFilter" onchange="jnvstQbRenderTable()">
-        <option value="">Everyone</option><option value="ME">Me (Admin)</option>${authors.length ? '<option value="TEACHERS">Any teacher</option>' : ''}
-        ${authors.map(a => `<option value="${a}">${v24e(V24.authorNames.get(a) || 'Teacher (removed)')}</option>`).join('')}</select>`;
-      cell.parentNode.insertBefore(d, cell.nextSibling);
-    }
-  }
-  if (typeof jnvstQbRenderTable === 'function') jnvstQbRenderTable(); // draws the table again with the names
-}
-function v24AuthorBadge(q) {
-  const a = q && (q.author_id || q.teacher_id);
-  if (!a || a === current.id) return '';
-  const name = V24.authorNames?.get(a) || 'Teacher';
-  const when = q.reviewed_at ? ` · approved ${v24Date(q.reviewed_at)}` : '';
-  return `<span class="tag v24-author" style="background:#ede9fe;color:#5b21b6;margin:0 0 6px;display:inline-block" title="Written by this teacher; approved into the central bank">👩‍🏫 Added by ${v24e(name)}${when}</span>`;
-}
-function v24DecorateAuthors() {
-  const box = document.getElementById('jnvstQbTable');
-  if (!box || typeof jnvstQbCache === 'undefined' || !V24.authorNames) return;
-  const byId = new Map(jnvstQbCache.map(q => [q.id, q]));
-  box.querySelectorAll('input[onchange^="jnvstQbToggleSelection("]').forEach(cb => {
-    const id = (cb.getAttribute('onchange').match(/jnvstQbToggleSelection\('([^']+)'/) || [])[1];
-    const q = byId.get(id), html = v24AuthorBadge(q);
-    const cell = cb.closest('tr')?.children?.[2];
-    if (html && cell && !cell.querySelector('.v24-author')) cell.insertAdjacentHTML('afterbegin', html + '<br>');
-  });
-  box.querySelectorAll('input[onchange^="jnvstQbTogglePassageGroup("]').forEach(cb => {
-    const gid = (cb.getAttribute('onchange').match(/jnvstQbTogglePassageGroup\('([^']+)'/) || [])[1];
-    const q = jnvstQbCache.find(x => String(x.passage_id || '') === gid || String(x.set_id || '') === gid);
-    const html = v24AuthorBadge(q);
-    const card = cb.closest('div[style*="border:2px"]');
-    const line = card?.querySelector('.small.muted');
-    if (html && line && !card.querySelector('.v24-author')) line.insertAdjacentHTML('afterend', html);
-  });
-}
-
 /* ============================================== hooks into the old tools == */
 (function v24Hooks() {
   const wrap = (name, fn) => {
@@ -920,30 +1046,9 @@ function v24DecorateAuthors() {
   });
 
   // Question Bank: teachers use the "My questions" view.
-  // Admin: also show who wrote each question, with an "Added by" filter.
-  wrap('jnvstQuestionBankHome', async function (orig, args) {
+  wrap('jnvstQuestionBankHome', function (orig, args) {
     if (V24.limited) return v24PortalHome('bank', 'mine');
-    const r = await orig.apply(this, args);
-    try { await v24LoadScope(); if (!V24.scope.missing && !V24.limited) await v24AdminAuthorUi(); } catch (_) {}
-    return r;
-  });
-
-  // Admin Question Bank: filter by who wrote each question.
-  wrap('jnvstQbFilteredRows', function (orig, args) {
-    const rows = orig.apply(this, args);
-    const f = document.getElementById('v24QbAuthorFilter')?.value || '';
-    if (!f || V24.limited) return rows;
-    return rows.filter(q => {
-      const a = q.author_id || q.teacher_id;
-      if (f === 'ME') return a === current.id;
-      if (f === 'TEACHERS') return a !== current.id;
-      return a === f;
-    });
-  });
-  wrap('jnvstQbRenderTable', function (orig, args) {
-    const r = orig.apply(this, args);
-    if (!V24.limited) { try { v24DecorateAuthors(); } catch (_) {} }
-    return r;
+    return orig.apply(this, args);
   });
 
   // Result release: teachers send a request instead.
