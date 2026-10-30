@@ -184,6 +184,7 @@ function explFor(it,D){
 const passageOf=row=>({title:String(row._passageTitle||row.passage_title||'').trim(),text:String(row._passageText||row.passage_text||'').trim(),id:row._passageGroup||row.passage_id||''});
 
 function whereLine(it,D){
+  if(D.bankMode)return it.chips||'';
   if(D.custom)return `In ${it.papers} student paper${it.papers===1?'':'s'}`;
   return D.sets.filter(s=>it.where.has(s)).map(s=>`<span class="sn">Set ${e(s)} · Q${it.where.get(s)}</span>`).join('');
 }
@@ -210,7 +211,7 @@ function questionPage(it,idx,total,D,o){
   const optHtml=anyOpt?`<div class="opts${longOpts?' one':''}">${opts.map(x=>`<div class="opt${x.ok?' ok':''}"><span class="L">${x.L}</span><span class="ot">${fmt(x.v)}</span>${o.count?`<span class="cnt">${x.n}</span>`:''}${x.ok?'<span class="tick">✓</span>':''}</div>`).join('')}</div>`
     :(o.count||o.ans)?`<div class="opts small4">${opts.map(x=>`<div class="opt${x.ok?' ok':''}"><span class="L">${x.L}</span>${o.count?`<span class="cnt">${x.n} chose</span>`:''}${x.ok?'<span class="tick">✓</span>':''}</div>`).join('')}</div>`:'';
   const ex=o.expl?explFor(it,D).map(([l,t])=>`<div class="ex"><b>${e(l)}:</b> ${fmt(t)}</div>`).join(''):'';
-  const side=`<div class="side">
+  const side=D.bankMode?'':`<div class="side">
       <div class="stat"><span class="sw">✗ ${it.wrong.length}</span><span class="ss">— ${it.skip.length}</span><span class="sr">✓ ${it.right.length}</span></div>
       <div class="small2">${attempted} student${attempted===1?'':'s'} · wrong · skipped · correct</div>
       ${(o.names||o.right)?`<div class="lists">${o.names?`
@@ -243,14 +244,15 @@ function coverPage(list,D,o){
 }
 
 function docHtml(D,o){
-  let list=D.items.filter(it=>o.which==='all'||it.wrong.length+it.skip.length>0);
-  list.sort((a,b)=>a.first-b.first);
-  if(o.order==='most')list.sort((a,b)=>(b.wrong.length+b.skip.length)-(a.wrong.length+a.skip.length)||a.first-b.first);
+  let list=D.bankMode?D.items:D.items.filter(it=>o.which==='all'||it.wrong.length+it.skip.length>0);
+  if(!D.bankMode){list.sort((a,b)=>a.first-b.first);
+    if(o.order==='most')list.sort((a,b)=>(b.wrong.length+b.skip.length)-(a.wrong.length+a.skip.length)||a.first-b.first);}
   const wide=o.shape==='wide';const W=297,H=wide?167:210;
-  const pages=[coverPage(list,D,o)];const shown=new Set();
+  const pages=[D.bankMode?bankCoverPage(list,D):coverPage(list,D,o)];const shown=new Set();
   list.forEach((it,i)=>{const p=passageOf(it.row||{});const pk=p.id||p.title;
     if(p.text&&pk&&!shown.has(pk)){shown.add(pk);pages.push(passagePage(p,D));}
     pages.push(questionPage(it,i+1,list.length,D,o));});
+  if(D.bankMode&&o.key)pages.push(...answerKeyPages(list,D));
   const css=`@page{size:${W}mm ${H}mm;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala UI',sans-serif;color:#0f172a}
 .pg{width:${W}mm;height:${H}mm;background:#fff;margin:6mm auto;display:flex;flex-direction:column;overflow:hidden;page-break-after:always;break-after:page}
@@ -284,7 +286,8 @@ body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala 
 .who.ok{border-color:#bbf7d0;background:#f0fdf4}.okh{color:#166534}
 .who i{font-style:normal;font-weight:700;color:#b91c1c}.who small{color:#64748b}.none{color:#94a3b8}
 .cover .ct{font-size:1.1em;font-weight:800;color:#17365D}.cover .cs{font-size:.5em;color:#475569;margin:2mm 0 4mm}
-table.ix{border-collapse:collapse;font-size:.42em;width:100%}table.ix td,table.ix th{border:.3mm solid #cbd5e1;padding:1mm 2mm;text-align:left}table.ix th{background:#f1f5f9}
+table.ix{border-collapse:collapse;font-size:.42em;width:100%}
+.key{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm 6mm;font-size:.8em}.key div{border-bottom:.3mm solid #e2e8f0;padding:.8mm 0;display:flex;gap:2mm}.key b{min-width:9mm;color:#1e3a8a}.key i{font-style:normal;font-weight:800;color:#166534}.key small{color:#64748b;font-size:.75em;align-self:center}table.ix td,table.ix th{border:.3mm solid #cbd5e1;padding:1mm 2mm;text-align:left}table.ix th{background:#f1f5f9}
 mjx-container{font-size:100%!important}
 .bn{position:sticky;top:0;z-index:5;font:14px Arial;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .bn button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer}.bn button:disabled{background:#94a3b8;cursor:wait}`;
@@ -330,6 +333,97 @@ ${pages.join('')}
 <\/script></body></html>`;
 }
 
+/* ======================= V28: discussion PDF from the question bank =======================
+   The teacher ticks questions in the Question Bank; every other question of the same
+   Variation Group (same subject) is added after it, one question per page, answers not
+   marked. Optional answer key at the end. */
+const BQ_COLS='id,teacher_id,subject_id,lesson_id,topic,part_code,language,question_text,option_a,option_b,option_c,option_d,correct_option,image_url,passage_id,passage_title,passage_text,question_order,variation_group,active,created_at';
+const vgOf=q=>String(q&&q.variation_group||'').trim();
+function bankDiscussionPdf(ids){
+  ids=[...new Set((ids||[]).filter(Boolean))];
+  if(!ids.length)return (typeof notify==='function'?notify:alert)('Tick the questions you want to discuss first.');
+  const old=q$('omrDiscDlg');if(old)old.remove();
+  const d=document.createElement('div');d.id='omrDiscDlg';
+  d.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  d.innerHTML=`<div class="card" style="max-width:520px;width:100%;margin:0;max-height:92vh;overflow:auto">
+    <h2 style="margin-top:0">📽 Discussion PDF</h2>
+    <p class="small muted" style="margin-top:0">${ids.length} question${ids.length===1?'':'s'} chosen. One wide page per question in big letters; the answer is not shown on the pages.</p>
+    <label>Title (on every page)</label><input id="bdTitle" value="Class discussion" maxlength="80">
+    <label>Page shape</label><select id="bdShape"><option value="a4">A4 landscape (print or projector)</option><option value="wide">16:9 widescreen (projector / smart board)</option></select>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="bdVar" type="checkbox" style="width:auto" checked> Add all variations of each Variation Group</label>
+    <label>Variations in</label><select id="bdLang"><option value="same">The same medium as the chosen question (English / Assamese / Common)</option><option value="all">Every medium</option></select>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="bdSpace" type="checkbox" style="width:auto" checked> Leave writing space for the pen tablet</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="bdKey" type="checkbox" style="width:auto"> Answer key at the end (last page)</label>
+    <div class="actions" style="margin-top:14px"><button id="bdGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('omrDiscDlg').remove()">Cancel</button></div>
+    <div id="bdMsg" class="small muted"></div></div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',ev=>{if(ev.target===d)d.remove();});
+  q$('bdGo').onclick=()=>buildBank(ids,{title:q$('bdTitle').value.trim()||'Class discussion',shape:q$('bdShape').value,vars:q$('bdVar').checked,lang:q$('bdLang').value,space:q$('bdSpace').checked,key:q$('bdKey').checked,ans:false,count:false,expl:false,names:false,right:false});
+}
+const sameMedium=(a,b)=>{a=String(a||'').toUpperCase();b=String(b||'').toUpperCase();return !a||!b||a===b||a==='COMMON'||b==='COMMON';};
+async function collectBank(ids,o){
+  const chosen=[];
+  for(let i=0;i<ids.length;i+=150){const {data,error}=await sb.from('mock_question_bank').select(BQ_COLS).in('id',ids.slice(i,i+150));if(error)throw error;chosen.push(...(data||[]));}
+  if(!chosen.length)throw new Error('The chosen questions were not found (or you cannot use them).');
+  const pos=new Map(ids.map((id,i)=>[id,i]));chosen.sort((a,b)=>pos.get(a.id)-pos.get(b.id));
+  // every question of the groups involved (the database shows each teacher only what they may use)
+  const groups=[...new Set(chosen.map(vgOf).filter(Boolean))];const members=new Map();
+  if(o.vars&&groups.length){
+    const rows=[];
+    for(let i=0;i<groups.length;i+=50){const {data,error}=await sb.from('mock_question_bank').select(BQ_COLS).in('variation_group',groups.slice(i,i+50));if(error)throw error;rows.push(...(data||[]));}
+    rows.forEach(r=>{const k=vgOf(r)+'|'+(r.subject_id||'');if(!members.has(k))members.set(k,[]);members.get(k).push(r);});
+    members.forEach(list=>list.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))||String(a.id).localeCompare(String(b.id))));
+  }
+  const items=[],used=new Set();let nChosen=0,nVar=0;
+  const picked=new Set(ids);
+  const blankStats={where:new Map(),wrong:[],skip:[],right:[],pick:{A:0,B:0,C:0,D:0}};
+  const chip=t=>`<span class="sn">${e(t)}</span>`;
+  chosen.forEach(q=>{
+    if(used.has(q.id))return;
+    const g=vgOf(q),all=g&&o.vars?(members.get(g+'|'+(q.subject_id||''))||[q]).filter(r=>r.id===q.id||(r.active!==false&&(o.lang==='all'||sameMedium(r.language,q.language)))):[q];
+    if(!all.some(r=>r.id===q.id))all.unshift(q);
+    const order=[q,...all.filter(r=>r.id!==q.id&&!used.has(r.id))];
+    order.forEach((r,k)=>{used.add(r.id);const isC=k===0||picked.has(r.id);isC?nChosen++:nVar++;
+      items.push({...blankStats,key:r.id,row:r,correct:String(r.correct_option||'').toUpperCase(),group:g,chosen:isC,
+        chips:(isC?chip('Chosen question'):chip('Variation'))+(g&&order.length>1?chip(`Group ${g} · ${k+1} of ${order.length}`):g?chip(`Group ${g}`):'')});});
+  });
+  return {bankMode:true,items,nChosen,nVar,title:o.title,subject:'',bank:new Map(),language:'',groups:new Set(items.map(it=>it.group).filter(Boolean)).size};
+}
+function bankCoverPage(list,D){
+  const date=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  return `<section class="pg cover"><div class="hd"><div class="qn">📽</div><div class="wh"><span class="sn">Class discussion</span></div><div class="tt">SWARUP SIR'S KNOWLEDGE HUB</div></div>
+    <div class="bd"><div class="main fit"><div class="ct">${e(D.title)}</div>
+      <div class="cs">${date} · ${list.length} question${list.length===1?'':'s'} · ${D.nChosen} chosen${D.nVar?` + ${D.nVar} variation${D.nVar===1?'':'s'}`:''}${D.groups?` · ${D.groups} Variation Group${D.groups===1?'':'s'}`:''}</div>
+      <table class="ix"><thead><tr><th>Page</th><th>Question</th><th>Topic</th><th>Variation Group</th></tr></thead><tbody>
+      ${list.map((it,i)=>`<tr><td>${i+1}</td><td>${it.chosen?'Chosen':'↳ variation'}</td><td>${e(it.row.topic||it.row.part_code||'')}</td><td>${e(it.group||'—')}</td></tr>`).join('')}
+      </tbody></table></div></div></section>`;
+}
+function answerKeyPages(list,D){
+  const per=60,out=[];
+  for(let s0=0;s0<list.length;s0+=per){
+    const part=list.slice(s0,s0+per);
+    out.push(`<section class="pg"><div class="hd"><div class="qn">🔑</div><div class="wh"><span class="sn">Answer key${list.length>per?` (${s0+1}–${s0+part.length})`:''}</span></div><div class="tt">${e(D.title)}</div></div>
+      <div class="bd"><div class="main fit"><div class="key">${part.map((it,i)=>`<div><b>${s0+i+1}.</b><i>${e(it.correct||'—')}</i>${it.group?`<small>${e(it.group)}</small>`:''}</div>`).join('')}</div></div></div></section>`);
+  }
+  return out;
+}
+async function buildBank(ids,o){
+  const msg=q$('bdMsg'),btn=q$('bdGo');
+  const w=window.open('','_blank');
+  if(!w){if(msg)msg.textContent='Your browser blocked the pop-up. Please allow pop-ups for this site and try again.';return;}
+  try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing the discussion pages…</body>');}catch(_){}
+  if(btn)btn.disabled=true;if(msg)msg.textContent='Collecting the questions and their variations…';
+  try{
+    const D=await collectBank(ids,o);
+    w.document.open();w.document.write(docHtml(D,o));w.document.close();
+    const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();
+  }catch(err){
+    try{w.close();}catch(_){}
+    if(msg)msg.textContent='Could not prepare the PDF: '+(err.message||err);
+    if(btn)btn.disabled=false;
+  }
+}
+
 async function build(base,o){
   const msg=q$('odMsg'),btn=q$('odGo');
   const w=window.open('','_blank');
@@ -350,5 +444,6 @@ async function build(base,o){
 
 root.omrDiscussionPdf=omrDiscussionPdf;
 root.omrDiscPick=omrDiscPick;
-root.__omrDiscussion={collect,docHtml};
+root.bankDiscussionPdf=bankDiscussionPdf;
+root.__omrDiscussion={collect,docHtml,collectBank};
 })(typeof window!=='undefined'?window:globalThis);

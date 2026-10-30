@@ -464,7 +464,9 @@ function v24BankCentral(body) {
       <label>Search<input id="v24CSearch" type="search" placeholder="Words in the question" onkeydown="if(event.key==='Enter')v24LoadCentral(0)"></label>
       <button class="secondary" onclick="v24LoadCentral(0)">Search</button>
     </div>
+    <div class="actions" style="margin:0 0 10px;align-items:center"><button onclick="v28CentralPdf()">📽 Discussion PDF (<span id="v28CCount">${(V24.cSel || new Set()).size}</span> ticked)</button><button class="secondary" onclick="V24.cSel=new Set();v24LoadCentral(0)">Clear ticks</button><span class="small muted">Tick questions to discuss in class; all variations of their groups are added. Ticks stay when you change filters.</span></div>
     <div id="v24CentralList"><div class="v24-empty">Loading…</div></div>`;
+  V24.cSel = V24.cSel || new Set();
   v24CentralLessons();
   v24LoadCentral(0);
 }
@@ -496,8 +498,8 @@ async function v24LoadCentral(page) {
   const rows = V24.central.rows;
   box.innerHTML = rows.length ? `
     <p class="small muted" style="margin:0 0 8px">${V24.central.count} question${V24.central.count === 1 ? '' : 's'}</p>
-    <div class="v24-tw"><table class="v24-t"><thead><tr><th>Lesson</th><th>Question</th><th>Type</th><th>Language</th><th>Added by</th><th></th></tr></thead><tbody>
-    ${rows.map((r, i) => `<tr><td class="nw">${v24e(v24LessonLabel(r.lesson_id))}</td>
+    <div class="v24-tw"><table class="v24-t"><thead><tr><th><input type="checkbox" aria-label="Tick all shown" style="width:auto;margin:0" onchange="v28CentralAll(this.checked)"></th><th>Lesson</th><th>Question</th><th>Type</th><th>Language</th><th>Added by</th><th></th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr><td><input type="checkbox" aria-label="Tick question" style="width:auto;margin:0" data-v28c="${r.id}" ${V24.cSel?.has(r.id) ? 'checked' : ''} onchange="v28CentralTick('${r.id}',this.checked)"></td><td class="nw">${v24e(v24LessonLabel(r.lesson_id))}</td>
       <td><div class="v24-q">${r.passage_title ? v24Chip('info', 'Passage: ' + r.passage_title) + '<br>' : ''}${r.image_url ? '🖼 ' : ''}${v24Math(String(r.question_text || '').slice(0, 300))}</div></td>
       <td class="nw">${v24e(v24PartLabel(r.part_code))}</td><td class="nw">${v24e(r.language || '—')}</td>
       <td class="nw">${r.author_id === current.id ? 'You' : (V24.adminIds.includes(r.author_id) ? 'Admin' : 'Teacher')}</td>
@@ -507,6 +509,21 @@ async function v24LoadCentral(page) {
     : '<div class="v24-empty">No questions match these filters.</div>';
   v24Typeset(box);
 }
+/* V28: discussion PDF of ticked questions (+ all variations of their groups). */
+function v28CentralTick(id, on) { V24.cSel = V24.cSel || new Set(); on ? V24.cSel.add(id) : V24.cSel.delete(id); const c = document.getElementById('v28CCount'); if (c) c.textContent = V24.cSel.size; }
+function v28CentralAll(on) { document.querySelectorAll('[data-v28c]').forEach(cb => { cb.checked = on; v28CentralTick(cb.getAttribute('data-v28c'), on); }); }
+function v28CentralPdf() {
+  const sel = V24.cSel || new Set(); if (!sel.size) return notify('Tick the questions you want to discuss first.');
+  if (typeof bankDiscussionPdf !== 'function') return notify('Please ask the Admin to upload the new omr-discussion.js.');
+  const shown = (V24.central.rows || []).map(r => r.id).filter(id => sel.has(id));
+  bankDiscussionPdf(shown.concat([...sel].filter(id => !shown.includes(id))));
+}
+function v28MinePdf() {
+  const ids = [...V24.selected]; if (!ids.length) return notify('Tick your questions first.');
+  if (typeof bankDiscussionPdf !== 'function') return notify('Please ask the Admin to upload the new omr-discussion.js.');
+  const order = (V24.mine || []).map(q => q.id); bankDiscussionPdf(ids.sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+}
+
 function v24PreviewCentral(i) {
   const q = V24.central.rows[i]; if (!q) return;
   v24Modal(`<h3>${v24e(v24SubjectName(q.subject_id))} · ${v24e(v24LessonLabel(q.lesson_id))}</h3>
@@ -537,6 +554,7 @@ function v24RenderMine(body) {
       <button onclick="v24SubmitSelected()">Send selected for approval</button>
       <button class="secondary" onclick="v24WithdrawSelected()">Take back selected</button>
       <button class="danger" onclick="v24DeleteSelected()">Delete selected</button>
+      <button onclick="v28MinePdf()">📽 Discussion PDF</button>
       <span class="small muted" id="v24SelCount">0 selected</span>
     </div>
     <p class="small muted" style="margin:0 0 10px">A passage and its questions, and the language versions of one question, are always sent and reviewed together.</p>
