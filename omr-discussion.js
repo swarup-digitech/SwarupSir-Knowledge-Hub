@@ -43,21 +43,90 @@ function omrDiscussionPdf(base){
     <label style="display:flex;gap:8px;align-items:center"><input id="odRight" type="checkbox" style="width:auto" checked> Show names of students who answered correctly</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="odExpl" type="checkbox" style="width:auto"> Show the explanation</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="odSpace" type="checkbox" style="width:auto" checked> Leave writing space for the pen tablet</label>
+    <div style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:10px">
+      <label style="margin:0">Students to include <span id="odStuCount" class="small muted"></span></label>
+      <div class="small muted" style="margin:2px 0 6px">Only the ticked students are used: their names, the option counts and (with “Only questions someone got wrong”) which questions get a page.</div>
+      <div id="odStu"><div class="small muted">Loading students…</div></div>
+    </div>
     <div class="actions" style="margin-top:14px"><button id="odGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('omrDiscDlg').remove()">Cancel</button></div>
     <div id="odMsg" class="small muted"></div></div>`;
   document.body.appendChild(d);
   d.addEventListener('click',ev=>{if(ev.target===d)d.remove();});
-  q$('odGo').onclick=()=>build(base,{shape:q$('odShape').value,which:q$('odWhich').value,order:q$('odOrder').value,
-    ans:q$('odAns').checked,count:q$('odCount').checked,names:q$('odNames').checked,right:!!(q$('odRight')&&q$('odRight').checked),expl:q$('odExpl').checked,space:q$('odSpace').checked});
+  q$('odGo').onclick=()=>{
+    const only=picked();
+    if(only&&!only.size){const m=q$('odMsg');if(m)m.textContent='Tick at least one student.';return;}
+    if(only)savePick(base,only);
+    build(base,{shape:q$('odShape').value,which:q$('odWhich').value,order:q$('odOrder').value,
+      ans:q$('odAns').checked,count:q$('odCount').checked,names:q$('odNames').checked,right:!!(q$('odRight')&&q$('odRight').checked),expl:q$('odExpl').checked,space:q$('odSpace').checked,only});
+  };
+  loadStudents(base).catch(err=>{const b=q$('odStu');if(b)b.innerHTML=`<div class="small muted">Could not load the student list (${e(err.message||err)}). All students will be included.</div>`;});
 }
 
+/* ------------------------------ which students ------------------------------ */
+// Students with imported results for this paper, with their group, ticked by default
+// (or as last time for this paper).
+let STU=[];
+const PICK_KEY=b=>'skh_disc_students_'+b;
+function savePick(base,set){try{localStorage.setItem(PICK_KEY(base),JSON.stringify([...set]));}catch(_){}}
+function loadPick(base){try{const v=JSON.parse(localStorage.getItem(PICK_KEY(base))||'null');return Array.isArray(v)?new Set(v):null;}catch(_){return null;}}
+async function loadStudents(base){
+  const rows=await fetchAll((a,b)=>sb.from('omr_responses').select('student_id').eq('paper_base_serial',base).eq('question_no',1).order('id').range(a,b));
+  const ids=[...new Set(rows.map(r=>String(r.student_id)))];
+  const people=new Map(),groups=new Map();
+  for(let i=0;i<ids.length;i+=150){
+    const part=ids.slice(i,i+150);
+    try{const {data}=await sb.from('profiles').select('id,full_name,roll_no').in('id',part);(data||[]).forEach(p=>people.set(String(p.id),p));}catch(_){}
+    try{const {data}=await sb.from('class_students').select('student_id,class_id').in('student_id',part);(data||[]).forEach(m=>{const k=String(m.student_id);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(String(m.class_id));});}catch(_){}
+  }
+  const cids=[...new Set([...groups.values()].flat())],cls=new Map();
+  for(let i=0;i<cids.length;i+=150){try{const {data}=await sb.from('classes').select('id,name,jnvst_parent_id').in('id',cids.slice(i,i+150));(data||[]).forEach(c=>cls.set(String(c.id),c));}catch(_){}}
+  const prev=loadPick(base);
+  STU=ids.map(id=>{const p=people.get(id)||{};const gs=(groups.get(id)||[]).map(g=>cls.get(g)).filter(Boolean);
+    const sub=gs.find(c=>c.jnvst_parent_id)||gs[0];
+    return {id,name:p.full_name||'',roll:p.roll_no||'',group:sub?sub.name:'',on:prev?prev.has(id):true};})
+    .sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true}));
+  paintStudents();
+}
+function paintStudents(){
+  const box=q$('odStu');if(!box)return;
+  const groups=[...new Set(STU.map(s=>s.group).filter(Boolean))].sort();
+  box.innerHTML=`<div class="actions" style="margin:0 0 6px;align-items:center;gap:6px">
+      <button type="button" class="secondary" style="padding:5px 10px" onclick="omrDiscPick('all')">All</button>
+      <button type="button" class="secondary" style="padding:5px 10px" onclick="omrDiscPick('none')">None</button>
+      ${groups.length>1?`<select style="width:auto;margin:0" onchange="omrDiscPick('group',this.value);this.value=''"><option value="">Only one group…</option>${groups.map(g=>`<option>${e(g)}</option>`).join('')}</select>`:''}
+      <input id="odStuQ" type="search" placeholder="Search name / roll" style="width:auto;flex:1;min-width:120px;margin:0" oninput="omrDiscPick('search')">
+    </div>
+    <div id="odStuList" style="max-height:220px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:4px 8px">
+      ${STU.map((s,i)=>`<label data-i="${i}" style="display:flex;gap:8px;align-items:center;margin:3px 0;font-weight:400"><input type="checkbox" style="width:auto;margin:0" ${s.on?'checked':''} onchange="omrDiscPick('one',${i},this.checked)"><b style="min-width:52px">${e(s.roll||'—')}</b><span style="flex:1">${e(s.name||'Student')}</span><span class="small muted">${e(s.group)}</span></label>`).join('')||'<div class="small muted">No students found.</div>'}
+    </div>`;
+  countStudents();
+}
+function countStudents(){const c=q$('odStuCount');if(c)c.textContent=`(${STU.filter(s=>s.on).length} of ${STU.length} ticked)`;}
+function omrDiscPick(kind,a,b){
+  if(kind==='all'||kind==='none')STU.forEach(s=>{s.on=kind==='all';});
+  else if(kind==='group')STU.forEach(s=>{s.on=s.group===a;});
+  else if(kind==='one'){if(STU[a])STU[a].on=!!b;countStudents();return;}
+  else if(kind==='search'){
+    const q=String(q$('odStuQ')?.value||'').trim().toLowerCase();
+    document.querySelectorAll('#odStuList label[data-i]').forEach(l=>{const s=STU[+l.dataset.i];l.style.display=!q||String(s.name).toLowerCase().includes(q)||String(s.roll).toLowerCase().includes(q)?'':'none';});
+    return;
+  }
+  document.querySelectorAll('#odStuList input[type=checkbox]').forEach((cb,i)=>{cb.checked=!!(STU[i]&&STU[i].on);});
+  countStudents();
+}
+// null = all students (list not loaded or everyone ticked)
+function picked(){if(!STU.length)return null;const on=STU.filter(s=>s.on);return on.length===STU.length?null:new Set(on.map(s=>s.id));}
+
 /* ------------------------------- collect the data ------------------------------- */
-async function collect(base){
+async function collect(base,only){
   const recs=(await qpGetHistoryGroupRecords(base)).filter(r=>r.paper_snapshot&&Array.isArray(r.paper_snapshot.rows));
   if(!recs.length)throw new Error('The question paper of this exam was not found in Generated History.');
   const resp=await fetchAll((a,b)=>sb.from('omr_responses').select('student_id,set_code,question_no,mock_question_id,selected_option,correct_option,is_correct')
     .eq('paper_base_serial',base).order('id').range(a,b));
   if(!resp.length)throw new Error('No OMR results are imported for this paper yet.');
+  const totalStudents=new Set(resp.map(x=>String(x.student_id))).size;
+  if(only){const all=resp.splice(0);all.forEach(x=>{if(only.has(String(x.student_id)))resp.push(x);});
+    if(!resp.length)throw new Error('None of the chosen students has a result for this paper.');}
   const custom=recs.some(isCustomRec);
   const bySet=new Map(),byStudent=new Map();
   recs.forEach(r=>{if(isCustomRec(r))byStudent.set(String(r.paper_snapshot.student_id||''),r);else if(!bySet.has(setOf(r)))bySet.set(setOf(r),r);});
@@ -100,7 +169,7 @@ async function collect(base){
   }
   const first=recs[0];
   return {base,custom,recs,items:[...Q.values()],bank,title:first.title||'Question paper',subject:first.subject||'',language:String(first.language||'').toUpperCase(),
-    students:new Set(resp.map(x=>x.student_id)).size,sets:[...bySet.keys()].sort()};
+    students:new Set(resp.map(x=>x.student_id)).size,totalStudents,sets:[...bySet.keys()].sort()};
 }
 
 /* ----------------------------------- pages ----------------------------------- */
@@ -167,7 +236,7 @@ function coverPage(list,D,o){
   const tot=D.items.length;
   return `<section class="pg cover"><div class="hd"><div class="qn">📽</div><div class="wh"><span class="sn">Class discussion</span></div><div class="tt">SWARUP SIR'S KNOWLEDGE HUB</div></div>
     <div class="bd"><div class="main fit"><div class="ct">${e(D.title)}</div>
-      <div class="cs">${e(D.subject)} · ${D.students} students · ${tot} questions · ${list.length} on the following pages · <code>${e(D.base)}</code></div>
+      <div class="cs">${e(D.subject)} · ${D.totalStudents&&D.totalStudents>D.students?`${D.students} of ${D.totalStudents} students (chosen)`:`${D.students} students`} · ${tot} questions · ${list.length} on the following pages · <code>${e(D.base)}</code></div>
       <table class="ix"><thead><tr><th>Page</th><th>${D.custom?'Asked in':'Question no.'}</th><th>✗ Wrong</th><th>— Skipped</th><th>✓ Correct</th></tr></thead><tbody>
       ${list.map((it,i)=>`<tr><td>${i+1}</td><td>${D.custom?it.papers+' papers':D.sets.filter(s=>it.where.has(s)).map(s=>s+'·'+it.where.get(s)).join('  ')}</td><td>${it.wrong.length}</td><td>${it.skip.length}</td><td>${it.right.length}</td></tr>`).join('')}
       </tbody></table></div></div></section>`;
@@ -268,7 +337,7 @@ async function build(base,o){
   try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing the class discussion pages…</body>');}catch(_){}
   if(btn)btn.disabled=true;if(msg)msg.textContent='Collecting results…';
   try{
-    const D=await collect(base);
+    const D=await collect(base,o.only||null);
     const html=docHtml(D,o);
     w.document.open();w.document.write(html);w.document.close();
     const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();
@@ -280,5 +349,6 @@ async function build(base,o){
 }
 
 root.omrDiscussionPdf=omrDiscussionPdf;
+root.omrDiscPick=omrDiscPick;
 root.__omrDiscussion={collect,docHtml};
 })(typeof window!=='undefined'?window:globalThis);
