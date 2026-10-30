@@ -461,6 +461,7 @@ function v24BankCentral(body) {
       <label>Subject<select id="v24CSubj" onchange="v24CentralLessons();v24LoadCentral(0)"><option value="">All my subjects</option>${vis.map(s => `<option value="${s.id}">${v24e(s.name)}</option>`).join('')}</select></label>
       <label>Lesson<select id="v24CLesson" onchange="v24LoadCentral(0)"><option value="">All lessons</option></select></label>
       <label>Type<select id="v24CPart" onchange="v24LoadCentral(0)"><option value="">All types</option>${V24_PARTS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+      <label>Language<select id="v24CLang" onchange="V24.lang=this.value;v24LoadCentral(0)"><option value="">All languages</option>${[['ENGLISH', 'English'], ['ASSAMESE', 'Assamese'], ['COMMON', 'Common (MAT)']].map(([k, l]) => `<option value="${k}"${V24.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>Search<input id="v24CSearch" type="search" placeholder="Words in the question" onkeydown="if(event.key==='Enter')v24LoadCentral(0)"></label>
       <button class="secondary" onclick="v24LoadCentral(0)">Search</button>
     </div>
@@ -491,6 +492,8 @@ async function v24LoadCentral(page) {
   q = subj ? q.eq('subject_id', subj) : q.in('subject_id', V24.mySubjects.map(s => s.id));
   if (lesson) q = q.eq('lesson_id', lesson);
   if (part) q = q.eq('part_code', part);
+  const lang = document.getElementById('v24CLang')?.value || '';   // V28.1: language filter
+  if (lang) q = q.eq('language', lang);
   if (search) q = q.ilike('question_text', `%${search.replace(/[%_]/g, '')}%`);
   const { data, error, count } = await q.order('created_at', { ascending: false }).range(from, from + size - 1);
   if (error) { box.innerHTML = message(error.message); return; }
@@ -546,10 +549,12 @@ function v24RenderMine(body) {
   const all = V24.mine;
   const statuses = [['all', 'All', 'info'], ['private', 'Private', 'private'], ['pending', 'Waiting for approval', 'pending'], ['returned', 'Returned', 'returned'], ['approved', 'In central bank', 'approved']];
   const n = s => s === 'all' ? all.length : all.filter(q => q.approval_status === s).length;
-  const rows = V24.mineFilter === 'all' ? all : all.filter(q => q.approval_status === V24.mineFilter);
+  const rows = (V24.mineFilter === 'all' ? all : all.filter(q => q.approval_status === V24.mineFilter))
+    .filter(q => !V24.lang || String(q.language || '').toUpperCase() === V24.lang);   // V28.1: language filter
   const label = { private: 'Private', pending: 'Waiting for approval', returned: 'Returned', approved: 'In central bank' };
   body.innerHTML = `
     <div>${statuses.map(([k, l, c]) => `<button type="button" class="v24-chip v24-${c} v24-chipbtn" aria-pressed="${V24.mineFilter === k}" onclick="V24.mineFilter='${k}';v24RenderMine()">${l} · ${n(k)}</button>`).join('')}</div>
+    <div class="v24-filters" style="margin:8px 0 0"><label>Language<select id="v24MLang" onchange="V24.lang=this.value;v24RenderMine()"><option value="">All languages</option>${[['ENGLISH', 'English'], ['ASSAMESE', 'Assamese'], ['COMMON', 'Common (MAT)']].map(([k, l]) => `<option value="${k}"${V24.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>
     <div class="actions" style="margin:6px 0 12px;align-items:center">
       <button onclick="v24SubmitSelected()">Send selected for approval</button>
       <button class="secondary" onclick="v24WithdrawSelected()">Take back selected</button>

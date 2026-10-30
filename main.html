@@ -339,7 +339,7 @@ function loadTeacherApp(){
                    g.onload=g.onerror=()=>{
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
-                    v.src="teacher-portal.js?v=8";
+                    v.src="teacher-portal.js?v=9";
                     v.onload=v.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
                     document.head.appendChild(v);
                    };
