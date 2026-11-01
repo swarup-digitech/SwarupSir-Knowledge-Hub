@@ -185,6 +185,7 @@ const passageOf=row=>({title:String(row._passageTitle||row.passage_title||'').tr
 
 function whereLine(it,D){
   if(D.bankMode)return it.chips||'';
+  if(D.single)return `<span class="sn">Q${it.first}</span>`;   // V31: online assignment (one paper)
   if(D.custom)return `In ${it.papers} student paper${it.papers===1?'':'s'}`;
   return D.sets.filter(s=>it.where.has(s)).map(s=>`<span class="sn">Set ${e(s)} · Q${it.where.get(s)}</span>`).join('');
 }
@@ -239,7 +240,7 @@ function coverPage(list,D,o){
     <div class="bd"><div class="main fit"><div class="ct">${e(D.title)}</div>
       <div class="cs">${e(D.subject)} · ${D.totalStudents&&D.totalStudents>D.students?`${D.students} of ${D.totalStudents} students (chosen)`:`${D.students} students`} · ${tot} questions · ${list.length} on the following pages · <code>${e(D.base)}</code></div>
       <table class="ix"><thead><tr><th>Page</th><th>${D.custom?'Asked in':'Question no.'}</th><th>✗ Wrong</th><th>— Skipped</th><th>✓ Correct</th></tr></thead><tbody>
-      ${list.map((it,i)=>`<tr><td>${i+1}</td><td>${D.custom?it.papers+' papers':D.sets.filter(s=>it.where.has(s)).map(s=>s+'·'+it.where.get(s)).join('  ')}</td><td>${it.wrong.length}</td><td>${it.skip.length}</td><td>${it.right.length}</td></tr>`).join('')}
+      ${list.map((it,i)=>`<tr><td>${i+1}</td><td>${D.custom?it.papers+' papers':D.single?'Q'+it.first:D.sets.filter(s=>it.where.has(s)).map(s=>s+'·'+it.where.get(s)).join('  ')}</td><td>${it.wrong.length}</td><td>${it.skip.length}</td><td>${it.right.length}</td></tr>`).join('')}
       </tbody></table></div></div></section>`;
 }
 
@@ -442,8 +443,122 @@ async function build(base,o){
   }
 }
 
+/* ======================= V31: class discussion PDF for an ONLINE assignment =======================
+   Same pages and options as after an OMR import, made from the students' online answers.
+   ids = one standard assignment, or all personal assignments of a 🎯 batch (each student has a
+   different paper; the same question-bank question is put together, like Custom Test papers). */
+async function assignBase(ids){return 'asg_'+String(ids[0]||'');}
+async function latestAttempts(ids){
+  const rows=[];
+  for(let i=0;i<ids.length;i+=100){const part=ids.slice(i,i+100);
+    rows.push(...await fetchAll((a,b)=>sb.from('attempts').select('id,assignment_id,student_id,attempt_number,submitted_at').in('assignment_id',part).order('id').range(a,b)));}
+  const last=new Map();
+  rows.filter(r=>r.submitted_at).forEach(r=>{const k=r.assignment_id+'|'+r.student_id,o=last.get(k);
+    if(!o||Number(r.attempt_number||1)>Number(o.attempt_number||1)||(Number(r.attempt_number||1)===Number(o.attempt_number||1)&&String(r.submitted_at)>String(o.submitted_at)))last.set(k,r);});
+  return [...last.values()];
+}
+async function loadStudentsAssign(ids){
+  const at=await latestAttempts(ids);const sids=[...new Set(at.map(r=>String(r.student_id)))];
+  const people=new Map(),groups=new Map();
+  for(let i=0;i<sids.length;i+=150){const part=sids.slice(i,i+150);
+    try{const {data}=await sb.from('profiles').select('id,full_name,roll_no').in('id',part);(data||[]).forEach(p=>people.set(String(p.id),p));}catch(_){}
+    try{const {data}=await sb.from('class_students').select('student_id,class_id').in('student_id',part);(data||[]).forEach(m=>{const k=String(m.student_id);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(String(m.class_id));});}catch(_){}}
+  const cids=[...new Set([...groups.values()].flat())],cls=new Map();
+  for(let i=0;i<cids.length;i+=150){try{const {data}=await sb.from('classes').select('id,name,jnvst_parent_id').in('id',cids.slice(i,i+150));(data||[]).forEach(c=>cls.set(String(c.id),c));}catch(_){}}
+  const prev=loadPick(await assignBase(ids));
+  STU=sids.map(id=>{const p=people.get(id)||{};const gs=(groups.get(id)||[]).map(g=>cls.get(g)).filter(Boolean);const sub=gs.find(c=>c.jnvst_parent_id)||gs[0];
+    return {id,name:p.full_name||'',roll:p.roll_no||'',group:sub?sub.name:'',on:prev?prev.has(id):true};})
+    .sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true}));
+  if(!STU.length){const b=q$('odStu');if(b)b.innerHTML='<div class="small muted">No student has submitted this assignment yet.</div>';return;}
+  paintStudents();
+}
+async function collectAssign(ids,only,title){
+  const asg=[];for(let i=0;i<ids.length;i+=100){const {data,error}=await sb.from('assignments').select('id,title,subject,adaptive_mode').in('id',ids.slice(i,i+100));if(error)throw error;asg.push(...(data||[]));}
+  if(!asg.length)throw new Error('The assignment was not found.');
+  const custom=ids.length>1||asg.some(a=>a.adaptive_mode);
+  const qs=[];for(let i=0;i<ids.length;i+=100){const part=ids.slice(i,i+100);qs.push(...await fetchAll((a,b)=>sb.from('questions').select('*').in('assignment_id',part).order('id').range(a,b)));}
+  if(!qs.length)throw new Error('This assignment has no questions.');
+  const qById=new Map(qs.map(q=>[String(q.id),q]));
+  let at=await latestAttempts(ids);
+  if(!at.length)throw new Error('No student has submitted this assignment yet.');
+  const totalStudents=new Set(at.map(r=>String(r.student_id))).size;
+  if(only){at=at.filter(r=>only.has(String(r.student_id)));if(!at.length)throw new Error('None of the chosen students has submitted.');}
+  const atById=new Map(at.map(r=>[String(r.id),r]));
+  const ans=[];const aids=[...atById.keys()];
+  for(let i=0;i<aids.length;i+=100){const part=aids.slice(i,i+100);ans.push(...await fetchAll((a,b)=>sb.from('answers').select('attempt_id,question_id,selected_option,is_correct').in('attempt_id',part).order('id').range(a,b)));}
+  const people=new Map();const sids=[...new Set(at.map(r=>String(r.student_id)))];
+  for(let i=0;i<sids.length;i+=150){try{const {data}=await sb.from('profiles').select('id,full_name,roll_no').in('id',sids.slice(i,i+150));(data||[]).forEach(p=>people.set(String(p.id),{name:p.full_name||'',roll:p.roll_no||''}));}catch(_){}}
+  const keyOf=q=>String(q.source_mock_question_id||q.source_school_question_bank_id||q.id);
+  const Q=new Map();
+  const ensure=q=>{const k=keyOf(q);if(!Q.has(k))Q.set(k,{key:k,row:q,where:new Map(),wrong:[],skip:[],right:[],pick:{A:0,B:0,C:0,D:0},first:1e9,papers:0,correct:String(q.correct_option||'').toUpperCase()});return Q.get(k);};
+  const order=q=>Number(q.question_order)||0;
+  if(!custom)qs.slice().sort((a,b)=>order(a)-order(b)).forEach((q,i)=>{const it=ensure(q);it.first=Math.min(it.first,order(q)||i+1);});
+  ans.forEach(x=>{
+    const t=atById.get(String(x.attempt_id)),q=qById.get(String(x.question_id));if(!t||!q)return;
+    const it=ensure(q),no=order(q)||1;
+    if(custom){it.papers++;it.first=Math.min(it.first,no);}
+    const p=people.get(String(t.student_id))||{name:'',roll:''};
+    const who={name:p.name,roll:p.roll,no,set:'',sel:String(x.selected_option||'').trim()};
+    const ok=x.is_correct===true||(who.sel&&it.correct&&who.sel.toUpperCase()===it.correct);
+    if(ok)it.right.push(who);else if(blank(who.sel))it.skip.push(who);else it.wrong.push(who);
+    String(who.sel).toUpperCase().split(/[^A-D]+/).filter(Boolean).forEach(l=>{if(it.pick[l]!=null)it.pick[l]++;});
+  });
+  // explanations (incl. Assamese) from the question bank, keyed by the page's question row
+  const bank=new Map(),src=[...Q.values()].map(it=>it.row.source_mock_question_id).filter(Boolean);
+  const byBank=new Map();
+  for(let i=0;i<src.length;i+=150){try{const {data}=await sb.from('mock_question_bank').select('id,language,explanation,explanation_as').in('id',src.slice(i,i+150));(data||[]).forEach(b=>byBank.set(String(b.id),b));}catch(_){}}
+  Q.forEach(it=>{const b=byBank.get(String(it.row.source_mock_question_id||''));if(b)bank.set(it.row.id,b);});
+  const a0=asg[0];
+  return {base:custom?`${asg.length} personal papers`:'Online assignment',custom,single:!custom,recs:[],items:[...Q.values()],bank,
+    title:title||a0.title||'Assignment',subject:a0.subject||'',language:'',students:new Set(at.map(r=>String(r.student_id))).size,totalStudents,sets:[]};
+}
+function assignmentDiscussionPdf(ids,title){
+  ids=[...new Set((ids||[]).filter(Boolean).map(String))];
+  if(!ids.length)return (typeof notify==='function'?notify:alert)('No assignment chosen.');
+  const old=q$('omrDiscDlg');if(old)old.remove();STU=[];
+  const d=document.createElement('div');d.id='omrDiscDlg';
+  d.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  d.innerHTML=`<div class="card" style="max-width:520px;width:100%;margin:0;max-height:92vh;overflow:auto">
+    <h2 style="margin-top:0">📽 Class discussion PDF</h2>
+    <p class="small muted" style="margin-top:0">${e(title||'Assignment')}${ids.length>1?` · ${ids.length} personal papers`:''}. One wide page per question in big letters, with the students who answered wrongly, skipped it or answered correctly.</p>
+    <label>Page shape</label><select id="odShape"><option value="a4">A4 landscape (print or projector)</option><option value="wide">16:9 widescreen (projector / smart board)</option></select>
+    <label>Questions</label><select id="odWhich"><option value="mist">Only questions someone got wrong or skipped</option><option value="all">All questions</option></select>
+    <label>Order</label><select id="odOrder"><option value="paper">${ids.length>1?'Question order':'Paper order'}</option><option value="most">Most mistakes first</option></select>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="odAns" type="checkbox" style="width:auto" checked> Mark the correct answer</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="odCount" type="checkbox" style="width:auto" checked> Show how many students chose each option</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="odNames" type="checkbox" style="width:auto" checked> Show names of students who were wrong / skipped</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="odRight" type="checkbox" style="width:auto" checked> Show names of students who answered correctly</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="odExpl" type="checkbox" style="width:auto"> Show the explanation</label>
+    <label style="display:flex;gap:8px;align-items:center"><input id="odSpace" type="checkbox" style="width:auto" checked> Leave writing space for the pen tablet</label>
+    <div style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:10px">
+      <label style="margin:0">Students to include <span id="odStuCount" class="small muted"></span></label>
+      <div class="small muted" style="margin:2px 0 6px">Only students who submitted are listed. Only the ticked students are used: their names, the option counts and (with “Only questions someone got wrong”) which questions get a page.</div>
+      <div id="odStu"><div class="small muted">Loading students…</div></div>
+    </div>
+    <div class="actions" style="margin-top:14px"><button id="odGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('omrDiscDlg').remove()">Cancel</button></div>
+    <div id="odMsg" class="small muted"></div></div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',ev=>{if(ev.target===d)d.remove();});
+  q$('odGo').onclick=async()=>{
+    const only=picked();
+    if(only&&!only.size){const m=q$('odMsg');if(m)m.textContent='Tick at least one student.';return;}
+    const o={shape:q$('odShape').value,which:q$('odWhich').value,order:q$('odOrder').value,ans:q$('odAns').checked,count:q$('odCount').checked,
+      names:q$('odNames').checked,right:!!(q$('odRight')&&q$('odRight').checked),expl:q$('odExpl').checked,space:q$('odSpace').checked,only};
+    const msg=q$('odMsg'),btn=q$('odGo');
+    const w=window.open('','_blank');   // open now (still the click), fill it when the data is ready
+    if(!w){if(msg)msg.textContent='Your browser blocked the pop-up. Please allow pop-ups for this site and try again.';return;}
+    try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing the class discussion pages…</body>');}catch(_){}
+    if(only)savePick(await assignBase(ids),only);
+    if(btn)btn.disabled=true;if(msg)msg.textContent='Collecting results…';
+    try{const D=await collectAssign(ids,only,title);w.document.open();w.document.write(docHtml(D,o));w.document.close();const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();}
+    catch(err){try{w.close();}catch(_){}if(msg)msg.textContent='Could not prepare the PDF: '+(err.message||err);if(btn)btn.disabled=false;}
+  };
+  loadStudentsAssign(ids).catch(err=>{const b=q$('odStu');if(b)b.innerHTML=`<div class="small muted">Could not load the student list (${e(err.message||err)}). All students will be included.</div>`;});
+}
+
 root.omrDiscussionPdf=omrDiscussionPdf;
+root.assignmentDiscussionPdf=assignmentDiscussionPdf;
 root.omrDiscPick=omrDiscPick;
 root.bankDiscussionPdf=bankDiscussionPdf;
-root.__omrDiscussion={collect,docHtml,collectBank};
+root.__omrDiscussion={collect,docHtml,collectBank,collectAssign};
 })(typeof window!=='undefined'?window:globalThis);

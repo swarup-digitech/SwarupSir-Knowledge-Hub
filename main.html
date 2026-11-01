@@ -331,7 +331,7 @@ function loadTeacherApp(){
                 x.onload=x.onerror=()=>{
                   // V21: class discussion PDF after an OMR import (optional)
                   const y=document.createElement("script");
-                  y.src="omr-discussion.js?v=6";
+                  y.src="omr-discussion.js?v=7";
                   y.onload=y.onerror=()=>{
                    // V27: student progress from the Mistake Bank (optional)
                    const g=document.createElement("script");
@@ -347,7 +347,7 @@ function loadTeacherApp(){
                       ex.onload=ex.onerror=()=>{
                         // V30: assignment start / end time, extension, publish results (optional)
                         const sc=document.createElement("script");
-                        sc.src="assignment-schedule.js?v=1";
+                        sc.src="assignment-schedule.js?v=2";
                         sc.onload=sc.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
                         document.head.appendChild(sc);
                       };
