@@ -340,7 +340,13 @@ function loadTeacherApp(){
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
                     v.src="teacher-portal.js?v=9";
-                    v.onload=v.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
+                    v.onload=v.onerror=()=>{
+                      // V29: JNVST Question Bank — Download for Editing / Re-upload (English + Assamese together) (optional)
+                      const ex=document.createElement("script");
+                      ex.src="jnvst-qb-excel.js?v=1";
+                      ex.onload=ex.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
+                      document.head.appendChild(ex);
+                    };
                     document.head.appendChild(v);
                    };
                    document.head.appendChild(g);
