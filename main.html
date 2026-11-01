@@ -304,7 +304,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=45";
+      s.src="teacher-app.js?v=46";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -344,7 +344,13 @@ function loadTeacherApp(){
                       // V29: JNVST Question Bank — Download for Editing / Re-upload (English + Assamese together) (optional)
                       const ex=document.createElement("script");
                       ex.src="jnvst-qb-excel.js?v=1";
-                      ex.onload=ex.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
+                      ex.onload=ex.onerror=()=>{
+                        // V30: assignment start / end time, extension, publish results (optional)
+                        const sc=document.createElement("script");
+                        sc.src="assignment-schedule.js?v=1";
+                        sc.onload=sc.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
+                        document.head.appendChild(sc);
+                      };
                       document.head.appendChild(ex);
                     };
                     document.head.appendChild(v);
@@ -2378,8 +2384,48 @@ async function changeStudentPassword(){
   }catch(e){msg.innerHTML=message(e.message||String(e));}
 }
 
+/* ---- V30: assignment schedule (start / end time, publish results) ---- */
+function v30Fmt(d){try{return new Date(d).toLocaleString(undefined,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}catch(_){return String(d)}}
+function v30Info(a,link){
+  const start=a&&a.start_at?new Date(a.start_at):null;let end=a&&a.end_at?new Date(a.end_at):null;
+  const ext=link&&link.extended_end_at?new Date(link.extended_end_at):null;const extended=!!(ext&&end&&ext>end);if(extended)end=ext;
+  const now=Date.now();
+  return {scheduled:!!(a&&a.end_at),start,end,extended,notOpen:!!(start&&now<start),closed:!!(end&&now>end),published:!!(a&&a.results_published_at)};
+}
+function v30Msg(e){return String((e&&e.message)||e||"").replace(/^(NOT_OPEN_YET|CLOSED|RESULTS_NOT_PUBLISHED):\s*/,"");}
+function v30StopTimer(){if(window._v30Timer){clearInterval(window._v30Timer);window._v30Timer=null;}const b=document.getElementById("v30TimeBar");if(b)b.remove();}
+function v30StartTimer(end){
+  v30StopTimer();if(!end)return;
+  const bar=document.createElement("div");bar.id="v30TimeBar";
+  bar.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:9999;background:#1e293b;color:#fff;padding:8px 16px;border-radius:999px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:15px;white-space:nowrap";
+  document.body.appendChild(bar);
+  const tick=()=>{
+    if(!active){v30StopTimer();return;}
+    const ms=new Date(end)-Date.now();
+    if(ms<=0){
+      v30StopTimer();
+      if(window.quizSubmitting)return;
+      if(Array.isArray(active.questions)&&active.questions.length){submitQuiz(true);notify("Time is over. Your answers have been submitted.");}
+      else{notify("This assignment has closed.");studentHome();}
+      return;
+    }
+    const t=Math.floor(ms/1000),h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=t%60;
+    bar.textContent="⏳ Time left: "+(h?h+"h ":"")+String(m).padStart(2,"0")+"m "+String(x).padStart(2,"0")+"s · ends "+v30Fmt(end);
+    bar.style.background=ms<5*60000?"#b91c1c":"#1e293b";
+  };
+  tick();window._v30Timer=setInterval(tick,1000);
+}
+function v30CardTime(a,link,isCompleted){
+  const v=v30Info(a,link);
+  if(!v.scheduled)return !isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:"";
+  const rows=[];
+  if(v.start)rows.push(`<b>${v.notOpen?"🕒 Opens":"Opened"}:</b> ${v30Fmt(v.start)}`);
+  rows.push(`<b>${v.closed?"⛔ Closed":"⏳ Ends"}:</b> ${v30Fmt(v.end)}${v.extended?' <span class="tag" style="background:#dcfce7;color:#166534">extended for you</span>':""}`);
+  return `<p class="small">${rows.join(" &nbsp;·&nbsp; ")}</p>`;
+}
 async function studentHome(){
   if(studentRefreshTimer){clearInterval(studentRefreshTimer);studentRefreshTimer=null;}
+  v30StopTimer();
 
   // Render a small shell immediately so navigation never looks blank.
   if(!document.getElementById("student-dash-panel-new")){
@@ -2390,7 +2436,7 @@ async function studentHome(){
   }
 
   const {data:links,error:le}=await sb.from("assignment_students")
-    .select("assignment_id,current_attempt_number")
+    .select("*")
     .eq("student_id",current.id);
   if(le)throw le;
   const linkMap=new Map((links||[]).map(x=>[x.assignment_id,x]));
@@ -2449,16 +2495,22 @@ async function studentHome(){
         </div>
         <span class="tag">${isMock?`⏱ ${Number(a.time_limit||120)} min`:isVideo?"MCQ + Video":"MCQ"}</span>
       </div>
-      ${!isCompleted&&a.deadline?`<p class="small">Deadline: ${new Date(a.deadline).toLocaleString()}</p>`:""}
+      ${v30CardTime(a,linkMap.get(a.id),isCompleted)}
       ${isCompleted?`
         <p><b>Submitted:</b> ${x.score}/${x.total_questions} &nbsp; <b>(${pct}%)</b> <span class="small">${x.submitted_at?new Date(x.submitted_at).toLocaleString():""}</span></p>
-        ${pct>=80
+        ${v30Info(a,linkMap.get(a.id)).scheduled
+          ? (v30Info(a,linkMap.get(a.id)).published
+              ? `<div class="success" style="margin-top:10px"><b>✓ Submitted. Results are published.</b></div><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View Result, Answers &amp; Class Analysis</button></div>`
+              : `<div class="notice" style="margin-top:10px"><b>✓ Submitted.</b> The answers, answer key and class analysis will be shown when your teacher publishes the results.</div>`)
+          : pct>=80
           ? `<div class="success" style="margin-top:10px"><b>✓ Assignment successfully submitted.</b></div><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View Result &amp; Answers</button></div>`
           : `<div class="notice" style="margin-top:10px"><b>Score below 80%.</b><br>You have to redo this assessment. You can view your result, answers and answer key during the 3-hour waiting period. The assessment will become available again automatically after 3 hours.</div><div style="margin-top:12px"><button onclick="viewPreviousWork('${a.id}','${x.id}')">View Result &amp; Answers</button></div>`}
         ${isVideo?`<div style="margin-top:10px"><button class="secondary" onclick="watchCompletedVideo('${a.id}')">▶ Watch Video Again</button></div>`:""}
       `:`
-        <span class="small" style="color:#166534"><b>Not Submitted</b></span>
-        <div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div>
+        ${(()=>{const v=v30Info(a,linkMap.get(a.id));
+          if(v.closed)return `<span class="small" style="color:#b91c1c"><b>⛔ Closed — not submitted</b></span>`;
+          if(v.notOpen)return `<span class="small" style="color:#92400e"><b>Not open yet</b></span><div class="actions" style="margin-top:10px"><button disabled title="Opens ${v30Fmt(v.start)}">🔒 Opens ${v30Fmt(v.start)}</button></div>`;
+          return `<span class="small" style="color:#166534"><b>Not Submitted</b></span><div class="actions" style="margin-top:10px"><button onclick="startLesson('${a.id}')">Start Assignment</button></div>`;})()}
       `}
     </div>`;
   };
@@ -2603,14 +2655,21 @@ async function viewPreviousWork(assignmentId,attemptId){
   const {data:a,error:ae}=await sb.from("assignments").select("*").eq("id",assignmentId).single();if(ae||!a)throw new Error(ae?.message||"Assignment not found.");
   const {data:at,error:te}=await sb.from("attempts").select("*").eq("id",attemptId).eq("student_id",current.id).single();if(te||!at)throw new Error(te?.message||"Submission not found.");
   const {data:ans,error:anErr}=await sb.from("answers").select("*").eq("attempt_id",attemptId);if(anErr)throw anErr;
-  const qids=new Set((ans||[]).map(x=>x.question_id));let qs=[];if(qids.size){const {data:q,error:qe}=await sb.rpc("student_attempt_review_questions",{p_attempt_id:attemptId});if(qe)throw qe;qs=(q||[]).filter(x=>qids.has(x.id))}
+  const v30s=!!a.end_at;   // V30: scheduled assignment
+  if(v30s&&!a.results_published_at){
+    const p=Math.round(Number(at.score||0)*100/Math.max(1,Number(at.total_questions||1)));
+    return render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions} <b>(${p}%)</b></p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p><div class="notice" style="margin-top:14px">The answers, answer key and class analysis will be shown when your teacher publishes the results.</div></div><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div>`);
+  }
+  const qids=new Set((ans||[]).map(x=>x.question_id));let qs=[];if(qids.size){const {data:q,error:qe}=await sb.rpc("student_attempt_review_questions",{p_attempt_id:attemptId});if(qe)throw new Error(v30Msg(qe));qs=(q||[]).filter(x=>qids.has(x.id))}
+  let v30an=null;if(v30s){try{const {data:an}=await sb.rpc("student_assignment_analytics",{p_assignment_id:assignmentId});v30an=an||null;}catch(_){}}
   const qm=new Map(qs.map(q=>[q.id,q]));
   const ordered=(ans||[]).map(x=>({x,q:qm.get(x.question_id)})).sort((a,b)=>(a.q?.question_order??999999)-(b.q?.question_order??999999));
-  const isLowScore=Number(at.total_questions||0)>0 && (Number(at.score||0)*100/Number(at.total_questions))<80;
+  const isLowScore=!v30s && Number(at.total_questions||0)>0 && (Number(at.score||0)*100/Number(at.total_questions))<80;
   const correctItems=ordered.filter(({x,q})=>x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option));
   const wrongItems=ordered.filter(({x,q})=>!(x.is_correct===true||(x.selected_option&&q?.correct_option&&x.selected_option===q.correct_option)));
   window._studentPreviousWork={assignment:a,attempt:at,items:ordered};
   render(`<div class="wrap">${header("Assignment Result")}<div class="card"><h2>${esc(a.title)}</h2><p><b>Score:</b> ${at.score}/${at.total_questions} <b>(${Math.round(Number(at.score||0)*100/Math.max(1,Number(at.total_questions||1)))}%)</b></p><p><b>Submitted:</b> ${at.submitted_at?new Date(at.submitted_at).toLocaleString():"—"}</p>
+    ${v30an?`<div class="card" style="margin:12px 0;background:#f0f9ff;border:1px solid #bae6fd"><h3 style="margin:0 0 8px">📊 Class analysis</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${[["Your rank",v30an.my_rank&&v30an.my_percent!=null?v30an.my_rank+" of "+v30an.submitted:"—"],["Your score",v30an.my_percent!=null?v30an.my_percent+"%":"—"],["Class average",v30an.average!=null?v30an.average+"%":"—"],["Highest",v30an.highest!=null?v30an.highest+"%":"—"],["Lowest",v30an.lowest!=null?v30an.lowest+"%":"—"],["Submitted",(v30an.submitted||0)+" of "+(v30an.assigned||0)],["80% or more",(v30an.at_least_80||0)+" student(s)"]].map(([k,v])=>`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;min-width:110px"><div class="small muted">${k}</div><div style="font-size:18px;font-weight:700">${v}</div></div>`).join("")}</div></div>`:""}
     ${isLowScore
       ? `<div class="notice" style="margin-top:14px"><b>Score below 80% — Assessment must be redone.</b><br>You can review your answers and the answer key during the waiting period. This assessment will become available again automatically 3 hours after submission.</div>`
       : `<div class="success" style="margin-top:14px"><b>✓ Assignment successfully submitted.</b></div>`}
@@ -2651,13 +2710,16 @@ async function startLesson(id){
   if(error)return notify(error.message);
 
   const {data:link,error:ae}=await sb.from("assignment_students")
-    .select("current_attempt_number")
+    .select("*")
     .eq("assignment_id",id)
     .eq("student_id",current.id)
     .maybeSingle();
 
   if(ae)return notify("Could not check assignment status: "+ae.message);
   if(!link)return notify("This assignment is no longer assigned to your account.");
+  const v30=v30Info(a,link);                                   // V30: schedule
+  if(v30.notOpen)return notify("This assignment is not open yet. It opens on "+v30Fmt(v30.start)+".");
+  if(v30.closed)return notify("This assignment closed on "+v30Fmt(v30.end)+". Ask your teacher if you need more time.");
 
   const currentAttemptNumber=Number(link.current_attempt_number||1);
   const {data:existing,error:xe}=await sb.from("attempts")
@@ -2670,11 +2732,12 @@ async function startLesson(id){
   if(xe)return notify("Could not check submission status: "+xe.message);
 
   if(existing?.length){
-    notify("Already Submitted. You have already submitted this assignment for the current attempt.\n\nIf your score is below 80%, it will become available again automatically after 3 hours. Your teacher can also re-assign it.");
+    notify(v30.scheduled?"Already Submitted. You have already submitted this assignment. Your result will be shown when your teacher publishes it.":"Already Submitted. You have already submitted this assignment for the current attempt.\n\nIf your score is below 80%, it will become available again automatically after 3 hours. Your teacher can also re-assign it.");
     return studentHome();
   }
 
-  active={...a,currentAttemptNumber};
+  active={...a,currentAttemptNumber,v30End:v30.scheduled?v30.end:null};
+  if(active.v30End)v30StartTimer(active.v30End);
   videoDone=!a.video_url;
   answers=[];
   window.quizIndex=0;
@@ -2684,7 +2747,7 @@ async function startLesson(id){
   // Mock tests and no-video assignments go directly to questions.
   if(isMock||!a.video_url){
     const {data:qs,error:qe}=await sb.rpc("student_assignment_questions",{p_assignment_id:a.id});
-    if(qe)return notify(qe.message);
+    if(qe){v30StopTimer();return notify(v30Msg(qe));}
     active.questions=qs||[];
     if(isMock){prepareMockQuestions();window.mockDeadline=Date.now()+Math.max(1,Number(a.time_limit||120))*60000;if(window.mockTimerId)clearInterval(window.mockTimerId);window.mockTimerId=setInterval(updateMockTimer,1000);}
     return quiz();
@@ -2707,7 +2770,7 @@ async function watchCompletedVideo(id){
   }catch(e){notify("Could not open video: "+(e.message||e));}
 }
 function lesson(){render(`<div class="wrap">${header(esc(active.title))}<div class="card"><p class="muted">${esc(active.subject||"")}</p>${active.video_url?`<iframe class="video" src="${esc(embed(active.video_url))}" allowfullscreen></iframe>`:""}<div class="notice">Watch the lesson, then continue to the questions.</div><button onclick="videoWatched()">Video watched — Continue to Questions</button></div></div>`)}
-async function videoWatched(){videoDone=true;const {data:qs,error}=await sb.rpc("student_assignment_questions",{p_assignment_id:active.id});if(error)return notify(error.message);active.questions=qs||[];quiz()}
+async function videoWatched(){videoDone=true;const {data:qs,error}=await sb.rpc("student_assignment_questions",{p_assignment_id:active.id});if(error){v30StopTimer();return notify(v30Msg(error));}active.questions=qs||[];quiz()}
 function shuffleArray(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function prepareMockQuestions(){if(!active.questions)return;let qs=active.questions.map(q=>({...q}));if(active.shuffle_questions)qs=shuffleArray(qs);if(active.shuffle_options)qs=qs.map(q=>{const pairs=[["A",q.option_a],["B",q.option_b],["C",q.option_c],["D",q.option_d]];const shuffled=shuffleArray(pairs);const nq={...q,_optOrig:{}};["A","B","C","D"].forEach((k,i)=>{nq["option_"+k.toLowerCase()]=shuffled[i][1];nq._optOrig[k]=shuffled[i][0]});return nq});active.questions=qs;answers=[];window.quizIndex=0}
 function originalOptionLetter(q,shown){if(!shown)return "";return (q&&q._optOrig&&q._optOrig[shown])||shown}
@@ -2757,6 +2820,7 @@ async function submitQuiz(autoSubmit=false){
     const payload=active.questions.map((q,i)=>({question_id:q.id,selected_option:originalOptionLetter(q,answers[i])||null}));
     const {data:res,error}=await sb.rpc("student_submit_assignment",{p_assignment_id:active.id,p_answers:payload,p_video_completed:!!videoDone});
     if(error){
+      if(/^CLOSED|^NOT_OPEN_YET/.test(error.message||"")){window.quizSubmitting=false;v30StopTimer();notify(v30Msg(error)+" Your answers could not be submitted.");return studentHome();}
       if(error.code==="23505"||/ALREADY_SUBMITTED/.test(error.message||"")){
         window.quizSubmitting=false;
         notify("Already Submitted. This assignment can only be submitted once for the current attempt. If your score is below 80%, it will become available again automatically after 3 hours. Your teacher can also re-assign it.");
@@ -2764,12 +2828,16 @@ async function submitQuiz(autoSubmit=false){
       }
       throw error;
     }
+    v30StopTimer();
     const score=Number(res.score||0), totalQ=Number(res.total_questions||active.questions.length), attempt={id:res.attempt_id};
 
     const submissionPct=totalQ?Math.round(score*100/totalQ):0;
     window.quizSubmitting=false;
     window.mockExam=null;
-    if(submissionPct>=80){
+    if(active.end_at){   // V30: scheduled — score now, answers after the teacher publishes
+      const pub=!!active.results_published_at;
+      render(`<div class="wrap">${header("Assignment Submitted")}<div class="card"><h2>${esc(active.title)}</h2><div class="success" style="margin-top:14px"><b>✓ Assignment successfully submitted.</b><br>Your score is ${score}/${totalQ} (${submissionPct}%).</div>${pub?"":`<div class="notice" style="margin-top:12px">The answers, answer key and class analysis will be shown when your teacher publishes the results.</div>`}<div class="actions" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">${pub?`<button onclick="viewPreviousWork('${esc(active.id)}','${esc(attempt.id)}')">View Result &amp; Answers</button>`:""}<button class="secondary" onclick="studentHome()">← Back to Assignments</button></div></div></div>`);
+    }else if(submissionPct>=80){
       render(`<div class="wrap">${header("Assignment Submitted")}<div class="card"><h2>${esc(active.title)}</h2><div class="success" style="margin-top:14px"><b>✓ Assignment successfully submitted.</b><br>Your score is ${score}/${totalQ} (${submissionPct}%).</div><div class="actions" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap"><button onclick="viewPreviousWork('${esc(active.id)}','${esc(attempt.id)}')">View Result &amp; Answers</button><button class="secondary" onclick="studentHome()">← Back to Assignments</button></div></div></div>`);
     }else{
       await viewPreviousWork(active.id,attempt.id);
