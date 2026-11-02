@@ -366,7 +366,16 @@ root.jnvstQbApplyEditedExcel=async function(){
   for(const {rec,src} of p.inserts){const o=ups.get(src.id);if(o&&o.language_pair_id)rec.language_pair_id=o.language_pair_id;}
   const list=[...ups].filter(([,v])=>Object.keys(v).length),total=list.length+(p.inserts.length?1:0);
   if(!total)return say('Nothing to save.');
-  if(!confirm(`Save the changes now?\n\n${list.length} question record(s) will be updated${p.inserts.length?`\n${p.inserts.length} new language version(s) will be added`:''}.`))return;
+  // V32: answer keys changed → earlier results are re-marked; ask once for the whole file
+  let remark='';
+  try{
+    const byKey=new Map();list.forEach(([id,v])=>{if(v.correct_option){const k=String(v.correct_option).toUpperCase();(byKey.get(k)||byKey.set(k,[]).get(k)).push(id);}});
+    let ans=0,chg=0,stu=0,asg=0,mk=0;
+    for(const [k,ids] of byKey){const {data,error}=await sb.rpc('v32_answer_key_impact',{p_table:'mock_question_bank',p_ids:ids,p_new:k});if(error)break;ans+=+data.answers||0;chg+=+data.changes||0;stu+=+data.students||0;asg+=+data.assignments||0;mk+=+data.mock_tests||0;}
+    if(chg)remark=`\n\n⚠ Correct Answer changed: ${chg} earlier answer(s) of about ${stu} student(s) in ${asg} assignment(s) and ${mk} mock test(s) will be RE-MARKED automatically (scores, mock test marks and Mistake Bank). OMR results are not changed.`;
+  }catch(_){}
+  if(!confirm(`Save the changes now?\n\n${list.length} question record(s) will be updated${p.inserts.length?`\n${p.inserts.length} new language version(s) will be added`:''}.${remark}`))return;
+  root.__v32Skip=true;   // already confirmed for the whole file
   try{jnvstBulkUploadLock('Saving edited JNVST questions…','Please do not close this page.')}catch(_){}
   const prog=(pc,t)=>{try{jnvstBulkUploadProgress(pc,t)}catch(_){}};
   let done=0,failed=[];
@@ -383,8 +392,8 @@ root.jnvstQbApplyEditedExcel=async function(){
     prog(100,'Done.');
     setTimeout(()=>{try{jnvstBulkUploadUnlock()}catch(_){}
       say(`Re-upload finished.\nUpdated: ${done} question record(s)${p.inserts.length?`\nAdded: ${added} new language version(s)`:''}${failed.length?`\n\nNot saved (${failed.length}):\n${failed.slice(0,10).join('\n')}`:''}`);
-      plan=null;jnvstQuestionBankHome();},300);
-  }catch(e){try{jnvstBulkUploadUnlock()}catch(_){}say('Saving stopped: '+(e.message||e)+`\n\n${done} record(s) were already updated.`);}
+      plan=null;root.__v32Skip=false;jnvstQuestionBankHome();},300);
+  }catch(e){root.__v32Skip=false;try{jnvstBulkUploadUnlock()}catch(_){}say('Saving stopped: '+(e.message||e)+`\n\n${done} record(s) were already updated.`);}
 };
 
 /* ---------- 5. buttons in the JNVST Question Bank ---------- */
