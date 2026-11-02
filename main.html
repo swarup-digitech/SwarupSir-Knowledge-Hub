@@ -347,11 +347,11 @@ function loadTeacherApp(){
                       ex.onload=ex.onerror=()=>{
                         // V30: assignment start / end time, extension, publish results (optional)
                         const sc=document.createElement("script");
-                        sc.src="assignment-schedule.js?v=2";
+                        sc.src="assignment-schedule.js?v=3";
                         sc.onload=sc.onerror=()=>{
                           // V32: answer key change → earlier results re-marked (optional)
                           const rk=document.createElement("script");
-                          rk.src="answer-key-remark.js?v=1";
+                          rk.src="answer-key-remark.js?v=2";
                           rk.onload=rk.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
                           document.head.appendChild(rk);
                         };

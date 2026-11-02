@@ -102,8 +102,9 @@ function barHtml(key,inModal){
       +(st.published?chip('📢 Results published','#dbeafe','#1e40af'):st.partlyPublished?chip('📢 Partly published','#dbeafe','#1e40af'):chip('🔒 Results not published','#f1f5f9','#475569'));
   }
   const pubBtn=st.scheduled?(st.published?`<button type="button" class="secondary" onclick="v30Publish('${k}',false)">🙈 Hide Results</button>`:`<button type="button" style="background:#1d4ed8;color:#fff;border:0;font-weight:700" onclick="v30Publish('${k}',true)">📢 Publish Results</button>`):'';
+  const regenBtn=`<button type="button" class="secondary" onclick="v30Regen('${k}')" title="After an answer key was changed: mark all submissions again with the current keys">♻ Re-generate results</button>`;
   const discBtn=typeof root.assignmentDiscussionPdf==='function'?`<button type="button" class="secondary" onclick="v30Disc('${k}')" title="One question per page with who answered wrongly / skipped / correctly">📽 Discussion PDF</button>`:'';
-  return `<div class="v30-bar" id="v30Bar_${k}" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed #cbd5e1">${chips}${inModal?'':`<button type="button" class="secondary" onclick="v30Open('${k}')">📅 ${st.scheduled?'Schedule / Extend':'Set schedule'}</button>`}${pubBtn}${discBtn}</div>`;
+  return `<div class="v30-bar" id="v30Bar_${k}" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed #cbd5e1">${chips}${inModal?'':`<button type="button" class="secondary" onclick="v30Open('${k}')">📅 ${st.scheduled?'Schedule / Extend':'Set schedule'}</button>`}${pubBtn}${discBtn}${regenBtn}</div>`;
 }
 function repaint(key){const el=$('v30Bar_'+key);if(el)el.outerHTML=barHtml(key);}
 const origCards=root.renderTeacherAssignmentCards;
@@ -133,6 +134,11 @@ async function updateAll(items,patch){
   }
   items.forEach(a=>Object.assign(a,patch));
 }
+root.v30Regen=function(key){
+  const items=REG.get(key)||[];if(!items.length)return;
+  if(typeof root.v34Regen!=='function')return say('Upload the new answer-key-remark.js and press Ctrl+Shift+R.');
+  root.v34Regen(items.map(a=>a.id),null,`“${items[0].title}”${items.length>1?` (${items.length} personal papers)`:''}`);
+};
 root.v30Disc=function(key){
   const items=REG.get(key)||[];if(!items.length)return;
   if(typeof root.assignmentDiscussionPdf!=='function')return say('Upload the new omr-discussion.js and press Ctrl+Shift+R.');

@@ -60,3 +60,60 @@ sb.from=function(table){
 };
 sb.__v32=true;
 })();
+
+/* V34: ♻ Re-generate results — on assignment cards (via assignment-schedule.js), mock tests and the Question Bank.
+   Asks the database what would change with today's answer keys, shows it, and re-marks after OK. */
+(function(){
+'use strict';
+const root=window;
+const say=m=>(typeof notify==='function'?notify(m):alert(m));
+const toast=m=>{try{jnvstQbToast(m)}catch(_){say(m)}};
+root.v34Regen=async function(assignIds,mockIds,label){
+  const args={p_assignment_ids:assignIds&&assignIds.length?assignIds:null,p_mock_test_ids:mockIds&&mockIds.length?mockIds:null};
+  const all=!args.p_assignment_ids&&!args.p_mock_test_ids;
+  try{
+    const {data:d,error}=await sb.rpc('v34_regenerate',{...args,p_apply:false});
+    if(error)throw new Error(/v34_regenerate|function/.test(error.message||'')&&!/own/.test(error.message||'')?'Run V34_REGENERATE_RESULTS.sql in Supabase first.':error.message);
+    const subs=(+d.submissions||0)+(+d.mock_submissions||0);
+    if(!(+d.old_keys)&&!(+d.answers)&&!subs)return say(`✓ ${label||'These results'} ${all?'are':'is'} up to date with the current answer keys. Nothing to re-generate.`);
+    const lines=[];
+    if(+d.old_keys)lines.push(`• ${d.old_keys} question(s) still have an old answer key (they get the Question Bank key)`);
+    if(+d.answers)lines.push(`• ${d.answers} student answer(s) change between right and wrong`);
+    if(+d.submissions)lines.push(`• ${d.submissions} assignment submission(s) get a new score`);
+    if(+d.mock_submissions)lines.push(`• ${d.mock_submissions} mock test submission(s) get new marks`);
+    if(+d.students)lines.push(`• ${d.students} student(s) concerned`);
+    if(!confirm(`♻ Re-generate results of ${label||'this'} with the current answer keys?\n\n${lines.join('\n')}\n\nThe Mistake Bank / Student progress is corrected too. OMR results are not changed.`))return;
+    const {data:r,error:e2}=await sb.rpc('v34_regenerate',{...args,p_apply:true});if(e2)throw e2;
+    toast(`♻ Results re-generated: ${(+r.submissions||0)+(+r.mock_submissions||0)} submission(s) re-marked`);
+    return r;
+  }catch(e){say('Could not re-generate: '+(e.message||e));}
+};
+// mock tests list: a button next to "Approve Results"
+const origMock=root.loadPreviousMockTests;
+if(typeof origMock==='function'&&!origMock.__v34){
+  const w=async function(){const r=await origMock.apply(this,arguments);
+    try{document.querySelectorAll('#previousMockTests button[onclick^="toggleMockResultsRelease("]').forEach(b=>{
+      if(b.parentNode.querySelector('.v34-regen'))return;
+      const id=(b.getAttribute('onclick').match(/toggleMockResultsRelease\('([^']+)'/)||[])[1];if(!id)return;
+      const t=b.closest('.assignment')?.querySelector('h3')?.textContent||'this mock test';
+      const x=document.createElement('button');x.type='button';x.className='secondary v34-regen';x.textContent='♻ Re-generate results';
+      x.title='Mark all submissions again with the current answer keys';
+      x.onclick=async()=>{const res=await root.v34Regen(null,[id],`“${t}”`);if(res)root.loadPreviousMockTests();};
+      b.after(x);});}catch(_){}
+    return r;};
+  w.__v34=true;root.loadPreviousMockTests=w;
+}
+// Question Bank: one button for everything you manage
+const origHome=root.jnvstQuestionBankHome;
+if(typeof origHome==='function'&&!origHome.__v34){
+  const w=async function(){const r=await origHome.apply(this,arguments);
+    try{if(document.getElementById('jnvstQbTable')&&!document.getElementById('v34RegenAll')){
+      const tpl=[...document.querySelectorAll('button')].find(b=>/downloadJnvstQuestionTemplate/.test(b.getAttribute('onclick')||''));
+      if(tpl){const x=document.createElement('button');x.id='v34RegenAll';x.type='button';x.className='secondary';x.textContent='♻ Re-generate all results';
+        x.title='After answer keys were changed: mark every assignment and mock test again with the current keys';
+        x.onclick=()=>root.v34Regen(null,null,'all your assignments and mock tests');
+        tpl.parentNode.appendChild(x);}}}catch(_){}
+    return r;};
+  w.__v34=true;root.jnvstQuestionBankHome=w;
+}
+})();
