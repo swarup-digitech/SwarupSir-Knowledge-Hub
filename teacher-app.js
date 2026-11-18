@@ -6207,7 +6207,7 @@ function omrScorePaperGroups(records,parsed){
   (records||[]).forEach(r=>{const g=qpHistoryGroupKey(r.serial_no);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(r)});
   const out=[];
   groups.forEach((recs,g)=>{const res=omrResolveForGroup(recs,parsed);const first=recs[0]||{};
-    out.push({base:g,title:first.title||'',subject:first.subject||'',generated_at:first.generated_at,sets:recs.some(omrIsCustomRec)?`${recs.length} personal papers`:recs.map(r=>r.set_code).sort().join(', '),score:res.score,res});});
+    out.push({base:g,recs,title:first.title||'',subject:first.subject||'',generated_at:first.generated_at,sets:recs.some(omrIsCustomRec)?`${recs.length} personal papers`:recs.map(r=>r.set_code).sort().join(', '),score:res.score,res});});
   return out.sort((a,b)=>b.score-a.score||String(b.generated_at).localeCompare(String(a.generated_at)));
 }
 async function omrImportPage(){
@@ -6228,7 +6228,7 @@ async function omrLoadHistory(){
   const el=document.getElementById('omrHistory');if(!el)return;
   const {data,error}=await sb.from('omr_imports').select('*').eq('teacher_id',current.id).order('imported_at',{ascending:false}).limit(100);
   if(error){el.innerHTML=`<div class="notice">Could not load OMR import history: ${esc(error.message)}<br><span class="small">Run <b>V14_OMR_MISTAKES_MIGRATION.sql</b> in Supabase SQL Editor first.</span></div>`;return}
-  el.innerHTML=(data||[]).length?`<div style="overflow:auto"><table><thead><tr><th>Imported</th><th>Exam</th><th>Paper Serial</th><th>Students</th><th>Questions</th><th>Skipped (bonus/key changed)</th><th>Class discussion</th></tr></thead><tbody>${data.map(x=>`<tr><td>${esc(qpHistoryDate(x.imported_at))}</td><td>${esc(x.exam_title||'')}</td><td><code>${esc(x.paper_base_serial)}</code></td><td>${x.student_count}</td><td>${x.question_count}</td><td>${esc((x.skipped_questions||[]).join(', ')||'—')}</td><td>${typeof omrDiscussionPdf==='function'?`<button class="secondary" style="padding:5px 10px" onclick="omrDiscussionPdf('${esc(x.paper_base_serial)}')">📽 PDF</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No OMR results imported yet.</p>';
+  el.innerHTML=(data||[]).length?`<div style="overflow:auto"><table><thead><tr><th>Imported</th><th>Exam</th><th>Paper Serial</th><th>Students</th><th>Questions</th><th>Skipped (bonus/key changed)</th><th>Class discussion</th><th>Correct</th></tr></thead><tbody>${data.map(x=>`<tr><td>${esc(qpHistoryDate(x.imported_at))}</td><td>${esc(x.exam_title||'')}</td><td><code>${esc(x.paper_base_serial)}</code></td><td>${x.student_count}</td><td>${x.question_count}</td><td>${esc((x.skipped_questions||[]).join(', ')||'—')}</td><td>${typeof omrDiscussionPdf==='function'?`<button class="secondary" style="padding:5px 10px" onclick="omrDiscussionPdf('${esc(x.paper_base_serial)}')">📽 PDF</button>`:''}</td><td>${typeof omrFixOpen==='function'?`<button class="secondary" style="padding:5px 10px" onclick="omrFixOpen('${esc(x.paper_base_serial)}')">✏️ Correct key / Undo</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No OMR results imported yet.</p>';
 }
 function omrReadFile(ev){
   const file=ev.target.files?.[0];if(!file)return;
@@ -6275,8 +6275,9 @@ function omrRenderPreview(){
   </div>`;
 }
 function omrPayloadRows(){
-  const res=omrSelectedCandidate()?.res;if(!res)return [];
-  return res.rows.filter(r=>r.set).map(r=>({roll_no:r.roll,set_code:r.set,answers:r.answers,sheet_keys:r.keys.map((k,i)=>(r.bonus?r.bonus.has(i+1):res.sets[r.set]?.bonus.has(i+1))?'BONUS':k)}));
+  const c=omrSelectedCandidate(),res=c?.res;if(!res)return [];
+  const saved=typeof omrSavedBonusFor==='function'?omrSavedBonusFor(c):()=>new Set();   // V34: Bonus set with "Correct key"
+  return res.rows.filter(r=>r.set).map(r=>{const sb=saved(r);return {roll_no:r.roll,set_code:r.set,answers:r.answers,sheet_keys:r.keys.map((k,i)=>((r.bonus?r.bonus.has(i+1):res.sets[r.set]?.bonus.has(i+1))||sb.has(i+1))?'BONUS':k)};});
 }
 function omrReportHtml(res){
   const rows=res.rows||[];const by=s=>rows.filter(x=>x.status===s);
