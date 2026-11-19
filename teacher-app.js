@@ -2769,6 +2769,7 @@ async function jnvstQuestionBankHome(){
       <button onclick="jnvstQbDeleteLesson()" class="danger">🗑 Delete Selected Lesson</button>
       <button onclick="jnvstQbDeleteSubject()" class="danger">🗑 Delete Selected Subject</button>
       <button class="secondary" onclick="jnvstQbClearSelection()">Clear Selection</button>
+      <button onclick="typeof mostMissedOpen==='function'?mostMissedOpen():notify('Upload most-missed.js and press Ctrl+Shift+R.')" style="background:#dc2626;color:#fff;border:0;font-weight:700" title="Questions students get wrong most often">⚠ Most Missed Questions</button>
       <button onclick="jnvstQbDiscussionPdf()" style="background:#0f766e;color:#fff;border:0;font-weight:700" title="One page per ticked question plus all its variations; answer not shown">📽 Discussion PDF (selected)</button>
       <button onclick="jnvstQbSetCommon(true)" style="background:#f59e0b;color:#fff;border:0;font-weight:700">⭐ Mark Selected as Common</button><button class="secondary" onclick="jnvstQbSetCommon(false)">Remove Common from Selected</button>
       <button id="jnvstQbCreateVariationBtn" onclick="jnvstQbCreateVariationFromGroup()" style="display:none;background:#16a34a;color:#fff;font-weight:700;border:0">➕ Create Variation Question</button>

@@ -465,7 +465,7 @@ function v24BankCentral(body) {
       <label>Search<input id="v24CSearch" type="search" placeholder="Words in the question" onkeydown="if(event.key==='Enter')v24LoadCentral(0)"></label>
       <button class="secondary" onclick="v24LoadCentral(0)">Search</button>
     </div>
-    <div class="actions" style="margin:0 0 10px;align-items:center"><button onclick="v28CentralPdf()">📽 Discussion PDF (<span id="v28CCount">${(V24.cSel || new Set()).size}</span> ticked)</button><button class="secondary" onclick="V24.cSel=new Set();v24LoadCentral(0)">Clear ticks</button><span class="small muted">Tick questions to discuss in class; all variations of their groups are added. Ticks stay when you change filters.</span></div>
+    <div class="actions" style="margin:0 0 10px;align-items:center"><button onclick="typeof mostMissedOpen==='function'?mostMissedOpen():alert('Upload most-missed.js and press Ctrl+Shift+R.')" style="background:#dc2626;color:#fff;border:0;font-weight:700" title="Questions your students get wrong most often">⚠ Most Missed</button><button onclick="v28CentralPdf()">📽 Discussion PDF (<span id="v28CCount">${(V24.cSel || new Set()).size}</span> ticked)</button><button class="secondary" onclick="V24.cSel=new Set();v24LoadCentral(0)">Clear ticks</button><span class="small muted">Tick questions to discuss in class; all variations of their groups are added. Ticks stay when you change filters.</span></div>
     <div id="v24CentralList"><div class="v24-empty">Loading…</div></div>`;
   V24.cSel = V24.cSel || new Set();
   v24CentralLessons();
@@ -559,6 +559,7 @@ function v24RenderMine(body) {
       <button onclick="v24SubmitSelected()">Send selected for approval</button>
       <button class="secondary" onclick="v24WithdrawSelected()">Take back selected</button>
       <button class="danger" onclick="v24DeleteSelected()">Delete selected</button>
+      <button onclick="typeof mostMissedOpen==='function'?mostMissedOpen():alert('Upload most-missed.js and press Ctrl+Shift+R.')" style="background:#dc2626;color:#fff;border:0;font-weight:700">⚠ Most Missed</button>
       <button onclick="v28MinePdf()">📽 Discussion PDF</button>
       <span class="small muted" id="v24SelCount">0 selected</span>
     </div>

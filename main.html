@@ -304,7 +304,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=48";
+      s.src="teacher-app.js?v=49";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -339,7 +339,7 @@ function loadTeacherApp(){
                    g.onload=g.onerror=()=>{
                     // V24: Admin + Teacher accounts (teacher dashboard, approvals). Must load last.
                     const v=document.createElement("script");
-                    v.src="teacher-portal.js?v=9";
+                    v.src="teacher-portal.js?v=10";
                     v.onload=v.onerror=()=>{
                       // V29: JNVST Question Bank — Download for Editing / Re-upload (English + Assamese together) (optional)
                       const ex=document.createElement("script");
@@ -355,7 +355,13 @@ function loadTeacherApp(){
                           rk.onload=rk.onerror=()=>{
                             const of=document.createElement("script");
                             of.src="omr-fix.js?v=2"; // V34: correct OMR key / undo import
-                            of.onload=of.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
+                            of.onload=of.onerror=()=>{
+                              // V35: most-missed questions + Discussion PDF (optional)
+                              const mm=document.createElement("script");
+                              mm.src="most-missed.js?v=1";
+                              mm.onload=mm.onerror=()=>{try{window.jnvstWord12Install&&jnvstWord12Install()}catch(_){}window.__teacherAppLoaded=true;resolve()};
+                              document.head.appendChild(mm);
+                            };
                             document.head.appendChild(of);
                           };
                           document.head.appendChild(rk);
