@@ -244,15 +244,39 @@ function coverPage(list,D,o){
       </tbody></table></div></div></section>`;
 }
 
+/* ---------------- V35: front cover with the hub logo (every discussion PDF) ---------------- */
+let LOGO='';
+async function ensureLogo(){
+  if(LOGO)return;
+  try{const r=await fetch('swarup-sir-logo.png');if(!r.ok)throw 0;const b=await r.blob();
+    LOGO=await new Promise((ok,no)=>{const f=new FileReader();f.onload=()=>ok(f.result);f.onerror=no;f.readAsDataURL(b);});}
+  catch(_){try{LOGO=new URL('swarup-sir-logo.png',location.href).href;}catch(__){}}   // print window can still load it by address
+}
+function brandCover(D,o,list){
+  const date=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  const n=list.length;
+  const meta=[D.subject,date,`${n} question${n===1?'':'s'}`].filter(Boolean).map(e).join(' · ');
+  return `<section class="pg brand"><div class="bar"></div>
+    <div class="bt"><div class="lg">${LOGO?`<img src="${e(LOGO)}" alt="">`:''}</div>
+      <div class="bi"><div class="tg">Excellence in Competitive Exam Preparation</div><div class="nm">Swarup Sir's Knowledge Hub</div><div class="ph">📞 Call / WhatsApp: 98643 90279</div></div></div>
+    <div class="bb"><div class="tl">${e(D.title)}</div><div class="mt">${meta}</div></div></section>`;
+}
+// V35: answer page after a question (Most missed questions PDF): the question again, the correct option marked, the explanation
+function answerPage(it,idx,total,D,o){
+  return questionPage(it,idx,total,D,{...o,ans:true,expl:true,count:false,names:false,right:false})
+    .replace('<div class="hd">','<div class="hd ans">')
+    .replace('<div class="wh">','<div class="wh"><span class="sn" style="background:#bbf7d0;color:#14532d">✓ Answer</span>');
+}
 function docHtml(D,o){
   let list=D.bankMode?D.items:D.items.filter(it=>o.which==='all'||it.wrong.length+it.skip.length>0);
   if(!D.bankMode){list.sort((a,b)=>a.first-b.first);
     if(o.order==='most')list.sort((a,b)=>(b.wrong.length+b.skip.length)-(a.wrong.length+a.skip.length)||a.first-b.first);}
   const wide=o.shape==='wide';const W=297,H=wide?167:210;
-  const pages=[D.bankMode?bankCoverPage(list,D):coverPage(list,D,o)];const shown=new Set();
+  const pages=[brandCover(D,o,list),D.bankMode?bankCoverPage(list,D):coverPage(list,D,o)];const shown=new Set();
   list.forEach((it,i)=>{const p=passageOf(it.row||{});const pk=p.id||p.title;
     if(p.text&&pk&&!shown.has(pk)){shown.add(pk);pages.push(passagePage(p,D));}
-    pages.push(questionPage(it,i+1,list.length,D,o));});
+    pages.push(questionPage(it,i+1,list.length,D,o));
+    if(D.bankMode&&o.ansPage)pages.push(answerPage(it,i+1,list.length,D,o));});
   if(D.bankMode&&o.key)pages.push(...answerKeyPages(list,D));
   const css=`@page{size:${W}mm ${H}mm;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala UI',sans-serif;color:#0f172a}
@@ -289,7 +313,7 @@ body{margin:0;background:#cbd5e1;font-family:Arial,'Noto Sans Bengali','Nirmala 
 .cover .ct{font-size:1.1em;font-weight:800;color:#17365D}.cover .cs{font-size:.5em;color:#475569;margin:2mm 0 4mm}
 table.ix{border-collapse:collapse;font-size:.42em;width:100%}
 .key{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm 6mm;font-size:.8em}.key div{border-bottom:.3mm solid #e2e8f0;padding:.8mm 0;display:flex;gap:2mm}.key b{min-width:9mm;color:#1e3a8a}.key i{font-style:normal;font-weight:800;color:#166534}.key small{color:#64748b;font-size:.75em;align-self:center}table.ix td,table.ix th{border:.3mm solid #cbd5e1;padding:1mm 2mm;text-align:left}table.ix th{background:#f1f5f9}
-mjx-container{font-size:100%!important}
+.brand{background:#fff}.brand .bar{height:6mm;background:#17365D;flex:0 0 auto}.brand .bt{flex:1;display:grid;grid-template-columns:42% 1fr;gap:10mm;align-items:center;padding:0 14mm;min-height:0}.brand .lg img{width:100%;display:block;border-radius:4mm}.brand .tg{font-size:4.6mm;color:#475569;letter-spacing:.3mm}.brand .nm{font:800 12mm/1.1 Arial;color:#17365D;margin:2mm 0 5mm}.brand .ph{font:700 6.5mm Arial;color:#166534}.brand .bb{flex:0 0 auto;border-top:.4mm solid #cbd5e1;background:#f1f5f9;padding:6mm 14mm 7mm}.brand .tl{font:800 11mm/1.15 Arial;color:#0f172a}.brand .mt{font-size:4.8mm;color:#475569;margin-top:2mm}\n.hd.ans{background:#166534}\nmjx-container{font-size:100%!important}
 .bn{position:sticky;top:0;z-index:5;font:14px Arial;background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .bn button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer}.bn button:disabled{background:#94a3b8;cursor:wait}`;
   const PLAIN=(root.OMR&&root.OMR.plainTeX)?root.OMR.plainTeX.toString():'function(t){return t}';
@@ -340,7 +364,8 @@ ${pages.join('')}
    marked. Optional answer key at the end. */
 const BQ_COLS='id,teacher_id,subject_id,lesson_id,topic,part_code,language,question_text,option_a,option_b,option_c,option_d,correct_option,image_url,passage_id,passage_title,passage_text,question_order,variation_group,active,created_at';
 const vgOf=q=>String(q&&q.variation_group||'').trim();
-function bankDiscussionPdf(ids){
+function bankDiscussionPdf(ids,opt){
+  opt=opt||{};
   ids=[...new Set((ids||[]).filter(Boolean))];
   if(!ids.length)return (typeof notify==='function'?notify:alert)('Tick the questions you want to discuss first.');
   const old=q$('omrDiscDlg');if(old)old.remove();
@@ -349,17 +374,18 @@ function bankDiscussionPdf(ids){
   d.innerHTML=`<div class="card" style="max-width:520px;width:100%;margin:0;max-height:92vh;overflow:auto">
     <h2 style="margin-top:0">📽 Discussion PDF</h2>
     <p class="small muted" style="margin-top:0">${ids.length} question${ids.length===1?'':'s'} chosen. One wide page per question in big letters; the answer is not shown on the pages.</p>
-    <label>Title (on every page)</label><input id="bdTitle" value="Class discussion" maxlength="80">
+    <label>Title (on every page)</label><input id="bdTitle" value="${e(opt.title||'Class discussion')}" maxlength="80">
     <label>Page shape</label><select id="bdShape"><option value="a4">A4 landscape (print or projector)</option><option value="wide">16:9 widescreen (projector / smart board)</option></select>
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="bdVar" type="checkbox" style="width:auto" checked> Add all variations of each Variation Group</label>
     <label>Variations in</label><select id="bdLang"><option value="same">The same medium as the chosen question (English / Assamese / Common)</option><option value="all">Every medium</option></select>
     <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="bdSpace" type="checkbox" style="width:auto" checked> Leave writing space for the pen tablet</label>
     <label style="display:flex;gap:8px;align-items:center"><input id="bdKey" type="checkbox" style="width:auto"> Answer key at the end (last page)</label>
+    ${opt.answerPages?'<label style="display:flex;gap:8px;align-items:center"><input id="bdAns" type="checkbox" style="width:auto"> Answer page after each question (answer + explanation)</label>':''}
     <div class="actions" style="margin-top:14px"><button id="bdGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('omrDiscDlg').remove()">Cancel</button></div>
     <div id="bdMsg" class="small muted"></div></div>`;
   document.body.appendChild(d);
   d.addEventListener('click',ev=>{if(ev.target===d)d.remove();});
-  q$('bdGo').onclick=()=>buildBank(ids,{title:q$('bdTitle').value.trim()||'Class discussion',shape:q$('bdShape').value,vars:q$('bdVar').checked,lang:q$('bdLang').value,space:q$('bdSpace').checked,key:q$('bdKey').checked,ans:false,count:false,expl:false,names:false,right:false});
+  q$('bdGo').onclick=()=>buildBank(ids,{title:q$('bdTitle').value.trim()||'Class discussion',shape:q$('bdShape').value,vars:q$('bdVar').checked,lang:q$('bdLang').value,space:q$('bdSpace').checked,key:q$('bdKey').checked,ansPage:!!(q$('bdAns')&&q$('bdAns').checked),ans:false,count:false,expl:false,names:false,right:false});
 }
 const sameMedium=(a,b)=>{a=String(a||'').toUpperCase();b=String(b||'').toUpperCase();return !a||!b||a===b||a==='COMMON'||b==='COMMON';};
 async function collectBank(ids,o){
@@ -388,7 +414,12 @@ async function collectBank(ids,o){
       items.push({...blankStats,key:r.id,row:r,correct:String(r.correct_option||'').toUpperCase(),group:g,chosen:isC,
         chips:(isC?chip('Chosen question'):chip('Variation'))+(g&&order.length>1?chip(`Group ${g} · ${k+1} of ${order.length}`):g?chip(`Group ${g}`):'')});});
   });
-  return {bankMode:true,items,nChosen,nVar,title:o.title,subject:'',bank:new Map(),language:'',groups:new Set(items.map(it=>it.group).filter(Boolean)).size};
+  const bank=new Map();
+  if(o.ansPage){   // V35: explanations (incl. Assamese) for the answer pages
+    const all=items.map(it=>it.row.id);
+    for(let i=0;i<all.length;i+=150){try{const {data}=await sb.from('mock_question_bank').select('id,language,explanation,explanation_as').in('id',all.slice(i,i+150));(data||[]).forEach(b=>bank.set(b.id,b));}catch(_){}}
+  }
+  return {bankMode:true,items,nChosen,nVar,title:o.title,subject:'',bank,language:'',groups:new Set(items.map(it=>it.group).filter(Boolean)).size};
 }
 function bankCoverPage(list,D){
   const date=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
@@ -416,6 +447,7 @@ async function buildBank(ids,o){
   if(btn)btn.disabled=true;if(msg)msg.textContent='Collecting the questions and their variations…';
   try{
     const D=await collectBank(ids,o);
+    await ensureLogo();
     w.document.open();w.document.write(docHtml(D,o));w.document.close();
     const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();
   }catch(err){
@@ -433,6 +465,7 @@ async function build(base,o){
   if(btn)btn.disabled=true;if(msg)msg.textContent='Collecting results…';
   try{
     const D=await collect(base,o.only||null);
+    await ensureLogo();
     const html=docHtml(D,o);
     w.document.open();w.document.write(html);w.document.close();
     const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();
@@ -550,7 +583,7 @@ function assignmentDiscussionPdf(ids,title){
     try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing the class discussion pages…</body>');}catch(_){}
     if(only)savePick(await assignBase(ids),only);
     if(btn)btn.disabled=true;if(msg)msg.textContent='Collecting results…';
-    try{const D=await collectAssign(ids,only,title);w.document.open();w.document.write(docHtml(D,o));w.document.close();const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();}
+    try{const D=await collectAssign(ids,only,title);await ensureLogo();w.document.open();w.document.write(docHtml(D,o));w.document.close();const dlg=q$('omrDiscDlg');if(dlg)dlg.remove();}
     catch(err){try{w.close();}catch(_){}if(msg)msg.textContent='Could not prepare the PDF: '+(err.message||err);if(btn)btn.disabled=false;}
   };
   loadStudentsAssign(ids).catch(err=>{const b=q$('odStu');if(b)b.innerHTML=`<div class="small muted">Could not load the student list (${e(err.message||err)}). All students will be included.</div>`;});

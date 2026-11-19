@@ -73,8 +73,7 @@ function mostMissedPdf(){
   const ids=shown().map(r=>r.mock_question_id).filter(id=>ST.pick.has(id));   // worst first
   if(!ids.length)return say('Tick at least one question first.');
   if(typeof bankDiscussionPdf!=='function')return say('Upload the new omr-discussion.js and press Ctrl+Shift+R.');
-  bankDiscussionPdf(ids);
-  setTimeout(()=>{const t=q$('bdTitle');if(t&&t.value==='Class discussion')t.value='Most missed questions';},0);
+  bankDiscussionPdf(ids,{answerPages:true,title:'Most missed questions'});   // only this PDF offers the answer page after each question
 }
 function mostMissedOpen(){
   const old=q$('mmDlg');if(old)old.remove();
