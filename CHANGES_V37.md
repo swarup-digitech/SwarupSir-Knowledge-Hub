@@ -2,7 +2,15 @@
 
 Includes everything from V36 (slot picker, random MAT blocks, series A–D, directions, no “[IMAGE QUESTION]”, no blank pages).
 
-## V37.1 (latest change)
+## V37.2 (latest change) — sets kept in one group, exam name, Set column
+* **One group for all sets.** A Pen-paper test is now ONE entry in the Mock Test list (“Term Mock 1 · ✍️ PEN-PAPER · OMR · Sets: A, B, C, D”). Sets are no longer renamed “… — Series A”; the set letter is stored separately. Buttons: **🖨 Set A / B / C / D PDF**, **📥 Import OMR**, **✎ Edit name** (renames all sets), **🗑 Delete all sets**.
+* **Exam name + exam code.** The title field is now “Exam name (Test Title)”. For Pen-paper an **exam code** (e.g. `MOCK-20261120-GKC7`) is made automatically, **printed on every booklet** next to the booklet code, and shown on the test card and after generation. Type the code (or the test name) as the **Exam name** in the OMR software.
+* **Import finds the test by itself.** New card *Import OMR — Pen-paper Mock Test* in Mock Test Management (the 📥 Import OMR button on a test opens it with that test selected). When you choose the Excel file, the Exam name cell / file name is compared with the exam codes and test names; the matching test is selected (or you are told that nothing matched and can choose from the list).
+* **Set column.** The import shows a table *Students and their Set*: Roll No, Name, **Set** (taken from the sheet's Exam Set column; if that is empty it is found from the key column or the answers) and how it was found. You can change the Set of any student by hand; students without a set are not imported.
+* Mistakes then go to the Mistake Bank as before.
+* **Run the SQL again** (it adds one more column, `exam_code`; safe to re-run).
+
+## V37.1
 * Generate Test now **starts with the question “Is this Mock Test Online or Pen-paper?”** (top of the page).
 * **Online = one paper for everyone.** No separate question sets are made. (The MAT blocks are still in random order, and the 4 questions inside a block are still shuffled, once, for that one paper.)
 * The **question sets A–D** drop-down appears **only for Pen-paper** tests.
