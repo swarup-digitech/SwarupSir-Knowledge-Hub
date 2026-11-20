@@ -1164,6 +1164,19 @@ function mockSortQuestions(a,b){
  if(ao!==bo)return ao-bo;
  return String(a.id||'').localeCompare(String(b.id||''));
 }
+/* ===== V36: Generate Mock Test — choose the question for every slot; MAT blocks in random order ===== */
+function mockShuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function mockQThumb(q){
+ const img=q.image_url?`<img src="${esc(q.image_url)}" loading="lazy" style="max-width:100%;max-height:74px;object-fit:contain;background:#fff;border:1px solid #e2e8f0;border-radius:6px">`:'';
+ const t=String(q.question_text||'').replace(/\s+/g,' ').replace(/[$\\]/g,'').trim();
+ const txt=t?`<div class="small">${esc(t.length>110?t.slice(0,110)+'…':t)}</div>`:'';
+ return (img+txt)||'<span class="muted small">(no preview)</span>';
+}
+function mockQLabel(q){const n=q.question_order||q.source_question_no;return `${q.set_id||'—'}${n?` · Q${n}`:''}`}
+function mockPassageThumb(set){
+ const q=(set.questions||[])[0]||{};const t=String(q.passage_text||'').replace(/\s+/g,' ').trim();
+ return `<b>${esc(q.passage_title||set.label)}</b><div class="small muted">${esc(t.length>130?t.slice(0,130)+'…':t)}</div><div class="small">${(set.questions||[]).length} questions</div>`;
+}
 async function generateMockTestPage(language){
  if(language) window.mockGeneratorLanguage=language;
  const generatorLanguage=window.mockGeneratorLanguage||'ASSAMESE';
@@ -1173,40 +1186,110 @@ async function generateMockTestPage(language){
  const {data:bank,error:be}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true}));
  if(be)return notify(be.message);
  const byPart={};(bank||[]).forEach(q=>{const lang=String(q.language||'').toUpperCase();if(q.section_code==='MAT'){if(lang==='COMMON'||!lang)(byPart[q.part_code]||=[]).push(q)}else if(lang===generatorLanguage){(byPart[q.part_code]||=[]).push(q)}});
- const setInfo={};
- const shortages=[];
+ Object.values(byPart).forEach(a=>a.sort(mockSortQuestions));
+ const setInfo={},shortages=[];
  for(const plan of MOCK_PLAN){
-  const sets=mockBuildSets(byPart[plan.part]||[],plan);
-  setInfo[plan.part]=sets;
-  if(!sets.length)shortages.push(plan);
+  const sets=mockBuildSets(byPart[plan.part]||[],plan);setInfo[plan.part]=sets;
+  const enough=plan.unit==='passage'?sets.length>=(plan.groupCount||1):(byPart[plan.part]||[]).length>=plan.count;
+  if(!enough)shortages.push(plan);
  }
- if(shortages.length)return notify('Question bank is incomplete or has no complete set/passage group:\n\n'+shortages.map(x=>x.unit==='passage'?`${x.label}: need at least 1 complete passage group of ${x.count} questions`:`${x.label}: need at least ${x.count} usable questions for one complete set`).join('\n'));
- const sectionGroups=[
-  ['MAT','Mental Ability Test (MAT)'],
-  ['EVS','Environmental Studies (EVS)'],
-  ['ARITHMETIC','Arithmetic'],
-  ['LANGUAGE','Language']
- ];
+ if(shortages.length)return notify('Question bank is incomplete:\n\n'+shortages.map(x=>x.unit==='passage'?`${x.label}: need at least ${x.groupCount||1} complete passage group(s) of ${x.passageCount||x.count} questions`:`${x.label}: need at least ${x.count} questions`).join('\n'));
+ window.mockGen={language:generatorLanguage,byPart,sets:setInfo,slots:{}};
+ MOCK_PLAN.forEach(p=>mockGenFillFromSet(p.part,1,true));
  render(`<div class="wrap">${header('Generate Mock Test')}<div class="card">
   <label>Test Title</label><input id="mtTitle" value="Mock Test">
   <label>Time Limit</label><input value="2 Hours (120 minutes)" disabled>
-  <label>Test Language</label><select id="mtLanguage" onchange="generateMockTestPage(this.value)"><option value="ASSAMESE" ${generatorLanguage==='ASSAMESE'?'selected':''}>Assamese</option><option value="ENGLISH" ${generatorLanguage==='ENGLISH'?'selected':''}>English</option></select><div class="notice small"><b>MAT is common:</b> MAT questions are shared by both languages. EVS, Arithmetic and Language will be selected only from the chosen language bank.</div><label>Question Selection</label><select id="mtMode"><option value="fixed">Fixed test — same 80 questions for all assigned students</option></select>
+  <label>Test Language</label><select id="mtLanguage" onchange="generateMockTestPage(this.value)"><option value="ASSAMESE" ${generatorLanguage==='ASSAMESE'?'selected':''}>Assamese</option><option value="ENGLISH" ${generatorLanguage==='ENGLISH'?'selected':''}>English</option></select><div class="notice small"><b>MAT is common:</b> MAT questions are shared by both languages. EVS, Arithmetic and Language are taken only from the chosen language bank.</div>
+  <div class="card" style="background:#f8fafc;border:2px solid #7c3aed;margin-top:15px">
+   <h3>🔀 Mental Ability order</h3>
+   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="mtShuffleMat" checked style="width:auto"> <b>Random order of the 5 MAT blocks</b></label>
+   <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="mtShuffleInside" checked style="width:auto"> <b>Also shuffle the 4 questions inside each block</b></label>
+   <label style="margin-top:8px">Booklet series (each series gets its own block order and question order)</label><select id="mtSeries" style="width:auto;min-width:260px"><option value="4" selected>4 series — A, B, C, D (students shared equally)</option><option value="3">3 series — A, B, C</option><option value="2">2 series — A, B</option><option value="1">1 series only (everyone gets the same paper)</option></select>
+   <p class="small muted" style="margin:6px 0 0">The five MAT blocks (4 questions each) are put in a random order. The 4 questions of a block always stay together (their order inside the block can be shuffled). With several series, one test is made per series (title “… — Series A”), students are spread over them at random, and the printed booklet carries that series code. Students and the printed paper show <b>PART I – V with a direction</b>, not the name of the pattern. Untick the first box to keep the syllabus order.</p>
+  </div>
   <div class="card" style="background:#f8fafc;border:2px solid #2563eb;margin-top:15px">
-   <h3>📚 Select Question Sets</h3>
-   <p class="small muted">Choose exactly which set/group should be used from each question bank. The selected sets are copied into the generated test and will be the same for all assigned students.</p>
+   <h3>📚 Choose the question for every slot</h3>
+   <p class="small muted">Each slot is one question of the paper. Press <b>Change</b> to pick any question from your bank. Picking a question already used in another slot of the same block swaps the two. Passages (EVS and Language) are chosen as complete groups of 5.</p>
    <div class="actions" style="margin-bottom:10px">
-    <button type="button" class="secondary" onclick="document.querySelectorAll('.mock-set-select').forEach(x=>x.selectedIndex=0)">Set 1 for all</button>
-    <button type="button" class="secondary" onclick="document.querySelectorAll('.mock-set-select').forEach(x=>x.value='random')">Random available set</button>
+    <button type="button" class="secondary" onclick="mockGenFillAll('set1')">Set 1 for all</button>
+    <button type="button" class="secondary" onclick="mockGenFillAll('randomSet')">Random sets</button>
+    <button type="button" class="secondary" onclick="mockGenFillAll('randomQ')">Random questions (mix sets)</button>
+    <span id="mockGenCount" class="small muted" style="align-self:center"></span>
    </div>
-   ${sectionGroups.map(([code,name])=>`<div style="margin:12px 0 6px"><b>${esc(name)}</b></div>${MOCK_PLAN.filter(x=>x.section===code).map(x=>`<div class="assignment" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0;padding:9px"><div><b>${esc(x.label)}</b><div class="small muted">${x.section==='LANGUAGE'&&x.groupCount?`${x.groupCount} passages × ${x.passageCount} questions`:`${x.count} question(s) per set`}</div></div><select id="mockSet_${x.part}" class="mock-set-select" style="min-width:210px;width:auto"><option value="random">Random set</option>${setInfo[x.part].map(st=>`<option value="${st.number}" ${st.number===1?'selected':''}>${esc(st.label)}</option>`).join('')}</select></div>`).join('')}`).join('')}
+   <div id="mockSlotsHost"></div>
   </div>
   <h3>Assign To</h3><p class="small muted">Select multiple classes. For each class choose entire class or selected students.</p>
   <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=true);loadMockAssignStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=false);loadMockAssignStudents()">Clear all</button></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="mock-class" type="checkbox" value="${c.id}" onchange="loadMockAssignStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join('')}</div>
   <div id="mockAssignPicker" class="card" style="background:#f8fafc;margin-top:15px"><span class="muted">Select classes above.</span></div>
-  <div class="card" style="background:#f8fafc"><h3>Question Blueprint</h3>${MOCK_PLAN.map(x=>`<div class="assignment" style="margin:6px 0;padding:9px"><b>${esc(x.label)}</b> — ${x.section==='LANGUAGE'&&x.groupCount?`${x.groupCount} passages × ${x.passageCount} questions`:`${x.count} ${x.unit==='passage'?'questions from 1 complete passage group':'questions'}`} · <b>${setInfo[x.part].length} set(s) available</b></div>`).join('')}</div>
   <div class="actions"><button onclick="createMockTest()">Generate & Assign 80-Question Test</button><button class="secondary" onclick="mockTestManagement()">Cancel</button></div>
- </div></div>`)
+ </div></div>`);
+ mockGenRender();
+}
+/* slots: question-id strings for question units, set numbers (as strings) for passage units */
+function mockGenSlotCount(plan){return plan.unit==='passage'?(plan.groupCount||1):plan.count}
+function mockGenFillFromSet(part,setNumber,silent){
+ const g=window.mockGen,plan=mockPlanByPart[part],sets=g.sets[part]||[],n=mockGenSlotCount(plan);
+ if(plan.unit==='passage'){const first=sets.find(s=>s.number===Number(setNumber))||sets[0];const rest=sets.filter(s=>s!==first);g.slots[part]=[first,...rest].slice(0,n).map(s=>String(s.number))}
+ else{const s=sets.find(x=>x.number===Number(setNumber))||sets[0];g.slots[part]=(s?s.questions:[]).slice(0,n).map(q=>q.id)}
+ if(!silent)mockGenRender();
+}
+function mockGenFillRandom(part,mode){
+ const g=window.mockGen,plan=mockPlanByPart[part],n=mockGenSlotCount(plan);
+ if(plan.unit==='passage')g.slots[part]=mockShuffle(g.sets[part]).slice(0,n).map(s=>String(s.number));
+ else if(mode==='randomSet'){const s=g.sets[part];g.slots[part]=s.length?mockShuffle(s)[0].questions.slice(0,n).map(q=>q.id):[]}
+ else g.slots[part]=mockShuffle(g.byPart[part]||[]).slice(0,n).map(q=>q.id);
+}
+function mockGenFillAll(mode){
+ MOCK_PLAN.forEach(p=>{if(mode==='set1')mockGenFillFromSet(p.part,1,true);else mockGenFillRandom(p.part,mode)});
+ mockGenRender();
+}
+function mockGenPlanRandom(part){mockGenFillRandom(part,'randomQ');mockGenRender()}
+function mockGenApplySet(part){const v=document.getElementById('mockFill_'+part)?.value;mockGenFillFromSet(part,v)}
+function mockGenClear(part,idx){window.mockGen.slots[part][idx]=null;mockGenRender()}
+function mockGenCard(plan){
+ const g=window.mockGen,slots=g.slots[plan.part]||[],n=mockGenSlotCount(plan),sets=g.sets[plan.part]||[];
+ const isPass=plan.unit==='passage';
+ const rows=Array.from({length:n},(_,i)=>{
+  const v=slots[i];let body='<span class="muted small">— empty —</span>',tag='';
+  if(isPass){const s=sets.find(x=>String(x.number)===String(v));if(s){body=mockPassageThumb(s);tag=esc(s.label)}}
+  else{const q=(g.byPart[plan.part]||[]).find(x=>x.id===v);if(q){body=mockQThumb(q);tag=esc(mockQLabel(q))}}
+  const slotName=plan.section==='LANGUAGE'?`Passage ${i+1}`:plan.unit==='passage'?'Passage':`Slot ${i+1}`;
+  return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e5e7eb"><div style="width:74px;font-weight:700">${slotName}</div><div style="flex:1;min-width:0">${body}</div><div class="small muted" style="width:120px;text-align:right">${tag}</div><div class="actions" style="margin:0;flex:none"><button type="button" class="secondary" onclick="mockGenPick('${plan.part}',${i})">Change</button><button type="button" class="secondary" onclick="mockGenClear('${plan.part}',${i})" title="Clear this slot">✕</button></div></div>`}).join('');
+ const filled=slots.filter(Boolean).length;
+ const fill=isPass?'':`<select id="mockFill_${plan.part}" style="width:auto;min-width:130px">${sets.map(s=>`<option value="${s.number}">${esc(s.label)}</option>`).join('')}</select><button type="button" class="secondary" onclick="mockGenApplySet('${plan.part}')">Fill from set</button>`;
+ return `<div class="assignment" style="margin:8px 0;padding:10px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><b>${esc(plan.label)}</b><span class="small ${filled===n?'':'muted'}" style="${filled===n?'color:#166534':'color:#b91c1c'}">${filled}/${n} chosen</span><span class="small muted">· ${isPass?sets.length+' passage(s) in bank':(g.byPart[plan.part]||[]).length+' question(s) in bank'}</span><span style="flex:1"></span>${fill}<button type="button" class="secondary" onclick="mockGenPlanRandom('${plan.part}')">🎲 Random</button></div>${rows}</div>`;
+}
+function mockGenRender(){
+ const g=window.mockGen,host=document.getElementById('mockSlotsHost');if(!host)return;
+ const secs=[['MAT','Mental Ability Test (MAT) — 5 blocks × 4 questions'],['EVS','Environmental Studies (EVS)'],['ARITHMETIC','Arithmetic'],['LANGUAGE','Language']];
+ host.innerHTML=secs.map(([code,name])=>`<div style="margin:14px 0 4px"><b style="font-size:16px">${esc(name)}</b></div>${MOCK_PLAN.filter(x=>x.section===code).map(mockGenCard).join('')}`).join('');
+ let ok=0,tot=0;MOCK_PLAN.forEach(p=>{const n=mockGenSlotCount(p);tot+=n;ok+=(g.slots[p.part]||[]).filter(Boolean).length});
+ const c=document.getElementById('mockGenCount');if(c)c.textContent=`${ok}/${tot} slots chosen`;
+}
+function mockGenPick(part,idx){
+ const g=window.mockGen,plan=mockPlanByPart[part];
+ let m=document.getElementById('mockPickModal');if(m)m.remove();
+ m=document.createElement('div');m.id='mockPickModal';
+ m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+ m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:1000px;width:100%;padding:16px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">${esc(plan.label)} — choose for ${plan.unit==='passage'?(plan.section==='LANGUAGE'?'Passage '+(idx+1):'this passage'):'Slot '+(idx+1)}</h3><span style="flex:1"></span><input id="mockPickFilter" placeholder="Search set id or text…" oninput="mockGenPickList('${part}',${idx})" style="width:230px"><button type="button" class="secondary" onclick="document.getElementById('mockPickModal').remove()">Close</button></div><div id="mockPickList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:12px"></div></div>`;
+ m.addEventListener('click',e=>{if(e.target===m)m.remove()});
+ document.body.appendChild(m);mockGenPickList(part,idx);
+}
+function mockGenPickList(part,idx){
+ const g=window.mockGen,plan=mockPlanByPart[part],isPass=plan.unit==='passage',slots=g.slots[part]||[];
+ const f=(document.getElementById('mockPickFilter')?.value||'').toLowerCase().trim();
+ const items=isPass?g.sets[part].map(s=>({key:String(s.number),label:s.label,html:mockPassageThumb(s),text:(s.label+' '+((s.questions[0]||{}).passage_title||'')+' '+((s.questions[0]||{}).passage_text||'')).toLowerCase()}))
+  :(g.byPart[part]||[]).map(q=>({key:q.id,label:mockQLabel(q),html:mockQThumb(q),text:(mockQLabel(q)+' '+(q.question_text||'')+' '+(q.topic||'')).toLowerCase()}));
+ const shown=items.filter(x=>!f||x.text.includes(f)).slice(0,300);
+ const host=document.getElementById('mockPickList');if(!host)return;
+ host.innerHTML=shown.length?shown.map(x=>{const at=slots.indexOf(x.key),cur=at===idx,used=at>=0&&!cur;return `<button type="button" onclick="mockGenChoose('${part}',${idx},'${x.key}')" style="text-align:left;background:${cur?'#dbeafe':'#fff'};color:#0f172a;border:2px solid ${cur?'#2563eb':used?'#cbd5e1':'#e2e8f0'};border-radius:10px;padding:8px;cursor:pointer"><div class="small" style="margin-bottom:4px"><b>${esc(x.label)}</b> ${cur?'<span style="color:#2563eb">· this slot</span>':used?`<span class="muted">· used in ${isPass?'another passage':'slot '+(at+1)}</span>`:''}</div>${x.html}</button>`}).join(''):'<div class="muted">No matching questions.</div>';
+ if(items.length>300&&!f)host.insertAdjacentHTML('beforeend','<div class="small muted">Showing the first 300 — type in the search box to narrow.</div>');
+}
+function mockGenChoose(part,idx,key){
+ const S=window.mockGen.slots[part];const j=S.indexOf(key);
+ if(j>=0&&j!==idx){const t=S[idx];S[idx]=S[j];S[j]=t}else S[idx]=key;
+ document.getElementById('mockPickModal')?.remove();mockGenRender();
 }
 async function loadMockAssignStudents(){const box=document.getElementById('mockAssignPicker');if(!box)return;const ids=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);if(!ids.length){box.innerHTML='<span class="muted">Select classes above.</span>';return}box.innerHTML='Loading students…';const {data:m,error}=await sb.from('class_students').select('class_id,student_id').in('class_id',ids);if(error){box.innerHTML=message(error.message);return}const sids=[...new Set((m||[]).map(x=>x.student_id))];const {data:students,error:e}=await sb.from('profiles').select('id,full_name,username').in('id',sids).order('full_name');if(e){box.innerHTML=message(e.message);return}const by=new Map();(m||[]).forEach(x=>{if(!by.has(x.class_id))by.set(x.class_id,[]);by.get(x.class_id).push(x.student_id)});box.innerHTML=ids.map(cid=>{const name=document.querySelector(`.mock-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid;const list=(by.get(cid)||[]).map(id=>students.find(s=>s.id===id)).filter(Boolean);return `<div class="assignment"><h3>${esc(name)}</h3><label><input type="radio" name="mockMode_${cid}" value="class" checked onchange="document.getElementById('mockStudents_${cid}').style.display='none'" style="width:auto;margin-right:6px">Entire class</label> <label><input type="radio" name="mockMode_${cid}" value="students" onchange="document.getElementById('mockStudents_${cid}').style.display='block'" style="width:auto;margin-right:6px">Selected students</label><div id="mockStudents_${cid}" style="display:none;margin-top:8px">${list.map(s=>`<label style="display:block;padding:5px"><input class="mock-student" data-class-id="${cid}" type="checkbox" value="${s.id}" style="width:auto;margin-right:6px">${esc(s.full_name)} <span class="muted small">${esc(s.username||'')}</span></label>`).join('')||'<span class="muted">No students.</span>'}</div></div>`}).join('')}
 async function createMockTest(){
@@ -1214,73 +1297,85 @@ async function createMockTest(){
  if(!title)return notify('Enter a test title.');
  const selected=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);
  if(!selected.length)return notify('Select at least one class.');
+ const g=window.mockGen;
+ if(!g)return notify('Please open Generate Mock Test again.');
+ // V36: every slot must be filled, and no question may be used twice.
+ const missing=[];
+ for(const plan of MOCK_PLAN){const n=mockGenSlotCount(plan),s=g.slots[plan.part]||[];if(s.filter(Boolean).length!==n)missing.push(`${plan.label}: ${s.filter(Boolean).length}/${n} chosen`);if(new Set(s.filter(Boolean)).size!==s.filter(Boolean).length)missing.push(`${plan.label}: the same question is used twice`)}
+ if(missing.length)return notify('Please complete the slots first:\n\n'+missing.join('\n'));
  let studentIds=[];
- for(const cid of selected){
-  const mode=document.querySelector(`input[name="mockMode_${cid}"]:checked`)?.value||'class';
-  if(mode==='class'){
-   const {data:m,error}=await sb.from('class_students').select('student_id').eq('class_id',cid);
-   if(error)throw error;studentIds.push(...(m||[]).map(x=>x.student_id));
-  }else studentIds.push(...[...document.querySelectorAll(`.mock-student[data-class-id="${cid}"]:checked`)].map(x=>x.value));
- }
+ try{
+  for(const cid of selected){
+   const mode=document.querySelector(`input[name="mockMode_${cid}"]:checked`)?.value||'class';
+   if(mode==='class'){
+    const {data:m,error}=await sb.from('class_students').select('student_id').eq('class_id',cid);
+    if(error)throw error;studentIds.push(...(m||[]).map(x=>x.student_id));
+   }else studentIds.push(...[...document.querySelectorAll(`.mock-student[data-class-id="${cid}"]:checked`)].map(x=>x.value));
+  }
+ }catch(e){return notify('Could not read students: '+(e.message||e))}
  studentIds=[...new Set(studentIds)];
  if(!studentIds.length)return notify('No students were selected.');
  try{
-  const {data:bank,error:be}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true}));
-  if(be)throw be;
   const selectedLanguage=document.getElementById('mtLanguage')?.value||'ASSAMESE';
-  const byPart={};(bank||[]).forEach(q=>{const lang=String(q.language||'').toUpperCase();if(q.section_code==='MAT'){if(lang==='COMMON'||!lang)(byPart[q.part_code]||=[]).push(q)}else if(lang===selectedLanguage){(byPart[q.part_code]||=[]).push(q)}});
-  const chosenSets={};
+  // Resolve the chosen slots into question lists.
+  const chosen={};
   for(const plan of MOCK_PLAN){
-   const sets=mockBuildSets(byPart[plan.part]||[],plan);
-   if(!sets.length)throw new Error(`${plan.label} has no complete set available.`);
-   const value=document.getElementById(`mockSet_${plan.part}`)?.value||'random';
-   if(plan.section==='LANGUAGE' && plan.groupCount){
-    const wanted=Number(plan.groupCount);
-    if(sets.length<wanted)throw new Error(`${plan.label}: need ${wanted} complete passages of ${plan.passageCount||5} questions; only ${sets.length} available.`);
-    let chosen;
-    if(value==='random'){
-      const shuffled=[...sets].sort(()=>Math.random()-0.5);
-      chosen=shuffled.slice(0,wanted);
-    }else{
-      const first=sets.find(x=>String(x.number)===String(value));
-      if(!first)throw new Error(`${plan.label}: selected passage is no longer available.`);
-      const rest=sets.filter(x=>x!==first).sort((a,b)=>String(a.set_id).localeCompare(String(b.set_id)));
-      chosen=[first,...rest].slice(0,wanted);
-    }
-    chosenSets[plan.part]=chosen;
-   }else{
-    const set=value==='random'?sets[Math.floor(Math.random()*sets.length)]:sets.find(x=>String(x.number)===String(value));
-    if(!set)throw new Error(`${plan.label}: selected set is no longer available.`);
-    chosenSets[plan.part]=set;
-   }
-  }
-  const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title,language:selectedLanguage,time_limit_seconds:7200,status:'published'}).select().single();
-  if(te)throw te;
-  let qrows=[];
-  for(const plan of MOCK_PLAN){
-   const selectedGroups=plan.section==='LANGUAGE' && plan.groupCount ? chosenSets[plan.part] : [chosenSets[plan.part]];
-   const selectedQs=selectedGroups.flatMap(g=>g.questions);
-   const expected=plan.count;
-   if(selectedQs.length!==expected)throw new Error(`${plan.label}: selected groups must contain exactly ${expected} questions.`);
+   const s=g.slots[plan.part];
    if(plan.unit==='passage'){
-    // Store the complete passage on every question in the passage group.
-    // This also repairs banks where only one question row contains the passage text.
-    for(const group of selectedGroups){
-     const groupQuestions=group.questions||[];
-     const passageText=groupQuestions.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'';
-     groupQuestions.forEach(q=>qrows.push({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:passageText||q.passage_text||null,image_url:q.image_url,marks:1.25}));
-    }
+    chosen[plan.part]=s.map(num=>{const set=(g.sets[plan.part]||[]).find(x=>String(x.number)===String(num));if(!set)throw new Error(`${plan.label}: a chosen passage is no longer available.`);return set});
    }else{
-    qrows.push(...selectedQs.map(q=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:q.passage_text,image_url:q.image_url,marks:1.25})));
+    chosen[plan.part]=s.map(id=>{const q=(g.byPart[plan.part]||[]).find(x=>x.id===id);if(!q)throw new Error(`${plan.label}: a chosen question is no longer available.`);return q});
    }
   }
-  qrows.forEach((q,i)=>q.question_number=i+1);
-  const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
-  const recipients=studentIds.map(student_id=>({mock_test_id:test.id,student_id}));
-  const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re;
-  const summary=MOCK_PLAN.map(x=>`${x.label}: ${Array.isArray(chosenSets[x.part])?chosenSets[x.part].map(g=>g.label).join(', '):chosenSets[x.part].label}`).join('\n');
-  notify(`Mock Test generated successfully.\n\n80 questions\n100 marks\n2 hours\nAssigned to ${recipients.length} student(s).\n\nSelected sets:\n${summary}`);
-  mockTestManagement();
+  // V36: the five MAT blocks go in a random order (each block of 4 stays together); V36.1: questions inside a block are shuffled too,
+  // and every booklet series (A–D) gets its own block order.
+  const matParts=MOCK_PLAN.filter(x=>x.section==='MAT').map(x=>x.part);
+  const shuffleMat=!!document.getElementById('mtShuffleMat')?.checked;
+  const shuffleInside=!!document.getElementById('mtShuffleInside')?.checked;
+  const nSeries=Math.min(4,Math.max(1,Number(document.getElementById('mtSeries')?.value)||1));
+  const codes=['A','B','C','D'].slice(0,nSeries);
+  const orders=[];
+  if(shuffleMat){let guard=0;while(orders.length<nSeries&&guard++<500){const o=mockShuffle(matParts);if(!orders.some(x=>x.join()===o.join()))orders.push(o)}}
+  while(orders.length<nSeries)orders.push(matParts.slice());
+  const roman=['I','II','III','IV','V'];
+  // students are spread over the series at random, as equally as possible
+  const pupils=mockShuffle(studentIds),bySeries=codes.map(()=>[]);
+  pupils.forEach((s,i)=>bySeries[i%nSeries].push(s));
+  const row=(test,q,passageText)=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:passageText!==undefined?(passageText||q.passage_text||null):q.passage_text,image_url:q.image_url,marks:1.25});
+  const createdIds=[],summaryLines=[];
+  try{
+   for(let si=0;si<nSeries;si++){
+    const matOrder=orders[si];
+    const orderedPlans=[...matOrder.map(p=>mockPlanByPart[p]),...MOCK_PLAN.filter(x=>x.section!=='MAT')];
+    const seriesTitle=nSeries>1?`${title} — Series ${codes[si]}`:title;
+    const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title:seriesTitle,language:selectedLanguage,time_limit_seconds:7200,status:'published'}).select().single();
+    if(te)throw te;createdIds.push(test.id);
+    const qrows=[];
+    for(const plan of orderedPlans){
+     if(plan.unit==='passage'){
+      for(const group of chosen[plan.part]){
+       const gq=group.questions||[];
+       const passageText=gq.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'';
+       gq.forEach(q=>qrows.push(row(test,q,passageText)));
+      }
+     }else{
+      const list=(plan.section==='MAT'&&shuffleInside)?mockShuffle(chosen[plan.part]):chosen[plan.part];
+      list.forEach(q=>qrows.push(row(test,q)));
+     }
+    }
+    if(qrows.length!==80)throw new Error(`The paper has ${qrows.length} questions instead of 80.`);
+    qrows.forEach((q,i)=>q.question_number=i+1);
+    const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
+    const recipients=bySeries[si].map(student_id=>({mock_test_id:test.id,student_id}));
+    if(recipients.length){const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re}
+    summaryLines.push(`${nSeries>1?'Series '+codes[si]+' ('+recipients.length+' student(s)): ':''}`+matOrder.map((p,i)=>`Part ${roman[i]}=${mockPlanByPart[p].label.replace(/^MAT\s*[—-]\s*/,'')}`).join(' → '));
+   }
+   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
+   mockTestManagement();
+  }catch(e){
+   for(const id of createdIds){try{await sb.from('mock_tests').delete().eq('id',id)}catch(_){}}
+   notify('Could not generate Mock Test: '+(e.message||e));
+  }
  }catch(e){notify('Could not generate Mock Test: '+(e.message||e))}
 }
 function qpPlainMath(v,dollars=true){
@@ -1519,7 +1614,8 @@ function jnvstPdfBookletMeta(test){
   h>>>=0;
   const bookletNo=String(100000+(h%900000));
   const codes=['A','B','C','D'];
-  const code=codes[h%4];
+  const sm=String(test?.title||'').match(/\bSeries ([A-D])\s*$/);   // V36.1: series tests print their own code
+  const code=sm?sm[1]:codes[h%4];
   return {bookletNo,code};
 }
 async function generateMockTestPDF(testId){
@@ -1539,7 +1635,7 @@ async function generateMockTestPDF(testId){
     const byPart={};
     qs.forEach(q=>(byPart[q.part_code]??=[]).push(q));
 
-    const matOrder=['MAT_PATTERN','MAT_SERIES','MAT_GEOMETRICAL','MAT_MIRROR','MAT_EMBEDDED'];
+    const matOrder=[];qs.filter(q=>q.section_code==='MAT').slice().sort((a,b)=>a.question_number-b.question_number).forEach(q=>{if(!matOrder.includes(q.part_code))matOrder.push(q.part_code)});
     const matQs=matOrder.flatMap(p=>byPart[p]||[]);
     const evsMcq=(byPart.EVS_MCQ||[]).sort((a,b)=>a.question_number-b.question_number);
     const evsPass=(byPart.EVS_PASSAGE||[]).sort((a,b)=>a.question_number-b.question_number);
@@ -1585,10 +1681,12 @@ async function generateMockTestPDF(testId){
       MAT_MIRROR:'Sub-Part D — Questions 13 to 16',
       MAT_EMBEDDED:'Sub-Part E — Questions 17 to 20'
     };
-    for(const [code] of partGroups){
+    const ROMAN=['I','II','III','IV','V'];
+    for(const [bi,code] of matOrder.entries()){
       const arr=(byPart[code]||[]).sort((a,b)=>a.question_number-b.question_number);
       if(arr.length){
-        matHtml+=`<div class="jnvst-part-head">${subTitles[code]}</div><div class="jnvst-directions"><b>Directions :</b> ${esc(dirByPart[code]||'')}</div>${jnvstPdfGroupQuestions(arr)}`;
+        const first=arr[0].question_number,last=arr[arr.length-1].question_number;
+        matHtml+=`<div class="jnvst-part-head">PART ${ROMAN[bi]||bi+1}</div><div class="jnvst-directions"><b>Directions :</b> ${esc(jnvstMatDirection(code,first,last,true))}</div>${jnvstPdfGroupQuestions(arr)}`;
       }
     }
     matHtml+=`<div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section I — Part 1</span></div></div>`;
