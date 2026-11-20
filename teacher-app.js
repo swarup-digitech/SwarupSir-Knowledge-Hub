@@ -1521,6 +1521,20 @@ function jnvstPdfOption(q,o){
   const v=q?.['option_'+o.toLowerCase()];
   return `<div class="jnvst-option"><b>(${o})</b> ${jnvstPdfEscape(v||'')}</div>`;
 }
+/* V36.2: the "[IMAGE QUESTION]" placeholder is never printed; the picture is the question. */
+function jnvstPdfRealText(t){const s=String(t==null?'':t).trim();return s&&!/^\[(?:PDF\/)?IMAGE QUESTION[^\]]*\]$/i.test(s)?s:''}
+/* V36.2: stop blank pages. A .jnvst-page used to be exactly one page tall (min-height:297mm) with a forced break after it, so a
+   sub-pixel overflow (or content ending exactly at a page end) produced an empty page. Each block is now sized to a whole number of
+   pages minus 2px, and pages are separated with break-before instead of break-after. Runs after the images have loaded. */
+function jnvstPdfFixPages(doc){
+  const PH=297/25.4*96;
+  doc.querySelectorAll('.jnvst-page').forEach(p=>{
+    p.style.minHeight='0';p.style.height='auto';
+    const pb=parseFloat(getComputedStyle(p).paddingBottom)||0;   // ignore the empty bottom padding when counting pages
+    const h=p.scrollHeight,n=Math.max(1,Math.ceil((h-pb-2)/PH));
+    p.style.height=(n*PH-2)+'px';
+  });
+}
 function jnvstPdfQuestion(q){
   const hasImage=!!String(q?.image_url||'').trim();
   // MAT / image-based questions contain the question figure AND all four
@@ -1538,7 +1552,7 @@ function jnvstPdfQuestion(q){
       <div class="jnvst-qnum">${q.question_number}.</div>
       <div class="jnvst-qbody">
         ${q.image_url?`<img class="jnvst-question-image" src="${esc(q.image_url)}" alt="">`:''}
-        ${q.question_text?`<div class="jnvst-qtext">${jnvstPdfEscape(q.question_text)}</div>`:''}
+        ${(()=>{const qt=jnvstPdfRealText(q.question_text);return qt?`<div class="jnvst-qtext">${jnvstPdfEscape(qt)}</div>`:''})()}
         ${opts}
       </div>
     </div>
@@ -1724,8 +1738,9 @@ async function generateMockTestPDF(testId){
     // The previous implementation referenced an undefined `css_add` variable,
     // which caused PDF generation to fail before the print preview opened.
     const css_add=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
+    const css_pages='.jnvst-page{page-break-after:auto!important;break-after:auto!important}.jnvst-page+.jnvst-page{page-break-before:always!important;break-before:page!important}';
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}</style></head><body><div class="jnvst-paper">${pages}</div></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper">${pages}</div></body></html>`);
     w.document.close();
     const waitForImages=async()=>{
       const images=[...w.document.images];
@@ -1733,7 +1748,7 @@ async function generateMockTestPDF(testId){
         if(img.complete)return resolve();
         img.onload=resolve;img.onerror=resolve;
       })));
-      setTimeout(()=>{w.focus();w.print();},300);
+      setTimeout(()=>{try{jnvstPdfFixPages(w.document)}catch(_){}w.focus();w.print();},300);
     };
     await waitForImages();
   }catch(e){
