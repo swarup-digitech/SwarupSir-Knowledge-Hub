@@ -1590,11 +1590,21 @@ function jnvstPdfRealText(t){const s=String(t==null?'':t).trim();return s&&!/^\[
    sub-pixel overflow (or content ending exactly at a page end) produced an empty page. Each block is now sized to a whole number of
    pages minus 2px, and pages are separated with break-before instead of break-after. Runs after the images have loaded. */
 function jnvstPdfFixPages(doc){
-  const PH=297/25.4*96;
+  const PH=297/25.4*96, MM=96/25.4;
   doc.querySelectorAll('.jnvst-page').forEach(p=>{
     p.style.minHeight='0';p.style.height='auto';
-    const pb=parseFloat(getComputedStyle(p).paddingBottom)||0;   // ignore the empty bottom padding when counting pages
-    const h=p.scrollHeight,n=Math.max(1,Math.ceil((h-pb-2)/PH));
+    const foot=p.querySelector(':scope > .jnvst-footer');
+    const kids=[...p.children].filter(c=>c!==foot);
+    kids.forEach(c=>{c.style.zoom='';});
+    const reserve=(foot?foot.offsetHeight:0)+6*MM+8;          // footer sits 6mm above the page bottom
+    const bottom=()=>{const top=p.getBoundingClientRect().top;let b=0;kids.forEach(c=>{b=Math.max(b,c.getBoundingClientRect().bottom-top)});return b};
+    let cb=bottom(),n=Math.max(1,Math.ceil(cb/PH));
+    // Content ends inside the footer zone: shrink it slightly to fit (≥88%), else add a page.
+    if(foot&&cb+reserve>n*PH){
+      let z=1;
+      for(let k=0;k<5&&cb+reserve>n*PH;k++){z=Math.max(.88,z*((n*PH-reserve)/cb)*.995);kids.forEach(c=>{c.style.zoom=z});cb=bottom();if(z<=.88)break}
+      if(cb+reserve>n*PH){kids.forEach(c=>{c.style.zoom=''});cb=bottom();n++}
+    }
     p.style.height=(n*PH-2)+'px';
   });
 }
