@@ -1404,7 +1404,7 @@ async function createMockTest(){
   // students are spread over the series at random, as equally as possible
   const pupils=mockShuffle(studentIds),bySeries=codes.map(()=>[]);
   pupils.forEach((s,i)=>bySeries[i%nSeries].push(s));
-  const row=(test,q,passageText)=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:q.section_code,part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:passageText!==undefined?(passageText||q.passage_text||null):q.passage_text,image_url:q.image_url,marks:1.25});
+  const row=(test,q,passageText)=>({mock_test_id:test.id,bank_question_id:q.id,question_number:0,section_code:mockSubjectOfQ(q),part_code:q.part_code,question_text:q.question_text,option_a:q.option_a,option_b:q.option_b,option_c:q.option_c,option_d:q.option_d,correct_option:q.correct_option,passage_id:q.passage_id||null,passage_title:q.passage_title||null,passage_text:passageText!==undefined?(passageText||q.passage_text||null):q.passage_text,image_url:q.image_url,marks:1.25});
   const createdIds=[],summaryLines=[];
   try{
    for(let si=0;si<nSeries;si++){
@@ -1851,7 +1851,7 @@ async function loadMockTeacherAttempt(attemptId){
   const amap=new Map((ans||[]).map(x=>[x.question_id,String(x.selected_option||'').toUpperCase()]));
   const rows=(qs||[]).map(q=>{const student=amap.get(q.id)||'';const key=String(q.correct_option||'').toUpperCase();return {...q,student_answer:student,correct:key,is_answered:!!student,is_correct:!!student&&student===key}});
   const subjects={};
-  rows.forEach(q=>{const k=mockSubjectLabel(q.section_code);if(!subjects[k])subjects[k]={questions:0,correct:0,wrong:0,unanswered:0,marks:0};const s=subjects[k];s.questions++;if(!q.student_answer)s.unanswered++;else if(q.is_correct){s.correct++;s.marks+=Number(q.marks||1.25)}else s.wrong++});
+  rows.forEach(q=>{const k=mockSubjectOfQ(q);if(!subjects[k])subjects[k]={questions:0,correct:0,wrong:0,unanswered:0,marks:0};const s=subjects[k];s.questions++;if(!q.student_answer)s.unanswered++;else if(q.is_correct){s.correct++;s.marks+=Number(q.marks||1.25)}else s.wrong++});
   return {attempt:a,test,profile:p,rows,subjects};
 }
 function mockTeacherResponseHtml(data){

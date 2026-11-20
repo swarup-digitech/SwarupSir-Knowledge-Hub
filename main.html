@@ -304,7 +304,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=52";
+      s.src="teacher-app.js?v=53";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -1462,6 +1462,7 @@ async function viewMockResult(attemptId){
 
 
 
+function mockSubjectOfQ(q){const p=String(q?.part_code||'').toUpperCase().replace(/[-\s]+/g,'_');if(p.startsWith('MAT'))return 'MAT';if(p.startsWith('EVS'))return 'EVS';if(p==='ARITHMETIC')return 'ARITHMETIC';if(p.startsWith('LANGUAGE'))return 'LANGUAGE';return mockSubjectLabel(q?.section_code)}
 function mockSubjectLabel(code){const m={MAT:'MAT',MENTAL_ABILITY:'MAT',ARITHMETIC:'ARITHMETIC',LANGUAGE:'LANGUAGE',EVS:'EVS'};return m[String(code||'').toUpperCase()]||String(code||'OTHER').replace(/_/g,' ')}
 
 
@@ -1486,7 +1487,7 @@ async function loadStudentMockResult(attemptId){
   const amap=new Map((ans||[]).map(x=>[x.question_id,String(x.selected_option||'').toUpperCase()]));
   const rows=(qs||[]).map(q=>{const student=amap.get(q.id)||'';const key=String(q.correct_option||'').toUpperCase();return {...q,student_answer:student,correct:key,is_answered:!!student,is_correct:!!student&&student===key}});
   const subjects={};
-  rows.forEach(q=>{const k=mockSubjectLabel(q.section_code);if(!subjects[k])subjects[k]={questions:0,correct:0,wrong:0,unanswered:0,marks:0};const x=subjects[k];x.questions++;if(!q.student_answer)x.unanswered++;else if(q.is_correct){x.correct++;x.marks+=Number(q.marks||1.25)}else x.wrong++});
+  rows.forEach(q=>{const k=mockSubjectOfQ(q);if(!subjects[k])subjects[k]={questions:0,correct:0,wrong:0,unanswered:0,marks:0};const x=subjects[k];x.questions++;if(!q.student_answer)x.unanswered++;else if(q.is_correct){x.correct++;x.marks+=Number(q.marks||1.25)}else x.wrong++});
   return {attempt:a,test,profile:p,rows,subjects};
 }
 
