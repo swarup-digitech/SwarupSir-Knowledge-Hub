@@ -21,7 +21,8 @@ async function loadPreviousMockTests(){
   const box=document.getElementById('previousMockTests');
   if(!box)return;
   box.innerHTML='<p class="muted">Loading previous Mock Tests…</p>';
-  const {data:tests,error}=await sb.from('mock_tests').select('id,title,language,time_limit_seconds,status,results_released,created_at').eq('teacher_id',current.id).order('created_at',{ascending:false});
+  let {data:tests,error}=await sb.from('mock_tests').select('id,title,language,time_limit_seconds,status,results_released,created_at,delivery_mode,series_group_id,series_code').eq('teacher_id',current.id).order('created_at',{ascending:false});
+  if(error){({data:tests,error}=await sb.from('mock_tests').select('id,title,language,time_limit_seconds,status,results_released,created_at').eq('teacher_id',current.id).order('created_at',{ascending:false}));}   // V37 columns not installed yet
   if(error){box.innerHTML=message(error.message);return;}
   if(!tests?.length){box.innerHTML='<p class="muted">No Mock Tests have been created yet.</p>';return;}
   const ids=tests.map(t=>t.id);
@@ -33,15 +34,16 @@ async function loadPreviousMockTests(){
   box.innerHTML=tests.map(t=>{
     const lang=t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common';
     const mins=Math.round(Number(t.time_limit_seconds||7200)/60);
+    const off=t.delivery_mode==='OFFLINE';
     return `<div class="assignment" style="margin:8px 0">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
-        <div><h3 style="margin:0 0 5px">${esc(t.title||'Mock Test')}</h3>
-          <div class="small muted">${lang} · ${mins} minutes · ${rc.get(t.id)||0} student(s) · ${ac.get(t.id)||0} attempt(s) · Created ${t.created_at?new Date(t.created_at).toLocaleString():'—'}</div>
+        <div><h3 style="margin:0 0 5px">${esc(t.title||'Mock Test')} <span class="tag" style="background:${off?'#ccfbf1':'#dbeafe'};color:${off?'#0f766e':'#1d4ed8'}">${off?'📄 PEN-PAPER · OMR':'🖥 ONLINE'}</span></h3>
+          <div class="small muted">${lang} · ${mins} minutes · ${off?'not shown to students':(rc.get(t.id)||0)+' student(s) · '+(ac.get(t.id)||0)+' attempt(s)'} · Created ${t.created_at?new Date(t.created_at).toLocaleString():'—'}</div>
         </div>
         <div class="actions">
           <button onclick="generateMockTestPDF('${t.id}')">🖨 Question Paper PDF</button>
           <button class="secondary" onclick="editMockTest('${t.id}')">✎ Edit</button>
-          <button class="secondary" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results':'✓ Approve Results'}</button>
+          ${off?`<button onclick="mockOmrImportPage('${t.series_group_id||t.id}')">📥 Import OMR</button>`:`<button class="secondary" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results':'✓ Approve Results'}</button>`}
           <button class="danger" onclick="deleteMockTest('${t.id}')">🗑 Delete</button>
         </div>
       </div>
@@ -1196,16 +1198,22 @@ async function generateMockTestPage(language){
  if(shortages.length)return notify('Question bank is incomplete:\n\n'+shortages.map(x=>x.unit==='passage'?`${x.label}: need at least ${x.groupCount||1} complete passage group(s) of ${x.passageCount||x.count} questions`:`${x.label}: need at least ${x.count} questions`).join('\n'));
  window.mockGen={language:generatorLanguage,byPart,sets:setInfo,slots:{}};
  MOCK_PLAN.forEach(p=>mockGenFillFromSet(p.part,1,true));
- render(`<div class="wrap">${header('Generate Mock Test')}<div class="card">
+ render(`<div class="wrap">${header('Generate Mock Test')}<div class="card" style="background:#f0fdfa;border:2px solid #0d9488;margin-bottom:14px">
+   <h3 style="margin-top:0">🖥 / ✍️ Is this Mock Test Online or Pen-paper?</h3>
+   <label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="mtMode" value="ONLINE" checked onchange="mockGenMode()" style="width:auto;margin-top:4px"><span><b>Online</b> — students take the test in the app. <b>One paper for everyone</b> (one question set). Assign it to classes/students below.</span></label>
+   <label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="mtMode" value="OFFLINE" onchange="mockGenMode()" style="width:auto;margin-top:4px"><span><b>Pen-paper</b> — printed question paper + OMR sheet. You can make <b>several question sets (A, B, C, D)</b>, each with its own question order. The test is <b>not shown to students</b>. After the exam, press <b>Import OMR</b> on the test to put each student's mistakes in the Mistake Bank.</span></label>
+  </div>
+  <div class="card">
   <label>Test Title</label><input id="mtTitle" value="Mock Test">
   <label>Time Limit</label><input value="2 Hours (120 minutes)" disabled>
-  <label>Test Language</label><select id="mtLanguage" onchange="generateMockTestPage(this.value)"><option value="ASSAMESE" ${generatorLanguage==='ASSAMESE'?'selected':''}>Assamese</option><option value="ENGLISH" ${generatorLanguage==='ENGLISH'?'selected':''}>English</option></select><div class="notice small"><b>MAT is common:</b> MAT questions are shared by both languages. EVS, Arithmetic and Language are taken only from the chosen language bank.</div>
+  <label>Test Language</label><select id="mtLanguage" onchange="generateMockTestPage(this.value)"><option value="ASSAMESE" ${generatorLanguage==='ASSAMESE'?'selected':''}>Assamese</option><option value="ENGLISH" ${generatorLanguage==='ENGLISH'?'selected':''}>English</option></select>
+  <div class="notice small"><b>MAT is common:</b> MAT questions are shared by both languages. EVS, Arithmetic and Language are taken only from the chosen language bank.</div>
   <div class="card" style="background:#f8fafc;border:2px solid #7c3aed;margin-top:15px">
    <h3>🔀 Mental Ability order</h3>
    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="mtShuffleMat" checked style="width:auto"> <b>Random order of the 5 MAT blocks</b></label>
    <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="mtShuffleInside" checked style="width:auto"> <b>Also shuffle the 4 questions inside each block</b></label>
-   <label style="margin-top:8px">Booklet series (each series gets its own block order and question order)</label><select id="mtSeries" style="width:auto;min-width:260px"><option value="4" selected>4 series — A, B, C, D (students shared equally)</option><option value="3">3 series — A, B, C</option><option value="2">2 series — A, B</option><option value="1">1 series only (everyone gets the same paper)</option></select>
-   <p class="small muted" style="margin:6px 0 0">The five MAT blocks (4 questions each) are put in a random order. The 4 questions of a block always stay together (their order inside the block can be shuffled). With several series, one test is made per series (title “… — Series A”), students are spread over them at random, and the printed booklet carries that series code. Students and the printed paper show <b>PART I – V with a direction</b>, not the name of the pattern. Untick the first box to keep the syllabus order.</p>
+   <div id="mockSeriesBlock" style="display:none"><label style="margin-top:8px">Question sets for the pen-paper test (each set gets its own block order and question order)</label><select id="mtSeries" style="width:auto;min-width:260px"><option value="4" selected>4 sets — A, B, C, D</option><option value="3">3 sets — A, B, C</option><option value="2">2 sets — A, B</option><option value="1">1 set only</option></select></div>
+   <p class="small muted" style="margin:6px 0 0">The five MAT blocks (4 questions each) are put in a random order. The 4 questions of a block always stay together (their order inside the block can be shuffled). An online test is a single paper for all students. A pen-paper test can have several sets (title “… — Series A”); the printed booklet carries the set letter, which the OMR sheet's Exam Set must match. Students and the printed paper show <b>PART I – V with a direction</b>, not the name of the pattern. Untick the first box to keep the syllabus order.</p>
   </div>
   <div class="card" style="background:#f8fafc;border:2px solid #2563eb;margin-top:15px">
    <h3>📚 Choose the question for every slot</h3>
@@ -1218,15 +1226,21 @@ async function generateMockTestPage(language){
    </div>
    <div id="mockSlotsHost"></div>
   </div>
-  <h3>Assign To</h3><p class="small muted">Select multiple classes. For each class choose entire class or selected students.</p>
+  <div id="mockAssignBlock"><h3>Assign To</h3><p class="small muted">Select multiple classes. For each class choose entire class or selected students.</p>
   <div class="actions" style="margin-bottom:10px"><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=true);loadMockAssignStudents()">Select all classes</button><button type="button" class="secondary" onclick="document.querySelectorAll('.mock-class').forEach(x=>x.checked=false);loadMockAssignStudents()">Clear all</button></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="mock-class" type="checkbox" value="${c.id}" onchange="loadMockAssignStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join('')}</div>
-  <div id="mockAssignPicker" class="card" style="background:#f8fafc;margin-top:15px"><span class="muted">Select classes above.</span></div>
-  <div class="actions"><button onclick="createMockTest()">Generate & Assign 80-Question Test</button><button class="secondary" onclick="mockTestManagement()">Cancel</button></div>
+  <div id="mockAssignPicker" class="card" style="background:#f8fafc;margin-top:15px"><span class="muted">Select classes above.</span></div></div>
+  <div class="actions"><button id="mockCreateBtn" onclick="createMockTest()">Generate & Assign 80-Question Test</button><button class="secondary" onclick="mockTestManagement()">Cancel</button></div>
  </div></div>`);
  mockGenRender();
 }
 /* slots: question-id strings for question units, set numbers (as strings) for passage units */
+function mockGenMode(){
+ const off=document.querySelector('input[name="mtMode"]:checked')?.value==='OFFLINE';
+ const a=document.getElementById('mockAssignBlock');if(a)a.style.display=off?'none':'';
+ const sb2=document.getElementById('mockSeriesBlock');if(sb2)sb2.style.display=off?'':'none';
+ const b=document.getElementById('mockCreateBtn');if(b)b.textContent=off?'Generate Pen-paper 80-Question Test':'Generate & Assign 80-Question Test';
+}
 function mockGenSlotCount(plan){return plan.unit==='passage'?(plan.groupCount||1):plan.count}
 function mockGenFillFromSet(part,setNumber,silent){
  const g=window.mockGen,plan=mockPlanByPart[part],sets=g.sets[part]||[],n=mockGenSlotCount(plan);
@@ -1295,8 +1309,9 @@ async function loadMockAssignStudents(){const box=document.getElementById('mockA
 async function createMockTest(){
  const title=document.getElementById('mtTitle').value.trim();
  if(!title)return notify('Enter a test title.');
+ const offline=document.querySelector('input[name="mtMode"]:checked')?.value==='OFFLINE';
  const selected=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);
- if(!selected.length)return notify('Select at least one class.');
+ if(!offline&&!selected.length)return notify('Select at least one class.');
  const g=window.mockGen;
  if(!g)return notify('Please open Generate Mock Test again.');
  // V36: every slot must be filled, and no question may be used twice.
@@ -1304,7 +1319,7 @@ async function createMockTest(){
  for(const plan of MOCK_PLAN){const n=mockGenSlotCount(plan),s=g.slots[plan.part]||[];if(s.filter(Boolean).length!==n)missing.push(`${plan.label}: ${s.filter(Boolean).length}/${n} chosen`);if(new Set(s.filter(Boolean)).size!==s.filter(Boolean).length)missing.push(`${plan.label}: the same question is used twice`)}
  if(missing.length)return notify('Please complete the slots first:\n\n'+missing.join('\n'));
  let studentIds=[];
- try{
+ if(!offline)try{
   for(const cid of selected){
    const mode=document.querySelector(`input[name="mockMode_${cid}"]:checked`)?.value||'class';
    if(mode==='class'){
@@ -1314,7 +1329,7 @@ async function createMockTest(){
   }
  }catch(e){return notify('Could not read students: '+(e.message||e))}
  studentIds=[...new Set(studentIds)];
- if(!studentIds.length)return notify('No students were selected.');
+ if(!offline&&!studentIds.length)return notify('No students were selected.');
  try{
   const selectedLanguage=document.getElementById('mtLanguage')?.value||'ASSAMESE';
   // Resolve the chosen slots into question lists.
@@ -1332,8 +1347,9 @@ async function createMockTest(){
   const matParts=MOCK_PLAN.filter(x=>x.section==='MAT').map(x=>x.part);
   const shuffleMat=!!document.getElementById('mtShuffleMat')?.checked;
   const shuffleInside=!!document.getElementById('mtShuffleInside')?.checked;
-  const nSeries=Math.min(4,Math.max(1,Number(document.getElementById('mtSeries')?.value)||1));
+  const nSeries=offline?Math.min(4,Math.max(1,Number(document.getElementById('mtSeries')?.value)||1)):1;   // V37.1: online = one paper for everyone; sets only for pen-paper
   const codes=['A','B','C','D'].slice(0,nSeries);
+  const groupId=offline?crypto.randomUUID():null;   // V37: ties the A–D series of one offline test together
   const orders=[];
   if(shuffleMat){let guard=0;while(orders.length<nSeries&&guard++<500){const o=mockShuffle(matParts);if(!orders.some(x=>x.join()===o.join()))orders.push(o)}}
   while(orders.length<nSeries)orders.push(matParts.slice());
@@ -1348,7 +1364,7 @@ async function createMockTest(){
     const matOrder=orders[si];
     const orderedPlans=[...matOrder.map(p=>mockPlanByPart[p]),...MOCK_PLAN.filter(x=>x.section!=='MAT')];
     const seriesTitle=nSeries>1?`${title} — Series ${codes[si]}`:title;
-    const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title:seriesTitle,language:selectedLanguage,time_limit_seconds:7200,status:'published'}).select().single();
+    const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title:seriesTitle,language:selectedLanguage,time_limit_seconds:7200,status:'published',...(offline?{delivery_mode:'OFFLINE',series_group_id:groupId,series_code:codes[si]}:{})}).select().single();
     if(te)throw te;createdIds.push(test.id);
     const qrows=[];
     for(const plan of orderedPlans){
@@ -1366,15 +1382,15 @@ async function createMockTest(){
     if(qrows.length!==80)throw new Error(`The paper has ${qrows.length} questions instead of 80.`);
     qrows.forEach((q,i)=>q.question_number=i+1);
     const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
-    const recipients=bySeries[si].map(student_id=>({mock_test_id:test.id,student_id}));
+    const recipients=offline?[]:bySeries[si].map(student_id=>({mock_test_id:test.id,student_id}));
     if(recipients.length){const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re}
-    summaryLines.push(`${nSeries>1?'Series '+codes[si]+' ('+recipients.length+' student(s)): ':''}`+matOrder.map((p,i)=>`Part ${roman[i]}=${mockPlanByPart[p].label.replace(/^MAT\s*[—-]\s*/,'')}`).join(' → '));
+    summaryLines.push(`${nSeries>1?'Series '+codes[si]+(offline?': ':' ('+recipients.length+' student(s)): '):''}`+matOrder.map((p,i)=>`Part ${roman[i]}=${mockPlanByPart[p].label.replace(/^MAT\s*[—-]\s*/,'')}`).join(' → '));
    }
-   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
+   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — not visible to students. Print the Question Paper PDF of every set, hold the exam on OMR sheets, then press Import OMR on the test.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
    mockTestManagement();
   }catch(e){
    for(const id of createdIds){try{await sb.from('mock_tests').delete().eq('id',id)}catch(_){}}
-   notify('Could not generate Mock Test: '+(e.message||e));
+   notify('Could not generate Mock Test: '+(e.message||e)+(offline&&/delivery_mode|series_group_id|series_code/.test(String(e.message||e))?'\n\nRun V37_MOCK_OFFLINE_OMR.sql in the Supabase SQL Editor first.':''));
   }
  }catch(e){notify('Could not generate Mock Test: '+(e.message||e))}
 }
@@ -6340,7 +6356,7 @@ async function omrImportPage(){
 }
 async function omrLoadHistory(){
   const el=document.getElementById('omrHistory');if(!el)return;
-  const {data,error}=await sb.from('omr_imports').select('*').eq('teacher_id',current.id).order('imported_at',{ascending:false}).limit(100);
+  const {data,error}=await sb.from('omr_imports').select('*').eq('teacher_id',current.id).not('paper_base_serial','like','MOCK-%').order('imported_at',{ascending:false}).limit(100);
   if(error){el.innerHTML=`<div class="notice">Could not load OMR import history: ${esc(error.message)}<br><span class="small">Run <b>V14_OMR_MISTAKES_MIGRATION.sql</b> in Supabase SQL Editor first.</span></div>`;return}
   el.innerHTML=(data||[]).length?`<div style="overflow:auto"><table><thead><tr><th>Imported</th><th>Exam</th><th>Paper Serial</th><th>Students</th><th>Questions</th><th>Skipped (bonus/key changed)</th><th>Class discussion</th><th>Correct</th></tr></thead><tbody>${data.map(x=>`<tr><td>${esc(qpHistoryDate(x.imported_at))}</td><td>${esc(x.exam_title||'')}</td><td><code>${esc(x.paper_base_serial)}</code></td><td>${x.student_count}</td><td>${x.question_count}</td><td>${esc((x.skipped_questions||[]).join(', ')||'—')}</td><td>${typeof omrDiscussionPdf==='function'?`<button class="secondary" style="padding:5px 10px" onclick="omrDiscussionPdf('${esc(x.paper_base_serial)}')">📽 PDF</button>`:''}</td><td>${typeof omrFixOpen==='function'?`<button class="secondary" style="padding:5px 10px" onclick="omrFixOpen('${esc(x.paper_base_serial)}')">✏️ Correct key / Undo</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No OMR results imported yet.</p>';
 }
@@ -6602,3 +6618,92 @@ async function saveAdaptiveJnvstAssignment(){
   const origCount=window.jnvstQbUpdateSelectionCount;
   window.jnvstQbUpdateSelectionCount=function(){const r=origCount.apply(this,arguments);const el=document.getElementById('jnvstQbEditSelCount');if(el)el.textContent=jnvstQbSelected.size;return r;};
 })();
+
+/* =====================================================================
+ * V37 — OFFLINE Mock Tests: import the OMR Excel into the Mistake Bank
+ * Reads the same OMR software Excel as "Import OMR Results" (Roll No, Exam Set, Q n Options, Q n Key, Q n Marks)
+ * and marks every student against the saved key of the matching series (A–D) of the offline Mock Test.
+ * ===================================================================== */
+let mockOmrState=null;
+async function mockOmrImportPage(group){
+  mockOmrState=null;
+  const {data:tests,error}=await sb.from('mock_tests').select('id,title,series_code,series_group_id,created_at').eq('teacher_id',current.id).or(`series_group_id.eq.${group},id.eq.${group}`).order('series_code',{ascending:true});
+  if(error)return notify('Could not load the Mock Test: '+error.message);
+  if(!tests?.length)return notify('Mock Test not found.');
+  const {data:qs,error:qe}=await sbFetchAll(()=>sb.from('mock_test_questions').select('id,mock_test_id,question_number,correct_option').in('mock_test_id',tests.map(t=>t.id)));
+  if(qe)return notify('Could not load the answer keys: '+qe.message);
+  const sets={};
+  tests.forEach(t=>{const code=String(t.series_code||'A').toUpperCase();const key=new Map();(qs||[]).filter(q=>q.mock_test_id===t.id).forEach(q=>key.set(Number(q.question_number),String(q.correct_option||'').toUpperCase()));sets[code]={test:t,key}});
+  const base=String(tests[0].title||'Mock Test').replace(/\s+—\s+Series\s+[A-D]\s*$/,'');
+  mockOmrState={group,base,sets,parsed:null,file:'',dry:null};
+  render(`<div class="wrap">${header('Import OMR — Pen-paper Mock Test')}
+   <div class="card"><h2>📥 ${esc(base)}</h2>
+    <p class="muted">Series in this test: <b>${Object.keys(sets).sort().join(', ')}</b>. Upload the result Excel from your OMR software. Each student is marked against the saved answer key of the series written (column <b>Exam Set</b> = A, B, C or D), and every mistake is added to the student's <b>Mistake Bank</b>.</p>
+    <ul class="small muted"><li>Needed columns: <b>Roll No</b> and <b>Q n Options</b> for every question. <b>Exam Set</b>, <b>Q n Key</b> and <b>Q n Marks</b> are used when present.</li><li>If Exam Set is missing, the series is found by comparing the key column (or the answers) with the saved keys.</li><li>Blank and multiple marks count as mistakes. Questions where the sheet gives marks although the answer is not the key (bonus), or where the key in the OMR software differs from the saved key, are skipped. Students without any mark (absent) are skipped. A student already imported for this test is skipped.</li></ul>
+    <label>OMR result Excel file</label><input type="file" id="mockOmrFile" accept=".xlsx,.xls,.csv" onchange="mockOmrReadFile(event)">
+    <div id="mockOmrPreview" style="margin-top:14px"></div></div>
+   <button class="secondary" onclick="mockTestManagement()">← Mock Test Management</button></div>`);
+}
+function mockOmrReadFile(ev){
+  const file=ev.target.files?.[0];if(!file||!mockOmrState)return;
+  const box=document.getElementById('mockOmrPreview');box.innerHTML='<p class="muted">Reading file…</p>';
+  const fr=new FileReader();
+  fr.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+      const parsed=omrParseSheet(aoa);
+      if(!parsed.rows.length)throw new Error('No student answers were found in this file.');
+      const S=mockOmrState.sets,codes=Object.keys(S);
+      const setKeys=Object.fromEntries(codes.map(c=>[c,S[c].key]));
+      parsed.rows.forEach(r=>{
+        let set=String(r.sheetSet||'').toUpperCase();r.setSource='sheet';
+        if(!S[set]){ if(codes.length===1){set=codes[0];r.setSource='only'}else{const d=omrDetectRowSet(r,setKeys,parsed.N);set=d.sure?d.set:'';r.setSource=d.sure?'detected':''} }
+        r.set=set;
+      });
+      mockOmrState.parsed=parsed;mockOmrState.file=file.name;mockOmrState.dry=null;
+      mockOmrRender();
+    }catch(err){box.innerHTML=`<div class="notice"><b>Could not read this file.</b><br>${esc(err.message||err)}</div>`}
+  };
+  fr.readAsArrayBuffer(file);
+}
+function mockOmrRender(){
+  const box=document.getElementById('mockOmrPreview'),st=mockOmrState;if(!box||!st?.parsed)return;
+  const p=st.parsed,S=st.sets,N=p.N;
+  const stat=Object.keys(S).sort().map(c=>{
+    const rows=p.rows.filter(r=>r.set===c);let t=0,m=0;
+    rows.forEach(r=>{for(let q=1;q<=N;q++){const k=S[c].key.get(q),v=r.keys[q-1];if(!k||!/^[ABCD]$/.test(v))continue;t++;if(v===k)m++}});
+    return {c,n:rows.length,ratio:t?m/t:null};
+  });
+  const unknown=p.rows.filter(r=>!r.set);
+  box.innerHTML=`<div class="success"><b>${esc(st.file)}</b>: ${p.rows.length} student(s) with answers, ${p.absent.length} absent, ${N} question column(s).</div>
+   <div style="overflow:auto"><table><thead><tr><th>Series</th><th>Students</th><th>Sheet key matches saved key</th></tr></thead><tbody>${stat.map(x=>`<tr><td><b>${x.c}</b></td><td>${x.n}</td><td>${x.ratio===null?'<span class="muted">no key column</span>':`<span class="${x.ratio>=0.9?'result-correct':'result-wrong'}">${Math.round(x.ratio*100)}%</span>`}</td></tr>`).join('')}</tbody></table></div>
+   ${unknown.length?`<div class="notice" style="margin-top:8px">${unknown.length} student(s) have no recognisable series and will not be imported: ${unknown.slice(0,15).map(r=>esc(r.roll)).join(', ')}${unknown.length>15?' …':''}</div>`:''}
+   ${N!==80?`<div class="notice" style="margin-top:8px">The file has ${N} question columns; a Mock Test has 80.</div>`:''}
+   <div class="actions" style="margin-top:12px"><button class="secondary" onclick="mockOmrRun(true)">Check (nothing is saved)</button><button onclick="mockOmrRun(false)">Import into Mistake Bank</button></div>
+   <div id="mockOmrResult" style="margin-top:12px">${st.dry?omrReportHtml(st.dry):''}</div>`;
+}
+function mockOmrPayload(){
+  const st=mockOmrState;if(!st?.parsed)return [];
+  return st.parsed.rows.filter(r=>r.set).map(r=>({roll_no:r.roll,set_code:r.set,answers:r.answers,
+    sheet_keys:r.keys.map((k,i)=>{const bonus=(r.marks[i]||0)>0&&r.answers[i]!==k&&/^[ABCD]$/.test(k||'');return bonus?'BONUS':k})}));
+}
+async function mockOmrRun(dry){
+  const st=mockOmrState;if(!st?.parsed)return notify('Choose the OMR Excel file first.');
+  const rows=mockOmrPayload();if(!rows.length)return notify('No student could be matched to a series.');
+  if(!dry){
+    const low=Object.keys(st.sets).map(c=>{const rs=st.parsed.rows.filter(r=>r.set===c);let t=0,m=0;rs.forEach(r=>{for(let q=1;q<=st.parsed.N;q++){const k=st.sets[c].key.get(q),v=r.keys[q-1];if(!k||!/^[ABCD]$/.test(v))continue;t++;if(v===k)m++}});return t&&m/t<0.6?c:null}).filter(Boolean);
+    if(low.length&&!confirm(`The key in the sheet matches the saved key of series ${low.join(', ')} only partly. Import anyway?`))return;
+  }
+  const btns=document.querySelectorAll('#mockOmrPreview button');btns.forEach(b=>b.disabled=true);
+  try{
+    const {data,error}=await sb.rpc('teacher_import_mock_omr_results',{p_series_group:st.group,p_exam_title:st.base,p_file_name:st.file,p_rows:rows,p_dry_run:!!dry});
+    if(error)throw error;
+    if(dry){st.dry=data;mockOmrRender()}
+    else{document.getElementById('mockOmrResult').innerHTML=omrReportHtml(data);notify(`OMR results imported for ${data.imported} student(s).`,'success');btns.forEach(b=>b.disabled=false)}
+  }catch(e){
+    const m=String(e.message||e);
+    notify('OMR import failed: '+m+(/teacher_import_mock_omr_results|function/i.test(m)?'\n\nRun V37_MOCK_OFFLINE_OMR.sql in the Supabase SQL Editor first.':''),'error');
+    btns.forEach(b=>b.disabled=false);
+  }
+}
