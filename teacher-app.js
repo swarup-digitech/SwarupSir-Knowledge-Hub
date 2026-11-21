@@ -46,11 +46,11 @@ async function loadPreviousMockTests(){
       html.push(`<div class="assignment" style="margin:8px 0">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div><h3 style="margin:0 0 5px">${esc(name)} <span class="tag" style="background:#ccfbf1;color:#0f766e">✍️ PEN-PAPER · OMR</span></h3>
-            <div class="small muted">${lang} · 120 minutes · Sets: <b>${sets.map(s=>esc(String(s.series_code||'A').toUpperCase())).join(', ')}</b> · not shown to students · Created ${created}</div>
+            <div class="small muted">${[...new Set(sets.map(s=>s.language==='ASSAMESE'?'Assamese':s.language==='ENGLISH'?'English':'Common'))].join(' + ')} · 120 minutes · Sets: <b>${[...new Set(sets.map(s=>String(s.series_code||'A').toUpperCase()))].join(', ')}</b> · not shown to students · Created ${created}</div>
             ${code?`<div class="small" style="margin-top:3px">Exam code: <code>${esc(code)}</code> — printed on every booklet. Type it (or the test name) as the <b>Exam name</b> in the OMR software.</div>`:''}
           </div>
           <div class="actions">
-            ${sets.map(s=>`<button onclick="generateMockTestPDF('${s.id}')">🖨 Set ${esc(String(s.series_code||'A').toUpperCase())} PDF</button>`).join('')}
+            ${sets.map(s=>`<button onclick="generateMockTestPDF('${s.id}')">🖨 Set ${esc(String(s.series_code||'A').toUpperCase())} ${s.language==='ASSAMESE'?'Assamese':s.language==='ENGLISH'?'English':''} PDF</button>`).join('')}
             <button onclick="mockOmrImportPage('${gid}')">📥 Import OMR</button>
             <button class="secondary" onclick="editMockGroup('${gid}')">✎ Edit name</button>
             <button class="danger" onclick="deleteMockGroup('${gid}')">🗑 Delete all sets</button>
@@ -1241,7 +1241,12 @@ async function generateMockTestPage(language){
   if(!enough)shortages.push(plan);
  }
  if(shortages.length)return notify('Question bank is incomplete:\n\n'+shortages.map(x=>x.unit==='passage'?`${x.label}: need at least ${x.groupCount||1} complete passage group(s) of ${x.passageCount||x.count} questions`:`${x.label}: need at least ${x.count} questions`).join('\n'));
- window.mockGen={language:generatorLanguage,byPart,sets:setInfo,slots:{}};
+ const otherLang=generatorLanguage==='ENGLISH'?'ASSAMESE':'ENGLISH';
+ const otherBy={};(bank||[]).forEach(q=>{if(q.section_code!=='MAT'&&String(q.language||'').toUpperCase()===otherLang)(otherBy[q.part_code]||=[]).push(q)});
+ Object.values(otherBy).forEach(a=>a.sort(mockSortQuestions));
+ const otherSets={};for(const plan of MOCK_PLAN){if(plan.section!=='MAT')otherSets[plan.part]=mockBuildSets(otherBy[plan.part]||[],plan)}
+ window.mockGen={language:generatorLanguage,byPart,sets:setInfo,slots:{},other:{lang:otherLang,byPart:otherBy,sets:otherSets}};
+ window.mockPairOverride={};
  MOCK_PLAN.forEach(p=>mockGenFillFromSet(p.part,1,true));
  render(`<div class="wrap">${header('Generate Mock Test')}<div class="card" style="background:#f0fdfa;border:2px solid #0d9488;margin-bottom:14px">
    <h3 style="margin-top:0">🖥 / ✍️ Is this Mock Test Online or Pen-paper?</h3>
@@ -1352,6 +1357,60 @@ function mockGenChoose(part,idx,key){
  document.getElementById('mockPickModal')?.remove();mockGenRender();
 }
 async function loadMockAssignStudents(){const box=document.getElementById('mockAssignPicker');if(!box)return;const ids=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);if(!ids.length){box.innerHTML='<span class="muted">Select classes above.</span>';return}box.innerHTML='Loading students…';const {data:m,error}=await sb.from('class_students').select('class_id,student_id').in('class_id',ids);if(error){box.innerHTML=message(error.message);return}const sids=[...new Set((m||[]).map(x=>x.student_id))];const {data:students,error:e}=await sb.from('profiles').select('id,full_name,username').in('id',sids).order('full_name');if(e){box.innerHTML=message(e.message);return}const by=new Map();(m||[]).forEach(x=>{if(!by.has(x.class_id))by.set(x.class_id,[]);by.get(x.class_id).push(x.student_id)});box.innerHTML=ids.map(cid=>{const name=document.querySelector(`.mock-class[value="${cid}"]`)?.parentElement.querySelector('b')?.textContent||cid;const list=(by.get(cid)||[]).map(id=>students.find(s=>s.id===id)).filter(Boolean);return `<div class="assignment"><h3>${esc(name)}</h3><label><input type="radio" name="mockMode_${cid}" value="class" checked onchange="document.getElementById('mockStudents_${cid}').style.display='none'" style="width:auto;margin-right:6px">Entire class</label> <label><input type="radio" name="mockMode_${cid}" value="students" onchange="document.getElementById('mockStudents_${cid}').style.display='block'" style="width:auto;margin-right:6px">Selected students</label><div id="mockStudents_${cid}" style="display:none;margin-top:8px">${list.map(s=>`<label style="display:block;padding:5px"><input class="mock-student" data-class-id="${cid}" type="checkbox" value="${s.id}" style="width:auto;margin-right:6px">${esc(s.full_name)} <span class="muted small">${esc(s.username||'')}</span></label>`).join('')||'<span class="muted">No students.</span>'}</div></div>`}).join('')}
+/* ===== V40: every pen-paper set is made in English AND Assamese ===== */
+function mockQPreview(q){return String(q?.question_text||q?.passage_title||q?.passage_text||'').replace(/\s+/g,' ').trim().slice(0,90)||'(no text)'}
+function mockFindQuestionPair(q,g){
+  // 1) the link made by the bilingual upload; 2) otherwise a unique look-alike (same lesson/topic/group/order and same correct option)
+  const pool=g.other.byPart[q.part_code]||[],pid=String(q.language_pair_id||'').trim();
+  if(pid){const hit=pool.filter(x=>String(x.language_pair_id||'').trim()===pid);if(hit.length===1)return {q:hit[0]};}
+  const same=(a,b)=>!String(a||'').trim()||!String(b||'').trim()||String(a).trim().toLowerCase()===String(b).trim().toLowerCase();
+  const c=pool.filter(x=>same(x.lesson_id,q.lesson_id)&&same(x.topic,q.topic)&&same(x.variation_group,q.variation_group)&&same(x.question_order,q.question_order)&&String(x.correct_option||'').toUpperCase()===String(q.correct_option||'').toUpperCase());
+  return c.length===1?{q:c[0]}:{candidates:pool};
+}
+function mockFindGroupPair(set,plan,g){
+  const key=(x)=>(x.questions||[]).map(q=>String(q.correct_option||'').toUpperCase()).join('');
+  const pool=g.other.sets[plan.part]||[],sig=key(set),f=set.questions[0]||{};
+  const same=(a,b)=>!String(a||'').trim()||!String(b||'').trim()||String(a).trim().toLowerCase()===String(b).trim().toLowerCase();
+  const c=pool.filter(s=>s.questions.length===set.questions.length&&key(s)===sig&&same(s.questions[0]?.lesson_id,f.lesson_id)&&same(s.questions[0]?.topic,f.topic)&&same(s.questions[0]?.variation_group,f.variation_group));
+  return c.length===1?{set:c[0]}:{candidates:pool};
+}
+// Returns {pairs:{key:counterpart}, problems:[...]}; key = 'q:<id>' or 'g:<part>:<number>'.
+function mockResolvePairs(chosen,g){
+  const pairs={},problems=[],used=new Set();
+  const ov=window.mockPairOverride||{};
+  for(const plan of MOCK_PLAN){
+    if(plan.section==='MAT')continue;
+    if(plan.unit==='passage'){
+      for(const set of chosen[plan.part]){
+        const key=`g:${plan.part}:${set.number}`;let res=null;
+        if(ov[key]){const s=(g.other.sets[plan.part]||[]).find(x=>String(x.number)===String(ov[key]));if(s)res={set:s}}
+        if(!res)res=mockFindGroupPair(set,plan,g);
+        if(res.set){pairs[key]=res.set;used.add(key+'>'+res.set.number)}
+        else problems.push({key,kind:'g',plan,label:`${plan.label}: ${mockQPreview(set.questions[0])}`,candidates:res.candidates.map(s=>({value:String(s.number),label:`${s.label} — ${mockQPreview(s.questions[0])} (${s.questions.length} Qs)`}))});
+      }
+    }else{
+      for(const q of chosen[plan.part]){
+        const key='q:'+q.id;let res=null;
+        if(ov[key]){const o=(g.other.byPart[plan.part]||[]).find(x=>x.id===ov[key]);if(o)res={q:o}}
+        if(!res)res=mockFindQuestionPair(q,g);
+        if(res.q){pairs[key]=res.q}
+        else problems.push({key,kind:'q',plan,label:`${plan.label}: ${mockQPreview(q)}`,candidates:res.candidates.map(x=>({value:x.id,label:mockQPreview(x)}))});
+      }
+    }
+  }
+  // the same other-language question must not be used twice
+  const seen=new Map();
+  Object.entries(pairs).forEach(([k,v])=>{const id=k.startsWith('g:')?k.split(':')[1]+':'+v.number:v.id;if(seen.has(id))problems.push({key:k,kind:k[0],plan:null,label:'Two chosen questions point to the same '+g.other.lang+' question — choose again',candidates:[],dup:true});seen.set(id,k)});
+  return {pairs,problems};
+}
+function mockPairDialog(problems,g,onDone){
+  const old=document.getElementById('mockPairDlg');if(old)old.remove();
+  const L=g.other.lang==='ASSAMESE'?'Assamese':'English';
+  const d=document.createElement('div');d.id='mockPairDlg';d.style.cssText='position:fixed;inset:0;z-index:99990;background:#0f172acc;display:flex;align-items:center;justify-content:center;padding:16px';
+  d.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:760px;width:100%;max-height:90vh;overflow:auto;padding:20px"><h2 style="margin-top:0">Match the ${L} questions</h2><p class="muted">Pen-paper sets are made in English <b>and</b> Assamese. For these questions the ${L} version could not be found automatically — choose the matching one.</p>${problems.map((p,i)=>`<div class="card" style="margin:8px 0"><div class="small"><b>${esc(p.label)}</b></div>${p.candidates.length?`<select data-pk="${esc(p.key)}" style="width:100%"><option value="">— choose the ${L} question —</option>${p.candidates.map(c=>`<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('')}</select>`:'<div class="notice small">No '+L+' question found in the bank. Add it (bilingual upload) and try again.</div>'}</div>`).join('')}<div class="actions"><button id="mockPairGo">Continue</button><button class="secondary" onclick="document.getElementById('mockPairDlg').remove()">Cancel</button></div></div>`;
+  document.body.appendChild(d);
+  document.getElementById('mockPairGo').onclick=()=>{const sels=[...d.querySelectorAll('select[data-pk]')];if(sels.length!==problems.length||sels.some(s=>!s.value))return notify('Choose a matching '+L+' question for every item.');sels.forEach(s=>{window.mockPairOverride[s.dataset.pk]=s.value});d.remove();onDone()};
+}
 async function createMockTest(){
  const title=document.getElementById('mtTitle').value.trim();
  if(!title)return notify('Enter a test title.');
@@ -1388,6 +1447,15 @@ async function createMockTest(){
     chosen[plan.part]=s.map(id=>{const q=(g.byPart[plan.part]||[]).find(x=>x.id===id);if(!q)throw new Error(`${plan.label}: a chosen question is no longer available.`);return q});
    }
   }
+  // V40: pen-paper = every set in both languages. Find the counterpart of each chosen question first.
+  let pairs={};
+  if(offline){
+   const pr=mockResolvePairs(chosen,g);
+   if(pr.problems.length){mockPairDialog(pr.problems,g,()=>createMockTest());return}
+   pairs=pr.pairs;
+  }
+  const otherLang=g.other?.lang||(selectedLanguage==='ENGLISH'?'ASSAMESE':'ENGLISH');
+  const langs=offline?[selectedLanguage,otherLang]:[selectedLanguage];
   // V36: the five MAT blocks go in a random order (each block of 4 stays together); V36.1: questions inside a block are shuffled too,
   // and every booklet series (A–D) gets its own block order.
   const matParts=MOCK_PLAN.filter(x=>x.section==='MAT').map(x=>x.part);
@@ -1411,29 +1479,37 @@ async function createMockTest(){
     const matOrder=orders[si];
     const orderedPlans=[...matOrder.map(p=>mockPlanByPart[p]),...MOCK_PLAN.filter(x=>x.section!=='MAT')];
     const seriesTitle=title;   // V37.2: all sets keep the same name; the set letter is stored in series_code
-    const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title:seriesTitle,language:selectedLanguage,time_limit_seconds:7200,status:'published',...(offline?{delivery_mode:'OFFLINE',series_group_id:groupId,series_code:codes[si],exam_code:examCode}:{})}).select().single();
-    if(te)throw te;createdIds.push(test.id);
-    const qrows=[];
+    // one question sequence per set; the other language reuses the same order with the counterpart questions
+    const seq=[];
     for(const plan of orderedPlans){
      if(plan.unit==='passage'){
       for(const group of chosen[plan.part]){
-       const gq=group.questions||[];
-       const passageText=gq.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'';
-       gq.forEach(q=>qrows.push(row(test,q,passageText)));
+       const gq=group.questions||[],pg=pairs[`g:${plan.part}:${group.number}`],aq=pg?pg.questions:[];
+       const pt=gq.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'',apt=aq.map(x=>String(x.passage_text||'').trim()).find(Boolean)||'';
+       gq.forEach((q,k)=>seq.push({q,alt:aq[k]||null,pt,apt}));
       }
      }else{
       const list=(plan.section==='MAT'&&shuffleInside)?mockShuffle(chosen[plan.part]):chosen[plan.part];
-      list.forEach(q=>qrows.push(row(test,q)));
+      list.forEach(q=>seq.push({q,alt:plan.section==='MAT'?q:(pairs['q:'+q.id]||null)}));
      }
     }
-    if(qrows.length!==80)throw new Error(`The paper has ${qrows.length} questions instead of 80.`);
-    qrows.forEach((q,i)=>q.question_number=i+1);
-    const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
-    const recipients=offline?[]:bySeries[si].map(student_id=>({mock_test_id:test.id,student_id}));
-    if(recipients.length){const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re}
+    if(seq.length!==80)throw new Error(`The paper has ${seq.length} questions instead of 80.`);
+    if(offline&&seq.some(x=>!x.alt))throw new Error('Some questions have no '+otherLang+' version. Match them and try again.');
+    for(const lg of langs){
+     const primary=lg===selectedLanguage;
+     const {data:test,error:te}=await sb.from('mock_tests').insert({teacher_id:current.id,title:seriesTitle,language:lg,time_limit_seconds:7200,status:'published',...(offline?{delivery_mode:'OFFLINE',series_group_id:groupId,series_code:codes[si],exam_code:examCode}:{})}).select().single();
+     if(te)throw te;createdIds.push(test.id);
+     const qrows=seq.map((it,i)=>{const q=primary?it.q:it.alt,r=row(test,q,primary?it.pt:it.apt);r.question_number=i+1;return r});
+     const {error:qe}=await sb.from('mock_test_questions').insert(qrows);if(qe)throw qe;
+     if(!offline){
+      const recipients=bySeries[si].map(student_id=>({mock_test_id:test.id,student_id}));
+      if(recipients.length){const {error:re}=await sb.from('mock_test_students').insert(recipients);if(re)throw re}
+     }
+    }
+    const recipients=offline?[]:bySeries[si];
     summaryLines.push(`${nSeries>1?'Series '+codes[si]+(offline?': ':' ('+recipients.length+' student(s)): '):''}`+matOrder.map((p,i)=>`Part ${roman[i]}=${mockPlanByPart[p].label.replace(/^MAT\s*[—-]\s*/,'')}`).join(' → '));
    }
-   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — not visible to students. Exam code: '+examCode+' (printed on every booklet — type it as the Exam name in the OMR software). Print the Question Paper PDF of every set, hold the exam on OMR sheets, then use Import OMR.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
+   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — '+(nSeries*2)+' booklets ('+nSeries+' set(s) × English + Assamese), not visible to students. Exam code: '+examCode+' (printed on every booklet — type it as the Exam name in the OMR software). Print the Question Paper PDF of every set, hold the exam on OMR sheets, then use Import OMR.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
    mockTestManagement();
   }catch(e){
    for(const id of createdIds){try{await sb.from('mock_tests').delete().eq('id',id)}catch(_){}}
@@ -1692,6 +1768,7 @@ function jnvstPdfGeneralInstructions(){
     </ol>
   </div>`;
 }
+function jnvstExamYear(test){const d=new Date(test?.created_at||Date.now());return d.getMonth()>=5?d.getFullYear()+1:d.getFullYear()}   // JNVST Class VI is held early next year
 function jnvstPdfBookletMeta(test){
   // Deterministic per Mock Test: the same test always gets the same booklet
   // number/code, while different tests normally receive different values.
@@ -1719,6 +1796,7 @@ async function generateMockTestPDF(testId){
     if(!qs?.length)throw new Error('No generated questions were found for this Mock Test.');
     const booklet=jnvstPdfBookletMeta(test);
     const lang=test.language==='ENGLISH'?'ENGLISH':test.language==='ASSAMESE'?'ASSAMESE':'COMMON';
+    const mediumTag=(test.series_code&&lang!=='COMMON')?' · '+(lang==='ASSAMESE'?'Assamese':'English')+' Medium':'';
     const byPart={};
     qs.forEach(q=>(byPart[q.part_code]??=[]).push(q));
 
@@ -1740,9 +1818,9 @@ async function generateMockTestPDF(testId){
     const firstPage=`<div class="jnvst-page">
       <div class="jnvst-topline"><span>Test Booklet No. <b>${booklet.bookletNo}</b></span><span>Test Booklet Code <b>${booklet.code}</b></span>${test.exam_code?`<span>Exam Code <b>${esc(test.exam_code)}</b></span>`:''}</div>
       <div class="jnvst-header">
-        <div class="jnvst-title">JAWAHAR NAVODAYA VIDYALAYA SELECTION TEST — STYLE MOCK PAPER</div>
-        <div class="jnvst-subtitle">CLASS VI — MOCK TEST</div>
-        <div class="jnvst-mock-badge">${esc(test.title||'MOCK TEST')}</div>
+        <div class="jnvst-institute">SWARUP SIR'S KNOWLEDGE HUB</div>
+        <div class="jnvst-title">JAWAHAR NAVODAYA VIDYALAYA SELECTION TEST ${jnvstExamYear(test)} FOR VI</div>
+        <div class="jnvst-mock-badge">Mock Test</div>
       </div>
       <table class="jnvst-fields">
         <tr><td class="label">Test Booklet No.</td><td class="jnvst-booklet-number">${booklet.bookletNo}</td><td class="label">Test Booklet Code</td><td class="jnvst-booklet-code">${booklet.code}</td></tr>
@@ -1753,7 +1831,7 @@ async function generateMockTestPDF(testId){
       </table>
       ${jnvstPdfGeneralInstructions()}
       <div class="jnvst-first-page-credit"><span>Swarup Sir's Knowledge Hub</span><span>(c)Swarup Sir, Ph: 98643-90279</span></div>
-      <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Page 1</span></div>
+      <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}${mediumTag}</span><span>Page 1</span></div>
     </div>`;
 
     let pages=firstPage;
@@ -1773,7 +1851,7 @@ async function generateMockTestPDF(testId){
       const arr=(byPart[code]||[]).sort((a,b)=>a.question_number-b.question_number);
       if(arr.length){
         const first=arr[0].question_number,last=arr[arr.length-1].question_number;
-        matHtml+=`<div class="jnvst-part-head">PART ${ROMAN[bi]||bi+1}</div><div class="jnvst-directions"><b>Directions :</b> ${esc(jnvstMatDirection(code,first,last,true))}</div>${jnvstPdfGroupQuestions(arr)}`;
+        matHtml+=`<div class="jnvst-part-head">${jnvstPartWord(lang)} ${ROMAN[bi]||bi+1}</div><div class="jnvst-directions"><b>${jnvstDirWord(lang)} :</b> ${esc(jnvstMatDirection(code,first,last,true,lang))}</div>${jnvstPdfGroupQuestions(arr)}`;
       }
     }
     matHtml+=`<div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section I — Part 1</span></div></div>`;
@@ -6713,8 +6791,8 @@ async function saveAdaptiveJnvstAssignment(){
 let mockOmrState=null;
 const mockOmrNorm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 async function mockOmrLoadGroups(){
-  let {data,error}=await sb.from('mock_tests').select('id,title,series_code,series_group_id,created_at,exam_code').eq('teacher_id',current.id).eq('delivery_mode','OFFLINE').order('created_at',{ascending:false});
-  if(error)({data,error}=await sb.from('mock_tests').select('id,title,series_code,series_group_id,created_at').eq('teacher_id',current.id).eq('delivery_mode','OFFLINE').order('created_at',{ascending:false}));
+  let {data,error}=await sb.from('mock_tests').select('id,title,language,series_code,series_group_id,created_at,exam_code').eq('teacher_id',current.id).eq('delivery_mode','OFFLINE').order('created_at',{ascending:false});
+  if(error)({data,error}=await sb.from('mock_tests').select('id,title,language,series_code,series_group_id,created_at').eq('teacher_id',current.id).eq('delivery_mode','OFFLINE').order('created_at',{ascending:false}));
   if(error)throw error;
   const map=new Map();
   (data||[]).forEach(t=>{const gid=t.series_group_id||t.id;if(!map.has(gid))map.set(gid,{gid,base:String(t.title||'Mock Test').replace(/\s+—\s+Series\s+[A-D]\s*$/,''),code:t.exam_code||'',created:t.created_at,tests:[]});map.get(gid).tests.push(t)});
@@ -6726,7 +6804,8 @@ async function mockOmrLoadKeys(gid){
   const {data:qs,error}=await sbFetchAll(()=>sb.from('mock_test_questions').select('id,mock_test_id,question_number,correct_option').in('mock_test_id',g.tests.map(t=>t.id)));
   if(error)throw error;
   const sets={};
-  g.tests.forEach(t=>{const code=String(t.series_code||'A').toUpperCase();const key=new Map();(qs||[]).filter(q=>q.mock_test_id===t.id).forEach(q=>key.set(Number(q.question_number),String(q.correct_option||'').toUpperCase()));sets[code]={test:t,key}});
+  g.tests.slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))).forEach(t=>{const code=String(t.series_code||'A').toUpperCase();const lg=String(t.language||'').toUpperCase();const key=new Map();(qs||[]).filter(q=>q.mock_test_id===t.id).forEach(q=>key.set(Number(q.question_number),String(q.correct_option||'').toUpperCase()));if(!sets[code])sets[code]={test:t,key,byLang:{}};if(lg)sets[code].byLang[lg]={test:t,key}});
+  const first=g.tests.slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')))[0];st.defLang=String(first?.language||'').toUpperCase();
   return st.keys[gid]=sets;
 }
 async function mockOmrImportPage(group){
@@ -6738,7 +6817,7 @@ async function mockOmrImportPage(group){
    <div class="card"><h2>📥 Import OMR Results into the Mistake Bank</h2>
     <p class="muted">Upload the result Excel from your OMR software. Every student is marked against the saved answer key of the <b>set</b> he/she wrote, and every mistake goes into the student's <b>Mistake Bank</b>.</p>
     <ul class="small muted"><li>Needed columns: <b>Roll No</b> and <b>Q n Options</b> for every question. <b>Exam Set</b> (A, B, C, D), <b>Q n Key</b>, <b>Q n Marks</b> and <b>Exam name</b> are used when present.</li><li><b>Best:</b> type the test's <b>exam code</b> (printed on every booklet, e.g. <code>MOCK-20261120-AB12</code>) or its name as the <b>Exam name</b> in the OMR software. The test is then selected automatically.</li><li>The <b>Set</b> of each student is shown in a column below. If the sheet has no Exam Set, it is found from the keys; you can also change it by hand.</li><li>Blank and multiple marks are mistakes. Bonus questions and questions whose key differs from the saved key are skipped. Absent students and students already imported for this test are skipped.</li></ul>
-    <label>Pen-paper Mock Test</label><select id="mockOmrGroup" onchange="mockOmrChangeGroup(this.value)">${groups.map(g=>`<option value="${g.gid}" ${g.gid===mockOmrState.gid?'selected':''}>${esc(g.base)}${g.code?' · '+esc(g.code):''} · sets ${g.tests.map(t=>String(t.series_code||'A').toUpperCase()).sort().join(', ')} · ${g.created?new Date(g.created).toLocaleDateString():''}</option>`).join('')}</select>
+    <label>Pen-paper Mock Test</label><select id="mockOmrGroup" onchange="mockOmrChangeGroup(this.value)">${groups.map(g=>`<option value="${g.gid}" ${g.gid===mockOmrState.gid?'selected':''}>${esc(g.base)}${g.code?' · '+esc(g.code):''} · sets ${[...new Set(g.tests.map(t=>String(t.series_code||'A').toUpperCase()))].sort().join(', ')} · ${g.created?new Date(g.created).toLocaleDateString():''}</option>`).join('')}</select>
     <label>OMR result Excel file</label><input type="file" id="mockOmrFile" accept=".xlsx,.xls,.csv" onchange="mockOmrReadFile(event)">
     <div id="mockOmrPreview" style="margin-top:14px"></div></div>
    <button class="secondary" onclick="mockTestManagement()">← Mock Test Management</button></div>`);
@@ -6751,8 +6830,15 @@ function mockOmrAssignSets(sets){
     let set=String(r.sheetSet||'').toUpperCase();r.setSource='Exam Set column';
     if(!sets[set]){ if(codes.length===1){set=codes[0];r.setSource='only set'}else{const d=omrDetectRowSet(r,setKeys,p.N);set=d.sure?d.set:'';r.setSource=d.sure?'found from '+d.method:'not found'} }
     r.set=set;
+    // V40: booklet language (English / Assamese) — the OMR sheet does not carry it, so default to the test's main language
+    const langs=Object.keys(sets[set]?.byLang||{});
+    if(langs.length&&r.langSource!=='manual'){r.lang=langs.includes(st.defLang)?st.defLang:langs[0];r.langSource='default'}
+    if(!langs.length)r.lang='';
   });
 }
+function mockOmrLangName(l){return l==='ASSAMESE'?'Assamese':l==='ENGLISH'?'English':l}
+function mockOmrSetLang(i,v){const r=mockOmrState?.parsed?.rows[i];if(!r)return;r.lang=v;r.langSource='manual';mockOmrState.dry=null;mockOmrRender()}
+function mockOmrAllLang(v){const st=mockOmrState;if(!st?.parsed)return;st.defLang=v;st.parsed.rows.forEach(r=>{r.langSource='';});mockOmrAssignSets(st.keys[st.gid]||{});st.dry=null;mockOmrRender()}
 async function mockOmrChangeGroup(gid){
   const st=mockOmrState;if(!st)return;st.gid=gid;st.dry=null;st.matched='';
   if(st.parsed){try{const sets=await mockOmrLoadKeys(gid);st.parsed.rows.forEach(r=>{if(r.setSource==='manual')r.setSource=''});mockOmrAssignSets(sets);mockOmrRender()}catch(e){notify('Could not load the answer keys: '+(e.message||e))}}
@@ -6791,19 +6877,22 @@ function mockOmrRender(){
   const box=document.getElementById('mockOmrPreview'),st=mockOmrState;if(!box||!st?.parsed)return;
   const p=st.parsed,S=st.keys[st.gid]||{},N=p.N,codes=Object.keys(S).sort(),stat=mockOmrStats();
   const unknown=p.rows.filter(r=>!r.set);
+  const hasLang=Object.values(S).some(x=>Object.keys(x.byLang||{}).length>1);
+  const allLangs=[...new Set(Object.values(S).flatMap(x=>Object.keys(x.byLang||{})))];
   const shown=p.rows.map((r,i)=>({r,i}));
   box.innerHTML=`<div class="success"><b>${esc(st.file)}</b>: ${p.rows.length} student(s) with answers, ${p.absent.length} absent, ${N} question column(s).</div>
    ${st.matched?`<div class="${/does not match/.test(st.matched)?'notice':'success'}" style="margin-top:8px">${esc(st.matched)}</div>`:''}
    <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>Set</th><th>Students</th><th>Sheet key matches saved key</th></tr></thead><tbody>${stat.map(x=>`<tr><td><b>${x.c}</b></td><td>${x.n}</td><td>${x.ratio===null?'<span class="muted">no key column</span>':`<span class="${x.ratio>=0.9?'result-correct':'result-wrong'}">${Math.round(x.ratio*100)}%</span>`}</td></tr>`).join('')}</tbody></table></div>
    ${unknown.length?`<div class="notice" style="margin-top:8px">${unknown.length} student(s) have no set yet — choose it in the Set column, otherwise they are not imported.</div>`:''}
    ${N!==80?`<div class="notice" style="margin-top:8px">The file has ${N} question columns; a Mock Test has 80.</div>`:''}
-   <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th><th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td><td class="small muted">${esc(r.setSource||'')}</td></tr>`).join('')}</tbody></table></div></details>
+   ${hasLang?`<div style="margin-top:8px"><label class="small">Booklet language for all students (change a single student in the table below)</label><select style="width:auto" onchange="mockOmrAllLang(this.value)">${allLangs.map(l=>`<option value="${l}" ${st.defLang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></div>`:''}
+   <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th>${hasLang?'<th>Language</th>':''}<th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td>${hasLang?`<td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetLang(${i},this.value)">${Object.keys(S[r.set]?.byLang||{}).map(l=>`<option value="${l}" ${r.lang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></td>`:''}<td class="small muted">${esc(r.setSource||'')}</td></tr>`).join('')}</tbody></table></div></details>
    <div class="actions" style="margin-top:12px"><button class="secondary" onclick="mockOmrRun(true)">Check (nothing is saved)</button><button onclick="mockOmrRun(false)">Import into Mistake Bank</button></div>
    <div id="mockOmrResult" style="margin-top:12px">${st.dry?omrReportHtml(st.dry):''}</div>`;
 }
 function mockOmrPayload(){
   const st=mockOmrState;if(!st?.parsed)return [];
-  return st.parsed.rows.filter(r=>r.set).map(r=>({roll_no:r.roll,set_code:r.set,answers:r.answers,
+  return st.parsed.rows.filter(r=>r.set).map(r=>({roll_no:r.roll,set_code:r.set,language:r.lang||'',answers:r.answers,
     sheet_keys:r.keys.map((k,i)=>{const bonus=(r.marks[i]||0)>0&&r.answers[i]!==k&&/^[ABCD]$/.test(k||'');return bonus?'BONUS':k})}));
 }
 async function mockOmrRun(dry){

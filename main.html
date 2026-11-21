@@ -96,6 +96,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .jnvst-header{text-align:center;border-bottom:1px solid #111;padding-bottom:5px;margin-bottom:7px}
 .jnvst-code{display:flex;justify-content:space-between;font-size:10pt;font-weight:700}
 .jnvst-topline{display:flex;justify-content:space-between;align-items:center;font-size:10pt;font-weight:700;margin-bottom:3px}.jnvst-topline b{font-size:12pt}.jnvst-booklet-number{font-size:14pt;font-weight:700;letter-spacing:1px}.jnvst-booklet-code{font-size:18pt;font-weight:800;text-align:center}.jnvst-roll-box{height:13mm!important;padding:0!important;background:#fff}.jnvst-first-page-credit{position:absolute;bottom:12mm;left:12mm;right:12mm;border-top:1px solid #111;padding-top:3px;font-size:9.5pt;font-weight:700;display:flex;justify-content:space-between;align-items:center}.jnvst-first-page-credit span:last-child{font-weight:700}
+.jnvst-institute{font-size:19pt;font-weight:700;letter-spacing:.5px;margin:6px 0 4px}
 .jnvst-title{font-size:17pt;font-weight:700;letter-spacing:.3px;margin:3px 0}
 .jnvst-subtitle{font-size:13pt;font-weight:700;margin:2px 0}
 .jnvst-mock-badge{display:inline-block;border:1px solid #111;padding:2px 8px;font-size:9pt;font-weight:700;margin-top:3px}
@@ -308,7 +309,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=57";
+      s.src="teacher-app.js?v=58";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -1389,14 +1390,24 @@ const JNVST_PDF_DIRECTIONS={
   LANGUAGE:"There are four passages in this Section. Each passage is followed by five questions. Read each passage carefully and answer the questions that follow. For each question, four probable answers as (A), (B), (C) and (D) are given. Only one out of these is correct. Choose the correct answer and darken the circle in the OMR Answer Sheet against the number corresponding to the question."
 };
 
+const JNVST_PDF_DIRECTIONS_AS={
+  MAT_PATTERN:"{a} ৰ পৰা {b} নং প্ৰশ্নলৈ, বাওঁফালে এটা সমস্যা চিত্ৰ দিয়া আছে, যাৰ এটা অংশ নাই। সোঁফালে থকা (A), (B), (C) আৰু (D) উত্তৰ চিত্ৰবোৰ ভালদৰে লক্ষ্য কৰা আৰু দিশ সলনি নকৰাকৈ সমস্যা চিত্ৰৰ নথকা অংশত বহুৱালে আৰ্হিটো সম্পূৰ্ণ হোৱা উত্তৰ চিত্ৰটো বাছি উলিওৱা। OMR উত্তৰপত্ৰত প্ৰশ্নৰ সংখ্যাৰ বিপৰীতে তোমাৰ উত্তৰৰ বৃত্তটো গাঢ় কৰা।",
+  MAT_SERIES:"{a} ৰ পৰা {b} নং প্ৰশ্নলৈ, বাওঁফালে তিনিটা সমস্যা চিত্ৰ দিয়া আছে আৰু চতুৰ্থ চিত্ৰটোৰ ঠাই খালী এৰি থোৱা হৈছে। সমস্যা চিত্ৰকেইটা এটা শৃংখলাত আছে। উত্তৰ চিত্ৰকেইটাৰ ভিতৰৰ পৰা, চতুৰ্থ চিত্ৰৰ খালী ঠাইত বহিলে শৃংখলাটো সম্পূৰ্ণ হোৱা চিত্ৰটো বাছি উলিওৱা। OMR উত্তৰপত্ৰত প্ৰশ্নৰ সংখ্যাৰ বিপৰীতে তোমাৰ উত্তৰৰ বৃত্তটো গাঢ় কৰা।",
+  MAT_GEOMETRICAL:"{a} ৰ পৰা {b} নং প্ৰশ্নলৈ, বাওঁফালে সমস্যা চিত্ৰ হিচাপে এটা জ্যামিতিক চিত্ৰৰ এটা অংশ দিয়া আছে আৰু আনটো অংশ (A), (B), (C) আৰু (D) এই চাৰিটা উত্তৰ চিত্ৰৰ ভিতৰত আছে। জ্যামিতিক চিত্ৰটো সম্পূৰ্ণ কৰা উত্তৰ চিত্ৰটো বাছি উলিওৱা। OMR উত্তৰপত্ৰত প্ৰশ্নৰ সংখ্যাৰ বিপৰীতে তোমাৰ উত্তৰৰ বৃত্তটো গাঢ় কৰা।",
+  MAT_MIRROR:"{a} ৰ পৰা {b} নং প্ৰশ্নলৈ, বাওঁফালে এটা সমস্যা চিত্ৰ আৰু সোঁফালে (A), (B), (C) আৰু (D) চাৰিটা উত্তৰ চিত্ৰ দিয়া আছে; সমস্যা চিত্ৰৰ কাষত X–Y ৰেখা আছে। X–Y ৰেখা ঠিয় (উলম্ব) হ'লে, X–Y ত দাপোণ ৰাখিলে সমস্যা চিত্ৰৰ যি হুবহু দাপোণ-প্ৰতিবিম্ব পৰিব, সেই উত্তৰ চিত্ৰটো বাছি উলিওৱা। X–Y ৰেখা পথালি (অনুভূমিক) হ'লে, X–Y ত পানীত দেখা পোৱা পানী-প্ৰতিবিম্বৰ উত্তৰ চিত্ৰটো বাছি উলিওৱা। OMR উত্তৰপত্ৰত প্ৰশ্নৰ সংখ্যাৰ বিপৰীতে তোমাৰ উত্তৰৰ বৃত্তটো গাঢ় কৰা।",
+  MAT_EMBEDDED:"{a} ৰ পৰা {b} নং প্ৰশ্নলৈ, বাওঁফালে এটা সমস্যা চিত্ৰ আৰু সোঁফালে (A), (B), (C) আৰু (D) চাৰিটা উত্তৰ চিত্ৰ দিয়া আছে। যি উত্তৰ চিত্ৰটোৰ ভিতৰত সমস্যা চিত্ৰটো লুকাই (সোমাই) আছে, সেইটো বাছি উলিওৱা। OMR উত্তৰপত্ৰত প্ৰশ্নৰ সংখ্যাৰ বিপৰীতে তোমাৰ উত্তৰৰ বৃত্তটো গাঢ় কৰা।"
+};
 /* V36: directions carry the question range of their block, so the block can sit anywhere in the paper */
-function jnvstMatDirection(part,a,b,forPrint){
-  let t=String(JNVST_PDF_DIRECTIONS[part]||'').replace(/\{a\}/g,a).replace(/\{b\}/g,b);
+function jnvstDirWord(lang){return String(lang||'').toUpperCase()==='ASSAMESE'?'নিৰ্দেশনা':'Directions'}
+function jnvstPartWord(lang){return String(lang||'').toUpperCase()==='ASSAMESE'?'অংশ':'PART'}
+function jnvstMatDirection(part,a,b,forPrint,lang){
+  const src=(String(lang||'').toUpperCase()==='ASSAMESE'&&JNVST_PDF_DIRECTIONS_AS[part])?JNVST_PDF_DIRECTIONS_AS:JNVST_PDF_DIRECTIONS;
+  let t=String(src[part]||'').replace(/\{a\}/g,a).replace(/\{b\}/g,b);
   return forPrint?t:jnvstOnlineDirection(t);
 }
 function jnvstOnlineDirection(t){
-  t=String(t||'').replace(/\s*(?:and\s+)?(?:Indicate your answer by\s+)?darken(?:ing)? the circle[\s\S]*$/i,'').trim();
-  return t&&!/[.!?]$/.test(t)?t+'.':t;
+  t=String(t||'').replace(/\s*OMR উত্তৰপত্ৰত[\s\S]*$/,'').replace(/\s*(?:and\s+)?(?:Indicate your answer by\s+)?darken(?:ing)? the circle[\s\S]*$/i,'').trim();
+  return t&&!/[.!?।]$/.test(t)?t+'.':t;
 }
 /* V36: label + direction for question i of a mock test (qs sorted by question_number). Part names are never shown. */
 function jnvstMockBlockInfo(qs,i){
@@ -1406,7 +1417,7 @@ function jnvstMockBlockInfo(qs,i){
   const a=qs[s].question_number,b=qs[e].question_number,ROM=['I','II','III','IV','V'];
   if(q.section_code==='MAT'){
     let n=0;for(let k=0;k<=s;k++)if(qs[k].section_code==='MAT'&&(k===0||qs[k-1].part_code!==qs[k].part_code))n++;
-    return {label:'Mental Ability · Part '+(ROM[n-1]||n),dir:jnvstMatDirection(part,a,b,false)};
+    return {label:'Mental Ability · Part '+(ROM[n-1]||n),dir:jnvstMatDirection(part,a,b,false,window.mockExam?.test?.language)};
   }
   if(part==='EVS_PASSAGE')return {label:'Environmental Studies · Passage',dir:'Read the passage carefully and answer Question Nos. '+a+' to '+b+'. Only one of the four answers is correct.'};
   if(part==='EVS_MCQ')return {label:'Environmental Studies',dir:jnvstOnlineDirection(JNVST_PDF_DIRECTIONS.EVS)};
