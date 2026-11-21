@@ -1601,6 +1601,7 @@ function qpPopupRuntime(){
     const extra=[];if(broken)extra.push(broken+' image(s) could not be loaded');if(leftovers&&mathOk)extra.push(leftovers+' formula(s) converted to plain text');
     say('Ready — '+imgs.length+' image(s) loaded'+(extra.length?' · '+extra.join(' · '):'')+'.',broken>0);
     window.__qpReady=true;
+    if(typeof window.__qpHook==='function'){try{await window.__qpHook();}catch(e){console.error(e);try{window.print();}catch(_){}}return;}
     setTimeout(()=>{try{window.focus();window.print();}catch(_){}} ,300);
   })();
 }
@@ -1894,19 +1895,11 @@ async function generateMockTestPDF(testId){
     const css_add=[...document.querySelectorAll('style')].map(s=>s.textContent||'').join('\n');
     const css_pages='.jnvst-page{page-break-after:auto!important;break-after:auto!important}.jnvst-page+.jnvst-page{page-break-before:always!important;break-before:page!important}';
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper">${pages}</div></body></html>`);
+    // V42: same maths runtime as the Question Paper Generator (MathJax in the print window, plain-text fallback),
+    // then size the sections to whole sheets AFTER the formulas are typeset, then print.
+    const hook=`window.__qpHook=async function(){jnvstPdfFixPages(document);window.addEventListener('beforeprint',function(){jnvstPdfFixPages(document)});await new Promise(function(r){setTimeout(r,300)});window.focus();window.print();};`;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper">${pages}</div><script>${jnvstPdfFixPages.toString()};${hook}${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`);
     w.document.close();
-    const waitForImages=async()=>{
-      const images=[...w.document.images];
-      await Promise.all(images.map(img=>new Promise(resolve=>{
-        if(img.complete)return resolve();
-        img.onload=resolve;img.onerror=resolve;
-      })));
-      try{await w.document.fonts.ready}catch(_){}
-      w.addEventListener('beforeprint',()=>{try{jnvstPdfFixPages(w.document)}catch(_){}});   // re-measure right before printing
-      setTimeout(()=>{try{jnvstPdfFixPages(w.document)}catch(_){}w.focus();w.print();},400);
-    };
-    await waitForImages();
   }catch(e){
     try{w.close()}catch(_){}
     notify('Could not generate the JNVST-style Question Paper PDF: '+(e.message||e));
