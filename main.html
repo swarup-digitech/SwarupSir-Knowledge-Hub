@@ -93,6 +93,12 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .jnvst-paper{font-family:"Times New Roman",Times,serif;color:#111;background:#fff}
 .jnvst-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm 12mm 14mm 12mm;margin:0 auto;background:#fff;position:relative;page-break-after:always}
 .jnvst-page:last-child{page-break-after:auto}
+/* V43: mock paper — wider left margin for the staple pin, safe distance from the printer's unprintable edge */
+.mock-paper .jnvst-page{padding:13mm 12mm 17mm 24mm}
+.mock-paper .jnvst-footer{left:24mm;right:12mm;bottom:8mm}
+.mock-paper .jnvst-title{font-size:14pt}
+.mock-paper .jnvst-first-page-credit{left:24mm!important;right:12mm!important;bottom:8mm!important}
+.mock-paper .jnvst-page img{max-width:100%}
 .jnvst-header{text-align:center;border-bottom:1px solid #111;padding-bottom:5px;margin-bottom:7px}
 .jnvst-code{display:flex;justify-content:space-between;font-size:10pt;font-weight:700}
 .jnvst-topline{display:flex;justify-content:space-between;align-items:center;font-size:10pt;font-weight:700;margin-bottom:3px}.jnvst-topline b{font-size:12pt}.jnvst-booklet-number{font-size:14pt;font-weight:700;letter-spacing:1px}.jnvst-booklet-code{font-size:18pt;font-weight:800;text-align:center}.jnvst-roll-box{height:13mm!important;padding:0!important;background:#fff}.jnvst-first-page-credit{position:absolute;bottom:12mm;left:12mm;right:12mm;border-top:1px solid #111;padding-top:3px;font-size:9.5pt;font-weight:700;display:flex;justify-content:space-between;align-items:center}.jnvst-first-page-credit span:last-child{font-weight:700}
@@ -309,7 +315,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=60";
+      s.src="teacher-app.js?v=61";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");

@@ -1675,7 +1675,8 @@ function jnvstPdfFixPages(doc){
     const kids=[...p.children].filter(c=>c!==foot);
     const setZoom=z=>kids.forEach(c=>{c.style.zoom=z===1?'':z});
     setZoom(1);
-    const reserve=(foot?foot.offsetHeight:0)+6*MM+8+SAFE;    // footer sits 6mm above the page bottom
+    const fb=foot?(parseFloat(getComputedStyle(foot).bottom)||6*MM):0;
+    const reserve=(foot?foot.offsetHeight:0)+fb+8+SAFE;    // footer sits above the page bottom
     const bottom=()=>{const top=p.getBoundingClientRect().top;let b=0;kids.forEach(c=>{b=Math.max(b,c.getBoundingClientRect().bottom-top)});return b};
     let cb=bottom(),n=Math.max(1,Math.ceil(cb/PH));
     // a last sheet that would hold only a few lines (or only the footer) is not wanted: shrink the section up to 14% instead
@@ -1898,7 +1899,7 @@ async function generateMockTestPDF(testId){
     // V42: same maths runtime as the Question Paper Generator (MathJax in the print window, plain-text fallback),
     // then size the sections to whole sheets AFTER the formulas are typeset, then print.
     const hook=`window.__qpHook=async function(){jnvstPdfFixPages(document);window.addEventListener('beforeprint',function(){jnvstPdfFixPages(document)});await new Promise(function(r){setTimeout(r,300)});window.focus();window.print();};`;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper">${pages}</div><script>${jnvstPdfFixPages.toString()};${hook}${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper mock-paper">${pages}</div><script>${jnvstPdfFixPages.toString()};${hook}${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`);
     w.document.close();
   }catch(e){
     try{w.close()}catch(_){}
