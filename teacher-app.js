@@ -1666,20 +1666,23 @@ function jnvstPdfRealText(t){const s=String(t==null?'':t).trim();return s&&!/^\[
    sub-pixel overflow (or content ending exactly at a page end) produced an empty page. Each block is now sized to a whole number of
    pages minus 2px, and pages are separated with break-before instead of break-after. Runs after the images have loaded. */
 function jnvstPdfFixPages(doc){
-  const PH=297/25.4*96, MM=96/25.4;
+  // Sizes every .jnvst-page to whole sheets so a section never leaves a blank / footer-only sheet behind.
+  const PH=297/25.4*96, MM=96/25.4, SAFE=26;     // SAFE: print layout can differ from screen layout by a few px
   doc.querySelectorAll('.jnvst-page').forEach(p=>{
     p.style.minHeight='0';p.style.height='auto';
     const foot=p.querySelector(':scope > .jnvst-footer');
     const kids=[...p.children].filter(c=>c!==foot);
-    kids.forEach(c=>{c.style.zoom='';});
-    const reserve=(foot?foot.offsetHeight:0)+6*MM+8;          // footer sits 6mm above the page bottom
+    const setZoom=z=>kids.forEach(c=>{c.style.zoom=z===1?'':z});
+    setZoom(1);
+    const reserve=(foot?foot.offsetHeight:0)+6*MM+8+SAFE;    // footer sits 6mm above the page bottom
     const bottom=()=>{const top=p.getBoundingClientRect().top;let b=0;kids.forEach(c=>{b=Math.max(b,c.getBoundingClientRect().bottom-top)});return b};
     let cb=bottom(),n=Math.max(1,Math.ceil(cb/PH));
-    // Content ends inside the footer zone: shrink it slightly to fit (≥88%), else add a page.
-    if(foot&&cb+reserve>n*PH){
+    // a last sheet that would hold only a few lines (or only the footer) is not wanted: shrink the section up to 14% instead
+    if(n>1&&cb-(n-1)*PH<0.10*PH&&(n-1)*PH-reserve>0&&((n-1)*PH-reserve)/cb>=0.86)n--;
+    if(cb+(foot?reserve:0)>n*PH){
       let z=1;
-      for(let k=0;k<5&&cb+reserve>n*PH;k++){z=Math.max(.88,z*((n*PH-reserve)/cb)*.995);kids.forEach(c=>{c.style.zoom=z});cb=bottom();if(z<=.88)break}
-      if(cb+reserve>n*PH){kids.forEach(c=>{c.style.zoom=''});cb=bottom();n++}
+      for(let k=0;k<6&&cb+(foot?reserve:0)>n*PH;k++){z=Math.max(.86,z*((n*PH-(foot?reserve:0))/cb)*.995);setZoom(z);cb=bottom();if(z<=.86)break}
+      if(cb+(foot?reserve:0)>n*PH){setZoom(1);cb=bottom();n=Math.max(1,Math.ceil((cb+(foot?reserve:0))/PH))}
     }
     p.style.height=(n*PH-2)+'px';
   });
@@ -1819,7 +1822,7 @@ async function generateMockTestPDF(testId){
       <div class="jnvst-topline"><span>Test Booklet No. <b>${booklet.bookletNo}</b></span><span>Test Booklet Code <b>${booklet.code}</b></span>${test.exam_code?`<span>Exam Code <b>${esc(test.exam_code)}</b></span>`:''}</div>
       <div class="jnvst-header">
         <div class="jnvst-institute">SWARUP SIR'S KNOWLEDGE HUB</div>
-        <div class="jnvst-title">JAWAHAR NAVODAYA VIDYALAYA SELECTION TEST ${jnvstExamYear(test)} FOR VI</div>
+        <div class="jnvst-title">JAWAHAR NAVODAYA VIDYALAYA SELECTION TEST FOR VI- ${jnvstExamYear(test)}</div>
         <div class="jnvst-mock-badge">Mock Test</div>
       </div>
       <table class="jnvst-fields">
@@ -1860,7 +1863,7 @@ async function generateMockTestPDF(testId){
     // Section I — Part 2: EVS. Standalone 15 questions followed by one passage
     // and five passage-based questions.
     let evsHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — I<br>PART — 2<br>ENVIRONMENTAL STUDIES (EVS)</div>`;
-    evsHtml+=`<div class="jnvst-directions"><b>Directions :</b> ${esc(JNVST_PDF_DIRECTIONS.EVS)}</div>`;
+    evsHtml+=`<div class="jnvst-directions"><b>${jnvstDirWord(lang)} :</b> ${esc(jnvstDirText('EVS',lang))}</div>`;
     evsHtml+=jnvstPdfGroupQuestions(evsMcq);
     if(evsPass.length){
       evsHtml+=jnvstPdfPassage(evsPass[0].passage_title||'Passage',evsPass[0].passage_text||'');
@@ -1871,14 +1874,14 @@ async function generateMockTestPDF(testId){
 
     // Section II — Arithmetic
     let arHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — II<br>ARITHMETIC TEST</div>
-      <div class="jnvst-directions"><b>Directions :</b> ${esc(JNVST_PDF_DIRECTIONS.ARITHMETIC)}</div>
+      <div class="jnvst-directions"><b>${jnvstDirWord(lang)} :</b> ${esc(jnvstDirText('ARITHMETIC',lang))}</div>
       <div class="jnvst-two-col">${jnvstPdfGroupQuestions(arithmetic)}</div>
       <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section II</span></div></div>`;
     pages+=arHtml;
 
     // Section III — Language, preserving each passage before its five questions.
     let langHtml=`<div class="jnvst-page"><div class="jnvst-section-head">SECTION — III<br>LANGUAGE TEST</div>
-      <div class="jnvst-directions"><b>Directions :</b> ${esc(JNVST_PDF_DIRECTIONS.LANGUAGE)}</div>
+      <div class="jnvst-directions"><b>${jnvstDirWord(lang)} :</b> ${esc(jnvstDirText('LANGUAGE',lang))}</div>
       ${jnvstPdfQuestionSection(language)}
       <div class="jnvst-footer"><span>${esc(test.title||'JNVST Mock Test')}</span><span>Section III</span></div></div>`;
     pages+=langHtml;
@@ -1899,7 +1902,9 @@ async function generateMockTestPDF(testId){
         if(img.complete)return resolve();
         img.onload=resolve;img.onerror=resolve;
       })));
-      setTimeout(()=>{try{jnvstPdfFixPages(w.document)}catch(_){}w.focus();w.print();},300);
+      try{await w.document.fonts.ready}catch(_){}
+      w.addEventListener('beforeprint',()=>{try{jnvstPdfFixPages(w.document)}catch(_){}});   // re-measure right before printing
+      setTimeout(()=>{try{jnvstPdfFixPages(w.document)}catch(_){}w.focus();w.print();},400);
     };
     await waitForImages();
   }catch(e){
