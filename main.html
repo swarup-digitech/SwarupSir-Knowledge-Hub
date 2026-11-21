@@ -94,7 +94,8 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .jnvst-page{width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm 12mm 14mm 12mm;margin:0 auto;background:#fff;position:relative;page-break-after:always}
 .jnvst-page:last-child{page-break-after:auto}
 /* V43: mock paper — wider left margin for the staple pin, safe distance from the printer's unprintable edge */
-.mock-paper .jnvst-page{padding:13mm 12mm 17mm 24mm}
+/* box-decoration-break:clone repeats the top/bottom padding on EVERY sheet of a section, so continuation sheets keep the same top margin */
+.mock-paper .jnvst-page{box-sizing:content-box;width:174mm;min-height:0;padding:13mm 12mm 17mm 24mm;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .mock-paper .jnvst-footer{left:24mm;right:12mm;bottom:8mm}
 .mock-paper .jnvst-title{font-size:14pt}
 .mock-paper .jnvst-first-page-credit{left:24mm!important;right:12mm!important;bottom:8mm!important}
@@ -315,7 +316,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=61";
+      s.src="teacher-app.js?v=62";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");

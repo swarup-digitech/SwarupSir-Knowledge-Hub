@@ -1667,26 +1667,33 @@ function jnvstPdfRealText(t){const s=String(t==null?'':t).trim();return s&&!/^\[
    sub-pixel overflow (or content ending exactly at a page end) produced an empty page. Each block is now sized to a whole number of
    pages minus 2px, and pages are separated with break-before instead of break-after. Runs after the images have loaded. */
 function jnvstPdfFixPages(doc){
-  // Sizes every .jnvst-page to whole sheets so a section never leaves a blank / footer-only sheet behind.
-  const PH=297/25.4*96, MM=96/25.4, SAFE=26;     // SAFE: print layout can differ from screen layout by a few px
+  // Sizes every .jnvst-page to whole sheets. Top/bottom padding is repeated on every sheet (box-decoration-break:clone),
+  // so each sheet holds U = sheet height - top padding - bottom padding of content. The footer lives in the bottom padding.
+  const PH=297/25.4*96, SAFE=22;
   doc.querySelectorAll('.jnvst-page').forEach(p=>{
+    const cs=getComputedStyle(p);
+    const clone=/clone/.test(cs.getPropertyValue('box-decoration-break')||cs.getPropertyValue('-webkit-box-decoration-break'))&&cs.boxSizing==='content-box';
+    const pt=parseFloat(cs.paddingTop)||0,pb=parseFloat(cs.paddingBottom)||0;
     p.style.minHeight='0';p.style.height='auto';
     const foot=p.querySelector(':scope > .jnvst-footer');
     const kids=[...p.children].filter(c=>c!==foot);
     const setZoom=z=>kids.forEach(c=>{c.style.zoom=z===1?'':z});
     setZoom(1);
-    const fb=foot?(parseFloat(getComputedStyle(foot).bottom)||6*MM):0;
-    const reserve=(foot?foot.offsetHeight:0)+fb+8+SAFE;    // footer sits above the page bottom
-    const bottom=()=>{const top=p.getBoundingClientRect().top;let b=0;kids.forEach(c=>{b=Math.max(b,c.getBoundingClientRect().bottom-top)});return b};
-    let cb=bottom(),n=Math.max(1,Math.ceil(cb/PH));
-    // a last sheet that would hold only a few lines (or only the footer) is not wanted: shrink the section up to 14% instead
-    if(n>1&&cb-(n-1)*PH<0.10*PH&&(n-1)*PH-reserve>0&&((n-1)*PH-reserve)/cb>=0.86)n--;
-    if(cb+(foot?reserve:0)>n*PH){
+    const U=clone?PH-pt-pb:PH;                                   // content height of one sheet
+    const fb=foot?(parseFloat(getComputedStyle(foot).bottom)||0):0;
+    const reserve=clone?0:(foot?foot.offsetHeight:0)+fb+8;       // legacy: footer sits inside the content area
+    const base=clone?pt:0;
+    const bottom=()=>{const top=p.getBoundingClientRect().top;let b=0;kids.forEach(c=>{b=Math.max(b,c.getBoundingClientRect().bottom-top)});return Math.max(0,b-base)};
+    let cb=bottom(),n=Math.max(1,Math.ceil((cb+reserve+SAFE)/U));
+    // a last sheet holding only a few lines is not wanted: shrink the section (max 14%) onto the previous sheet
+    if(n>1&&(cb+reserve+SAFE)-(n-1)*U<0.10*U&&((n-1)*U-reserve-SAFE)/cb>=0.86)n--;
+    if(cb+reserve+SAFE>n*U){
       let z=1;
-      for(let k=0;k<6&&cb+(foot?reserve:0)>n*PH;k++){z=Math.max(.86,z*((n*PH-(foot?reserve:0))/cb)*.995);setZoom(z);cb=bottom();if(z<=.86)break}
-      if(cb+(foot?reserve:0)>n*PH){setZoom(1);cb=bottom();n=Math.max(1,Math.ceil((cb+(foot?reserve:0))/PH))}
+      for(let k=0;k<6&&cb+reserve+SAFE>n*U;k++){z=Math.max(.86,z*((n*U-reserve-SAFE)/cb)*.995);setZoom(z);cb=bottom();if(z<=.86)break}
+      if(cb+reserve+SAFE>n*U){setZoom(1);cb=bottom();n=Math.max(1,Math.ceil((cb+reserve+SAFE)/U))}
     }
-    p.style.height=(n*PH-2)+'px';
+    if(clone){p.style.height=(n*U-2)+'px'}                          // content-box height; padding is added per sheet
+    else{p.style.height=(n*PH-2)+'px'}
   });
 }
 function jnvstPdfQuestion(q){
@@ -1833,6 +1840,7 @@ async function generateMockTestPDF(testId){
         <tr><td class="label">Name of the Candidate</td><td colspan="3">&nbsp;</td></tr>
         <tr><td class="label">Signature of the Candidate</td><td colspan="3">&nbsp;</td></tr>
         <tr><td class="label">Time</td><td>2 Hours</td><td class="label">Maximum Marks</td><td>100</td></tr>
+        ${lang!=='COMMON'?`<tr><td class="label">Medium of the Paper</td><td colspan="3"><b>${lang==='ASSAMESE'?'ASSAMESE (অসমীয়া)':'ENGLISH'}</b></td></tr>`:''}
       </table>
       ${jnvstPdfGeneralInstructions()}
       <div class="jnvst-first-page-credit"><span>Swarup Sir's Knowledge Hub</span><span>(c)Swarup Sir, Ph: 98643-90279</span></div>
