@@ -51,6 +51,8 @@ async function loadPreviousMockTests(){
           </div>
           <div class="actions">
             ${sets.map(s=>`<button onclick="generateMockTestPDF('${s.id}')">🖨 Set ${esc(String(s.series_code||'A').toUpperCase())} ${s.language==='ASSAMESE'?'Assamese':s.language==='ENGLISH'?'English':''} PDF</button>`).join('')}
+            <button style="background:#16a34a" onclick="mockAnswerKeyPDF('${gid}')">🔑 Answer Key (PDF)</button>
+            <button class="secondary" onclick="mockAnswerKeyExcel('${gid}')">⬇ Key (Excel)</button>
             <button onclick="mockOmrImportPage('${gid}')">📥 Import OMR</button>
             <button class="secondary" onclick="editMockGroup('${gid}')">✎ Edit name</button>
             <button class="danger" onclick="deleteMockGroup('${gid}')">🗑 Delete all sets</button>
@@ -6831,15 +6833,27 @@ async function mockOmrImportPage(group){
 }
 function mockOmrAssignSets(sets){
   const st=mockOmrState,p=st.parsed;if(!p)return;
-  const codes=Object.keys(sets),setKeys=Object.fromEntries(codes.map(c=>[c,sets[c].key]));
+  const codes=Object.keys(sets);
+  // V45: English and Assamese keys of one set may differ. Candidates are 'A' (both languages have the same key) or 'A|ENGLISH' / 'A|ASSAMESE' (keys differ).
+  const sameKey=(a,b)=>{for(let q=1;q<=80;q++){if((a.get(q)||'')!==(b.get(q)||''))return false}return true};
+  const setKeys={};
+  codes.forEach(c=>{const L=Object.keys(sets[c].byLang||{});
+    if(L.length<2||L.slice(1).every(l=>sameKey(sets[c].byLang[L[0]].key,sets[c].byLang[l].key)))setKeys[c]=sets[c].key;
+    else L.forEach(l=>{setKeys[c+'|'+l]=sets[c].byLang[l].key})});
+  const best=(r,set)=>{      // language whose saved key matches the sheet's key column best
+    const L=Object.keys(sets[set]?.byLang||{});let bl='',bs=-1,tie=false;
+    L.forEach(l=>{let m=0;for(let q=1;q<=p.N;q++){const k=sets[set].byLang[l].key.get(q),v=r.keys[q-1];if(k&&v&&v===k)m++}if(m>bs){bs=m;bl=l;tie=false}else if(m===bs)tie=true});
+    return (bs>0&&!tie)?bl:''};
   p.rows.forEach(r=>{
     if(r.setSource==='manual'&&sets[r.set])return;
-    let set=String(r.sheetSet||'').toUpperCase();r.setSource='Exam Set column';
-    if(!sets[set]){ if(codes.length===1){set=codes[0];r.setSource='only set'}else{const d=omrDetectRowSet(r,setKeys,p.N);set=d.sure?d.set:'';r.setSource=d.sure?'found from '+d.method:'not found'} }
+    let set=String(r.sheetSet||'').toUpperCase();r.setSource='Exam Set column';let keyLang='';
+    if(!sets[set]){ if(codes.length===1){set=codes[0];r.setSource='only set'}else{const d=omrDetectRowSet(r,setKeys,p.N);const parts=String(d.set||'').split('|');set=d.sure?parts[0]:'';keyLang=d.sure?(parts[1]||''):'';r.setSource=d.sure?'found from '+d.method:'not found'} }
     r.set=set;
+    if(set&&!keyLang&&r.langSource!=='manual')keyLang=best(r,set);
+    if(set&&keyLang&&r.langSource!=='manual'&&sets[set]?.byLang?.[keyLang]){r.lang=keyLang;r.langSource='key'}
     // V40: booklet language (English / Assamese) — the OMR sheet does not carry it, so default to the test's main language
     const langs=Object.keys(sets[set]?.byLang||{});
-    if(langs.length&&r.langSource!=='manual'){r.lang=langs.includes(st.defLang)?st.defLang:langs[0];r.langSource='default'}
+    if(langs.length&&r.langSource!=='manual'&&r.langSource!=='key'){r.lang=langs.includes(st.defLang)?st.defLang:langs[0];r.langSource='default'}
     if(!langs.length)r.lang='';
   });
 }
@@ -6874,11 +6888,16 @@ function mockOmrReadFile(ev){
 function mockOmrSetRow(i,v){const r=mockOmrState?.parsed?.rows[i];if(!r)return;r.set=v;r.setSource='manual';mockOmrState.dry=null;mockOmrRender()}
 function mockOmrStats(){
   const st=mockOmrState,p=st.parsed,S=st.keys[st.gid]||{},N=p.N;
-  return Object.keys(S).sort().map(c=>{
-    const rows=p.rows.filter(r=>r.set===c);let t=0,m=0;
-    rows.forEach(r=>{for(let q=1;q<=N;q++){const k=S[c].key.get(q),v=r.keys[q-1];if(!k||!/^[ABCD]$/.test(v))continue;t++;if(v===k)m++}});
-    return {c,n:rows.length,ratio:t?m/t:null};
+  const out=[];
+  Object.keys(S).sort().forEach(c=>{
+    const L=Object.keys(S[c].byLang||{}),multi=L.length>1;
+    (multi?L:['']).forEach(l=>{
+      const rows=p.rows.filter(r=>r.set===c&&(!multi||r.lang===l));const key=(l&&S[c].byLang[l])?S[c].byLang[l].key:S[c].key;let t=0,m=0;
+      rows.forEach(r=>{for(let q=1;q<=N;q++){const k=key.get(q),v=r.keys[q-1];if(!k||!/^[ABCD]$/.test(v))continue;t++;if(v===k)m++}});
+      out.push({c:c+(l?' · '+mockOmrLangName(l):''),n:rows.length,ratio:t?m/t:null});
+    });
   });
+  return out;
 }
 function mockOmrRender(){
   const box=document.getElementById('mockOmrPreview'),st=mockOmrState;if(!box||!st?.parsed)return;
@@ -6893,7 +6912,7 @@ function mockOmrRender(){
    ${unknown.length?`<div class="notice" style="margin-top:8px">${unknown.length} student(s) have no set yet — choose it in the Set column, otherwise they are not imported.</div>`:''}
    ${N!==80?`<div class="notice" style="margin-top:8px">The file has ${N} question columns; a Mock Test has 80.</div>`:''}
    ${hasLang?`<div style="margin-top:8px"><label class="small">Booklet language for all students (change a single student in the table below)</label><select style="width:auto" onchange="mockOmrAllLang(this.value)">${allLangs.map(l=>`<option value="${l}" ${st.defLang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></div>`:''}
-   <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th>${hasLang?'<th>Language</th>':''}<th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td>${hasLang?`<td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetLang(${i},this.value)">${Object.keys(S[r.set]?.byLang||{}).map(l=>`<option value="${l}" ${r.lang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></td>`:''}<td class="small muted">${esc(r.setSource||'')}</td></tr>`).join('')}</tbody></table></div></details>
+   <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th>${hasLang?'<th>Language</th>':''}<th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td>${hasLang?`<td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetLang(${i},this.value)">${Object.keys(S[r.set]?.byLang||{}).map(l=>`<option value="${l}" ${r.lang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></td>`:''}<td class="small muted">${esc(r.setSource||'')}${hasLang&&r.langSource==='key'?' · language from key':''}</td></tr>`).join('')}</tbody></table></div></details>
    <div class="actions" style="margin-top:12px"><button class="secondary" onclick="mockOmrRun(true)">Check (nothing is saved)</button><button onclick="mockOmrRun(false)">Import into Mistake Bank</button></div>
    <div id="mockOmrResult" style="margin-top:12px">${st.dry?omrReportHtml(st.dry):''}</div>`;
 }
@@ -6921,4 +6940,59 @@ async function mockOmrRun(dry){
     notify('OMR import failed: '+m+(/teacher_import_mock_omr_results|function/i.test(m)?'\n\nRun V37_MOCK_OFFLINE_OMR.sql in the Supabase SQL Editor first.':''),'error');
     btns.forEach(b=>b.disabled=false);
   }
+}
+
+/* ===== V45: answer keys (English and Assamese keys may differ) ===== */
+async function mockKeyLoad(gid){
+  const groups=await mockOmrLoadGroups();const g=groups.find(x=>x.gid===gid);if(!g)throw new Error('Test not found.');
+  const {data:qs,error}=await sbFetchAll(()=>sb.from('mock_test_questions').select('mock_test_id,question_number,correct_option,part_code,section_code').in('mock_test_id',g.tests.map(t=>t.id)));
+  if(error)throw error;
+  const sets={};
+  g.tests.slice().sort((a,b)=>String(a.series_code||'').localeCompare(String(b.series_code||''))||String(a.created_at||'').localeCompare(String(b.created_at||''))).forEach(t=>{
+    const c=String(t.series_code||'A').toUpperCase(),l=String(t.language||'').toUpperCase()||'ENGLISH';
+    const key=new Map();(qs||[]).filter(q=>q.mock_test_id===t.id).forEach(q=>key.set(Number(q.question_number),{a:String(q.correct_option||'').toUpperCase(),s:q.section_code||''}));
+    (sets[c]||(sets[c]={}))[l]=key;
+  });
+  return {g,sets,langs:[...new Set(g.tests.map(t=>String(t.language||'').toUpperCase()||'ENGLISH'))].sort()};
+}
+const MOCK_KEY_SECTIONS=[[1,20,'Mental Ability (MAT)'],[21,40,'Environmental Studies (EVS)'],[41,60,'Arithmetic'],[61,80,'Language']];
+async function mockAnswerKeyPDF(gid){
+  try{
+    const {g,sets,langs}=await mockKeyLoad(gid);
+    const LN=l=>l==='ASSAMESE'?'Assamese':'English';
+    let diffTotal=0;
+    const blocks=Object.keys(sets).sort().map(c=>{
+      const S=sets[c],L=langs.filter(l=>S[l]);let diff=[];
+      if(L.length>1)for(let q=1;q<=80;q++){if((S[L[0]].get(q)?.a||'')!==(S[L[1]].get(q)?.a||''))diff.push(q)}
+      diffTotal+=diff.length;
+      const group=([a,b,name])=>{let rows='';for(let q=a;q<=b;q++){const d=diff.includes(q);rows+=`<tr><td class="q">${q}</td>${L.map((l,i)=>`<td class="${d?'d':''}">${esc(S[l].get(q)?.a||'–')}</td>`).join('')}</tr>`}
+        return `<div class="g"><div class="gh">Q ${a}–${b}<br><small>${esc(name)}</small></div><table><thead><tr><th>Q</th>${L.map(l=>`<th>${LN(l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`};
+      return `<section><h2>Set ${esc(c)}</h2>${L.length>1?`<div class="note">${diff.length?`English and Assamese keys <b>differ</b> in ${diff.length} question(s): ${diff.join(', ')} (shown in red).`:'English and Assamese keys are the same.'}</div>`:''}<div class="grid">${MOCK_KEY_SECTIONS.map(group).join('')}</div></section>`}).join('');
+    const w=window.open('','_blank');if(!w)return notify('Please allow pop-ups to print the answer key.');
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(g.base)} - Answer Key</title><style>
+@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:"Times New Roman",Times,serif;color:#111}
+.wrap{padding:13mm 12mm 12mm 24mm}h1{margin:0;text-align:center;font-size:18pt}.sub{text-align:center;font-size:11pt;margin:2px 0 8px}
+section{break-inside:avoid;margin:0 0 7mm}h2{font-size:13pt;margin:0 0 3px;border-bottom:2px solid #111}.note{font-size:9.5pt;margin:2px 0 4px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}.gh{font-size:9.5pt;font-weight:700;text-align:center;margin-bottom:2px}.gh small{font-weight:400;font-size:8pt}
+table{border-collapse:collapse;width:100%;font-size:10pt}th,td{border:1px solid #444;padding:1px 3px;text-align:center}th{background:#eee}td.q{font-weight:700;background:#f6f6f6}td.d{color:#b91c1c;font-weight:700}
+.foot{font-size:9pt;margin-top:4mm}</style></head><body><div class="wrap"><h1>ANSWER KEY</h1><div class="sub"><b>${esc(g.base)}</b>${g.code?` · Exam Code <b>${esc(g.code)}</b>`:''} · 80 Questions · 100 Marks (1.25 each)</div>
+${diffTotal?`<div class="note" style="color:#b91c1c;text-align:center">⚠ In some questions the English and Assamese answers are different — use the key of the booklet language.</div>`:''}${blocks}
+<div class="foot">Prepared from the questions saved in the test. Teacher copy — do not give to students before the exam.</div></div><script>setTimeout(function(){window.focus();window.print()},400)<\/script></body></html>`);
+    w.document.close();
+  }catch(e){notify('Could not prepare the answer key: '+(e.message||e))}
+}
+async function mockAnswerKeyExcel(gid){
+  try{
+    if(typeof XLSX==='undefined')return notify('Excel library is not loaded. Please refresh and try again.');
+    const {g,sets,langs}=await mockKeyLoad(gid);
+    const LN=l=>l==='ASSAMESE'?'Assamese':'English';
+    const cols=[];Object.keys(sets).sort().forEach(c=>langs.forEach(l=>{if(sets[c][l])cols.push([c,l])}));
+    const rows=[['Q.No','Section',...cols.map(([c,l])=>'Set '+c+' '+LN(l))]];
+    const secOf=q=>MOCK_KEY_SECTIONS.find(([a,b])=>q>=a&&q<=b)[2];
+    for(let q=1;q<=80;q++)rows.push([q,secOf(q),...cols.map(([c,l])=>sets[c][l].get(q)?.a||'')]);
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:6},{wch:28},...cols.map(()=>({wch:16}))];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Answer Key');
+    XLSX.writeFile(wb,'Answer_Key_'+String(g.code||g.base).replace(/[^\w-]+/g,'_')+'.xlsx');
+    notify('Answer key downloaded.','success');
+  }catch(e){notify('Could not download the answer key: '+(e.message||e))}
 }
