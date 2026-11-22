@@ -47,7 +47,7 @@ async function loadPreviousMockTests(){
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div><h3 style="margin:0 0 5px">${esc(name)} <span class="tag" style="background:#ccfbf1;color:#0f766e">✍️ PEN-PAPER · OMR</span></h3>
             <div class="small muted">${[...new Set(sets.map(s=>s.language==='ASSAMESE'?'Assamese':s.language==='ENGLISH'?'English':'Common'))].join(' + ')} · 120 minutes · Sets: <b>${[...new Set(sets.map(s=>String(s.series_code||'A').toUpperCase()))].join(', ')}</b> · not shown to students · Created ${created}</div>
-            ${code?`<div class="small" style="margin-top:3px">Exam code: <code>${esc(code)}</code> — printed on every booklet. Type it (or the test name) as the <b>Exam name</b> in the OMR software.</div>`:''}
+            ${code?`<div class="small" style="margin-top:3px">Exam code: <code>${esc(code)}</code>. Booklets print <b>${new Set(sets.map(s=>s.language)).size>1?`<code>${esc(code)}-E</code> (English) and <code>${esc(code)}-A</code> (Assamese)`:esc(code)}</b>. Scan English and Assamese sheets as separate batches and type the printed code as the <b>Exam name</b> in the OMR software.</div>`:''}
           </div>
           <div class="actions">
             ${sets.map(s=>`<button onclick="generateMockTestPDF('${s.id}')">🖨 Set ${esc(String(s.series_code||'A').toUpperCase())} ${s.language==='ASSAMESE'?'Assamese':s.language==='ENGLISH'?'English':''} PDF</button>`).join('')}
@@ -1256,7 +1256,7 @@ async function generateMockTestPage(language){
    <label style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="mtMode" value="OFFLINE" onchange="mockGenMode()" style="width:auto;margin-top:4px"><span><b>Pen-paper</b> — printed question paper + OMR sheet. You can make <b>several question sets (A, B, C, D)</b>, each with its own question order. The test is <b>not shown to students</b>. After the exam, press <b>Import OMR</b> on the test to put each student's mistakes in the Mistake Bank.</span></label>
   </div>
   <div class="card">
-  <label>Exam name (Test Title)</label><input id="mtTitle" value="Mock Test"><div id="mockExamHint" class="small muted" style="display:none;margin:-4px 0 8px">Pen-paper: an <b>exam code</b> is made automatically and printed on every booklet. Type the code (or this name) as the <b>Exam name</b> in the OMR software so the OMR Excel finds this test by itself.</div>
+  <label>Exam name (Test Title)</label><input id="mtTitle" value="Mock Test"><div id="mockExamHint" class="small muted" style="display:none;margin:-4px 0 8px">Pen-paper: an <b>exam code</b> is made automatically and printed on every booklet. Booklets print the code followed by <b>-E</b> (English) or <b>-A</b> (Assamese). Type the printed code as the <b>Exam name</b> in the OMR software (scan English and Assamese sheets as separate batches) so the OMR Excel finds this test and its language by itself.</div>
   <label>Time Limit</label><input value="2 Hours (120 minutes)" disabled>
   <label>Test Language</label><select id="mtLanguage" onchange="generateMockTestPage(this.value)"><option value="ASSAMESE" ${generatorLanguage==='ASSAMESE'?'selected':''}>Assamese</option><option value="ENGLISH" ${generatorLanguage==='ENGLISH'?'selected':''}>English</option></select>
   <div class="notice small"><b>MAT is common:</b> MAT questions are shared by both languages. EVS, Arithmetic and Language are taken only from the chosen language bank.</div>
@@ -1511,7 +1511,7 @@ async function createMockTest(){
     const recipients=offline?[]:bySeries[si];
     summaryLines.push(`${nSeries>1?'Series '+codes[si]+(offline?': ':' ('+recipients.length+' student(s)): '):''}`+matOrder.map((p,i)=>`Part ${roman[i]}=${mockPlanByPart[p].label.replace(/^MAT\s*[—-]\s*/,'')}`).join(' → '));
    }
-   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — '+(nSeries*2)+' booklets ('+nSeries+' set(s) × English + Assamese), not visible to students. Exam code: '+examCode+' (printed on every booklet — type it as the Exam name in the OMR software). Print the Question Paper PDF of every set, hold the exam on OMR sheets, then use Import OMR.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
+   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — '+(nSeries*2)+' booklets ('+nSeries+' set(s) × English + Assamese), not visible to students. Exam code: '+examCode+' (booklets print it with -E for English or -A for Assamese; type the printed code as the Exam name in the OMR software, one batch per language). Print the Question Paper PDF of every set, hold the exam on OMR sheets, then use Import OMR.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
    mockTestManagement();
   }catch(e){
    for(const id of createdIds){try{await sb.from('mock_tests').delete().eq('id',id)}catch(_){}}
@@ -1830,7 +1830,7 @@ async function generateMockTestPDF(testId){
     ];
 
     const firstPage=`<div class="jnvst-page">
-      <div class="jnvst-topline"><span>Test Booklet No. <b>${booklet.bookletNo}</b></span><span>Test Booklet Code <b>${booklet.code}</b></span>${test.exam_code?`<span>Exam Code <b>${esc(test.exam_code)}</b></span>`:''}</div>
+      <div class="jnvst-topline"><span>Test Booklet No. <b>${booklet.bookletNo}</b></span><span>Test Booklet Code <b>${booklet.code}</b></span>${test.exam_code?`<span>Exam Code <b>${esc(mockBookletExamCode(test))}</b></span>`:''}</div>
       <div class="jnvst-header">
         <div class="jnvst-institute">SWARUP SIR'S KNOWLEDGE HUB</div>
         <div class="jnvst-title">JAWAHAR NAVODAYA VIDYALAYA SELECTION TEST FOR VI- ${jnvstExamYear(test)}</div>
@@ -6799,6 +6799,23 @@ async function saveAdaptiveJnvstAssignment(){
  * ===================================================================== */
 let mockOmrState=null;
 const mockOmrNorm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+/* V46: the OMR software only has sets A-D, so the exam code carries the language: ...-E (English booklets) / ...-A (Assamese). */
+function mockBookletExamCode(test){
+  const c=String(test?.exam_code||'');if(!c)return '';
+  const l=String(test?.language||'').toUpperCase();
+  return (test.series_code&&(l==='ENGLISH'||l==='ASSAMESE'))?c+(l==='ASSAMESE'?'-A':'-E'):c;
+}
+// Reads the language letter that follows the exam code in the OMR "Exam name" / file name. Returns 'ENGLISH' | 'ASSAMESE' | ''.
+function mockOmrExamLang(texts,code){
+  const tidy=s=>String(s||'').toUpperCase().replace(/[\s_.\-]+/g,'-'),c=tidy(code);if(!c)return '';
+  const pick=r=>/^(ENGLISH|ENG|E)$/.test(r)?'ENGLISH':/^(ASSAMESE|ASM|ASS|A)$/.test(r)?'ASSAMESE':'';
+  for(const tx of texts){const s=tidy(tx),i=s.indexOf(c);if(i<0)continue;
+    const m=s.slice(i+c.length).match(/^-?(ENGLISH|ASSAMESE|ENG|ASM|ASS|E|A)(?=-|$)/);if(m){const l=pick(m[1]);if(l)return l}}
+  // the OMR software may drop the hyphens: MOCK20261122YC3ZA
+  const flat=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''),fc=flat(code);
+  for(const tx of texts){const s=flat(tx);if(s.startsWith(fc)){const l=pick(s.slice(fc.length));if(l)return l}}
+  return '';
+}
 async function mockOmrLoadGroups(){
   let {data,error}=await sb.from('mock_tests').select('id,title,language,series_code,series_group_id,created_at,exam_code').eq('teacher_id',current.id).eq('delivery_mode','OFFLINE').order('created_at',{ascending:false});
   if(error)({data,error}=await sb.from('mock_tests').select('id,title,language,series_code,series_group_id,created_at').eq('teacher_id',current.id).eq('delivery_mode','OFFLINE').order('created_at',{ascending:false}));
@@ -6825,7 +6842,7 @@ async function mockOmrImportPage(group){
   render(`<div class="wrap">${header('Import OMR — Pen-paper Mock Test')}
    <div class="card"><h2>📥 Import OMR Results into the Mistake Bank</h2>
     <p class="muted">Upload the result Excel from your OMR software. Every student is marked against the saved answer key of the <b>set</b> he/she wrote, and every mistake goes into the student's <b>Mistake Bank</b>.</p>
-    <ul class="small muted"><li>Needed columns: <b>Roll No</b> and <b>Q n Options</b> for every question. <b>Exam Set</b> (A, B, C, D), <b>Q n Key</b>, <b>Q n Marks</b> and <b>Exam name</b> are used when present.</li><li><b>Best:</b> type the test's <b>exam code</b> (printed on every booklet, e.g. <code>MOCK-20261120-AB12</code>) or its name as the <b>Exam name</b> in the OMR software. The test is then selected automatically.</li><li>The <b>Set</b> of each student is shown in a column below. If the sheet has no Exam Set, it is found from the keys; you can also change it by hand.</li><li>Blank and multiple marks are mistakes. Bonus questions and questions whose key differs from the saved key are skipped. Absent students and students already imported for this test are skipped.</li></ul>
+    <ul class="small muted"><li>Needed columns: <b>Roll No</b> and <b>Q n Options</b> for every question. <b>Exam Set</b> (A, B, C, D), <b>Q n Key</b>, <b>Q n Marks</b> and <b>Exam name</b> are used when present.</li><li><b>Best:</b> type the exam code <b>exactly as printed on the booklet</b> as the <b>Exam name</b> in the OMR software — e.g. <code>MOCK-20261120-AB12-E</code> for English booklets and <code>MOCK-20261120-AB12-A</code> for Assamese booklets. Scan the two languages as separate batches. The test and the language are then selected automatically.</li><li>The <b>Set</b> of each student is shown in a column below. If the sheet has no Exam Set, it is found from the keys; you can also change it by hand.</li><li>Blank and multiple marks are mistakes. Bonus questions and questions whose key differs from the saved key are skipped. Absent students and students already imported for this test are skipped.</li></ul>
     <label>Pen-paper Mock Test</label><select id="mockOmrGroup" onchange="mockOmrChangeGroup(this.value)">${groups.map(g=>`<option value="${g.gid}" ${g.gid===mockOmrState.gid?'selected':''}>${esc(g.base)}${g.code?' · '+esc(g.code):''} · sets ${[...new Set(g.tests.map(t=>String(t.series_code||'A').toUpperCase()))].sort().join(', ')} · ${g.created?new Date(g.created).toLocaleDateString():''}</option>`).join('')}</select>
     <label>OMR result Excel file</label><input type="file" id="mockOmrFile" accept=".xlsx,.xls,.csv" onchange="mockOmrReadFile(event)">
     <div id="mockOmrPreview" style="margin-top:14px"></div></div>
@@ -6851,17 +6868,18 @@ function mockOmrAssignSets(sets){
     r.set=set;
     if(set&&!keyLang&&r.langSource!=='manual')keyLang=best(r,set);
     if(set&&keyLang&&r.langSource!=='manual'&&sets[set]?.byLang?.[keyLang]){r.lang=keyLang;r.langSource='key'}
+    if(set&&st.examLang&&r.langSource!=='manual'&&sets[set]?.byLang?.[st.examLang]){r.lang=st.examLang;r.langSource='exam'}   // V46: exam code ends with -E / -A
     // V40: booklet language (English / Assamese) — the OMR sheet does not carry it, so default to the test's main language
     const langs=Object.keys(sets[set]?.byLang||{});
-    if(langs.length&&r.langSource!=='manual'&&r.langSource!=='key'){r.lang=langs.includes(st.defLang)?st.defLang:langs[0];r.langSource='default'}
+    if(langs.length&&r.langSource!=='manual'&&r.langSource!=='key'&&r.langSource!=='exam'){r.lang=langs.includes(st.defLang)?st.defLang:langs[0];r.langSource='default'}
     if(!langs.length)r.lang='';
   });
 }
 function mockOmrLangName(l){return l==='ASSAMESE'?'Assamese':l==='ENGLISH'?'English':l}
 function mockOmrSetLang(i,v){const r=mockOmrState?.parsed?.rows[i];if(!r)return;r.lang=v;r.langSource='manual';mockOmrState.dry=null;mockOmrRender()}
-function mockOmrAllLang(v){const st=mockOmrState;if(!st?.parsed)return;st.defLang=v;st.parsed.rows.forEach(r=>{r.langSource='';});mockOmrAssignSets(st.keys[st.gid]||{});st.dry=null;mockOmrRender()}
+function mockOmrAllLang(v){const st=mockOmrState;if(!st?.parsed)return;st.defLang=v;st.examLang='';st.parsed.rows.forEach(r=>{r.langSource='';});mockOmrAssignSets(st.keys[st.gid]||{});st.dry=null;mockOmrRender()}
 async function mockOmrChangeGroup(gid){
-  const st=mockOmrState;if(!st)return;st.gid=gid;st.dry=null;st.matched='';
+  const st=mockOmrState;if(!st)return;st.gid=gid;st.dry=null;st.matched='';st.examLang='';
   if(st.parsed){try{const sets=await mockOmrLoadKeys(gid);st.parsed.rows.forEach(r=>{if(r.setSource==='manual')r.setSource=''});mockOmrAssignSets(sets);mockOmrRender()}catch(e){notify('Could not load the answer keys: '+(e.message||e))}}
 }
 function mockOmrReadFile(ev){
@@ -6878,7 +6896,8 @@ function mockOmrReadFile(ev){
       // pick the test from the Exam name / file name (exam code first, then the test name)
       const hay=mockOmrNorm((parsed.exam||'')+' '+file.name),exam=mockOmrNorm(parsed.exam);
       const hit=st.groups.find(g=>g.code&&hay.includes(mockOmrNorm(g.code)))||st.groups.find(g=>exam&&exam===mockOmrNorm(g.base));
-      if(hit){st.gid=hit.gid;st.matched=`Test selected from the Exam name / file name (“${parsed.exam||file.name}”).`;const sel=document.getElementById('mockOmrGroup');if(sel)sel.value=hit.gid}
+      st.examLang='';
+      if(hit){st.gid=hit.gid;st.examLang=hit.code?mockOmrExamLang([parsed.exam,file.name],hit.code):'';st.matched=`Test selected from the Exam name / file name (“${parsed.exam||file.name}”).`+(st.examLang?` Booklet language: ${mockOmrLangName(st.examLang)} (from the letter after the exam code).`:'');const sel=document.getElementById('mockOmrGroup');if(sel)sel.value=hit.gid}
       else st.matched=`The Exam name in the file (“${parsed.exam||'—'}”) does not match any exam code or test name — please check the selected test.`;
       const sets=await mockOmrLoadKeys(st.gid);mockOmrAssignSets(sets);mockOmrRender();
     }catch(err){box.innerHTML=`<div class="notice"><b>Could not read this file.</b><br>${esc(err.message||err)}</div>`}
@@ -6912,7 +6931,7 @@ function mockOmrRender(){
    ${unknown.length?`<div class="notice" style="margin-top:8px">${unknown.length} student(s) have no set yet — choose it in the Set column, otherwise they are not imported.</div>`:''}
    ${N!==80?`<div class="notice" style="margin-top:8px">The file has ${N} question columns; a Mock Test has 80.</div>`:''}
    ${hasLang?`<div style="margin-top:8px"><label class="small">Booklet language for all students (change a single student in the table below)</label><select style="width:auto" onchange="mockOmrAllLang(this.value)">${allLangs.map(l=>`<option value="${l}" ${st.defLang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></div>`:''}
-   <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th>${hasLang?'<th>Language</th>':''}<th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td>${hasLang?`<td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetLang(${i},this.value)">${Object.keys(S[r.set]?.byLang||{}).map(l=>`<option value="${l}" ${r.lang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></td>`:''}<td class="small muted">${esc(r.setSource||'')}${hasLang&&r.langSource==='key'?' · language from key':''}</td></tr>`).join('')}</tbody></table></div></details>
+   <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th>${hasLang?'<th>Language</th>':''}<th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td>${hasLang?`<td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetLang(${i},this.value)">${Object.keys(S[r.set]?.byLang||{}).map(l=>`<option value="${l}" ${r.lang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></td>`:''}<td class="small muted">${esc(r.setSource||'')}${hasLang&&r.langSource==='key'?' · language from key':''}${hasLang&&r.langSource==='exam'?' · language from exam code':''}</td></tr>`).join('')}</tbody></table></div></details>
    <div class="actions" style="margin-top:12px"><button class="secondary" onclick="mockOmrRun(true)">Check (nothing is saved)</button><button onclick="mockOmrRun(false)">Import into Mistake Bank</button></div>
    <div id="mockOmrResult" style="margin-top:12px">${st.dry?omrReportHtml(st.dry):''}</div>`;
 }
