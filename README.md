@@ -1,4 +1,4 @@
-# JNVST Mock Test – final files (cumulative, teacher-app.js?v=73)
+# JNVST Mock Test – final files (cumulative, teacher-app.js?v=74)
 
 ## 1. Supabase – run in this order (SQL Editor; all safe to re-run)
 1. sql/1_V38_MOCK_EXAM_LOCK.sql      – online exam lock, auto-submit, "left test" log
@@ -13,7 +13,7 @@
 ## 2. Upload main.html and teacher-app.js (replace both).
 
 ## 3. What is in this build
-- Online Mock Test: no back/exit, continuous server timer, warnings, auto-submit; 20 questions per part (1.25 marks)
+- Online Mock Test: maths (fractions etc.) in questions AND options now renders for students; no back/exit, continuous server timer, warnings, auto-submit; 20 questions per part (1.25 marks)
 - Pen-paper Mock Test: 4 sets x English + Assamese, new first page, medium, Assamese directions, A4 safe margins + staple margin, MathJax, no blank pages
 - Answer key PDF/Excel (English and Assamese keys may differ); OMR import picks booklet by set + language (-E / -A after exam code)
 - Mock Tests > Previous: "View Results" (online and pen-paper) so teacher sees every student's response + review BEFORE approving; "Approve / Hide Results" for pen-paper sets
