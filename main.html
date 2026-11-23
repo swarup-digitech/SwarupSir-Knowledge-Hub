@@ -316,7 +316,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=64";
+      s.src="teacher-app.js?v=65";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -1523,14 +1523,16 @@ function confirmExitMockTest(){if(confirm('Exit the test? Your saved answers and
 async function submitMockAttempt(attemptId,auto=false){if(window.mockSubmitting)return;window.mockSubmitting=true;try{clearInterval(mockTimerHandle);const {error}=await sb.rpc('student_mock_submit',{p_attempt_id:attemptId});if(error)throw error;window.mockSubmitOk=true;mockLockOff();window.mockExam=null;if(auto)notify('Time is over. Your Mock Test was submitted automatically.');const {data:t}=await sb.from('mock_test_attempts').select('id,mock_tests(results_released)').eq('id',attemptId).maybeSingle();if(t?.mock_tests?.results_released)return viewMockResult(attemptId);notify('Test submitted. Your result will be available after the teacher approves it.','success');return studentMockTests()}catch(e){notify('Could not submit test: '+(e.message||e))}finally{window.mockSubmitting=false}}
 async function viewMockResult(attemptId){
   try{
-    const data=await loadStudentMockResult(attemptId);const {attempt:a,test,rows,subjects}=data;const answered=rows.filter(q=>q.is_answered).length;
+    const data=await loadStudentMockResult(attemptId);const {attempt:a,test,rows,subjects}=data;const answered=rows.filter(q=>q.is_answered).length;window.mockReview={rows,filter:rows.some(q=>q.is_answered&&!q.is_correct)?'wrong':'all',subject:'ALL'};
     render(`<div class="wrap">${header('Mock Test Result')}
       <div class="card"><div class="result-student-head"><div><h2>${esc(test.title||'Mock Test')}</h2><p class="muted">Result approved by teacher · ${esc(test.language==='ENGLISH'?'English':test.language==='ASSAMESE'?'Assamese':'Common')}</p></div><div class="result-score"><b>${Number(a.score||0).toFixed(2)}/100</b><span>${Number(a.percentage||0).toFixed(2)}%</span></div></div>
       <div class="result-summary"><div><b>Attempted</b><br>${answered}/${rows.length}</div><div><b>Correct</b><br><span class="result-correct">${rows.filter(q=>q.is_correct).length}</span></div><div><b>Wrong</b><br><span class="result-wrong">${rows.filter(q=>q.is_answered&&!q.is_correct).length}</span></div><div><b>Unanswered</b><br>${rows.filter(q=>!q.is_answered).length}</div></div></div>
       <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Subject-wise Result</h2><button onclick="generateStudentMockResultPDF('${a.id}')">📄 Download Result Sheet</button></div><div style="overflow:auto"><table><thead><tr><th>Subject</th><th>Questions</th><th>Correct</th><th>Wrong</th><th>Unanswered</th><th>Marks</th><th>%</th></tr></thead><tbody>${Object.entries(subjects).map(([k,s])=>`<tr><td>${esc(k)}</td><td>${s.questions}</td><td class="result-correct">${s.correct}</td><td class="result-wrong">${s.wrong}</td><td>${s.unanswered}</td><td>${s.marks.toFixed(2)}</td><td>${s.questions?((s.correct/s.questions)*100).toFixed(2):'0.00'}%</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="card" id="mockReviewCard">${mockReviewShell(rows)}</div>
       <div class="card"><h2>Question-wise Answer Summary</h2><p class="muted small">Wrong answers are highlighted in red. The downloadable Result Sheet contains only Question No., Answer Key and Student's Answer.</p><div class="result-questions">${rows.map(q=>`<div class="result-question"><b>Q${q.question_number}</b><div class="result-answer"><span>Key: <strong class="answer-key">${esc(q.correct||'—')}</strong></span><span>Student: <strong class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${esc(q.student_answer||'—')}</strong></span></div><span class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${q.student_answer?(q.is_correct?'✓':'✗'):'—'}</span></div>`).join('')}</div></div>
       <div class="actions"><button class="secondary" onclick="studentMockTests()">← Back to Mock Tests</button><button onclick="generateStudentMockResultPDF('${a.id}')">📄 Download Result Sheet</button></div>
     </div>`);
+  mockReviewPaint();
   }catch(e){notify(e.message||e)}
 }
 
@@ -1546,6 +1548,38 @@ function mockSubjectLabel(code){const m={MAT:'MAT',MENTAL_ABILITY:'MAT',ARITHMET
 
 
 function safePdfText(v){return String(v??'').replace(/[\u0000-\u001f]/g,' ').trim()}
+
+/* V47: review of every question after the result is released */
+const MOCK_REVIEW_TABS=[['wrong','✗ Wrong'],['correct','✓ Correct'],['unanswered','Unanswered'],['all','All']];
+function mockReviewFilterRows(){const r=window.mockReview;if(!r)return [];return r.rows.filter(q=>(r.subject==='ALL'||mockSubjectOfQ(q)===r.subject)&&(r.filter==='all'||(r.filter==='wrong'&&q.is_answered&&!q.is_correct)||(r.filter==='correct'&&q.is_correct)||(r.filter==='unanswered'&&!q.is_answered)))}
+function mockReviewShell(rows){
+  return `<h2 style="margin-top:0">Review your answers</h2><p class="muted small">See the questions you answered correctly and wrongly, with the correct answer and the explanation.</p><div id="mockReviewBar"></div><div id="mockReviewList"></div>`}
+function mockReviewSet(f){window.mockReview.filter=f;mockReviewPaint()}
+function mockReviewSubject(v){window.mockReview.subject=v;mockReviewPaint()}
+function mockReviewQuestionHtml(q){
+  const letters=['A','B','C','D'],opt={A:q.option_a,B:q.option_b,C:q.option_c,D:q.option_d};
+  const st=q.is_correct?['✓ Correct','#166534','#dcfce7']:q.is_answered?['✗ Wrong','#b91c1c','#fee2e2']:['Not answered','#475569','#e2e8f0'];
+  const ex=String(q.explanation||'').trim();
+  return `<div class="card" style="margin:10px 0;border-left:5px solid ${st[1]}">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>Question ${q.question_number} <span class="muted small">· ${esc(mockSubjectOfQ(q))}</span></b><span class="tag" style="background:${st[2]};color:${st[1]}">${st[0]}</span></div>
+    ${q.passage_text?`<details style="margin:8px 0"><summary><b>${esc(q.passage_title||'Passage')}</b> (tap to read)</summary><div style="white-space:pre-wrap;margin-top:6px;line-height:1.6;background:#f8fafc;padding:10px;border-radius:8px">${esc(q.passage_text)}</div></details>`:''}
+    ${q.image_url?`<div class="question-image-wrap"><img class="question-image" src="${esc(q.image_url)}"></div>`:''}
+    ${realQuestionText(q.question_text)?`<div class="question-text" style="margin:8px 0">${jnvstMathPreview(realQuestionText(q.question_text))}</div>`:''}
+    ${letters.map(l=>{const sel=q.student_answer===l,key=q.correct===l;let cls='student-review-option',mark='';
+      if(sel&&key){cls+=' student-review-selected-correct';mark='✓ Your answer · Correct'}else if(sel){cls+=' student-review-selected-wrong';mark='✗ Your answer'}else if(key){cls+=' student-review-correct';mark='✓ Correct answer'}
+      return `<div class="${cls}"><b>${l}.</b> <span class="student-review-math">${jnvstMathPreview(String(opt[l]||''))}</span> ${mark?`<span class="student-review-mark">${mark}</span>`:''}</div>`}).join('')}
+    <div class="small" style="margin-top:6px">Your answer: <b>${q.student_answer||'—'}</b> &nbsp;·&nbsp; Correct answer: <b>${esc(q.correct||'—')}</b></div>
+    <div class="notice" style="margin-top:8px;background:#eff6ff;border-color:#bfdbfe"><b>Explanation:</b> ${ex?`<div style="margin-top:4px;white-space:pre-wrap">${jnvstMathPreview(ex)}</div>`:'<span class="muted">No explanation has been added for this question yet.</span>'}</div>
+  </div>`}
+function mockReviewPaint(){
+  const r=window.mockReview,bar=document.getElementById('mockReviewBar'),list=document.getElementById('mockReviewList');if(!r||!bar||!list)return;
+  const cnt=f=>r.rows.filter(q=>f==='all'||(f==='wrong'&&q.is_answered&&!q.is_correct)||(f==='correct'&&q.is_correct)||(f==='unanswered'&&!q.is_answered)).length;
+  const subjects=[...new Set(r.rows.map(mockSubjectOfQ))];
+  bar.innerHTML=`<div class="actions" style="margin:6px 0">${MOCK_REVIEW_TABS.map(([f,l])=>`<button class="${r.filter===f?'':'secondary'}" onclick="mockReviewSet('${f}')">${l} (${cnt(f)})</button>`).join('')}<select style="width:auto" onchange="mockReviewSubject(this.value)"><option value="ALL">All subjects</option>${subjects.map(s=>`<option value="${esc(s)}" ${r.subject===s?'selected':''}>${esc(s)}</option>`).join('')}</select></div>`;
+  const rows=mockReviewFilterRows();
+  list.innerHTML=rows.length?rows.map(mockReviewQuestionHtml).join(''):`<div class="notice">${r.filter==='wrong'?'No wrong answers here — well done!':'No questions in this list.'}</div>`;
+  jnvstTypesetWhenReady([list]);
+}
 
 async function loadStudentMockResult(attemptId){
   const {data:a,error:ae}=await sb.from('mock_test_attempts').select('*,mock_tests(*)').eq('id',attemptId).eq('student_id',current.id).single();

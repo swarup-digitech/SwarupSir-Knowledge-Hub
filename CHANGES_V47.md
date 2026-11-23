@@ -1,0 +1,3 @@
+# V47 – question review on the student's Mock Test result
+Run V47_MOCK_RESULT_REVIEW.sql in Supabase (replaces student_mock_result_questions; safe to re-run). Upload main.html + teacher-app.js (cache-bust v=65).
+Student > Mock Tests > View result (after the teacher has released the result): new card "Review your answers" under the score card — tabs Wrong / Correct / Unanswered / All with counts, subject filter; every question shows passage, picture, text, the 4 options (your answer red, correct answer green), "Your answer / Correct answer" and the Explanation from the question bank (Assamese tests use explanation_as when available, otherwise the English explanation).
