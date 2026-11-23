@@ -1947,7 +1947,7 @@ async function mockTeacherResults(only){
       ${onlyIds?`<p><b>${esc(String(tests[0]?.title||'').replace(/\s+—\s+Series\s+[A-D]\s*$/,''))}</b> · <a href="#" onclick="mockTeacherResults();return false">show all tests</a></p>`:''}
       <p class="muted">You can open every student's answers with the explanations <b>before</b> you approve the results. View student responses and generate the printable Mock Test Result Sheet.</p>
       <div style="overflow:auto"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Language</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th><th>Report</th></tr></thead>
-      <tbody>${(ats||[]).map(a=>{const t=(tests||[]).find(x=>x.id===a.mock_test_id)||{};const p=pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button>${a.source==='OMR'?`<button class="danger" onclick="deleteMockOmrImport('${t.series_group_id||t.id}','${a.student_id}','${esc(p.full_name||'')}')">🗑 Delete import</button>`:''}</div>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No attempts yet.</td></tr>'}</tbody></table></div>
+      <tbody>${(ats||[]).map(a=>{const t=(tests||[]).find(x=>x.id===a.mock_test_id)||{};const p=pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button>${a.source==='OMR'?`<button class="danger" onclick="deleteMockOmrImport('${t.series_group_id||t.id}','${a.student_id}','${esc(p.full_name||'')}')">🗑 Delete import</button>`:`<button class="secondary" title="Open the same attempt again; answers are kept and the student continues" onclick="reassignMockAttempt('${a.id}','resume','${esc(p.full_name||'')}',${Math.max(5,Math.floor((new Date(a.end_at)-new Date(a.submitted_at||a.end_at))/60000)||0)})">↩ Re-assign (continue)</button><button class="danger" title="Delete this attempt; the student starts again from question 1" onclick="reassignMockAttempt('${a.id}','fresh','${esc(p.full_name||'')}')">⟲ Fresh re-assign</button>`}</div>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No attempts yet.</td></tr>'}</tbody></table></div>
       <div class="actions" style="margin-top:15px;flex-wrap:wrap">${(tests||[]).map(t=>`<button class="${t.results_released?'secondary':''}" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results: ':'✓ Approve Results: '}${esc(t.title||'Mock Test')}</button>`).join('')}<button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div>
     </div></div>`)
 }
@@ -7137,6 +7137,19 @@ function mockDiscussionPdf(gid){
       }catch(err){try{w.close()}catch(_){}msg.textContent='Could not prepare the PDF: '+(err.message||err);btn.disabled=false}
     };
   }).catch(e=>notify(e.message||e));
+}
+
+/* ===== V54: re-assign an online Mock Test after an accidental submit ===== */
+async function reassignMockAttempt(attemptId,mode,name,defMin){
+  let minutes=null;
+  if(mode==='resume'){
+    const v=prompt(`Re-assign to ${name||'the student'} — he continues from where he stopped (all answers are kept).\n\nHow many minutes should he get? (time left when he submitted: ${defMin})`,String(defMin||10));
+    if(v===null)return;minutes=parseInt(v,10);if(!(minutes>0))return notify('Please enter the minutes.');
+  }else if(!confirm(`Fresh re-assign to ${name||'the student'}?\n\nHis submitted attempt and all its answers will be DELETED and he starts again from question 1 with the full time.`))return;
+  const {data,error}=await sb.rpc('teacher_reassign_mock_attempt',{p_attempt_id:attemptId,p_mode:mode,p_minutes:minutes});
+  if(error)return notify('Could not re-assign: '+error.message+(/teacher_reassign_mock_attempt|function/i.test(error.message)?'\n\nRun V54_REASSIGN_MOCK_ATTEMPT.sql in Supabase first.':''),'error');
+  notify(mode==='resume'?`Re-assigned. ${name||'The student'} can continue now (${data?.minutes||minutes} min).`:`Re-assigned fresh. ${name||'The student'} can start the test again.`,'success');
+  mockTeacherResults();
 }
 
 /* ===== V45: answer keys (English and Assamese keys may differ) ===== */
