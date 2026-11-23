@@ -57,6 +57,7 @@ async function loadPreviousMockTests(){
             <button class="secondary" onclick="mockTeacherResults(${esc(JSON.stringify(sets.map(s=>s.id)))})">👁 View Results</button>
             <button class="secondary" onclick="toggleMockGroupRelease('${gid}',${sets.every(s=>s.results_released)?'false':'true'})">${sets.every(s=>s.results_released)?'🔒 Hide Results':'✓ Approve Results'}</button>
             <button class="secondary" onclick="mockKeyEditPage('${gid}')">✎ Edit Key</button>
+            <button class="danger" onclick="deleteMockOmrImport('${gid}')">🗑 Delete OMR import</button>
             <button class="secondary" onclick="editMockGroup('${gid}')">✎ Edit name</button>
             <button class="danger" onclick="deleteMockGroup('${gid}')">🗑 Delete all sets</button>
           </div>
@@ -1945,7 +1946,7 @@ async function mockTeacherResults(only){
       ${onlyIds?`<p><b>${esc(String(tests[0]?.title||'').replace(/\s+—\s+Series\s+[A-D]\s*$/,''))}</b> · <a href="#" onclick="mockTeacherResults();return false">show all tests</a></p>`:''}
       <p class="muted">You can open every student's answers with the explanations <b>before</b> you approve the results. View student responses and generate the printable Mock Test Result Sheet.</p>
       <div style="overflow:auto"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Language</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th><th>Report</th></tr></thead>
-      <tbody>${(ats||[]).map(a=>{const t=(tests||[]).find(x=>x.id===a.mock_test_id)||{};const p=pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button></div>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No attempts yet.</td></tr>'}</tbody></table></div>
+      <tbody>${(ats||[]).map(a=>{const t=(tests||[]).find(x=>x.id===a.mock_test_id)||{};const p=pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button>${a.source==='OMR'?`<button class="danger" onclick="deleteMockOmrImport('${t.series_group_id||t.id}','${a.student_id}','${esc(p.full_name||'')}')">🗑 Delete import</button>`:''}</div>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No attempts yet.</td></tr>'}</tbody></table></div>
       <div class="actions" style="margin-top:15px;flex-wrap:wrap">${(tests||[]).map(t=>`<button class="${t.results_released?'secondary':''}" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results: ':'✓ Approve Results: '}${esc(t.title||'Mock Test')}</button>`).join('')}<button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div>
     </div></div>`)
 }
@@ -7063,6 +7064,17 @@ async function mockAnsEditSave(){
   if(error)return notify('Could not save: '+error.message+(/teacher_update_student_answers|function/i.test(error.message)?'\n\nRun V52_EDIT_STUDENT_ANSWERS.sql in Supabase first.':''),'error');
   notify(`Saved. New score: ${Number(data?.score||0).toFixed(2)}/100.`,'success');
   viewMockTeacherAttempt(k.id);
+}
+
+/* ===== V53: delete imported OMR results so that the file can be imported again ===== */
+async function deleteMockOmrImport(gid,studentId,name){
+  const one=!!studentId;
+  if(!confirm(one?`Delete the imported OMR result of ${name||'this student'}?\n\nAfter this you can import the OMR file again (only students without an import are added).`:'Delete ALL imported OMR results of this pen-paper exam (every set, every student)?\n\nStudents will lose their paper Mock Test results until you import again. Online results are not touched.'))return;
+  if(!one&&!confirm('Please confirm once more: delete all imported OMR results of this exam?'))return;
+  const {data,error}=await sb.rpc('teacher_delete_mock_omr',{p_series_group:gid,p_student_id:one?studentId:null});
+  if(error)return notify('Could not delete: '+error.message+(/teacher_delete_mock_omr|function/i.test(error.message)?'\n\nRun V53_DELETE_MOCK_OMR.sql in Supabase first.':''),'error');
+  notify(`Deleted ${data?.results_removed||0} result(s) (${data?.answers_removed||0} answers). You can import the OMR file again now.`,'success');
+  if(one)mockTeacherResults(); else loadPreviousMockTests();
 }
 
 /* ===== V45: answer keys (English and Assamese keys may differ) ===== */
