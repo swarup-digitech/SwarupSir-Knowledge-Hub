@@ -57,6 +57,7 @@ async function loadPreviousMockTests(){
             <button class="secondary" onclick="mockTeacherResults(${esc(JSON.stringify(sets.map(s=>s.id)))})">👁 View Results</button>
             <button class="secondary" onclick="toggleMockGroupRelease('${gid}',${sets.every(s=>s.results_released)?'false':'true'})">${sets.every(s=>s.results_released)?'🔒 Hide Results':'✓ Approve Results'}</button>
             <button class="secondary" onclick="mockKeyEditPage('${gid}')">✎ Edit Key</button>
+            <button style="background:#0f766e" onclick="mockDiscussionPdf('${gid}')">📽 Discussion PDF</button>
             <button class="danger" onclick="deleteMockOmrImport('${gid}')">🗑 Delete OMR import</button>
             <button class="secondary" onclick="editMockGroup('${gid}')">✎ Edit name</button>
             <button class="danger" onclick="deleteMockGroup('${gid}')">🗑 Delete all sets</button>
@@ -7075,6 +7076,67 @@ async function deleteMockOmrImport(gid,studentId,name){
   if(error)return notify('Could not delete: '+error.message+(/teacher_delete_mock_omr|function/i.test(error.message)?'\n\nRun V53_DELETE_MOCK_OMR.sql in Supabase first.':''),'error');
   notify(`Deleted ${data?.results_removed||0} result(s) (${data?.answers_removed||0} answers). You can import the OMR file again now.`,'success');
   if(one)mockTeacherResults(); else loadPreviousMockTests();
+}
+
+/* ===== V54: class discussion PDF for a pen-paper Mock Test (same pages as the OMR / assignment discussion PDF) ===== */
+async function mockDiscussionCollect(gid,lang){
+  const g=(await mockOmrLoadGroups()).find(x=>x.gid===gid);if(!g)throw new Error('Mock Test not found.');
+  const tests=g.tests.filter(x=>!lang||String(x.language||'').toUpperCase()===lang);if(!tests.length)throw new Error('No sets in this language.');
+  const ids=tests.map(x=>x.id),tById=new Map(tests.map(x=>[x.id,x]));
+  const qr=await sbFetchAll(()=>sb.from('mock_test_questions').select('id,mock_test_id,bank_question_id,question_number,section_code,part_code,correct_option,question_text,option_a,option_b,option_c,option_d,image_url,passage_title,passage_text').in('mock_test_id',ids));if(qr.error)throw qr.error;
+  const ar=await sbFetchAll(()=>sb.from('mock_test_attempts').select('id,mock_test_id,student_id').eq('source','OMR').in('mock_test_id',ids));if(ar.error)throw ar.error;
+  if(!(ar.data||[]).length)throw new Error('No OMR results are imported for '+(lang?lang.toLowerCase()+' ':'')+'sets of this test yet.');
+  const stuTest=new Map(ar.data.map(a=>[a.student_id,a.mock_test_id]));
+  const rr=await sbFetchAll(()=>sb.from('omr_responses').select('id,student_id,question_no,selected_option,correct_option,is_correct').eq('paper_base_serial','MOCK-'+gid));if(rr.error)throw rr.error;
+  const people=new Map(),sids=[...stuTest.keys()];
+  for(let i=0;i<sids.length;i+=150){const {data}=await sb.from('profiles').select('id,full_name,roll_no').in('id',sids.slice(i,i+150));(data||[]).forEach(p=>people.set(p.id,{name:p.full_name||'',roll:p.roll_no||''}))}
+  const qBy=new Map((qr.data||[]).map(q=>[q.mock_test_id+':'+q.question_number,q]));
+  const setOf=id=>String(tById.get(id)?.series_code||'A').toUpperCase();
+  const sets=[...new Set(tests.map(x=>setOf(x.id)))].sort(),firstSet=sets[0];
+  const Q=new Map();
+  const ensure=q=>{const key=q.bank_question_id||(q.mock_test_id+':'+q.question_number);if(!Q.has(key))Q.set(key,{key,row:{...q,id:q.bank_question_id||undefined},where:new Map(),wrong:[],skip:[],right:[],pick:{A:0,B:0,C:0,D:0},first:1e9,papers:0,correct:''});return Q.get(key)};
+  (qr.data||[]).forEach(q=>{const it=ensure(q),s=setOf(q.mock_test_id);if(!it.where.has(s))it.where.set(s,q.question_number);if(s===firstSet)it.first=Math.min(it.first,q.question_number);if(!it.correct)it.correct=String(q.correct_option||'').toUpperCase()});
+  (rr.data||[]).forEach(x=>{const tid=stuTest.get(x.student_id);if(!tid)return;const q=qBy.get(tid+':'+x.question_no);if(!q)return;const it=ensure(q);
+    const p=people.get(x.student_id)||{name:'',roll:''},sel=String(x.selected_option||'').trim();
+    const who={name:p.name,roll:p.roll,no:x.question_no,set:setOf(tid),sel};
+    const ok=!!sel&&sel.toUpperCase()===String(q.correct_option||'').toUpperCase();
+    if(ok)it.right.push(who);else if(!sel)it.skip.push(who);else it.wrong.push(who);
+    if(/^[ABCD]$/i.test(sel))it.pick[sel.toUpperCase()]++});
+  Q.forEach(it=>{if(it.first===1e9)it.first=Math.min(...[...it.where.values()])});
+  const bank=new Map(),bids=[...Q.values()].map(it=>it.row.id).filter(Boolean);
+  for(let i=0;i<bids.length;i+=150){try{const {data}=await sb.from('mock_question_bank').select('id,language,explanation,explanation_as').in('id',bids.slice(i,i+150));(data||[]).forEach(b=>bank.set(b.id,b))}catch(_){}}
+  const n=stuTest.size;
+  return {base:g.code||g.base,custom:false,recs:[],items:[...Q.values()],bank,title:g.base+(lang?' · '+(lang==='ASSAMESE'?'Assamese':'English'):''),subject:'Pen-paper Mock Test',language:lang||'',students:n,totalStudents:n,sets};
+}
+function mockDiscussionPdf(gid){
+  if(!window.__omrDiscussion?.docHtml)return notify('The discussion PDF module (omr-discussion.js) is not loaded.');
+  mockOmrLoadGroups().then(groups=>{
+    const g=groups.find(x=>x.gid===gid);if(!g)return notify('Mock Test not found.');
+    const langs=[...new Set(g.tests.map(x=>String(x.language||'').toUpperCase()).filter(Boolean))];
+    const old=document.getElementById('mockDiscDlg');if(old)old.remove();
+    const d=document.createElement('div');d.id='mockDiscDlg';d.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    const ck=(id,l,on)=>`<label style="display:flex;gap:8px;align-items:center"><input id="${id}" type="checkbox" style="width:auto" ${on?'checked':''}> ${l}</label>`;
+    d.innerHTML=`<div class="card" style="max-width:520px;width:100%;margin:0;max-height:92vh;overflow:auto"><h2 style="margin-top:0">📽 Class discussion PDF</h2>
+      <p class="small muted" style="margin-top:0">One wide page per question with its number in every set, option counts and the students who were wrong, skipped or correct. <b>${esc(g.base)}</b></p>
+      ${langs.length>1?`<label>Booklet language</label><select id="mdLang">${langs.map(l=>`<option value="${l}">${l==='ASSAMESE'?'Assamese':'English'}</option>`).join('')}</select>`:''}
+      <label>Page shape</label><select id="mdShape"><option value="a4">A4 landscape (print or projector)</option><option value="wide">16:9 widescreen</option></select>
+      <label>Questions</label><select id="mdWhich"><option value="mist">Only questions someone got wrong or skipped</option><option value="all">All questions</option></select>
+      <label>Order</label><select id="mdOrder"><option value="paper">Paper order (Set ${esc([...new Set(g.tests.map(x=>String(x.series_code||'A').toUpperCase()))].sort()[0])} numbering)</option><option value="most">Most mistakes first</option></select>
+      <div style="margin-top:8px">${ck('mdAns','Mark the correct answer',1)}${ck('mdCount','Show how many students chose each option',1)}${ck('mdNames','Show names of students who were wrong / skipped',1)}${ck('mdRight','Show names of students who answered correctly',1)}${ck('mdExpl','Show the explanation',1)}${ck('mdSpace','Leave writing space for the pen tablet',1)}</div>
+      <div class="actions" style="margin-top:14px"><button id="mdGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('mockDiscDlg').remove()">Cancel</button></div><div id="mdMsg" class="small muted"></div></div>`;
+    document.body.appendChild(d);d.addEventListener('click',ev=>{if(ev.target===d)d.remove()});
+    document.getElementById('mdGo').onclick=async()=>{
+      const msg=document.getElementById('mdMsg'),btn=document.getElementById('mdGo'),v=id=>document.getElementById(id);
+      const w=window.open('','_blank');if(!w){msg.textContent='Your browser blocked the pop-up. Please allow pop-ups for this site and try again.';return}
+      try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing the class discussion pages…</body>')}catch(_){}
+      btn.disabled=true;msg.textContent='Collecting results…';
+      try{
+        const D=await mockDiscussionCollect(gid,v('mdLang')?.value||langs[0]||'');
+        const o={shape:v('mdShape').value,which:v('mdWhich').value,order:v('mdOrder').value,ans:v('mdAns').checked,count:v('mdCount').checked,names:v('mdNames').checked,right:v('mdRight').checked,expl:v('mdExpl').checked,space:v('mdSpace').checked,only:null};
+        const html=window.__omrDiscussion.docHtml(D,o);w.document.open();w.document.write(html);w.document.close();d.remove();
+      }catch(err){try{w.close()}catch(_){}msg.textContent='Could not prepare the PDF: '+(err.message||err);btn.disabled=false}
+    };
+  }).catch(e=>notify(e.message||e));
 }
 
 /* ===== V45: answer keys (English and Assamese keys may differ) ===== */
