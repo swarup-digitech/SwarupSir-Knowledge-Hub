@@ -74,6 +74,7 @@ async function loadPreviousMockTests(){
           <button onclick="generateMockTestPDF('${t.id}')">🖨 Question Paper PDF</button>
           <button class="secondary" onclick="editMockTest('${t.id}')">✎ Edit</button>
           <button class="secondary" onclick="mockTeacherResults(['${t.id}'])">👁 View Results</button>
+          <button class="secondary" onclick="mockKeyEditPage('${t.id}')">✎ Edit Key</button>
           <button class="secondary" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results':'✓ Approve Results'}</button>
           <button class="danger" onclick="deleteMockTest('${t.id}')">🗑 Delete</button>
         </div>
@@ -1976,7 +1977,7 @@ function mockTeacherResponseHtml(data){
       <h3>Subject-wise Performance</h3><div style="overflow:auto"><table><thead><tr><th>Subject</th><th>Questions</th><th>Correct</th><th>Wrong</th><th>Unanswered</th><th>Marks</th><th>%</th></tr></thead><tbody>${Object.entries(subjects).map(([k,s])=>`<tr><td>${esc(k)}</td><td>${s.questions}</td><td class="result-correct">${s.correct}</td><td class="result-wrong">${s.wrong}</td><td>${s.unanswered}</td><td>${s.marks.toFixed(2)}</td><td>${s.questions?((s.correct/s.questions)*100).toFixed(2):'0.00'}%</td></tr>`).join('')}</tbody></table></div>
     </div>
     <div class="card" id="mockReviewCard">${mockReviewShell(rows)}</div>
-    <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Question-wise Response</h2><div class="actions"><button onclick="generateMockResultPDF('${a.id}')">📄 Generate Result PDF</button><button class="secondary" onclick="mockTeacherResults()">← Back to Results</button></div></div>
+    <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Question-wise Response</h2><div class="actions"><button onclick="generateMockResultPDF('${a.id}')">📄 Generate Result PDF</button>${a.source==='OMR'?`<button class="secondary" onclick="mockAnsEditPage('${a.id}')">✎ Correct this student's answers</button>`:''}<button class="secondary" onclick="mockTeacherResults()">← Back to Results</button></div></div>
       <p class="muted small">The PDF contains only Question No., Answer Key and Student's Answer. Wrong answers are highlighted in red.</p>
       <div class="result-questions">${rows.map(q=>`<div class="result-question"><b>Q${q.question_number}</b><div class="result-answer"><span>Key: <strong class="answer-key">${esc(q.correct||'—')}</strong></span><span>Student: <strong class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${esc(q.student_answer||'—')}</strong></span></div><span class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${q.student_answer?(q.is_correct?'✓':'✗'):'—'}</span></div>`).join('')}</div>
     </div></div>`;
@@ -7005,7 +7006,8 @@ async function mockOmrRun(dry){
 /* ===== V51: correct the answer key of a pen-paper Mock Test ===== */
 async function mockKeyEditPage(gid,testId){
   try{
-    const groups=await mockOmrLoadGroups();const g=groups.find(x=>x.gid===gid);if(!g)throw new Error('Test not found.');
+    let g=(await mockOmrLoadGroups()).find(x=>x.gid===gid);
+    if(!g){const {data:one,error:oe}=await sb.from('mock_tests').select('id,title,language,series_code,series_group_id,created_at').eq('teacher_id',current.id).eq('id',gid).maybeSingle();if(oe||!one)throw new Error('Test not found.');g={gid,base:String(one.title||'Mock Test'),tests:[one]}}   // online test (not pen-paper)
     const tests=g.tests.slice().sort((a,b)=>String(a.series_code||'A').localeCompare(String(b.series_code||'A'))||String(a.language||'').localeCompare(String(b.language||'')));
     const cur=tests.find(x=>x.id===testId)||tests[0];
     const {data:qs,error}=await sb.from('mock_test_questions').select('id,question_number,correct_option,part_code,section_code,question_text,passage_title').eq('mock_test_id',cur.id).order('question_number');
@@ -7034,6 +7036,33 @@ async function mockKeyEditSave(){
   if(error)return notify('Could not save the key: '+error.message+(/teacher_update_mock_key|function/i.test(error.message)?'\n\nRun V51_EDIT_MOCK_KEY.sql in Supabase first.':''),'error');
   notify(`Key saved (${data?.changed||0} changed). ${data?.remarked||0} result(s) re-marked.`,'success');
   mockKeyEditPage(k.gid,k.test.id);
+}
+
+/* ===== V52: correct one student's marked answers (OMR misread) ===== */
+async function mockAnsEditPage(attemptId){
+  try{
+    const data=await loadMockTeacherAttempt(attemptId);const {attempt:a,test,profile:p,rows}=data;
+    window.mockAnsEdit={id:attemptId,orig:new Map(rows.map(q=>[q.question_number,q.student_answer||''])),cur:new Map(rows.map(q=>[q.question_number,q.student_answer||''])),rows};
+    render(`<div class="wrap">${header('Correct Student Answers')}
+      <div class="card"><h2>✎ Correct answers — ${esc(p.full_name||'')} <span class="muted">· Roll No ${esc(p.roll_no||'')}</span></h2>
+        <p class="muted">${esc(String(test.title||''))}. Use this when the OMR software read this student's sheet wrongly: set what the student really marked (or “—” for blank). The score is re-calculated when you press <b>Save</b>. Changed rows are highlighted.</p>
+        <div class="actions"><button onclick="mockAnsEditSave()">💾 Save</button><button class="secondary" onclick="mockAnsEditPage('${attemptId}')">↺ Undo changes</button><button class="secondary" onclick="viewMockTeacherAttempt('${attemptId}')">← Back to response</button></div>
+        <div id="maSummary" class="small muted" style="margin:8px 0"></div>
+        <div style="overflow:auto"><table><thead><tr><th>Q</th><th>Subject</th><th>Key</th><th>Student marked</th></tr></thead><tbody>${rows.map(q=>`<tr id="marow${q.question_number}"><td><b>${q.question_number}</b></td><td>${esc(mockSubjectOfQ(q))}</td><td><b>${esc(q.correct||'—')}</b></td><td style="white-space:nowrap">${['','A','B','C','D'].map(o=>`<label style="margin-right:8px"><input type="radio" style="width:auto" name="ma${q.question_number}" value="${o}" ${(q.student_answer||'')===o?'checked':''} onchange="mockAnsEditSet(${q.question_number},'${o}')"> ${o||'—'}</label>`).join('')}</td></tr>`).join('')}</tbody></table></div>
+      </div></div>`);
+    mockAnsEditSummary();
+  }catch(e){notify('Could not open the answers: '+(e.message||e))}
+}
+function mockAnsEditDiff(){const k=window.mockAnsEdit;return k?[...k.cur].filter(([n,o])=>k.orig.get(n)!==o).map(([n,o])=>({question_number:n,selected_option:o})):[]}
+function mockAnsEditSet(n,o){const k=window.mockAnsEdit;if(!k)return;k.cur.set(n,o);const r=document.getElementById('marow'+n);if(r)r.style.background=k.orig.get(n)!==o?'#fef9c3':'';mockAnsEditSummary()}
+function mockAnsEditSummary(){const el=document.getElementById('maSummary');if(!el)return;const d=mockAnsEditDiff();el.innerHTML=d.length?`<b style="color:#b45309">${d.length} answer(s) changed, not saved yet:</b> ${d.map(x=>'Q'+x.question_number+'→'+(x.selected_option||'—')).join(', ')}`:'No changes.'}
+async function mockAnsEditSave(){
+  const k=window.mockAnsEdit;if(!k)return;const d=mockAnsEditDiff();if(!d.length)return notify('No changes to save.');
+  if(!confirm(`Save ${d.length} changed answer(s) and re-calculate this student's score?`))return;
+  const {data,error}=await sb.rpc('teacher_update_student_answers',{p_attempt_id:k.id,p_changes:d});
+  if(error)return notify('Could not save: '+error.message+(/teacher_update_student_answers|function/i.test(error.message)?'\n\nRun V52_EDIT_STUDENT_ANSWERS.sql in Supabase first.':''),'error');
+  notify(`Saved. New score: ${Number(data?.score||0).toFixed(2)}/100.`,'success');
+  viewMockTeacherAttempt(k.id);
 }
 
 /* ===== V45: answer keys (English and Assamese keys may differ) ===== */

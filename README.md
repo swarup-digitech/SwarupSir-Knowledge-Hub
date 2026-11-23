@@ -1,39 +1,28 @@
-# Swarup Sir's Knowledge Hub
+# JNVST Mock Test – final files (cumulative, teacher-app.js?v=71)
 
-Student and teacher portal for the JNVST and School courses, built on Supabase.
+## 1. Supabase – run in this order (SQL Editor; all safe to re-run)
+1. sql/1_V38_MOCK_EXAM_LOCK.sql      – online exam lock, auto-submit, "left test" log
+2. sql/2_V40_MOCK_BILINGUAL_SETS.sql – pen-paper sets (A–D, English + Assamese) and OMR import (includes the earlier V37 migration)
+3. sql/3_V47_MOCK_RESULT_REVIEW.sql  – result review with explanations
+4. sql/4_V48_PAPER_MOCK_RESULTS.sql  – OMR import also creates the student's Mock Test result
+5. sql/5_V49_PAPER_RESULTS_BACKFILL.sql – results for students imported earlier
+6. sql/6_V51_EDIT_MOCK_KEY.sql       – edit the answer key and re-mark results
+7. sql/7_V52_EDIT_STUDENT_ANSWERS.sql – correct one student's misread answers
 
-| File | What it is |
-|---|---|
-| `main.html` | Login, student app (assignments, mock tests, results, profile) and the shell of the JNVST teacher app |
-| `teacher-app.js` | JNVST teacher tools – loaded by `main.html` only after a teacher logs in |
-| `teacher-dashboard.html` | School Course teacher dashboard |
-| `common-ui.js` | Shared helpers (toast messages `notify()`) |
-| `student-sw.js`, `student-app.webmanifest`, `manifest.webmanifest`, `skh-icon*.png` | Installable student app (PWA) |
-| `custom-adaptive.js` | V15 Custom Adaptive Assignment (teacher-controlled personal sets) |
-| `custom-adaptive-paper.js` | V16 Custom Adaptive Question Paper (one personal JNVST paper per student; V22: one question per Variation Group, fix button) |
-| `custom-test.js` | V23 Custom Test (teacher-chosen questions, a variation per student, own question order, personal OMR) |
-| `index.ts` | Supabase Edge Function `create-students` (student accounts, login by Roll No, fees) |
-| `V13_SECURE_SCORING_MIGRATION.sql` | Database change for V13 (security, server-side marking) |
-| `V14_OMR_MISTAKES_MIGRATION.sql` | Database change for V14 (OMR import, mistake streaks) |
-| `V16_ADAPTIVE_PAPER_OMR.sql` | Database change for V16 (OMR import finds each student's personal paper) |
-| `omr-engine.js` | V17 OMR sheet layout, sheet reader, result report layout |
-| `custom-omr.js` | V17 teacher screens: print sheets, scan, review, import, reports |
-| `student-omr.js` | V17 student list and PDF download of scanned OMR results |
-| `V17_STUDENT_OMR_REPORTS.sql` | Database change for V17 (student result functions) |
-| `V18_OMR_REPORT_GROUPS.sql` | Database change for V18 (student report knows subject / lesson names) |
-| `V19_COMMON_QUESTIONS.sql` | Database change for V19 (adds the Common label column to the question bank) |
-| `V20_ASSAMESE_EXPLANATIONS.sql` | Database change for V20 (Assamese explanations, automatic translation queue, report update) |
-| `assamese-explanations.js` | V20 Question Bank add-on: automatic Assamese translation of explanations, status, filter |
-| `omr-discussion.js` | V21 Class discussion PDF after an OMR import (one question per wide page, who was wrong/skipped) |
-| `supabase/functions/translate-explanations/index.ts` | V20 Edge Function that translates explanations into Assamese (Claude API) |
-| `supabase/migrations/` | All database changes in order – see `supabase/README.md` |
-| `*_Template.xlsx` | Bulk-upload templates for teachers |
-| `docs/` | Notes from earlier versions |
+## 2. Upload main.html and teacher-app.js (replace both).
 
-Not in this package (they live only on the website): `index.html`, `student-login.html`,
-`teacher-login.html`, `school-login.html`, `school-dashboard.html`,
-`student-course-selection.html`, and the `get-omr-result` Edge Function.
-Add them here so the whole site is versioned together.
+## 3. What is in this build
+- Online Mock Test: no back/exit, continuous server timer, warnings, auto-submit; 20 questions per part (1.25 marks)
+- Pen-paper Mock Test: 4 sets x English + Assamese, new first page, medium, Assamese directions, A4 safe margins + staple margin, MathJax, no blank pages
+- Answer key PDF/Excel (English and Assamese keys may differ); OMR import picks booklet by set + language (-E / -A after exam code)
+- Mock Tests > Previous: "View Results" (online and pen-paper) so teacher sees every student's response + review BEFORE approving; "Approve / Hide Results" for pen-paper sets
+- OMR import: if the key read by the OMR software differs from the saved key, a table lists those questions; per question choose Use saved key (default) / Use key from file (updates saved key and re-marks) / Skip question
+- ✎ Correct this student's answers (Results > View Response, pen-paper) when OMR misread a sheet
+- ✎ Edit Key on every pen-paper exam card and every online test card: correct wrongly read answers per Set/language; all scores re-marked
+- Student result page: score card + Review (Wrong / Correct / Unanswered / All) with correct answer and explanation
+- Fee details download (students with fees paid and dues)
 
-See `CHANGES_V13.md` and `CHANGES_V14.md` for what changed and how to install it.
-Latest: `CHANGES_V23.md` (Custom Test) and `CHANGES_V22.md` (Custom Adaptive Papers without repeated Variation Groups).
+## 4. Notes
+- Test with one student first: create a pen-paper test, import a small OMR file, View Results, Edit Key, Approve Results, open the student's result.
+- Edit Key changes the Mock Test's copy of the key only (not the Question Bank). Mistake Bank entries already created from an OMR import are not re-written.
+- If your live teacher-app.js has extra code (e.g. the "Re-generate results" button) that is not in this build, merge it before replacing.
