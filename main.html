@@ -316,7 +316,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=65";
+      s.src="teacher-app.js?v=68";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
@@ -1553,7 +1553,7 @@ function safePdfText(v){return String(v??'').replace(/[\u0000-\u001f]/g,' ').tri
 const MOCK_REVIEW_TABS=[['wrong','✗ Wrong'],['correct','✓ Correct'],['unanswered','Unanswered'],['all','All']];
 function mockReviewFilterRows(){const r=window.mockReview;if(!r)return [];return r.rows.filter(q=>(r.subject==='ALL'||mockSubjectOfQ(q)===r.subject)&&(r.filter==='all'||(r.filter==='wrong'&&q.is_answered&&!q.is_correct)||(r.filter==='correct'&&q.is_correct)||(r.filter==='unanswered'&&!q.is_answered)))}
 function mockReviewShell(rows){
-  return `<h2 style="margin-top:0">Review your answers</h2><p class="muted small">See the questions you answered correctly and wrongly, with the correct answer and the explanation.</p><div id="mockReviewBar"></div><div id="mockReviewList"></div>`}
+  return `<h2 style="margin-top:0">Review of answers</h2><p class="muted small">Questions answered correctly and wrongly, with the correct answer and the explanation.</p><div id="mockReviewBar"></div><div id="mockReviewList"></div>`}
 function mockReviewSet(f){window.mockReview.filter=f;mockReviewPaint()}
 function mockReviewSubject(v){window.mockReview.subject=v;mockReviewPaint()}
 function mockReviewQuestionHtml(q){

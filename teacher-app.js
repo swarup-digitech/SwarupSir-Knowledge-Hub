@@ -54,6 +54,9 @@ async function loadPreviousMockTests(){
             <button style="background:#16a34a" onclick="mockAnswerKeyPDF('${gid}')">🔑 Answer Key (PDF)</button>
             <button class="secondary" onclick="mockAnswerKeyExcel('${gid}')">⬇ Key (Excel)</button>
             <button onclick="mockOmrImportPage('${gid}')">📥 Import OMR</button>
+            <button class="secondary" onclick="mockTeacherResults(${esc(JSON.stringify(sets.map(s=>s.id)))})">👁 View Results</button>
+            <button class="secondary" onclick="toggleMockGroupRelease('${gid}',${sets.every(s=>s.results_released)?'false':'true'})">${sets.every(s=>s.results_released)?'🔒 Hide Results':'✓ Approve Results'}</button>
+            <button class="secondary" onclick="mockKeyEditPage('${gid}')">✎ Edit Key</button>
             <button class="secondary" onclick="editMockGroup('${gid}')">✎ Edit name</button>
             <button class="danger" onclick="deleteMockGroup('${gid}')">🗑 Delete all sets</button>
           </div>
@@ -70,6 +73,7 @@ async function loadPreviousMockTests(){
         <div class="actions">
           <button onclick="generateMockTestPDF('${t.id}')">🖨 Question Paper PDF</button>
           <button class="secondary" onclick="editMockTest('${t.id}')">✎ Edit</button>
+          <button class="secondary" onclick="mockTeacherResults(['${t.id}'])">👁 View Results</button>
           <button class="secondary" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results':'✓ Approve Results'}</button>
           <button class="danger" onclick="deleteMockTest('${t.id}')">🗑 Delete</button>
         </div>
@@ -100,6 +104,13 @@ async function toggleMockResultsRelease(id,release){
   const action=release?'make results visible to students':'hide results from students';
   if(!confirm(`Are you sure you want to ${action}?`))return;
   const {error}=await sb.from('mock_tests').update({results_released:!!release}).eq('id',id).eq('teacher_id',current.id);
+  if(error)return notify('Could not update result approval: '+error.message);
+  notify(release?'Results approved. Students can now view their results.':'Results hidden from students.');
+  loadPreviousMockTests();
+}
+async function toggleMockGroupRelease(gid,release){
+  if(!confirm(release?'Make the results of all sets visible to students?':'Hide the results of all sets from students?'))return;
+  const {error}=await sb.from('mock_tests').update({results_released:!!release}).eq('teacher_id',current.id).or(`series_group_id.eq.${gid},id.eq.${gid}`);
   if(error)return notify('Could not update result approval: '+error.message);
   notify(release?'Results approved. Students can now view their results.':'Results hidden from students.');
   loadPreviousMockTests();
@@ -1916,9 +1927,11 @@ async function generateMockTestPDF(testId){
     notify('Could not generate the JNVST-style Question Paper PDF: '+(e.message||e));
   }
 }
-async function mockTeacherResults(){
-  const {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
+async function mockTeacherResults(only){
+  const onlyIds=Array.isArray(only)?only:null;
+  let {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
   if(error)return notify(error.message);
+  if(onlyIds)tests=(tests||[]).filter(x=>onlyIds.includes(x.id));
   const ids=(tests||[]).map(x=>x.id);
   const {data:ats,error:ae}=await sb.from('mock_test_attempts').select('*').in('mock_test_id',ids.length?ids:['00000000-0000-0000-0000-000000000000']).order('submitted_at',{ascending:false});
   if(ae)return notify(ae.message);
@@ -1928,7 +1941,8 @@ async function mockTeacherResults(){
   render(`<div class="wrap">${header('Mock Test Results')}
     <div class="card">
       <h2>📊 Mock Test Results</h2>
-      <p class="muted">View student responses and generate the printable Mock Test Result Sheet.</p>
+      ${onlyIds?`<p><b>${esc(String(tests[0]?.title||'').replace(/\s+—\s+Series\s+[A-D]\s*$/,''))}</b> · <a href="#" onclick="mockTeacherResults();return false">show all tests</a></p>`:''}
+      <p class="muted">You can open every student's answers with the explanations <b>before</b> you approve the results. View student responses and generate the printable Mock Test Result Sheet.</p>
       <div style="overflow:auto"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Language</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th><th>Report</th></tr></thead>
       <tbody>${(ats||[]).map(a=>{const t=(tests||[]).find(x=>x.id===a.mock_test_id)||{};const p=pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button></div>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No attempts yet.</td></tr>'}</tbody></table></div>
       <div class="actions" style="margin-top:15px;flex-wrap:wrap">${(tests||[]).map(t=>`<button class="${t.results_released?'secondary':''}" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results: ':'✓ Approve Results: '}${esc(t.title||'Mock Test')}</button>`).join('')}<button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div>
@@ -1946,7 +1960,10 @@ async function loadMockTeacherAttempt(attemptId){
   ]);
   if(qe)throw qe;if(ane)throw ane;if(pe)throw pe;
   const amap=new Map((ans||[]).map(x=>[x.question_id,String(x.selected_option||'').toUpperCase()]));
-  const rows=(qs||[]).map(q=>{const student=amap.get(q.id)||'';const key=String(q.correct_option||'').toUpperCase();return {...q,student_answer:student,correct:key,is_answered:!!student,is_correct:!!student&&student===key}});
+  const bids=[...new Set((qs||[]).map(q=>q.bank_question_id).filter(Boolean))],emap=new Map();
+  for(let i=0;i<bids.length;i+=100){const {data:bq}=await sb.from('mock_question_bank').select('id,explanation,explanation_as').in('id',bids.slice(i,i+100));(bq||[]).forEach(b=>emap.set(b.id,b))}
+  const asm=String(test.language||'').toUpperCase()==='ASSAMESE';
+  const rows=(qs||[]).map(q=>{const student=amap.get(q.id)||'';const key=String(q.correct_option||'').toUpperCase();const b=emap.get(q.bank_question_id)||{};return {...q,explanation:(asm&&b.explanation_as)||b.explanation||'',student_answer:student,correct:key,is_answered:!!student,is_correct:!!student&&student===key}});
   const subjects={};
   rows.forEach(q=>{const k=mockSubjectOfQ(q);if(!subjects[k])subjects[k]={questions:0,correct:0,wrong:0,unanswered:0,marks:0};const s=subjects[k];s.questions++;if(!q.student_answer)s.unanswered++;else if(q.is_correct){s.correct++;s.marks+=Number(q.marks||1.25)}else s.wrong++});
   return {attempt:a,test,profile:p,rows,subjects};
@@ -1958,12 +1975,13 @@ function mockTeacherResponseHtml(data){
       <div class="result-controls"><div class="grid"><div><b>Submitted</b><br>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</div><div><b>Left test screen</b><br>${Number(a.leave_count||0)}×${a.auto_submitted?' · auto-submitted':''}</div><div><b>Attempted</b><br>${rows.filter(q=>q.is_answered).length}/${rows.length}</div><div><b>Correct</b><br><span class="result-correct">${rows.filter(q=>q.is_correct).length}</span></div><div><b>Wrong</b><br><span class="result-wrong">${rows.filter(q=>q.is_answered&&!q.is_correct).length}</span></div><div><b>Unanswered</b><br>${rows.filter(q=>!q.is_answered).length}</div></div></div>
       <h3>Subject-wise Performance</h3><div style="overflow:auto"><table><thead><tr><th>Subject</th><th>Questions</th><th>Correct</th><th>Wrong</th><th>Unanswered</th><th>Marks</th><th>%</th></tr></thead><tbody>${Object.entries(subjects).map(([k,s])=>`<tr><td>${esc(k)}</td><td>${s.questions}</td><td class="result-correct">${s.correct}</td><td class="result-wrong">${s.wrong}</td><td>${s.unanswered}</td><td>${s.marks.toFixed(2)}</td><td>${s.questions?((s.correct/s.questions)*100).toFixed(2):'0.00'}%</td></tr>`).join('')}</tbody></table></div>
     </div>
+    <div class="card" id="mockReviewCard">${mockReviewShell(rows)}</div>
     <div class="card"><div class="actions" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Question-wise Response</h2><div class="actions"><button onclick="generateMockResultPDF('${a.id}')">📄 Generate Result PDF</button><button class="secondary" onclick="mockTeacherResults()">← Back to Results</button></div></div>
       <p class="muted small">The PDF contains only Question No., Answer Key and Student's Answer. Wrong answers are highlighted in red.</p>
       <div class="result-questions">${rows.map(q=>`<div class="result-question"><b>Q${q.question_number}</b><div class="result-answer"><span>Key: <strong class="answer-key">${esc(q.correct||'—')}</strong></span><span>Student: <strong class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${esc(q.student_answer||'—')}</strong></span></div><span class="${q.student_answer?(q.is_correct?'result-correct':'result-wrong'):''}">${q.student_answer?(q.is_correct?'✓':'✗'):'—'}</span></div>`).join('')}</div>
     </div></div>`;
 }
-async function viewMockTeacherAttempt(attemptId){try{const data=await loadMockTeacherAttempt(attemptId);render(mockTeacherResponseHtml(data))}catch(e){notify('Could not load student response: '+(e.message||e))}}
+async function viewMockTeacherAttempt(attemptId){try{const data=await loadMockTeacherAttempt(attemptId);render(mockTeacherResponseHtml(data));window.mockReview={rows:data.rows,filter:data.rows.some(q=>q.is_answered&&!q.is_correct)?'wrong':'all',subject:'ALL'};mockReviewPaint()}catch(e){notify('Could not load student response: '+(e.message||e))}}
 async function generateMockResultPDF(attemptId){try{const data=await loadMockTeacherAttempt(attemptId);buildMockResultPDF(data)}catch(e){notify('Could not generate PDF: '+(e.message||e))}}
 function jnvstBaseKey(c){
  const n=String(c?.name||"").trim().toUpperCase().replace(/\s+/g," ");
@@ -6953,12 +6971,50 @@ async function mockOmrRun(dry){
     const {data,error}=await sb.rpc('teacher_import_mock_omr_results',{p_series_group:st.gid,p_exam_title:(g?.base||'')+(g?.code?' ('+g.code+')':''),p_file_name:st.file,p_rows:rows,p_dry_run:!!dry});
     if(error)throw error;
     if(dry){st.dry=data;mockOmrRender()}
-    else{document.getElementById('mockOmrResult').innerHTML=omrReportHtml(data);notify(`OMR results imported for ${data.imported} student(s).`,'success');btns.forEach(b=>b.disabled=false)}
+    else{
+      let made=null,bfErr='';
+      try{const {data:bf,error:be}=await sb.rpc('teacher_backfill_mock_omr_results',{p_series_group:st.gid});if(be)throw be;made=bf?.created??0}catch(be){bfErr=String(be.message||be)}
+      document.getElementById('mockOmrResult').innerHTML=omrReportHtml(data)+(bfErr?`<div class="notice" style="margin-top:8px"><b>Student results were not created:</b> ${esc(bfErr)}<br>Run V48 and V49 in the Supabase SQL Editor, then import this file again.</div>`:`<div class="success" style="margin-top:8px">Mock Test results created for ${made} student(s). Press “Approve Results” on this set so students can see their score card and answers.</div>`);
+      notify(`OMR results imported for ${data.imported} student(s).`,'success');btns.forEach(b=>b.disabled=false)}
   }catch(e){
     const m=String(e.message||e);
     notify('OMR import failed: '+m+(/teacher_import_mock_omr_results|function/i.test(m)?'\n\nRun V37_MOCK_OFFLINE_OMR.sql in the Supabase SQL Editor first.':''),'error');
     btns.forEach(b=>b.disabled=false);
   }
+}
+
+/* ===== V51: correct the answer key of a pen-paper Mock Test ===== */
+async function mockKeyEditPage(gid,testId){
+  try{
+    const groups=await mockOmrLoadGroups();const g=groups.find(x=>x.gid===gid);if(!g)throw new Error('Test not found.');
+    const tests=g.tests.slice().sort((a,b)=>String(a.series_code||'A').localeCompare(String(b.series_code||'A'))||String(a.language||'').localeCompare(String(b.language||'')));
+    const cur=tests.find(x=>x.id===testId)||tests[0];
+    const {data:qs,error}=await sb.from('mock_test_questions').select('id,question_number,correct_option,part_code,section_code,question_text,passage_title').eq('mock_test_id',cur.id).order('question_number');
+    if(error)throw error;
+    window.mockKeyEdit={gid,test:cur,orig:new Map((qs||[]).map(q=>[q.question_number,String(q.correct_option||'').toUpperCase()])),cur:new Map((qs||[]).map(q=>[q.question_number,String(q.correct_option||'').toUpperCase()]))};
+    const lg=l=>l==='ASSAMESE'?'Assamese':l==='ENGLISH'?'English':'Common';
+    render(`<div class="wrap">${header('Edit Answer Key')}
+      <div class="card"><h2>✎ Edit Answer Key — ${esc(g.base)}</h2>
+        <p class="muted">Use this when the key was read wrongly. Choose the Set / language, correct the answers and press <b>Save key</b>. All students' scores of that Set are re-marked automatically. Changed answers are highlighted.</p>
+        <div class="actions"><select id="mkeySel" style="width:auto" onchange="mockKeyEditPage('${gid}',this.value)">${tests.map(x=>`<option value="${x.id}" ${x.id===cur.id?'selected':''}>Set ${esc(String(x.series_code||'A').toUpperCase())} · ${lg(x.language)}</option>`).join('')}</select>
+          <button onclick="mockKeyEditSave()">💾 Save key</button><button class="secondary" onclick="mockKeyEditReset()">↺ Undo changes</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div>
+        <div id="mkeySummary" class="small muted" style="margin:8px 0"></div>
+        <div style="overflow:auto"><table><thead><tr><th>Q</th><th>Subject</th><th>Question</th><th>Key</th></tr></thead><tbody>${(qs||[]).map(q=>{const txt=String(q.question_text||'').replace(/\s+/g,' ').slice(0,90)||(q.passage_title?('Passage: '+q.passage_title):'(picture question)');return `<tr id="mkrow${q.question_number}"><td><b>${q.question_number}</b></td><td>${esc(mockSubjectOfQ(q))}</td><td class="small">${esc(txt)}</td><td style="white-space:nowrap">${['A','B','C','D'].map(o=>`<label style="margin-right:8px"><input type="radio" style="width:auto" name="mk${q.question_number}" value="${o}" ${String(q.correct_option||'').toUpperCase()===o?'checked':''} onchange="mockKeyEditSet(${q.question_number},'${o}')"> ${o}</label>`).join('')}</td></tr>`}).join('')}</tbody></table></div>
+      </div></div>`);
+    mockKeyEditSummary();
+  }catch(e){notify('Could not open the key: '+(e.message||e))}
+}
+function mockKeyEditSet(n,o){const k=window.mockKeyEdit;if(!k)return;k.cur.set(n,o);const r=document.getElementById('mkrow'+n);if(r)r.style.background=k.orig.get(n)!==o?'#fef9c3':'';mockKeyEditSummary()}
+function mockKeyEditDiff(){const k=window.mockKeyEdit;return k?[...k.cur].filter(([n,o])=>k.orig.get(n)!==o).map(([n,o])=>({question_number:n,correct_option:o})):[]}
+function mockKeyEditSummary(){const el=document.getElementById('mkeySummary');if(!el)return;const d=mockKeyEditDiff();el.innerHTML=d.length?`<b style="color:#b45309">${d.length} answer(s) changed, not saved yet:</b> ${d.map(x=>'Q'+x.question_number+'→'+x.correct_option).join(', ')}`:'No changes.'}
+function mockKeyEditReset(){const k=window.mockKeyEdit;if(k)mockKeyEditPage(k.gid,k.test.id)}
+async function mockKeyEditSave(){
+  const k=window.mockKeyEdit;if(!k)return;const d=mockKeyEditDiff();if(!d.length)return notify('No changes to save.');
+  if(!confirm(`Save ${d.length} changed answer(s) for this Set? Scores of all students of this Set will be re-marked.`))return;
+  const {data,error}=await sb.rpc('teacher_update_mock_key',{p_test_id:k.test.id,p_changes:d});
+  if(error)return notify('Could not save the key: '+error.message+(/teacher_update_mock_key|function/i.test(error.message)?'\n\nRun V51_EDIT_MOCK_KEY.sql in Supabase first.':''),'error');
+  notify(`Key saved (${data?.changed||0} changed). ${data?.remarked||0} result(s) re-marked.`,'success');
+  mockKeyEditPage(k.gid,k.test.id);
 }
 
 /* ===== V45: answer keys (English and Assamese keys may differ) ===== */
