@@ -6946,17 +6946,31 @@ function mockOmrRender(){
   box.innerHTML=`<div class="success"><b>${esc(st.file)}</b>: ${p.rows.length} student(s) with answers, ${p.absent.length} absent, ${N} question column(s).</div>
    ${st.matched?`<div class="${/does not match/.test(st.matched)?'notice':'success'}" style="margin-top:8px">${esc(st.matched)}</div>`:''}
    <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>Set</th><th>Students</th><th>Sheet key matches saved key</th></tr></thead><tbody>${stat.map(x=>`<tr><td><b>${x.c}</b></td><td>${x.n}</td><td>${x.ratio===null?'<span class="muted">no key column</span>':`<span class="${x.ratio>=0.9?'result-correct':'result-wrong'}">${Math.round(x.ratio*100)}%</span>`}</td></tr>`).join('')}</tbody></table></div>
+   ${mockOmrMismatchHtml()}
    ${unknown.length?`<div class="notice" style="margin-top:8px">${unknown.length} student(s) have no set yet — choose it in the Set column, otherwise they are not imported.</div>`:''}
    ${N!==80?`<div class="notice" style="margin-top:8px">The file has ${N} question columns; a Mock Test has 80.</div>`:''}
    ${hasLang?`<div style="margin-top:8px"><label class="small">Booklet language for all students (change a single student in the table below)</label><select style="width:auto" onchange="mockOmrAllLang(this.value)">${allLangs.map(l=>`<option value="${l}" ${st.defLang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></div>`:''}
    <details open style="margin-top:10px"><summary><b>Students and their Set</b> (${p.rows.length})</summary><div style="overflow:auto;max-height:340px"><table><thead><tr><th>Roll No</th><th>Name</th><th>Set</th>${hasLang?'<th>Language</th>':''}<th>How the set was found</th></tr></thead><tbody>${shown.map(({r,i})=>`<tr><td>${esc(r.roll)}</td><td>${esc(r.name||'')}</td><td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetRow(${i},this.value)"><option value="">—</option>${codes.map(c=>`<option value="${c}" ${r.set===c?'selected':''}>${c}</option>`).join('')}</select></td>${hasLang?`<td><select style="width:auto;padding:4px 8px" onchange="mockOmrSetLang(${i},this.value)">${Object.keys(S[r.set]?.byLang||{}).map(l=>`<option value="${l}" ${r.lang===l?'selected':''}>${mockOmrLangName(l)}</option>`).join('')}</select></td>`:''}<td class="small muted">${esc(r.setSource||'')}${hasLang&&r.langSource==='key'?' · language from key':''}${hasLang&&r.langSource==='exam'?' · language from exam code':''}</td></tr>`).join('')}</tbody></table></div></details>
-   <div class="actions" style="margin-top:12px"><button class="secondary" onclick="mockOmrRun(true)">Check (nothing is saved)</button><button onclick="mockOmrRun(false)">Import into Mistake Bank</button></div>
+   <div class="actions" style="margin-top:12px"><button class="secondary" onclick="mockOmrRun(true)">Check (nothing is saved)</button><button onclick="mockOmrRun(false)">Import OMR results</button></div>
    <div id="mockOmrResult" style="margin-top:12px">${st.dry?omrReportHtml(st.dry):''}</div>`;
+}
+/* V52: the OMR software may read the key row wrongly. The saved key is trusted by default; the teacher decides per question. */
+function mockOmrRowKey(r){const S=mockOmrState.keys[mockOmrState.gid]||{},s=S[r.set];if(!s)return null;const b=r.lang&&s.byLang?.[r.lang];return b?{test:b.test,key:b.key}:{test:s.test,key:s.key}}
+function mockOmrMismatches(){
+  const st=mockOmrState,p=st?.parsed;if(!p)return [];const acc=new Map();
+  p.rows.forEach(r=>{const rk=mockOmrRowKey(r);if(!rk)return;for(let q=1;q<=p.N;q++){const v=r.keys[q-1];if(!/^[ABCD]$/.test(v||''))continue;const id=rk.test.id+'|'+q;let e=acc.get(id);if(!e){e={tid:rk.test.id,test:rk.test,q,saved:rk.key.get(q)||'',cnt:{},n:0};acc.set(id,e)}e.cnt[v]=(e.cnt[v]||0)+1;e.n++}});
+  return [...acc.values()].map(e=>{const top=Object.entries(e.cnt).sort((a,b)=>b[1]-a[1])[0];return {...e,sheet:top?top[0]:'',sheetN:top?top[1]:0}}).filter(e=>e.saved&&e.sheet&&e.saved!==e.sheet).sort((a,b)=>String(a.test.series_code).localeCompare(String(b.test.series_code))||a.q-b.q);
+}
+function mockOmrDec(tid,q,v){const st=mockOmrState;(st.dec||(st.dec={}))[tid+'|'+q]=v;st.dry=null}
+function mockOmrMismatchHtml(){
+  const m=mockOmrMismatches();if(!m.length)return '';const st=mockOmrState,lg=l=>String(l).toUpperCase()==='ASSAMESE'?'Assamese':'English';
+  return `<div class="notice" style="margin-top:10px"><b>${m.length} question(s) where the key read from the OMR file differs from the saved key.</b> The OMR software may have read the key wrongly. Choose what to do for each (default: use the saved key).
+   <div style="overflow:auto;max-height:300px;margin-top:6px"><table><thead><tr><th>Set</th><th>Q</th><th>Saved key</th><th>Key in OMR file</th><th>Action</th></tr></thead><tbody>${m.map(e=>{const d=(st.dec||{})[e.tid+'|'+e.q]||'saved';return `<tr><td>${esc(String(e.test.series_code||'A').toUpperCase())} · ${lg(e.test.language)}</td><td><b>${e.q}</b></td><td><b>${e.saved}</b></td><td><b>${e.sheet}</b> <span class="muted small">(${e.sheetN}/${e.n} sheets)</span></td><td><select style="width:auto" onchange="mockOmrDec('${e.tid}',${e.q},this.value)"><option value="saved" ${d==='saved'?'selected':''}>Use saved key (${e.saved})</option><option value="sheet" ${d==='sheet'?'selected':''}>Use key from file (${e.sheet}) – updates saved key</option><option value="skip" ${d==='skip'?'selected':''}>Skip this question (bonus / cancelled)</option></select></td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function mockOmrPayload(){
   const st=mockOmrState;if(!st?.parsed)return [];
   return st.parsed.rows.filter(r=>r.set).map(r=>({roll_no:r.roll,set_code:r.set,language:r.lang||'',answers:r.answers,
-    sheet_keys:r.keys.map((k,i)=>{const bonus=(r.marks[i]||0)>0&&r.answers[i]!==k&&/^[ABCD]$/.test(k||'');return bonus?'BONUS':k})}));
+    sheet_keys:r.keys.map((k,i)=>{const rk=mockOmrRowKey(r);const d=rk&&(mockOmrState.dec||{})[rk.test.id+'|'+(i+1)];return d==='skip'?'BONUS':''})}));
 }
 async function mockOmrRun(dry){
   const st=mockOmrState;if(!st?.parsed)return notify('Choose the OMR Excel file first.');
@@ -6968,6 +6982,11 @@ async function mockOmrRun(dry){
   }
   const btns=document.querySelectorAll('#mockOmrPreview button');btns.forEach(b=>b.disabled=true);
   try{
+    if(!dry){   // V52: questions where the teacher chose the key from the OMR file → update the saved key first (all results of that set are re-marked)
+      const byTest={};mockOmrMismatches().forEach(e=>{if((st.dec||{})[e.tid+'|'+e.q]==='sheet')(byTest[e.tid]||(byTest[e.tid]=[])).push({question_number:e.q,correct_option:e.sheet})});
+      for(const [tid,ch] of Object.entries(byTest)){const {error:ke}=await sb.rpc('teacher_update_mock_key',{p_test_id:tid,p_changes:ch});if(ke)throw new Error('Could not update the key: '+ke.message+' (run V51_EDIT_MOCK_KEY.sql)');
+        const S=st.keys[st.gid]||{};Object.values(S).forEach(s=>{[s,...Object.values(s.byLang||{})].forEach(x=>{if(x.test?.id===tid)ch.forEach(c=>x.key.set(c.question_number,c.correct_option))})})}
+    }
     const {data,error}=await sb.rpc('teacher_import_mock_omr_results',{p_series_group:st.gid,p_exam_title:(g?.base||'')+(g?.code?' ('+g.code+')':''),p_file_name:st.file,p_rows:rows,p_dry_run:!!dry});
     if(error)throw error;
     if(dry){st.dry=data;mockOmrRender()}
