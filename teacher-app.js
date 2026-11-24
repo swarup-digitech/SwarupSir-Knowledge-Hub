@@ -1704,6 +1704,91 @@ function jnvstPdfRealText(t){const s=String(t==null?'':t).trim();return s&&!/^\[
 /* V36.2: stop blank pages. A .jnvst-page used to be exactly one page tall (min-height:297mm) with a forced break after it, so a
    sub-pixel overflow (or content ending exactly at a page end) produced an empty page. Each block is now sized to a whole number of
    pages minus 2px, and pages are separated with break-before instead of break-after. Runs after the images have loaded. */
+/* ===== V56: engine-independent pagination of the mock paper. Every printed sheet is its own fixed-size block (A4, same margins,
+   own footer + page number), so footers stay aligned in Chrome, Edge and Firefox; nothing depends on box-decoration-break. ===== */
+async function jnvstPdfPaginate(doc){
+  const win=doc.defaultView||window;
+  if(doc.body.dataset.jnvstPaginated==='1')return;doc.body.dataset.jnvstPaginated='1';
+  try{await doc.fonts.ready}catch(_){}
+  await Promise.all([...doc.images].map(im=>im.complete?1:new Promise(r=>{im.onload=im.onerror=r;setTimeout(r,4000)})));
+  const mm=v=>v/25.4*96,PH=mm(297),TOP=mm(13),BOT=mm(17),U=PH-TOP-BOT-6,COLW=mm(81);
+  const root=doc.querySelector('.mock-paper');if(!root)return;
+  const cs=el=>win.getComputedStyle(el);
+  const H=el=>{const c=cs(el);return el.getBoundingClientRect().height+(parseFloat(c.marginTop)||0)+(parseFloat(c.marginBottom)||0)};
+  const HEAD=/jnvst-(section-head|part-head|directions)\b/;
+  const mk=cls=>{const d=doc.createElement('div');d.className=cls;return d};
+  const pages=[...root.querySelectorAll(':scope > .jnvst-page')];
+  const sheetsOut=[];
+  for(const p of pages){
+    const foot=p.querySelector(':scope > .jnvst-footer');
+    const isSection=!!p.querySelector(':scope > .jnvst-section-head');
+    if(!isSection){p.classList.add('jnvst-sheet');sheetsOut.push({el:p,label:null});continue}
+    const spans=foot?[...foot.querySelectorAll('span')]:[];
+    const left=spans[0]?spans[0].textContent:'',label=spans[1]?spans[1].textContent:'';
+    const kids=[...p.children].filter(c=>c!==foot);
+    // measuring box for two-column questions
+    const meas=mk('jnvst-two-col-measure');meas.style.cssText='position:absolute;left:-9999px;top:0;visibility:hidden;width:'+COLW+'px';root.appendChild(meas);
+    const units=[];let pend=[];
+    const push=(els,col)=>{units.push({els:pend.concat(els),col,h:0});pend=[]};
+    for(let i=0;i<kids.length;i++){const k=kids[i];
+      if(k.classList.contains('jnvst-two-col')){if(pend.length)push([],false);[...k.children].forEach(q=>{const cl=q.cloneNode(true);meas.appendChild(cl);const h=H(cl);meas.removeChild(cl);units.push({els:pend.concat([q]),col:true,h:h+pend.reduce((s,e)=>s+H(e),0)});pend=[]});continue}
+      if(HEAD.test(k.className)){pend.push(k);continue}
+      if(k.classList.contains('jnvst-passage')){pend.push(k);continue}
+      push([k],false);
+    }
+    if(pend.length)push([],false);
+    const measure=()=>{units.forEach(u=>{if(u.col){const cl=u.els[0].cloneNode(true);meas.appendChild(cl);u.h=H(cl);meas.removeChild(cl)}else u.h=u.els.reduce((s,e)=>s+H(e),0)})};
+    const layout=()=>{
+      const out=[];let sheet=null,y=0,cols=null,ci=0,cy=[0,0],cStart=0;
+      const newSheet=()=>{const s=mk('jnvst-page jnvst-sheet');s.dataset.label=label;s.dataset.left=left;p.parentNode.insertBefore(s,p);out.push(s);sheet=s;y=0;cols=null;return s};
+      const newCols=()=>{const w=mk('jnvst-cols');w.style.cssText='display:flex;gap:12mm;align-items:flex-start';const c1=mk('jnvst-col'),c2=mk('jnvst-col');[c1,c2].forEach(c=>c.style.cssText='width:81mm;flex:none');w.appendChild(c1);w.appendChild(c2);sheet.appendChild(w);cols=[c1,c2];ci=0;cy=[0,0];cStart=y};
+      const closeCols=()=>{if(cols){y=cStart+Math.max(cy[0],cy[1]);cols=null}};
+      for(const u of units){
+        if(!sheet)newSheet();
+        if(!u.col){
+          closeCols();
+          if(y>0&&y+u.h>U)newSheet();
+          u.els.forEach(e=>sheet.appendChild(e));
+          if(u.h>U){const z=U/u.h;u.els.forEach(e=>e.style.zoom=String(z*0.99));y+=U}else y+=u.h;
+        }else{
+          if(!cols){if(y>0&&U-y<u.h+4)newSheet();newCols()}
+          if(cy[ci]+u.h>U-cStart&&cy[ci]>0){
+            if(ci===0)ci=1;else{closeCols();newSheet();newCols()}
+            if(cy[ci]+u.h>U-cStart&&cy[ci]>0){closeCols();newSheet();newCols()}
+          }
+          u.els.forEach(e=>cols[ci].appendChild(e));cy[ci]+=u.h;
+        }
+      }
+      closeCols();
+      return {out,last:y};
+    };
+    // a last sheet holding only a few lines is avoided by shrinking the section a little (max 10%)
+    let res=null;
+    for(const z of [1,.96,.93,.9]){
+      if(res){units.forEach(u=>u.els.forEach(e=>p.insertBefore(e,foot||null)));res.out.forEach(s=>s.remove())}
+      units.forEach(u=>u.els.forEach(e=>{e.style.zoom=z===1?'':String(z)}));
+      measure();
+      res=layout();
+      if(!(res.out.length>1&&res.last<0.14*U))break;
+    }
+    meas.remove();
+    const out=res.out;
+    out.forEach(s=>{p.parentNode.insertBefore(s,p);sheetsOut.push({el:s,label:s.dataset.label,left:s.dataset.left})});
+    p.remove();
+  }
+  // footer + page number on every sheet
+  const all=[...root.querySelectorAll(':scope > .jnvst-page')];
+  all.forEach((s,i)=>{
+    const n=i+1,info=sheetsOut.find(x=>x.el===s);
+    let foot=s.querySelector(':scope > .jnvst-footer');
+    if(info&&info.label!==null){
+      foot=doc.createElement('div');foot.className='jnvst-footer';
+      const a=doc.createElement('span'),b=doc.createElement('span');a.textContent=info.left||'';b.textContent=info.label+' · Page '+n;foot.appendChild(a);foot.appendChild(b);s.appendChild(foot);
+    }else if(foot){const sp=foot.querySelectorAll('span');const last=sp[sp.length-1];if(last&&/^Page\s*\d+$/i.test(last.textContent.trim()))last.textContent='Page '+n}
+  });
+  doc.querySelectorAll('.jnvst-sheet').forEach(s=>s.classList.add('jnvst-sheet-ready'));
+}
+
 function jnvstPdfFixPages(doc){
   // Sizes every .jnvst-page to whole sheets. Top/bottom padding is repeated on every sheet (box-decoration-break:clone),
   // so each sheet holds U = sheet height - top padding - bottom padding of content. The footer lives in the bottom padding.
@@ -1944,8 +2029,8 @@ async function generateMockTestPDF(testId){
     w.document.open();
     // V42: same maths runtime as the Question Paper Generator (MathJax in the print window, plain-text fallback),
     // then size the sections to whole sheets AFTER the formulas are typeset, then print.
-    const hook=`window.__qpHook=async function(){jnvstPdfFixPages(document);window.addEventListener('beforeprint',function(){jnvstPdfFixPages(document)});await new Promise(function(r){setTimeout(r,300)});window.focus();window.print();};`;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper mock-paper">${pages}</div><script>${jnvstPdfFixPages.toString()};${hook}${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`);
+    const hook=`window.__qpHook=async function(){await jnvstPdfPaginate(document);await new Promise(function(r){setTimeout(r,300)});window.focus();window.print();};`;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(test.title||'JNVST Mock Test')} - Question Paper</title><style>${css_add}${css_pages}</style></head><body><div class="jnvst-paper mock-paper">${pages}</div><script>${jnvstPdfPaginate.toString()};${hook}${qpPlainMath.toString()};(${qpPopupRuntime.toString()})();<\/script></body></html>`);
     w.document.close();
   }catch(e){
     try{w.close()}catch(_){}

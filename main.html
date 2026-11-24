@@ -98,8 +98,10 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:10px}
 .mock-paper .jnvst-page{box-sizing:content-box;width:174mm;min-height:0;padding:13mm 12mm 17mm 24mm;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .mock-paper .jnvst-footer{left:24mm;right:12mm;bottom:8mm}
 .mock-paper .jnvst-title{font-size:14pt}
-.mock-paper .jnvst-first-page-credit{left:24mm!important;right:12mm!important;bottom:8mm!important}
+.mock-paper .jnvst-first-page-credit{left:24mm!important;right:12mm!important;bottom:14mm!important}
 .mock-paper .jnvst-page img{max-width:100%}
+/* V56: every printed sheet is its own fixed A4 block (footer anchored at the same place on every sheet, any browser) */
+.mock-paper .jnvst-page.jnvst-sheet{box-sizing:border-box;width:210mm;height:296.4mm;min-height:0;overflow:hidden;box-decoration-break:slice;-webkit-box-decoration-break:slice;page-break-inside:avoid;break-inside:avoid}
 .jnvst-header{text-align:center;border-bottom:1px solid #111;padding-bottom:5px;margin-bottom:7px}
 .jnvst-code{display:flex;justify-content:space-between;font-size:10pt;font-weight:700}
 .jnvst-topline{display:flex;justify-content:space-between;align-items:center;font-size:10pt;font-weight:700;margin-bottom:3px}.jnvst-topline b{font-size:12pt}.jnvst-booklet-number{font-size:14pt;font-weight:700;letter-spacing:1px}.jnvst-booklet-code{font-size:18pt;font-weight:800;text-align:center}.jnvst-roll-box{height:13mm!important;padding:0!important;background:#fff}.jnvst-first-page-credit{position:absolute;bottom:12mm;left:12mm;right:12mm;border-top:1px solid #111;padding-top:3px;font-size:9.5pt;font-weight:700;display:flex;justify-content:space-between;align-items:center}.jnvst-first-page-credit span:last-child{font-weight:700}
@@ -316,7 +318,7 @@ function loadTeacherApp(){
   if(!__teacherAppPromise){
     __teacherAppPromise=new Promise((resolve,reject)=>{
       const s=document.createElement("script");
-      s.src="teacher-app.js?v=79";
+      s.src="teacher-app.js?v=80";
       s.onload=()=>{
         // V15: Custom Adaptive Assignment module (optional — teacher tools still work without it)
         const c=document.createElement("script");
