@@ -56,6 +56,7 @@ async function loadPreviousMockTests(){
             <button onclick="mockOmrImportPage('${gid}')">📥 Import OMR</button>
             <button class="secondary" onclick="mockTeacherResults(${esc(JSON.stringify(sets.map(s=>s.id)))})">👁 View Results</button>
             <button class="secondary" onclick="toggleMockGroupRelease('${gid}',${sets.every(s=>s.results_released)?'false':'true'})">${sets.every(s=>s.results_released)?'🔒 Hide Results':'✓ Approve Results'}</button>
+            <button class="secondary" onclick="mockPreviewPage('${sets[0].id}')">🔍 Preview / Edit</button>
             <button class="secondary" onclick="mockKeyEditPage('${gid}')">✎ Edit Key</button>
             <button style="background:#0f766e" onclick="mockDiscussionPdf('${gid}')">📽 Discussion PDF</button>
             <button class="danger" onclick="deleteMockOmrImport('${gid}')">🗑 Delete OMR import</button>
@@ -75,6 +76,8 @@ async function loadPreviousMockTests(){
         <div class="actions">
           <button onclick="generateMockTestPDF('${t.id}')">🖨 Question Paper PDF</button>
           <button class="secondary" onclick="editMockTest('${t.id}')">✎ Edit</button>
+          <button class="secondary" onclick="mockPreviewPage('${t.id}')">🔍 Preview / Edit</button>
+          <button class="secondary" onclick="mockAssignDialog('${t.id}')">👥 Assign</button>
           <button class="secondary" onclick="mockTeacherResults(['${t.id}'])">👁 View Results</button>
           <button class="secondary" onclick="mockKeyEditPage('${t.id}')">✎ Edit Key</button>
           <button class="secondary" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results':'✓ Approve Results'}</button>
@@ -1298,6 +1301,7 @@ async function generateMockTestPage(language){
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">${classes.map(c=>`<label style="padding:9px;border:1px solid #dbe3ee;border-radius:10px;background:#fff"><input class="mock-class" type="checkbox" value="${c.id}" onchange="loadMockAssignStudents()" style="width:auto;margin-right:8px"><b>${esc(c.name)}</b></label>`).join('')}</div>
   <div id="mockAssignPicker" class="card" style="background:#f8fafc;margin-top:15px"><span class="muted">Select classes above.</span></div></div>
   <div class="actions"><button id="mockCreateBtn" onclick="createMockTest()">Generate & Assign 80-Question Test</button><button class="secondary" onclick="mockTestManagement()">Cancel</button></div>
+  <p class="small muted">Online test: leave all classes unticked to save it as a <b>draft</b> — preview and correct it first, then assign it with the <b>👥 Assign</b> button.</p>
  </div></div>`);
  mockGenRender();
 }
@@ -1451,7 +1455,7 @@ async function createMockTest(){
  if(!title)return notify('Enter a test title.');
  const offline=document.querySelector('input[name="mtMode"]:checked')?.value==='OFFLINE';
  const selected=[...document.querySelectorAll('.mock-class:checked')].map(x=>x.value);
- if(!offline&&!selected.length)return notify('Select at least one class.');
+ // V55: an online test may be created without classes (a draft): preview/edit it first, then use 👥 Assign
  const g=window.mockGen;
  if(!g)return notify('Please open Generate Mock Test again.');
  // V36: every slot must be filled, and no question may be used twice.
@@ -1469,7 +1473,6 @@ async function createMockTest(){
   }
  }catch(e){return notify('Could not read students: '+(e.message||e))}
  studentIds=[...new Set(studentIds)];
- if(!offline&&!studentIds.length)return notify('No students were selected.');
  try{
   const selectedLanguage=document.getElementById('mtLanguage')?.value||'ASSAMESE';
   // Resolve the chosen slots into question lists.
@@ -1544,7 +1547,7 @@ async function createMockTest(){
     const recipients=offline?[]:bySeries[si];
     summaryLines.push(`${nSeries>1?'Series '+codes[si]+(offline?': ':' ('+recipients.length+' student(s)): '):''}`+matOrder.map((p,i)=>`Part ${roman[i]}=${mockPlanByPart[p].label.replace(/^MAT\s*[—-]\s*/,'')}`).join(' → '));
    }
-   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — '+(nSeries*2)+' booklets ('+nSeries+' set(s) × English + Assamese), not visible to students. Exam code: '+examCode+' (booklets print it with -E for English or -A for Assamese; type the printed code as the Exam name in the OMR software, one batch per language). Print the Question Paper PDF of every set, hold the exam on OMR sheets, then use Import OMR.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':'Assigned to '+studentIds.length+' student(s).'}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
+   notify(`Mock Test generated successfully.\n\n80 questions · 100 marks · 2 hours\n${offline?'PEN-PAPER test — '+(nSeries*2)+' booklets ('+nSeries+' set(s) × English + Assamese), not visible to students. Exam code: '+examCode+' (booklets print it with -E for English or -A for Assamese; type the printed code as the Exam name in the OMR software, one batch per language). Print the Question Paper PDF of every set, hold the exam on OMR sheets, then use Import OMR.':nSeries>1?nSeries+' booklet series (A–'+codes[nSeries-1]+'), '+studentIds.length+' student(s) shared between them.':(studentIds.length?'Assigned to '+studentIds.length+' student(s).':'No class selected — saved as a DRAFT. Open 🔍 Preview / Edit to check the paper, then press 👥 Assign.')}\n\nMAT block order${shuffleMat?' (random)':''}${shuffleInside?', questions shuffled inside each block':''} — for your reference only; students see Part I–V with directions:\n${summaryLines.join('\n')}`);
    mockTestManagement();
   }catch(e){
    for(const id of createdIds){try{await sb.from('mock_tests').delete().eq('id',id)}catch(_){}}
@@ -7225,6 +7228,84 @@ async function reassignMockAttempt(attemptId,mode,name,defMin){
   if(error)return notify('Could not re-assign: '+error.message+(/teacher_reassign_mock_attempt|function/i.test(error.message)?'\n\nRun V54_REASSIGN_MOCK_ATTEMPT.sql in Supabase first.':''),'error');
   notify(mode==='resume'?`Re-assigned. ${name||'The student'} can continue now (${data?.minutes||minutes} min).`:`Re-assigned fresh. ${name||'The student'} can start the test again.`,'success');
   mockTeacherResults();
+}
+
+/* ===== V55: preview a generated Mock Test, edit questions / keys (saved in the Question Bank AND the Mock Test), assign later ===== */
+async function mockPreviewPage(testId){
+  try{
+    const {data:test,error:te}=await sb.from('mock_tests').select('*').eq('id',testId).eq('teacher_id',current.id).single();if(te)throw te;
+    const gid=test.series_group_id||test.id;
+    const {data:sibs}=await sb.from('mock_tests').select('id,title,series_code,language,delivery_mode').eq('teacher_id',current.id).or(`series_group_id.eq.${gid},id.eq.${gid}`);
+    const {data:qs,error:qe}=await sb.from('mock_test_questions').select('*').eq('mock_test_id',testId).order('question_number');if(qe)throw qe;
+    const bids=[...new Set((qs||[]).map(q=>q.bank_question_id).filter(Boolean))],bmap=new Map();
+    for(let i=0;i<bids.length;i+=100){const {data:b}=await sb.from('mock_question_bank').select('id,explanation,explanation_as').in('id',bids.slice(i,i+100));(b||[]).forEach(x=>bmap.set(x.id,x))}
+    window.mockPrev={test,qs:qs||[],bmap,gid};
+    const lg=l=>String(l).toUpperCase()==='ASSAMESE'?'Assamese':String(l).toUpperCase()==='ENGLISH'?'English':'Common';
+    const sorted=(sibs||[]).slice().sort((a,b)=>String(a.series_code||'').localeCompare(String(b.series_code||''))||String(a.language||'').localeCompare(String(b.language||'')));
+    let lastSec='',lastPass='';
+    const body=(qs||[]).map(q=>{
+      const sub=mockSubjectOfQ(q),head=sub!==lastSec?`<h3 style="margin:18px 0 6px;border-bottom:2px solid #e2e8f0;padding-bottom:4px">${esc(sub)}</h3>`:'';lastSec=sub;
+      const pass=q.passage_text&&q.passage_text!==lastPass?`<details open style="margin:8px 0"><summary><b>${esc(q.passage_title||'Passage')}</b></summary><div style="white-space:pre-wrap;line-height:1.6;background:#f8fafc;padding:10px;border-radius:8px;margin-top:4px">${esc(q.passage_text)}</div></details>`:'';lastPass=q.passage_text||lastPass;
+      const ex=String((bmap.get(q.bank_question_id)||{})[String(test.language).toUpperCase()==='ASSAMESE'&&bmap.get(q.bank_question_id)?.explanation_as?'explanation_as':'explanation']||'').trim();
+      return head+pass+`<div class="card" style="margin:8px 0;padding:10px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>Q${q.question_number}</b><button class="secondary" onclick="mockPreviewEdit(${q.question_number})">✎ Edit</button></div>
+        ${q.image_url?`<img src="${esc(q.image_url)}" style="max-width:100%;max-height:220px">`:''}
+        ${realQuestionText(q.question_text)?`<div style="margin:6px 0">${jnvstMathPreview(realQuestionText(q.question_text))}</div>`:'<div class="muted small">(question is a picture)</div>'}
+        ${['A','B','C','D'].map(o=>{const key=String(q.correct_option||'').toUpperCase()===o;return `<div style="padding:4px 8px;margin:2px 0;border-radius:8px;${key?'background:#dcfce7;border:1px solid #86efac':'border:1px solid #e2e8f0'}"><b>${o}.</b> ${jnvstMathPreview(String(q['option_'+o.toLowerCase()]||''))} ${key?'<b style="color:#166534">✓ key</b>':''}</div>`}).join('')}
+        <div class="small" style="margin-top:6px;color:#475569"><b>Explanation:</b> ${ex?jnvstMathPreview(ex):'<span class="muted">none</span>'}</div></div>`}).join('');
+    render(`<div class="wrap">${header('Preview Mock Test')}<div class="card">
+      <h2 style="margin-top:0">🔍 ${esc(test.title||'Mock Test')}</h2>
+      <p class="muted">Check the paper as the students will see it. Press <b>✎ Edit</b> on a question to correct the text, options, key or explanation — the change is saved in the <b>Question Bank</b> and in this Mock Test.</p>
+      <div class="actions">${sorted.length>1?`<select style="width:auto" onchange="mockPreviewPage(this.value)">${sorted.map(x=>`<option value="${x.id}" ${x.id===testId?'selected':''}>Set ${esc(String(x.series_code||'A').toUpperCase())} · ${lg(x.language)}</option>`).join('')}</select>`:''}
+        <button onclick="generateMockTestPDF('${testId}')">📄 Question Paper PDF</button><button class="secondary" onclick="mockTestManagement()">← Back</button></div>
+      <div class="small muted" style="margin-top:6px">${(qs||[]).length} questions · ${lg(test.language)} · ${test.delivery_mode==='OFFLINE'?'Pen-paper':'Online'}</div>
+      ${body}</div></div>`);
+    try{jnvstTypesetWhenReady([document.querySelector('.wrap')])}catch(_){}
+  }catch(e){notify('Could not open the preview: '+(e.message||e))}
+}
+function mockPreviewEdit(n){
+  const P=window.mockPrev,q=P.qs.find(x=>x.question_number===n);if(!q)return;
+  const b=P.bmap.get(q.bank_question_id)||{},asm=String(P.test.language).toUpperCase()==='ASSAMESE'&&b.explanation_as!=null,exKey=asm?'explanation_as':'explanation';
+  window.mockPrevEdit={n,exKey};
+  document.getElementById('mockPrevModal')?.remove();const m=document.createElement('div');m.id='mockPrevModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+  const ta=(id,l,v,r)=>`<label>${l}</label><textarea id="${id}" rows="${r}" style="width:100%">${esc(v||'')}</textarea>`;
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:760px;width:100%;padding:16px"><h3 style="margin-top:0">✎ Edit Q${n}</h3>
+    <p class="small muted">Maths: write fractions etc. as \\(\\frac{1}{2}\\). ${q.bank_question_id?'':'<b>This question has no link to the Question Bank, so only this Mock Test is changed.</b>'}</p>
+    ${ta('mpQ','Question',q.question_text,4)}${['a','b','c','d'].map(o=>ta('mp_'+o,'Option '+o.toUpperCase(),q['option_'+o],2)).join('')}
+    <label>Correct option</label><select id="mpKey" style="width:auto">${['A','B','C','D'].map(o=>`<option ${String(q.correct_option||'').toUpperCase()===o?'selected':''}>${o}</option>`).join('')}</select>
+    ${ta('mpEx','Explanation'+(asm?' (Assamese)':''),b[exKey],3)}
+    <label>Apply to</label><select id="mpScope" style="width:auto"><option value="exam">This Mock Test (all its sets) + Question Bank</option><option value="all">All my Mock Tests using this question + Question Bank</option></select>
+    <div class="actions" style="margin-top:12px"><button onclick="mockPreviewSave()">💾 Save</button><button class="secondary" onclick="document.getElementById('mockPrevModal').remove()">Cancel</button></div></div>`;
+  m.addEventListener('click',e=>{if(e.target===m)m.remove()});document.body.appendChild(m);
+}
+async function mockPreviewSave(){
+  const P=window.mockPrev,E=window.mockPrevEdit,q=P.qs.find(x=>x.question_number===E.n),v=id=>document.getElementById(id).value;
+  const f={question_text:v('mpQ'),option_a:v('mp_a'),option_b:v('mp_b'),option_c:v('mp_c'),option_d:v('mp_d'),correct_option:v('mpKey'),[E.exKey]:v('mpEx')};
+  const keyChanged=String(q.correct_option||'').toUpperCase()!==f.correct_option;
+  if(keyChanged&&!confirm('The correct option is changed. Results already submitted for this question will be re-marked. Continue?'))return;
+  const {data,error}=await sb.rpc('teacher_update_mock_question',{p_test_id:P.test.id,p_number:E.n,p_fields:f,p_scope:v('mpScope')});
+  if(error)return notify('Could not save: '+error.message+(/teacher_update_mock_question|function/i.test(error.message)?'\n\nRun V55_EDIT_MOCK_QUESTION.sql in Supabase first.':''),'error');
+  document.getElementById('mockPrevModal')?.remove();
+  notify(`Saved. Question Bank: ${data?.bank?'updated':'not linked'} · Mock Test copies updated: ${data?.copies||0}${data?.key_changed?' · results re-marked':''}.`,'success');
+  mockPreviewPage(P.test.id);
+}
+async function mockAssignDialog(testId){
+  const {data:classes}=await sb.from('classes').select('id,name').eq('teacher_id',current.id).order('name');
+  if(!classes?.length)return notify('Create a class first.');
+  document.getElementById('mockAssignDlg')?.remove();const m=document.createElement('div');m.id='mockAssignDlg';
+  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:16px"><h3 style="margin-top:0">👥 Assign this Mock Test</h3><p class="small muted">Every student of the ticked classes gets the test (students already assigned are skipped).</p>
+   ${classes.map(c=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" class="mock-asg-class" value="${c.id}" style="width:auto"> ${esc(c.name)}</label>`).join('')}
+   <div class="actions" style="margin-top:12px"><button onclick="mockAssignSave('${testId}')">Assign</button><button class="secondary" onclick="document.getElementById('mockAssignDlg').remove()">Cancel</button></div></div>`;
+  m.addEventListener('click',e=>{if(e.target===m)m.remove()});document.body.appendChild(m);
+}
+async function mockAssignSave(testId){
+  const cids=[...document.querySelectorAll('.mock-asg-class:checked')].map(x=>x.value);if(!cids.length)return notify('Tick at least one class.');
+  const {data:m,error}=await sb.from('class_students').select('student_id').in('class_id',cids);if(error)return notify(error.message);
+  const ids=[...new Set((m||[]).map(x=>x.student_id))];if(!ids.length)return notify('These classes have no students.');
+  const {error:ie}=await sb.from('mock_test_students').upsert(ids.map(student_id=>({mock_test_id:testId,student_id})),{onConflict:'mock_test_id,student_id',ignoreDuplicates:true});
+  if(ie)return notify('Could not assign: '+ie.message);
+  document.getElementById('mockAssignDlg')?.remove();notify(`Assigned to ${ids.length} student(s).`,'success');loadPreviousMockTests();
 }
 
 /* ===== V45: answer keys (English and Assamese keys may differ) ===== */
