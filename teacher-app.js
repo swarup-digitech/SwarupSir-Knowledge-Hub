@@ -1248,6 +1248,7 @@ async function generateMockTestPage(language){
  if(!classes?.length)return notify('Create a class first.');
  const {data:bank,error:be}=await sbFetchAll(()=>sb.from('mock_question_bank').select('*').eq('teacher_id',current.id).eq('active',true).order('created_at',{ascending:true}));
  if(be)return notify(be.message);
+ let lessonRows=[];try{const {data:ls}=await sb.from('jnvst_subject_lessons').select('id,lesson_code,lesson_name,parent_lesson_id,subject_id').eq('teacher_id',current.id);lessonRows=ls||[]}catch(_){}
  const byPart={};(bank||[]).forEach(q=>{const lang=String(q.language||'').toUpperCase();if(q.section_code==='MAT'){if(lang==='COMMON'||!lang)(byPart[q.part_code]||=[]).push(q)}else if(lang===generatorLanguage){(byPart[q.part_code]||=[]).push(q)}});
  Object.values(byPart).forEach(a=>a.sort(mockSortQuestions));
  const setInfo={},shortages=[];
@@ -1261,7 +1262,7 @@ async function generateMockTestPage(language){
  const otherBy={};(bank||[]).forEach(q=>{if(q.section_code!=='MAT'&&String(q.language||'').toUpperCase()===otherLang)(otherBy[q.part_code]||=[]).push(q)});
  Object.values(otherBy).forEach(a=>a.sort(mockSortQuestions));
  const otherSets={};for(const plan of MOCK_PLAN){if(plan.section!=='MAT')otherSets[plan.part]=mockBuildSets(otherBy[plan.part]||[],plan)}
- window.mockGen={language:generatorLanguage,byPart,sets:setInfo,slots:{},other:{lang:otherLang,byPart:otherBy,sets:otherSets}};
+ window.mockGen={lessons:new Map(lessonRows.map(l=>[String(l.id),l])),chap:{},language:generatorLanguage,byPart,sets:setInfo,slots:{},other:{lang:otherLang,byPart:otherBy,sets:otherSets}};
  window.mockPairOverride={};
  MOCK_PLAN.forEach(p=>mockGenFillFromSet(p.part,1,true));
  render(`<div class="wrap">${header('Generate Mock Test')}<div class="card" style="background:#f0fdfa;border:2px solid #0d9488;margin-bottom:14px">
@@ -1315,9 +1316,25 @@ function mockGenFillFromSet(part,setNumber,silent){
  else{const s=sets.find(x=>x.number===Number(setNumber))||sets[0];g.slots[part]=(s?s.questions:[]).slice(0,n).map(q=>q.id)}
  if(!silent)mockGenRender();
 }
+/* V56: chapter filter — a lesson includes its sub-lessons */
+function mockGenChain(q){const L=window.mockGen.lessons,out=[];let id=String(q.lesson_id||''),n=0;while(id&&L.has(id)&&n++<8){out.push(id);id=String(L.get(id).parent_lesson_id||'')}if(!out.length&&q.lesson_id)out.push(String(q.lesson_id));return out}
+function mockGenInChapter(q,chap){return !chap||mockGenChain(q).includes(String(chap))}
+function mockGenChapterOptions(part,cur){
+  const g=window.mockGen,cnt=new Map(),pool=g.byPart[part]||[];
+  pool.forEach(q=>mockGenChain(q).forEach(id=>cnt.set(id,(cnt.get(id)||0)+1)));
+  const depth=id=>{let d=0,x=g.lessons.get(id);while(x&&x.parent_lesson_id&&d<6){d++;x=g.lessons.get(String(x.parent_lesson_id))}return d};
+  const name=id=>{const l=g.lessons.get(id);return l?((l.lesson_code?l.lesson_code+' · ':'')+l.lesson_name):'Chapter '+id.slice(0,6)};
+  const ids=[...cnt.keys()].sort((a,b)=>String(g.lessons.get(a)?.lesson_code||name(a)).localeCompare(String(g.lessons.get(b)?.lesson_code||name(b)),undefined,{numeric:true}));
+  const noChap=pool.filter(q=>!q.lesson_id).length;
+  return `<option value="">All chapters</option>`+ids.map(id=>`<option value="${esc(id)}" ${String(cur||'')===id?'selected':''}>${'\u00A0\u00A0'.repeat(depth(id))}${esc(name(id))} (${cnt.get(id)})</option>`).join('')+(noChap?`<option value="__none" ${cur==='__none'?'selected':''}>No chapter set (${noChap})</option>`:'');
+}
+function mockGenChapterPool(part){const g=window.mockGen,c=g.chap[part]||'';const pool=g.byPart[part]||[];return !c?pool:c==='__none'?pool.filter(q=>!q.lesson_id):pool.filter(q=>mockGenInChapter(q,c))}
+function mockGenSetChapter(part,v){window.mockGen.chap[part]=v;mockGenRender()}
 function mockGenFillRandom(part,mode){
  const g=window.mockGen,plan=mockPlanByPart[part],n=mockGenSlotCount(plan);
- if(plan.unit==='passage')g.slots[part]=mockShuffle(g.sets[part]).slice(0,n).map(s=>String(s.number));
+ const chapOn=!!(g.chap[part]);
+ if(plan.unit==='passage'){const ok=chapOn?g.sets[part].filter(s=>s.questions.some(q=>mockGenChapterPool(part).includes(q))):g.sets[part];g.slots[part]=mockShuffle(ok.length?ok:g.sets[part]).slice(0,n).map(s=>String(s.number))}
+ else if(chapOn)g.slots[part]=mockShuffle(mockGenChapterPool(part)).slice(0,n).map(q=>q.id);
  else if(mode==='randomSet'){const s=g.sets[part];g.slots[part]=s.length?mockShuffle(s)[0].questions.slice(0,n).map(q=>q.id):[]}
  else g.slots[part]=mockShuffle(g.byPart[part]||[]).slice(0,n).map(q=>q.id);
 }
@@ -1339,7 +1356,7 @@ function mockGenCard(plan){
   return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e5e7eb"><div style="width:74px;font-weight:700">${slotName}</div><div style="flex:1;min-width:0">${body}</div><div class="small muted" style="width:120px;text-align:right">${tag}</div><div class="actions" style="margin:0;flex:none"><button type="button" class="secondary" onclick="mockGenPick('${plan.part}',${i})">Change</button><button type="button" class="secondary" onclick="mockGenClear('${plan.part}',${i})" title="Clear this slot">✕</button></div></div>`}).join('');
  const filled=slots.filter(Boolean).length;
  const fill=isPass?'':`<select id="mockFill_${plan.part}" style="width:auto;min-width:130px">${sets.map(s=>`<option value="${s.number}">${esc(s.label)}</option>`).join('')}</select><button type="button" class="secondary" onclick="mockGenApplySet('${plan.part}')">Fill from set</button>`;
- return `<div class="assignment" style="margin:8px 0;padding:10px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><b>${esc(plan.label)}</b><span class="small ${filled===n?'':'muted'}" style="${filled===n?'color:#166534':'color:#b91c1c'}">${filled}/${n} chosen</span><span class="small muted">· ${isPass?sets.length+' passage(s) in bank':(g.byPart[plan.part]||[]).length+' question(s) in bank'}</span><span style="flex:1"></span>${fill}<button type="button" class="secondary" onclick="mockGenPlanRandom('${plan.part}')">🎲 Random</button></div>${rows}</div>`;
+ return `<div class="assignment" style="margin:8px 0;padding:10px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><b>${esc(plan.label)}</b><span class="small ${filled===n?'':'muted'}" style="${filled===n?'color:#166534':'color:#b91c1c'}">${filled}/${n} chosen</span><span class="small muted">· ${isPass?sets.length+' passage(s) in bank':(g.byPart[plan.part]||[]).length+' question(s) in bank'}</span><span style="flex:1"></span>${fill}<select style="width:auto;max-width:240px" title="Chapter filter: used by Random and shown first in Change" onchange="mockGenSetChapter('${plan.part}',this.value)">${mockGenChapterOptions(plan.part,g.chap[plan.part])}</select><button type="button" class="secondary" onclick="mockGenPlanRandom('${plan.part}')">🎲 Random${g.chap[plan.part]?' from chapter':''}</button></div>${rows}</div>`;
 }
 function mockGenRender(){
  const g=window.mockGen,host=document.getElementById('mockSlotsHost');if(!host)return;
@@ -1353,7 +1370,7 @@ function mockGenPick(part,idx){
  let m=document.getElementById('mockPickModal');if(m)m.remove();
  m=document.createElement('div');m.id='mockPickModal';
  m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
- m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:1000px;width:100%;padding:16px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">${esc(plan.label)} — choose for ${plan.unit==='passage'?(plan.section==='LANGUAGE'?'Passage '+(idx+1):'this passage'):'Slot '+(idx+1)}</h3><span style="flex:1"></span><input id="mockPickFilter" placeholder="Search set id or text…" oninput="mockGenPickList('${part}',${idx})" style="width:230px"><button type="button" class="secondary" onclick="document.getElementById('mockPickModal').remove()">Close</button></div><div id="mockPickList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:12px"></div></div>`;
+ m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:1000px;width:100%;padding:16px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">${esc(plan.label)} — choose for ${plan.unit==='passage'?(plan.section==='LANGUAGE'?'Passage '+(idx+1):'this passage'):'Slot '+(idx+1)}</h3><span style="flex:1"></span><select id="mockPickChap" onchange="mockGenPickList('${part}',${idx})" style="width:auto;max-width:260px">${mockGenChapterOptions(part,g.chap[part])}</select><input id="mockPickFilter" placeholder="Search set id or text…" oninput="mockGenPickList('${part}',${idx})" style="width:230px"><button type="button" class="secondary" onclick="document.getElementById('mockPickModal').remove()">Close</button></div><div id="mockPickList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:12px"></div></div>`;
  m.addEventListener('click',e=>{if(e.target===m)m.remove()});
  document.body.appendChild(m);mockGenPickList(part,idx);
 }
@@ -1362,7 +1379,9 @@ function mockGenPickList(part,idx){
  const f=(document.getElementById('mockPickFilter')?.value||'').toLowerCase().trim();
  const items=isPass?g.sets[part].map(s=>({key:String(s.number),label:s.label,html:mockPassageThumb(s),text:(s.label+' '+((s.questions[0]||{}).passage_title||'')+' '+((s.questions[0]||{}).passage_text||'')).toLowerCase()}))
   :(g.byPart[part]||[]).map(q=>({key:q.id,label:mockQLabel(q),html:mockQThumb(q),text:(mockQLabel(q)+' '+(q.question_text||'')+' '+(q.topic||'')).toLowerCase()}));
- const shown=items.filter(x=>!f||x.text.includes(f)).slice(0,300);
+ const chap=document.getElementById('mockPickChap')?.value||'';const okQ=chap?(q=>chap==='__none'?!q.lesson_id:mockGenInChapter(q,chap)):null;
+ const qOf=isPass?Object.fromEntries(g.sets[part].map(s=>[String(s.number),s.questions])):null;
+ const shown=items.filter(x=>(!f||x.text.includes(f))&&(!okQ||(isPass?(qOf[x.key]||[]).some(okQ):okQ((g.byPart[part]||[]).find(q=>q.id===x.key)||{})))).slice(0,300);
  const host=document.getElementById('mockPickList');if(!host)return;
  host.innerHTML=shown.length?shown.map(x=>{const at=slots.indexOf(x.key),cur=at===idx,used=at>=0&&!cur;return `<button type="button" onclick="mockGenChoose('${part}',${idx},'${x.key}')" style="text-align:left;background:${cur?'#dbeafe':'#fff'};color:#0f172a;border:2px solid ${cur?'#2563eb':used?'#cbd5e1':'#e2e8f0'};border-radius:10px;padding:8px;cursor:pointer"><div class="small" style="margin-bottom:4px"><b>${esc(x.label)}</b> ${cur?'<span style="color:#2563eb">· this slot</span>':used?`<span class="muted">· used in ${isPass?'another passage':'slot '+(at+1)}</span>`:''}</div>${x.html}</button>`}).join(''):'<div class="muted">No matching questions.</div>';
  if(items.length>300&&!f)host.insertAdjacentHTML('beforeend','<div class="small muted">Showing the first 300 — type in the search box to narrow.</div>');
@@ -1930,6 +1949,61 @@ async function generateMockTestPDF(testId){
     notify('Could not generate the JNVST-style Question Paper PDF: '+(e.message||e));
   }
 }
+/* ===== V55: filters for Mock Test Results ===== */
+function mockResBase(t){return String(t.title||'').replace(/\s+—\s+Series\s+[A-D]\s*$/,'')}
+function mockResRowHtml(a){const R=window.mockRes,t=R.tests.find(x=>x.id===a.mock_test_id)||{};const p=R.pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button>${a.source==='OMR'?`<button class="danger" onclick="deleteMockOmrImport('${t.series_group_id||t.id}','${a.student_id}','${esc(p.full_name||'')}')">🗑 Delete import</button>`:`<button class="secondary" title="Open the same attempt again; answers are kept and the student continues" onclick="reassignMockAttempt('${a.id}','resume','${esc(p.full_name||'')}',${Math.max(5,Math.floor((new Date(a.end_at)-new Date(a.submitted_at||a.end_at))/60000)||0)})">↩ Re-assign (continue)</button><button class="danger" title="Delete this attempt; the student starts again from question 1" onclick="reassignMockAttempt('${a.id}','fresh','${esc(p.full_name||'')}')">⟲ Fresh re-assign</button>`}</div>`:'—'}</td></tr>`}
+function mockResFiltered(){
+  const R=window.mockRes,f=R.f||{};const q=String(f.q||'').trim().toLowerCase();
+  const num=v=>v===''||v==null||isNaN(Number(v))?null:Number(v);const mn=num(f.min),mx=num(f.max);
+  let rows=R.ats.filter(a=>{const t=R.tests.find(x=>x.id===a.mock_test_id)||{},p=R.pm.get(a.student_id)||{};
+    if(f.test&&mockResBase(t)!==f.test)return false;
+    if(f.set&&String(t.series_code||'').toUpperCase()!==f.set)return false;
+    if(f.lang&&String(t.language||'').toUpperCase()!==f.lang)return false;
+    if(f.mode&&((a.source==='OMR')?'OMR':'ONLINE')!==f.mode)return false;
+    if(f.status&&a.status!==f.status)return false;
+    const sc=Number(a.score||0);if(mn!=null&&sc<mn)return false;if(mx!=null&&sc>mx)return false;
+    if(f.left==='yes'&&!(Number(a.leave_count||0)>0))return false;if(f.left==='no'&&Number(a.leave_count||0)>0)return false;
+    if(q&&!(String(p.full_name||'').toLowerCase().includes(q)||String(p.roll_no||'').toLowerCase().includes(q)))return false;
+    return true});
+  const by={score_d:(a,b)=>Number(b.score||0)-Number(a.score||0),score_a:(a,b)=>Number(a.score||0)-Number(b.score||0),
+    roll:(a,b)=>String(R.pm.get(a.student_id)?.roll_no||'').localeCompare(String(R.pm.get(b.student_id)?.roll_no||''),undefined,{numeric:true}),
+    name:(a,b)=>String(R.pm.get(a.student_id)?.full_name||'').localeCompare(String(R.pm.get(b.student_id)?.full_name||'')),
+    left:(a,b)=>Number(b.leave_count||0)-Number(a.leave_count||0)};
+  if(by[f.sort])rows=rows.slice().sort(by[f.sort]);
+  return rows;
+}
+function mockResSet(k,v){window.mockRes.f[k]=v;mockResPaint(k==='q'?'keepFocus':'')}
+function mockResClear(){window.mockRes.f={};mockResPaint()}
+function mockResPaint(keep){
+  const R=window.mockRes,f=R.f||{},box=document.getElementById('mockResFilter'),body=document.getElementById('mockResBody');if(!box||!body)return;
+  const bases=[...new Set(R.tests.map(mockResBase))],sets=[...new Set(R.tests.map(x=>String(x.series_code||'').toUpperCase()).filter(Boolean))].sort(),langs=[...new Set(R.tests.map(x=>String(x.language||'').toUpperCase()).filter(Boolean))];
+  const opt=(v,l,cur)=>`<option value="${esc(v)}" ${String(cur||'')===String(v)?'selected':''}>${esc(l)}</option>`;
+  const sel=(k,label,opts)=>`<div><label class="small muted">${label}</label><select style="width:auto" onchange="mockResSet('${k}',this.value)">${opts}</select></div>`;
+  if(keep!=='keepFocus'||!document.getElementById('mrQ')){
+    box.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0 6px">
+      ${sel('test','Mock Test',opt('','All mock tests',f.test)+bases.map(b=>opt(b,b,f.test)).join(''))}
+      ${sel('set','Set / Series',opt('','All sets',f.set)+sets.map(s=>opt(s,'Set '+s,f.set)).join(''))}
+      ${sel('lang','Medium',opt('','All media',f.lang)+langs.map(l=>opt(l,l==='ASSAMESE'?'Assamese':l==='ENGLISH'?'English':'Common',f.lang)).join(''))}
+      ${sel('mode','Type',opt('','Online + Pen-paper',f.mode)+opt('ONLINE','Online',f.mode)+opt('OMR','Pen-paper (OMR)',f.mode))}
+      ${sel('status','Status',opt('','Any status',f.status)+opt('submitted','Submitted',f.status)+opt('in_progress','In progress',f.status))}
+      <div><label class="small muted">Marks from</label><input type="number" style="width:90px" value="${esc(f.min??'')}" onchange="mockResSet('min',this.value)"></div>
+      <div><label class="small muted">to</label><input type="number" style="width:90px" value="${esc(f.max??'')}" onchange="mockResSet('max',this.value)"></div>
+      ${sel('left','Left test',opt('','Any',f.left)+opt('yes','Left at least once',f.left)+opt('no','Never left',f.left))}
+      ${sel('sort','Sort by',opt('','Latest submitted',f.sort)+opt('score_d','Marks: high → low',f.sort)+opt('score_a','Marks: low → high',f.sort)+opt('roll','Roll No',f.sort)+opt('name','Name',f.sort)+opt('left','Most times left',f.sort))}
+      <div><label class="small muted">Name / Roll No</label><input id="mrQ" style="width:150px" value="${esc(f.q||'')}" oninput="mockResSet('q',this.value)"></div>
+      <button class="secondary" onclick="mockResClear()">✕ Clear</button><button class="secondary" onclick="mockResExcel()">⬇ Excel</button></div><div id="mockResCount" class="small muted" style="margin-bottom:6px"></div>`;
+  }
+  const rows=mockResFiltered();
+  document.getElementById('mockResCount').textContent=`Showing ${rows.length} of ${R.ats.length} result(s)`+(rows.length?` · average marks ${(rows.reduce((s,a)=>s+Number(a.score||0),0)/rows.length).toFixed(2)} · highest ${Math.max(...rows.map(a=>Number(a.score||0))).toFixed(2)}`:'');
+  body.innerHTML=rows.map(mockResRowHtml).join('')||'<tr><td colspan="10">No results match these filters.</td></tr>';
+}
+function mockResExcel(){
+  if(typeof XLSX==='undefined')return notify('Excel library not loaded.');const R=window.mockRes;
+  const data=mockResFiltered().map(a=>{const t=R.tests.find(x=>x.id===a.mock_test_id)||{},p=R.pm.get(a.student_id)||{};return {'Mock Test':mockResBase(t),Set:String(t.series_code||'').toUpperCase(),Medium:t.language||'',Type:a.source==='OMR'?'Pen-paper':'Online','Roll No':p.roll_no||'',Student:p.full_name||'',Marks:Number(a.score||0),'%':Number(a.percentage||0),Status:a.status,'Times left test':Number(a.leave_count||0),Submitted:a.submitted_at?new Date(a.submitted_at).toLocaleString():''}});
+  if(!data.length)return notify('Nothing to export.');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),'Results');XLSX.writeFile(wb,'Mock_Test_Results.xlsx');
+}
+
 async function mockTeacherResults(only){
   const onlyIds=Array.isArray(only)?only:null;
   let {data:tests,error}=await sb.from('mock_tests').select('*').eq('teacher_id',current.id).order('created_at',{ascending:false});
@@ -1941,15 +2015,16 @@ async function mockTeacherResults(only){
   const pids=[...new Set((ats||[]).map(x=>x.student_id))];
   const {data:ps}=pids.length?await sb.from('profiles').select('id,full_name,roll_no').in('id',pids):{data:[]};
   const pm=new Map((ps||[]).map(x=>[x.id,x]));
+  window.mockRes={ats:ats||[],tests:tests||[],pm,f:onlyIds?{}:(window.mockRes?.f||{})};
   render(`<div class="wrap">${header('Mock Test Results')}
     <div class="card">
       <h2>📊 Mock Test Results</h2>
       ${onlyIds?`<p><b>${esc(String(tests[0]?.title||'').replace(/\s+—\s+Series\s+[A-D]\s*$/,''))}</b> · <a href="#" onclick="mockTeacherResults();return false">show all tests</a></p>`:''}
       <p class="muted">You can open every student's answers with the explanations <b>before</b> you approve the results. View student responses and generate the printable Mock Test Result Sheet.</p>
-      <div style="overflow:auto"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Language</th><th>Score</th><th>%</th><th>Status</th><th>Submitted</th><th>Report</th></tr></thead>
-      <tbody>${(ats||[]).map(a=>{const t=(tests||[]).find(x=>x.id===a.mock_test_id)||{};const p=pm.get(a.student_id)||{};return `<tr><td>${esc(t.title||'')}</td><td>${esc(p.full_name||'')}</td><td>${esc(p.roll_no||'')}</td><td>${esc(t.language==='ENGLISH'?'English':t.language==='ASSAMESE'?'Assamese':'Common')}</td><td>${Number(a.score||0).toFixed(2)}</td><td>${Number(a.percentage||0).toFixed(2)}</td><td>${esc(a.status)}</td><td>${Number(a.leave_count||0)?'<b style="color:#b91c1c">'+Number(a.leave_count)+'×</b>':'—'}${a.auto_submitted?' <span class="muted">(auto)</span>':''}</td><td>${a.submitted_at?new Date(a.submitted_at).toLocaleString():'—'}</td><td>${a.status==='submitted'?`<div class="actions"><button class="secondary" onclick="viewMockTeacherAttempt('${a.id}')">👁 View Response</button><button onclick="generateMockResultPDF('${a.id}')">📄 PDF</button>${a.source==='OMR'?`<button class="danger" onclick="deleteMockOmrImport('${t.series_group_id||t.id}','${a.student_id}','${esc(p.full_name||'')}')">🗑 Delete import</button>`:`<button class="secondary" title="Open the same attempt again; answers are kept and the student continues" onclick="reassignMockAttempt('${a.id}','resume','${esc(p.full_name||'')}',${Math.max(5,Math.floor((new Date(a.end_at)-new Date(a.submitted_at||a.end_at))/60000)||0)})">↩ Re-assign (continue)</button><button class="danger" title="Delete this attempt; the student starts again from question 1" onclick="reassignMockAttempt('${a.id}','fresh','${esc(p.full_name||'')}')">⟲ Fresh re-assign</button>`}</div>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No attempts yet.</td></tr>'}</tbody></table></div>
+      <div id="mockResFilter"></div>
+      <div style="overflow:auto"><table><thead><tr><th>Test</th><th>Student</th><th>Roll No</th><th>Language</th><th>Score</th><th>%</th><th>Status</th><th title="How many times the student left the test screen (switched app / tab, minimised or went back)">Left test</th><th>Submitted</th><th>Action</th></tr></thead><tbody id="mockResBody"></tbody></table></div>
       <div class="actions" style="margin-top:15px;flex-wrap:wrap">${(tests||[]).map(t=>`<button class="${t.results_released?'secondary':''}" onclick="toggleMockResultsRelease('${t.id}',${t.results_released?'false':'true'})">${t.results_released?'🔒 Hide Results: ':'✓ Approve Results: '}${esc(t.title||'Mock Test')}</button>`).join('')}<button onclick="mockTestManagement()">← Mock Test Management</button><button class="secondary" onclick="teacherHome()">Dashboard</button></div>
-    </div></div>`)
+    </div></div>`);mockResPaint()
 }
 async function loadMockTeacherAttempt(attemptId){
   const {data:a,error:ae}=await sb.from('mock_test_attempts').select('*,mock_tests(*)').eq('id',attemptId).single();

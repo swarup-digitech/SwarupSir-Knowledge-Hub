@@ -1,4 +1,4 @@
-# JNVST Mock Test – final files (cumulative, teacher-app.js?v=75)
+# JNVST Mock Test – final files (cumulative, teacher-app.js?v=78)
 
 ## 1. Supabase – run in this order (SQL Editor; all safe to re-run)
 1. sql/1_V38_MOCK_EXAM_LOCK.sql      – online exam lock, auto-submit, "left test" log
@@ -20,6 +20,8 @@
 - Mock Tests > Previous: "View Results" (online and pen-paper) so teacher sees every student's response + review BEFORE approving; "Approve / Hide Results" for pen-paper sets
 - OMR import: if the key read by the OMR software differs from the saved key, a table lists those questions; per question choose Use saved key (default) / Use key from file (updates saved key and re-marks) / Skip question
 - 📽 Discussion PDF on the pen-paper exam card (one page per question, set-wise numbers, option counts, who was wrong/skipped, explanation) - needs omr-discussion.js already in your app
+- Generate Mock Test: chapter filter for every slot group (Random from chapter) and inside the Change picker (sub-chapters included)
+- Mock Test Results filters: mock test, set, medium, online/pen-paper, status, marks range, left-test, name/roll, sort, Excel of filtered list
 - ↩ Re-assign (continue) and ⟲ Fresh re-assign for an accidentally submitted online attempt (View Results)
 - 🗑 Delete OMR import (exam card, or per student in View Results) then import again
 - ✎ Correct this student's answers (Results > View Response, pen-paper) when OMR misread a sheet
