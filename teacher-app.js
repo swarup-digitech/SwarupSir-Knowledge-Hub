@@ -7242,14 +7242,24 @@ async function deleteMockOmrImport(gid,studentId,name){
 }
 
 /* ===== V54: class discussion PDF for a pen-paper Mock Test (same pages as the OMR / assignment discussion PDF) ===== */
-async function mockDiscussionCollect(gid,lang){
+async function mockDiscStudents(gid,lang){
+  const g=(await mockOmrLoadGroups()).find(x=>x.gid===gid);if(!g)return [];
+  const tests=g.tests.filter(x=>!lang||String(x.language||'').toUpperCase()===lang);if(!tests.length)return [];
+  const tm=new Map(tests.map(x=>[x.id,x]));
+  const ar=await sbFetchAll(()=>sb.from('mock_test_attempts').select('id,mock_test_id,student_id').eq('source','OMR').in('mock_test_id',tests.map(x=>x.id)));if(ar.error)throw ar.error;
+  const ids=[...new Set((ar.data||[]).map(a=>a.student_id))],pm=new Map();
+  for(let i=0;i<ids.length;i+=150){const {data}=await sb.from('profiles').select('id,full_name,roll_no').in('id',ids.slice(i,i+150));(data||[]).forEach(p=>pm.set(p.id,p))}
+  return (ar.data||[]).map(a=>{const p=pm.get(a.student_id)||{},t=tm.get(a.mock_test_id)||{};return {id:a.student_id,name:p.full_name||'',roll:p.roll_no||'',set:String(t.series_code||'A').toUpperCase(),lang:String(t.language||'').toUpperCase()}}).sort((a,b)=>String(a.roll).localeCompare(String(b.roll),undefined,{numeric:true}));
+}
+async function mockDiscussionCollect(gid,lang,only){
   const g=(await mockOmrLoadGroups()).find(x=>x.gid===gid);if(!g)throw new Error('Mock Test not found.');
   const tests=g.tests.filter(x=>!lang||String(x.language||'').toUpperCase()===lang);if(!tests.length)throw new Error('No sets in this language.');
   const ids=tests.map(x=>x.id),tById=new Map(tests.map(x=>[x.id,x]));
   const qr=await sbFetchAll(()=>sb.from('mock_test_questions').select('id,mock_test_id,bank_question_id,question_number,section_code,part_code,correct_option,question_text,option_a,option_b,option_c,option_d,image_url,passage_title,passage_text').in('mock_test_id',ids));if(qr.error)throw qr.error;
   const ar=await sbFetchAll(()=>sb.from('mock_test_attempts').select('id,mock_test_id,student_id').eq('source','OMR').in('mock_test_id',ids));if(ar.error)throw ar.error;
   if(!(ar.data||[]).length)throw new Error('No OMR results are imported for '+(lang?lang.toLowerCase()+' ':'')+'sets of this test yet.');
-  const stuTest=new Map(ar.data.map(a=>[a.student_id,a.mock_test_id]));
+  let arD=ar.data;if(only){arD=arD.filter(a=>only.has(String(a.student_id)));if(!arD.length)throw new Error('None of the chosen students has an imported OMR result.')}
+  const stuTest=new Map(arD.map(a=>[a.student_id,a.mock_test_id]));
   const rr=await sbFetchAll(()=>sb.from('omr_responses').select('id,student_id,question_no,selected_option,correct_option,is_correct').eq('paper_base_serial','MOCK-'+gid));if(rr.error)throw rr.error;
   const people=new Map(),sids=[...stuTest.keys()];
   for(let i=0;i<sids.length;i+=150){const {data}=await sb.from('profiles').select('id,full_name,roll_no').in('id',sids.slice(i,i+150));(data||[]).forEach(p=>people.set(p.id,{name:p.full_name||'',roll:p.roll_no||''}))}
@@ -7271,6 +7281,21 @@ async function mockDiscussionCollect(gid,lang){
   const n=stuTest.size;
   return {base:g.code||g.base,custom:false,recs:[],items:[...Q.values()],bank,title:g.base+(lang?' · '+(lang==='ASSAMESE'?'Assamese':'English'):''),subject:'Pen-paper Mock Test',language:lang||'',students:n,totalStudents:n,sets};
 }
+async function mockDiscLoadStudents(){
+  const box=document.getElementById('mdStu');if(!box)return;const ctx=window.mockDiscCtx,lang=document.getElementById('mdLang')?.value??'';
+  box.innerHTML='<div class="small muted">Loading students…</div>';
+  try{
+    const list=await mockDiscStudents(ctx.gid,lang);ctx.list=list;
+    if(!list.length){box.innerHTML='<div class="notice">No OMR results are imported for this medium yet.</div>';document.getElementById('mdStuCount').textContent='';return}
+    box.innerHTML=`<div class="actions" style="margin:0 0 6px"><input id="mdStuQ" placeholder="Search name / roll no" style="width:170px" oninput="mockDiscFilter()"><button type="button" class="secondary" onclick="mockDiscTick(true)">All</button><button type="button" class="secondary" onclick="mockDiscTick(false)">None</button>${[...new Set(list.map(x=>x.set))].sort().map(s=>`<button type="button" class="secondary" onclick="mockDiscTickSet('${s}')">Set ${s}</button>`).join('')}</div>
+      <div style="max-height:220px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:4px 8px">${list.map(x=>`<label class="md-row" data-q="${esc((x.name+' '+x.roll).toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" class="md-stu" value="${x.id}" data-set="${x.set}" style="width:auto" checked onchange="mockDiscCount()"> <span>${esc(x.roll)} · ${esc(x.name)}</span> <span class="muted small">Set ${x.set}${lang===''?' · '+(x.lang==='ASSAMESE'?'Assamese':'English'):''}</span></label>`).join('')}</div>`;
+    mockDiscCount();
+  }catch(e){box.innerHTML='<div class="notice">Could not load students: '+esc(e.message||e)+'</div>'}
+}
+function mockDiscCount(){const a=[...document.querySelectorAll('.md-stu')];const el=document.getElementById('mdStuCount');if(el)el.textContent=`(${a.filter(x=>x.checked).length} of ${a.length} ticked)`}
+function mockDiscTick(on){document.querySelectorAll('.md-row').forEach(r=>{if(r.style.display!=='none')r.querySelector('.md-stu').checked=on});mockDiscCount()}
+function mockDiscTickSet(s){document.querySelectorAll('.md-stu').forEach(x=>{x.checked=x.dataset.set===s});mockDiscCount()}
+function mockDiscFilter(){const q=(document.getElementById('mdStuQ').value||'').toLowerCase().trim();document.querySelectorAll('.md-row').forEach(r=>{r.style.display=!q||r.dataset.q.includes(q)?'flex':'none'})}
 function mockDiscussionPdf(gid){
   if(!window.__omrDiscussion?.docHtml)return notify('The discussion PDF module (omr-discussion.js) is not loaded.');
   mockOmrLoadGroups().then(groups=>{
@@ -7281,20 +7306,27 @@ function mockDiscussionPdf(gid){
     const ck=(id,l,on)=>`<label style="display:flex;gap:8px;align-items:center"><input id="${id}" type="checkbox" style="width:auto" ${on?'checked':''}> ${l}</label>`;
     d.innerHTML=`<div class="card" style="max-width:520px;width:100%;margin:0;max-height:92vh;overflow:auto"><h2 style="margin-top:0">📽 Class discussion PDF</h2>
       <p class="small muted" style="margin-top:0">One wide page per question with its number in every set, option counts and the students who were wrong, skipped or correct. <b>${esc(g.base)}</b></p>
-      ${langs.length>1?`<label>Booklet language</label><select id="mdLang">${langs.map(l=>`<option value="${l}">${l==='ASSAMESE'?'Assamese':'English'}</option>`).join('')}</select>`:''}
+      <label>Medium</label><select id="mdLang" onchange="mockDiscLoadStudents()">${langs.map(l=>`<option value="${l}">${l==='ASSAMESE'?'Assamese':l==='ENGLISH'?'English':'Common'}</option>`).join('')}${langs.length>1?'<option value="">Both media (separate pages)</option>':''}</select>
       <label>Page shape</label><select id="mdShape"><option value="a4">A4 landscape (print or projector)</option><option value="wide">16:9 widescreen</option></select>
       <label>Questions</label><select id="mdWhich"><option value="mist">Only questions someone got wrong or skipped</option><option value="all">All questions</option></select>
       <label>Order</label><select id="mdOrder"><option value="paper">Paper order (Set ${esc([...new Set(g.tests.map(x=>String(x.series_code||'A').toUpperCase()))].sort()[0])} numbering)</option><option value="most">Most mistakes first</option></select>
       <div style="margin-top:8px">${ck('mdAns','Mark the correct answer',1)}${ck('mdCount','Show how many students chose each option',1)}${ck('mdNames','Show names of students who were wrong / skipped',1)}${ck('mdRight','Show names of students who answered correctly',1)}${ck('mdExpl','Show the explanation',1)}${ck('mdSpace','Leave writing space for the pen tablet',1)}</div>
+      <div style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:10px"><label style="margin:0">Students to include <span id="mdStuCount" class="small muted"></span></label>
+        <div class="small muted" style="margin:2px 0 6px">Only the ticked students are used: their names, the option counts, and which questions get a page.</div>
+        <div id="mdStu"><div class="small muted">Loading students…</div></div></div>
       <div class="actions" style="margin-top:14px"><button id="mdGo">📽 Create PDF</button><button class="secondary" onclick="document.getElementById('mockDiscDlg').remove()">Cancel</button></div><div id="mdMsg" class="small muted"></div></div>`;
     document.body.appendChild(d);d.addEventListener('click',ev=>{if(ev.target===d)d.remove()});
+    window.mockDiscCtx={gid,langs};
+    mockDiscLoadStudents();
     document.getElementById('mdGo').onclick=async()=>{
       const msg=document.getElementById('mdMsg'),btn=document.getElementById('mdGo'),v=id=>document.getElementById(id);
       const w=window.open('','_blank');if(!w){msg.textContent='Your browser blocked the pop-up. Please allow pop-ups for this site and try again.';return}
       try{w.document.write('<!doctype html><title>Preparing…</title><body style="font-family:Arial;padding:30px">Preparing the class discussion pages…</body>')}catch(_){}
       btn.disabled=true;msg.textContent='Collecting results…';
       try{
-        const D=await mockDiscussionCollect(gid,v('mdLang')?.value||langs[0]||'');
+        const picked=[...document.querySelectorAll('.md-stu:checked')].map(x=>x.value);
+        if(!picked.length){try{w.close()}catch(_){}msg.textContent='Tick at least one student.';btn.disabled=false;return}
+        const D=await mockDiscussionCollect(gid,v('mdLang')?.value??'',new Set(picked));
         const o={shape:v('mdShape').value,which:v('mdWhich').value,order:v('mdOrder').value,ans:v('mdAns').checked,count:v('mdCount').checked,names:v('mdNames').checked,right:v('mdRight').checked,expl:v('mdExpl').checked,space:v('mdSpace').checked,only:null};
         const html=window.__omrDiscussion.docHtml(D,o);w.document.open();w.document.write(html);w.document.close();d.remove();
       }catch(err){try{w.close()}catch(_){}msg.textContent='Could not prepare the PDF: '+(err.message||err);btn.disabled=false}

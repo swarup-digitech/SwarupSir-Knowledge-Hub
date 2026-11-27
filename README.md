@@ -1,4 +1,4 @@
-# JNVST Mock Test – final files (cumulative, teacher-app.js?v=80)
+# JNVST Mock Test – final files (cumulative, teacher-app.js?v=81)
 
 ## 1. Supabase – run in this order (SQL Editor; all safe to re-run)
 1. sql/1_V38_MOCK_EXAM_LOCK.sql      – online exam lock, auto-submit, "left test" log
@@ -20,6 +20,7 @@
 - Answer key PDF/Excel (English and Assamese keys may differ); OMR import picks booklet by set + language (-E / -A after exam code)
 - Mock Tests > Previous: "View Results" (online and pen-paper) so teacher sees every student's response + review BEFORE approving; "Approve / Hide Results" for pen-paper sets
 - OMR import: if the key read by the OMR software differs from the saved key, a table lists those questions; per question choose Use saved key (default) / Use key from file (updates saved key and re-marks) / Skip question
+- 📽 Discussion PDF: choose Medium (English / Assamese / both) and tick the students (search, All, None, per Set)
 - 📽 Discussion PDF on the pen-paper exam card (one page per question, set-wise numbers, option counts, who was wrong/skipped, explanation) - needs omr-discussion.js already in your app
 - Question Paper PDF: every printed sheet is its own A4 block with its own footer + page number (same position on every page, Chrome and Firefox)
 - 🔍 Preview / Edit on every Mock Test card (edit text, options, key, explanation -> saved in Question Bank AND Mock Test); online tests can be saved as a draft (no class) and assigned later with 👥 Assign
